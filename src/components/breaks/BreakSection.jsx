@@ -4,7 +4,7 @@ import { Coffee, UtensilsCrossed } from "lucide-react";
 import TimeSlotCard from "./TimeSlotCard";
 
 export default function BreakSection({
-  type, title, subtitle, slots, registrations, onRegister, userRegistration, agentName, maxPerSlot
+  type, title, subtitle, slots, registrations, onRegister, userRegistration, agentName, maxPerSlot, registrationDisabled = false
 }) {
   const isLunch = type === "lunch";
   const hasRegistered = !!userRegistration;
@@ -62,6 +62,7 @@ export default function BreakSection({
               onRegister={onRegister}
               isRegistered={isRegistered}
               isDisabled={hasRegistered && !isRegistered}
+              registrationDisabled={registrationDisabled}
               maxPerSlot={maxPerSlot}
             />
           );

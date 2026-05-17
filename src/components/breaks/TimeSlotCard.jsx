@@ -2,11 +2,11 @@ import React from "react";
 import { motion } from "framer-motion";
 import { Clock, User, Check, Lock } from "lucide-react";
 
-export default function TimeSlotCard({ slot, breakType, registrations, onRegister, isRegistered, isDisabled, index, maxPerSlot = 1 }) {
+export default function TimeSlotCard({ slot, breakType, registrations, onRegister, isRegistered, isDisabled, registrationDisabled = false, index, maxPerSlot = 1 }) {
   const isLunch = breakType === "lunch";
   const count = registrations.length;
   const isFull = count >= maxPerSlot;
-  const canRegister = !isFull && !isRegistered && !isDisabled;
+  const canRegister = !isFull && !isRegistered && !isDisabled && !registrationDisabled;
 
   const accentFrom = isLunch ? "from-indigo-500" : "from-purple-500";
   const accentTo = isLunch ? "to-blue-500" : "to-pink-500";
@@ -83,7 +83,7 @@ export default function TimeSlotCard({ slot, breakType, registrations, onRegiste
             }
           `}
         >
-          {isDisabled ? "כבר נרשמת" : "הרשמה"}
+          {registrationDisabled ? "מעדכן..." : isDisabled ? "כבר נרשמת" : "הרשמה"}
         </button>
       )}
     </motion.div>

@@ -13,6 +13,25 @@ import DateSelector from "../components/breaks/DateSelector";
 import AppNav from "../components/layout/AppNav";
 import { SHORT_BREAK_SLOTS, LUNCH_BREAK_SLOTS } from "@/constants/scheduling";
 
+const getBreakDayCacheKey = (dateStr) => `break-day-cache:${dateStr}`;
+
+const readCachedBreakDay = (dateStr) => {
+  try {
+    const raw = sessionStorage.getItem(getBreakDayCacheKey(dateStr));
+    return raw ? JSON.parse(raw) : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const writeCachedBreakDay = (dateStr, data) => {
+  try {
+    sessionStorage.setItem(getBreakDayCacheKey(dateStr), JSON.stringify(data));
+  } catch {
+    // Cache is only a speed boost; ignore browsers that block storage.
+  }
+};
+
 export default function BreakScheduler() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [agentName, setAgentName] = useState(() => localStorage.getItem("agent_name") || "");
@@ -22,22 +41,26 @@ export default function BreakScheduler() {
 
   const dateStr = format(selectedDate, "yyyy-MM-dd");
 
-  const { data: breakDayData, isLoading } = useQuery({
+  const { data: breakDayData, isLoading, isFetching } = useQuery({
     queryKey: ["break-day", dateStr],
     queryFn: async () => {
       const [registrations, settingsList] = await Promise.all([
         base44.entities.BreakRegistration.filter({ date: dateStr }),
         base44.entities.BreakSettings.filter({ date: dateStr }),
       ]);
-      return {
+      const data = {
         registrations,
         settings: settingsList[0] || null,
       };
+      writeCachedBreakDay(dateStr, data);
+      return data;
     },
+    initialData: () => readCachedBreakDay(dateStr),
     placeholderData: keepPreviousData,
   });
   const registrations = breakDayData?.registrations ?? [];
   const settings = breakDayData?.settings ?? null;
+  const isInitialBreakLoad = isLoading && !breakDayData;
 
   useEffect(() => {
     if (agentName && settings?.show_shortage_notice) setShowNotice(true);
@@ -70,6 +93,10 @@ export default function BreakScheduler() {
   };
 
   const handleRegister = (breakType) => (slot) => {
+    if (isInitialBreakLoad) {
+      toast({ title: "רגע קטן", description: "מעדכנים זמינות להפסקות" });
+      return;
+    }
     createMutation.mutate({ agent_name: agentName, break_type: breakType, time_slot: slot, date: dateStr });
   };
 
@@ -172,36 +199,40 @@ export default function BreakScheduler() {
           <MyRegistrations shortReg={myShortReg} lunchReg={myLunchReg} onCancel={handleCancel} />
         </motion.div>
 
-        {isLoading ? (
-          <div className="flex justify-center py-24">
-            <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-400 rounded-full animate-spin" />
-          </div>
-        ) : (
-          <div className="space-y-6">
-            <BreakSection
-              type="short"
-              title="הפסקת 10 דקות"
-              subtitle="10:00 – 12:00 · מקסימום נציג אחד למשבצת"
-              slots={SHORT_BREAK_SLOTS}
-              registrations={shortRegs}
-              onRegister={handleRegister("short")}
-              userRegistration={myShortReg}
-              agentName={agentName}
-              maxPerSlot={settings?.short_max_per_slot ?? 1}
-            />
-            <BreakSection
-              type="lunch"
-              title="הפסקת צהריים"
-              subtitle={`12:30 – 15:30 · חצי שעה · מקסימום ${settings?.lunch_max_per_slot ?? 1} נציג${(settings?.lunch_max_per_slot ?? 1) > 1 ? "ים" : ""} למשבצת`}
-              slots={LUNCH_BREAK_SLOTS}
-              registrations={lunchRegs}
-              onRegister={handleRegister("lunch")}
-              userRegistration={myLunchReg}
-              agentName={agentName}
-              maxPerSlot={settings?.lunch_max_per_slot ?? 1}
-            />
+        {isFetching && (
+          <div className="mb-3 flex justify-center">
+            <div className="px-3 py-1.5 rounded-full bg-white/80 border border-indigo-100 text-xs font-semibold text-indigo-600 shadow-sm">
+              מעדכן זמינות...
+            </div>
           </div>
         )}
+
+        <div className="space-y-6">
+          <BreakSection
+            type="short"
+            title="הפסקת 10 דקות"
+            subtitle="10:00 – 12:00 · מקסימום נציג אחד למשבצת"
+            slots={SHORT_BREAK_SLOTS}
+            registrations={shortRegs}
+            onRegister={handleRegister("short")}
+            userRegistration={myShortReg}
+            agentName={agentName}
+            maxPerSlot={settings?.short_max_per_slot ?? 1}
+            registrationDisabled={isInitialBreakLoad || createMutation.isPending}
+          />
+          <BreakSection
+            type="lunch"
+            title="הפסקת צהריים"
+            subtitle={`12:30 – 15:30 · חצי שעה · מקסימום ${settings?.lunch_max_per_slot ?? 1} נציג${(settings?.lunch_max_per_slot ?? 1) > 1 ? "ים" : ""} למשבצת`}
+            slots={LUNCH_BREAK_SLOTS}
+            registrations={lunchRegs}
+            onRegister={handleRegister("lunch")}
+            userRegistration={myLunchReg}
+            agentName={agentName}
+            maxPerSlot={settings?.lunch_max_per_slot ?? 1}
+            registrationDisabled={isInitialBreakLoad || createMutation.isPending}
+          />
+        </div>
       </div>
     </div>
   );
