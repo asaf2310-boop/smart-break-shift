@@ -48,16 +48,16 @@ export default function Home() {
         <div className="absolute bottom-[-10%] left-[-5%] w-[500px] h-[500px] bg-purple-300/20 rounded-full blur-3xl" />
       </div>
 
-      <div className="relative z-10 max-w-3xl mx-auto px-4 py-16">
+      <div className="relative z-10 max-w-3xl mx-auto px-4 py-8 sm:py-16">
         <motion.div
           initial={{ opacity: 0, y: -16 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-12"
+          className="text-center mb-8 sm:mb-12"
         >
-          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
-            <Users className="w-8 h-8 text-white" />
+          <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+            <Users className="w-7 h-7 sm:w-8 sm:h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-extrabold text-slate-800 mb-2">מערכת הפסקות ומשמרות</h1>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-800 mb-2">מערכת הפסקות ומשמרות</h1>
           <p className="text-slate-500 text-sm">
             שלום <span className="text-indigo-600 font-semibold">{agentName}</span> · {AGENT_NAMES.length} נציגים
           </p>
@@ -83,7 +83,7 @@ export default function Home() {
               >
                 <Link
                   to={card.to}
-                  className="block rounded-3xl border border-slate-200 bg-white p-6 shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all group"
+                  className="block rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all group"
                 >
                   <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${card.gradient} flex items-center justify-center mb-4 shadow-md group-hover:scale-105 transition-transform`}>
                     <Icon className="w-6 h-6 text-white" />

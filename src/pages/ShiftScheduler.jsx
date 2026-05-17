@@ -220,34 +220,34 @@ export default function ShiftScheduler() {
         <div className="absolute bottom-[-10%] left-[-5%] w-[500px] h-[500px] bg-purple-300/20 rounded-full blur-3xl" />
       </div>
 
-      <div className="relative z-10 max-w-4xl mx-auto px-4 py-8">
+      <div className="relative z-10 max-w-4xl mx-auto px-3 sm:px-4 py-5 sm:py-8">
          {/* Header */}
-         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between mb-8">
-           <button onClick={handleLogout} className="text-sm text-slate-400 hover:text-slate-700 transition-colors flex items-center gap-2">
+         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 sm:mb-8">
+           <button onClick={handleLogout} className="order-2 sm:order-1 text-sm text-slate-400 hover:text-slate-700 transition-colors flex items-center gap-2">
              <LogOut className="w-4 h-4" />
              החלף נציג
            </button>
-           <div className="text-center flex-1">
+           <div className="order-1 sm:order-2 text-center flex-1">
              <div className="flex items-center gap-3 justify-center mb-2">
                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
                  <CalendarDays className="w-5 h-5 text-white" />
                </div>
                <div>
-                 <h1 className="text-2xl font-extrabold text-slate-800">העדפות משמרות</h1>
+                 <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800">העדפות משמרות</h1>
                  <p className="text-slate-500 text-xs">אתה רואה את: <span className="text-indigo-600 font-semibold">{agentName}</span></p>
                </div>
              </div>
            </div>
-           <div className="w-24" />
+           <div className="hidden sm:block sm:order-3 w-24" />
          </motion.div>
 
          <AppNav />
 
         {/* ─── Tabs ─── */}
-        <div className="flex bg-white border border-slate-200 rounded-2xl shadow-sm p-1 gap-1 mb-6">
+        <div className="flex bg-white border border-slate-200 rounded-2xl shadow-sm p-1 gap-1 mb-5 sm:mb-6">
           <button
             onClick={() => setActiveTab("schedule")}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
+            className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 ${
               activeTab === "schedule"
                 ? "bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-md"
                 : "text-slate-500 hover:text-slate-800"
@@ -258,7 +258,7 @@ export default function ShiftScheduler() {
           </button>
           <button
             onClick={() => setActiveTab("constraints")}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
+            className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 ${
               activeTab === "constraints"
                 ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md"
                 : "text-slate-500 hover:text-slate-800"
@@ -343,19 +343,21 @@ export default function ShiftScheduler() {
             </div>
           ) : (
             <div className="p-4">
-              <div className="rounded-2xl border border-slate-100">
-                <CombinedShiftGrid
-                  weekDays={constraintsDays}
-                  getDayRecord={getDayRecord}
-                  onMark={handleDayClick}
-                  locked={isPastDeadline}
-                  holidayEveDates={HOLIDAY_EVE_DATES}
-                />
+              <div className="rounded-2xl border border-slate-100 overflow-x-auto">
+                <div className="min-w-[640px]">
+                  <CombinedShiftGrid
+                    weekDays={constraintsDays}
+                    getDayRecord={getDayRecord}
+                    onMark={handleDayClick}
+                    locked={isPastDeadline}
+                    holidayEveDates={HOLIDAY_EVE_DATES}
+                  />
+                </div>
               </div>
 
               {/* ─── Vacation row (per day, below shifts) ─── */}
-              <div className="mt-3 rounded-2xl border border-orange-100 bg-orange-50/40 overflow-hidden">
-                <div className="grid grid-cols-6">
+              <div className="mt-3 rounded-2xl border border-orange-100 bg-orange-50/40 overflow-x-auto">
+                <div className="grid grid-cols-6 min-w-[640px]">
                   <div className="px-3 py-3 flex flex-col items-center justify-center gap-1 border-l border-orange-100">
                     <Palmtree className="w-4 h-4 text-orange-400" />
                     <span className="text-xs font-bold text-orange-500">חופש</span>
@@ -496,52 +498,54 @@ export default function ShiftScheduler() {
                   </div>
                   <h3 className="font-bold text-slate-800">השיבוץ שלי</h3>
                 </div>
-                <div className="p-4">
-                  <div className="grid grid-cols-6 gap-3 mb-2">
-                    <div></div>
-                    {scheduleDays.map((date, i) => (
-                      <div key={i} className="text-center">
-                        <div className="text-xs font-semibold text-slate-500">{WEEKDAY_LABELS[i]}</div>
-                        <div className="text-sm font-bold text-slate-700">{format(date, "dd/MM")}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-6 gap-3">
-                    <div className="flex flex-col items-center justify-center gap-1 px-2">
-                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center shadow">
-                        <Check className="w-4 h-4 text-white" />
-                      </div>
-                      <div className="text-center">
-                        <div className="text-xs font-bold text-slate-800">משמרת</div>
-                      </div>
-                    </div>
-                    {scheduleDays.map(date => {
-                      const dateStr = format(date, "yyyy-MM-dd");
-                      const isHolidayEve = HOLIDAY_EVE_DATES.includes(dateStr);
-                      const morningReg = scheduleRegistrations.find(
-                        r => r.agent_name === agentName && r.date === dateStr && r.shift_type === "morning"
-                      );
-                      const eveningReg = scheduleRegistrations.find(
-                        r => r.agent_name === agentName && r.date === dateStr && r.shift_type === "evening"
-                      );
-                      const myReg = morningReg || eveningReg;
-                      const time = isHolidayEve && morningReg ? "09:00–14:00" : morningReg ? "08:00–16:00" : eveningReg ? "09:00–17:00" : null;
-                      const shiftLabel = isHolidayEve && morningReg ? "ערב חג" : morningReg ? "בוקר" : eveningReg ? "ערב" : null;
-                      return (
-                        <div key={dateStr} className="py-2 px-1 flex flex-col items-center justify-center">
-                          {myReg ? (
-                            <div className="w-full px-2 py-2 rounded-lg border-2 bg-indigo-50 border-indigo-300 flex flex-col items-center justify-center gap-1">
-                              <div className="text-xs font-bold text-indigo-700">{shiftLabel}</div>
-                              <div className="text-xs text-indigo-600 font-semibold">{time}</div>
-                            </div>
-                          ) : (
-                            <div className="w-full px-2 py-2 rounded-lg border-2 border-dashed border-slate-200 flex items-center justify-center">
-                              <span className="text-xs text-slate-300">–</span>
-                            </div>
-                          )}
+                <div className="p-3 sm:p-4 overflow-x-auto">
+                  <div className="min-w-[640px]">
+                    <div className="grid grid-cols-6 gap-3 mb-2">
+                      <div></div>
+                      {scheduleDays.map((date, i) => (
+                        <div key={i} className="text-center">
+                          <div className="text-xs font-semibold text-slate-500">{WEEKDAY_LABELS[i]}</div>
+                          <div className="text-sm font-bold text-slate-700">{format(date, "dd/MM")}</div>
                         </div>
-                      );
-                    })}
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-6 gap-3">
+                      <div className="flex flex-col items-center justify-center gap-1 px-2">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center shadow">
+                          <Check className="w-4 h-4 text-white" />
+                        </div>
+                        <div className="text-center">
+                          <div className="text-xs font-bold text-slate-800">משמרת</div>
+                        </div>
+                      </div>
+                      {scheduleDays.map(date => {
+                        const dateStr = format(date, "yyyy-MM-dd");
+                        const isHolidayEve = HOLIDAY_EVE_DATES.includes(dateStr);
+                        const morningReg = scheduleRegistrations.find(
+                          r => r.agent_name === agentName && r.date === dateStr && r.shift_type === "morning"
+                        );
+                        const eveningReg = scheduleRegistrations.find(
+                          r => r.agent_name === agentName && r.date === dateStr && r.shift_type === "evening"
+                        );
+                        const myReg = morningReg || eveningReg;
+                        const time = isHolidayEve && morningReg ? "09:00–14:00" : morningReg ? "08:00–16:00" : eveningReg ? "09:00–17:00" : null;
+                        const shiftLabel = isHolidayEve && morningReg ? "ערב חג" : morningReg ? "בוקר" : eveningReg ? "ערב" : null;
+                        return (
+                          <div key={dateStr} className="py-2 px-1 flex flex-col items-center justify-center">
+                            {myReg ? (
+                              <div className="w-full px-2 py-2 rounded-lg border-2 bg-indigo-50 border-indigo-300 flex flex-col items-center justify-center gap-1">
+                                <div className="text-xs font-bold text-indigo-700">{shiftLabel}</div>
+                                <div className="text-xs text-indigo-600 font-semibold">{time}</div>
+                              </div>
+                            ) : (
+                              <div className="w-full px-2 py-2 rounded-lg border-2 border-dashed border-slate-200 flex items-center justify-center">
+                                <span className="text-xs text-slate-300">–</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </motion.div>
@@ -558,54 +562,58 @@ export default function ShiftScheduler() {
                   return (
                     <motion.div key={shift.type} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
                       className="rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-lg shadow-slate-200/60">
-                      <div className="px-3 pt-2 pb-0 grid grid-cols-6 gap-3 border-b border-slate-100">
-                        <div></div>
-                        {scheduleDays.map((date, i) => (
-                          <div key={i} className="text-center pb-2">
-                            <div className="text-xs font-semibold text-slate-500">{WEEKDAY_LABELS[i]}</div>
-                            <div className="text-xs font-bold text-slate-700">{format(date, "dd/MM")}</div>
+                      <div className="overflow-x-auto">
+                        <div className="min-w-[640px]">
+                          <div className="px-3 pt-2 pb-0 grid grid-cols-6 gap-3 border-b border-slate-100">
+                            <div></div>
+                            {scheduleDays.map((date, i) => (
+                              <div key={i} className="text-center pb-2">
+                                <div className="text-xs font-semibold text-slate-500">{WEEKDAY_LABELS[i]}</div>
+                                <div className="text-xs font-bold text-slate-700">{format(date, "dd/MM")}</div>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                      <div className="p-3 grid grid-cols-6 gap-3 items-start">
-                        <div className="flex items-center gap-2 px-2">
-                          <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${shift.gradient} flex items-center justify-center shadow`}>
-                            <ShiftIcon className="w-3.5 h-3.5 text-white" />
-                          </div>
-                          <div>
-                            <div className="text-xs font-bold text-slate-800">{shift.label}</div>
-                            <div className="text-xs text-slate-400">{shift.time}</div>
+                          <div className="p-3 grid grid-cols-6 gap-3 items-start">
+                            <div className="flex items-center gap-2 px-2">
+                              <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${shift.gradient} flex items-center justify-center shadow`}>
+                                <ShiftIcon className="w-3.5 h-3.5 text-white" />
+                              </div>
+                              <div>
+                                <div className="text-xs font-bold text-slate-800">{shift.label}</div>
+                                <div className="text-xs text-slate-400">{shift.time}</div>
+                              </div>
+                            </div>
+                            {scheduleDays.map((date) => {
+                               const dateStr = format(date, "yyyy-MM-dd");
+                               const isHolidayEveDay = HOLIDAY_EVE_DATES.includes(dateStr);
+                               // On holiday eve, all registrations are stored as "morning"; show them in holiday_eve row
+                               const regs = scheduleRegistrations.filter(r =>
+                                 r.date === dateStr &&
+                                 r.shift_type === shift.type &&
+                                 r.agent_name !== agentName &&
+                                 !isHolidayEveDay
+                               ).concat(
+                                 isHolidayEveDay && shift.type === "holiday_eve"
+                                   ? scheduleRegistrations.filter(r => r.date === dateStr && r.agent_name !== agentName)
+                                   : []
+                               );
+                              const borderColor = shift.type === "morning" ? "border-amber-300" : shift.type === "evening" ? "border-indigo-300" : "border-purple-300";
+                              const bgColor = shift.type === "morning" ? "bg-amber-50" : shift.type === "evening" ? "bg-indigo-50" : "bg-purple-50";
+                              const textColor = shift.type === "morning" ? "text-amber-700" : shift.type === "evening" ? "text-indigo-700" : "text-purple-700";
+                              return (
+                                <div key={dateStr} className="flex flex-col gap-1">
+                                  {regs.length > 0 ? regs.map(reg => (
+                                    <div key={reg.id} className={`px-2 py-1.5 rounded-lg text-xs font-semibold border-2 ${bgColor} ${borderColor} ${textColor}`}>
+                                      {reg.agent_name}
+                                    </div>
+                                  )) : (
+                                    <div className="text-slate-300 text-xs text-center">–</div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
-                        {scheduleDays.map((date) => {
-                           const dateStr = format(date, "yyyy-MM-dd");
-                           const isHolidayEveDay = HOLIDAY_EVE_DATES.includes(dateStr);
-                           // On holiday eve, all registrations are stored as "morning"; show them in holiday_eve row
-                           const regs = scheduleRegistrations.filter(r =>
-                             r.date === dateStr &&
-                             r.shift_type === shift.type &&
-                             r.agent_name !== agentName &&
-                             !isHolidayEveDay
-                           ).concat(
-                             isHolidayEveDay && shift.type === "holiday_eve"
-                               ? scheduleRegistrations.filter(r => r.date === dateStr && r.agent_name !== agentName)
-                               : []
-                           );
-                          const borderColor = shift.type === "morning" ? "border-amber-300" : shift.type === "evening" ? "border-indigo-300" : "border-purple-300";
-                          const bgColor = shift.type === "morning" ? "bg-amber-50" : shift.type === "evening" ? "bg-indigo-50" : "bg-purple-50";
-                          const textColor = shift.type === "morning" ? "text-amber-700" : shift.type === "evening" ? "text-indigo-700" : "text-purple-700";
-                          return (
-                            <div key={dateStr} className="flex flex-col gap-1">
-                              {regs.length > 0 ? regs.map(reg => (
-                                <div key={reg.id} className={`px-2 py-1.5 rounded-lg text-xs font-semibold border-2 ${bgColor} ${borderColor} ${textColor}`}>
-                                  {reg.agent_name}
-                                </div>
-                              )) : (
-                                <div className="text-slate-300 text-xs text-center">–</div>
-                              )}
-                            </div>
-                          );
-                        })}
                       </div>
                     </motion.div>
                   );

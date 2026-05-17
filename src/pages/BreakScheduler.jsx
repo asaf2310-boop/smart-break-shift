@@ -151,34 +151,36 @@ export default function BreakScheduler() {
         )}
       </AnimatePresence>
 
-      <div className="relative z-10 max-w-5xl mx-auto px-4 py-8">
+      <div className="relative z-10 max-w-5xl mx-auto px-3 sm:px-4 py-5 sm:py-8">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex items-center justify-between mb-8"
+          className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 sm:mb-8"
         >
           <button
             onClick={handleLogout}
-            className="flex items-center gap-2 text-slate-400 hover:text-slate-700 text-sm transition-colors"
+            className="order-2 sm:order-1 flex items-center gap-2 text-slate-400 hover:text-slate-700 text-sm transition-colors"
           >
             <LogOut className="w-4 h-4" />
             <span>החלף משתמש</span>
           </button>
 
-          <div className="text-center">
+          <div className="order-1 sm:order-2 text-center">
             <div className="flex items-center gap-3 justify-center mb-1">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
                 <CalendarClock className="w-5 h-5 text-white" />
               </div>
-              <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">ניהול הפסקות</h1>
+              <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800 tracking-tight">ניהול הפסקות</h1>
             </div>
             <p className="text-slate-500 text-sm">
               שלום <span className="text-indigo-600 font-semibold">{agentName}</span>
             </p>
           </div>
 
-          <DateSelector selectedDate={selectedDate} onDateChange={setSelectedDate} variant="light" />
+          <div className="order-3">
+            <DateSelector selectedDate={selectedDate} onDateChange={setSelectedDate} variant="light" />
+          </div>
         </motion.div>
 
         {/* Nav */}

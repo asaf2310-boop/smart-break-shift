@@ -15,7 +15,7 @@ export default function AgentNameDialog({ open, onSubmit }) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-indigo-950 via-purple-950 to-slate-900">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-gradient-to-br from-indigo-950 via-purple-950 to-slate-900 p-4">
       <div className="absolute top-1/4 left-1/4 w-72 h-72 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-1/4 right-1/4 w-72 h-72 bg-purple-500/20 rounded-full blur-3xl pointer-events-none" />
 
@@ -23,16 +23,16 @@ export default function AgentNameDialog({ open, onSubmit }) {
         initial={{ opacity: 0, scale: 0.92, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ type: "spring", stiffness: 260, damping: 22 }}
-        className="relative w-full max-w-md mx-4"
+        className="relative w-full max-w-sm sm:max-w-md"
         dir="rtl"
       >
-        <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl shadow-2xl p-8">
-          <div className="flex flex-col items-center gap-3 mb-8">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
-              <CalendarClock className="w-8 h-8 text-white" />
+        <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl shadow-2xl p-5 sm:p-8">
+          <div className="flex flex-col items-center gap-3 mb-6 sm:mb-8">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+              <CalendarClock className="w-7 h-7 sm:w-8 sm:h-8 text-white" />
             </div>
             <div className="text-center">
-              <h1 className="text-2xl font-extrabold text-white tracking-tight">ניהול הפסקות</h1>
+              <h1 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">מערכת הפסקות ומשמרות</h1>
               <p className="text-white/60 text-sm mt-1">בחר/י את שמך להמשך</p>
             </div>
           </div>
