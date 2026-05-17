@@ -17,6 +17,5 @@ export function useIsAdmin() {
   const roleAdmin = isAuthenticated && user?.role === "admin";
 
   if (roleAdmin) return true;
-  if (!pinRequired) return true;
-  return sessionUnlocked;
+  return pinRequired && sessionUnlocked;
 }
