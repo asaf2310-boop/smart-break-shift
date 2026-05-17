@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, addDays, isBefore, isAfter } from "date-fns";
 import { useToast } from "@/components/ui/use-toast";
 import { motion } from "framer-motion";
@@ -18,6 +18,27 @@ import {
   getWeekDays,
   getConstraintsDeadline,
 } from "@/constants/scheduling";
+
+const getScheduleCacheKey = (dateFrom, dateTo) => `shift-schedule-cache:${dateFrom}:${dateTo}`;
+
+const readCachedSchedule = (dateFrom, dateTo) => {
+  try {
+    const raw = sessionStorage.getItem(getScheduleCacheKey(dateFrom, dateTo));
+    const parsed = raw ? JSON.parse(raw) : undefined;
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const writeCachedSchedule = (dateFrom, dateTo, data) => {
+  if (!Array.isArray(data) || data.length === 0) return;
+  try {
+    sessionStorage.setItem(getScheduleCacheKey(dateFrom, dateTo), JSON.stringify(data));
+  } catch {
+    // Cache is only a speed boost; ignore browsers that block storage.
+  }
+};
 
 export default function ShiftScheduler() {
   const [agentName, setAgentName] = useState(() => localStorage.getItem("agent_name") || "");
@@ -40,17 +61,23 @@ export default function ShiftScheduler() {
   const scheduleDateFrom = format(scheduleDays[0], "yyyy-MM-dd");
   const scheduleDateTo = format(scheduleDays[4], "yyyy-MM-dd");
 
-  const { data: scheduleRegistrations = [], isLoading: loadingSchedule } = useQuery({
+  const { data: scheduleRegistrations = [], isLoading: loadingSchedule, isFetching: fetchingSchedule } = useQuery({
     queryKey: ["shift-registrations", scheduleDateFrom, scheduleDateTo],
     queryFn: async () => {
       const days = scheduleDays.map(d => format(d, "yyyy-MM-dd"));
       const results = await Promise.all(days.map(d => base44.entities.ShiftRegistration.filter({ date: d })));
-      return results.flat();
+      const rows = results.flat();
+      writeCachedSchedule(scheduleDateFrom, scheduleDateTo, rows);
+      return rows;
     },
+    initialData: () => readCachedSchedule(scheduleDateFrom, scheduleDateTo),
+    placeholderData: keepPreviousData,
+    refetchOnMount: "always",
     enabled: !!agentName,
   });
 
   const schedulePublished = scheduleRegistrations.length > 0;
+  const isInitialScheduleLoad = loadingSchedule && scheduleRegistrations.length === 0;
 
   const deadline = getConstraintsDeadline(thisWeekStart);
   const isPastDeadline = isAfter(now, deadline);
@@ -442,15 +469,21 @@ export default function ShiftScheduler() {
 
 
 
-          {loadingSchedule ? (
-            <div className="flex justify-center py-12">
-              <div className="w-8 h-8 border-4 border-amber-500/30 border-t-amber-400 rounded-full animate-spin" />
+          {fetchingSchedule && (
+            <div className="mx-4 mt-4 flex justify-center">
+              <div className="px-3 py-1.5 rounded-full bg-amber-50 border border-amber-100 text-xs font-semibold text-amber-700">
+                מעדכן שיבוץ...
+              </div>
             </div>
-          ) : !schedulePublished ? (
+          )}
+
+          {!schedulePublished ? (
             <div className="flex flex-col items-center gap-2 py-12 text-slate-400">
               <Lock className="w-8 h-8 opacity-30" />
-              <p className="text-sm font-medium">השיבוץ לשבוע הנוכחי טרם פורסם</p>
-              <p className="text-xs">המנהל יפרסם בקרוב</p>
+              <p className="text-sm font-medium">
+                {isInitialScheduleLoad ? "טוען את השיבוץ..." : "השיבוץ לשבוע הנוכחי טרם פורסם"}
+              </p>
+              <p className="text-xs">{isInitialScheduleLoad ? "זה יופיע מיד כשנתוני השיבוץ יגיעו" : "המנהל יפרסם בקרוב"}</p>
             </div>
           ) : (
             <div className="p-4">
