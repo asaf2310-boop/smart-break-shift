@@ -1,28 +1,54 @@
-"use client"
+const isNode = typeof window === 'undefined';
+const windowObj = isNode ? { localStorage: new Map() } : window;
+const storage = windowObj.localStorage;
 
-import * as React from "react"
-import * as TooltipPrimitive from "@radix-ui/react-tooltip"
+const toSnakeCase = (str) => {
+	return str.replace(/([A-Z])/g, '_$1').toLowerCase();
+}
 
-import { cn } from "@/lib/utils"
+const getAppParamValue = (paramName, { defaultValue = undefined, removeFromUrl = false } = {}) => {
+	if (isNode) {
+		return defaultValue;
+	}
+	const storageKey = `base44_${toSnakeCase(paramName)}`;
+	const urlParams = new URLSearchParams(window.location.search);
+	const searchParam = urlParams.get(paramName);
+	if (removeFromUrl) {
+		urlParams.delete(paramName);
+		const newUrl = `${window.location.pathname}${urlParams.toString() ? `?${urlParams.toString()}` : ""
+			}${window.location.hash}`;
+		window.history.replaceState({}, document.title, newUrl);
+	}
+	if (searchParam) {
+		storage.setItem(storageKey, searchParam);
+		return searchParam;
+	}
+	if (defaultValue) {
+		storage.setItem(storageKey, defaultValue);
+		return defaultValue;
+	}
+	const storedValue = storage.getItem(storageKey);
+	if (storedValue) {
+		return storedValue;
+	}
+	return null;
+}
 
-const TooltipProvider = TooltipPrimitive.Provider
+const getAppParams = () => {
+	if (getAppParamValue("clear_access_token") === 'true') {
+		storage.removeItem('base44_access_token');
+		storage.removeItem('token');
+	}
+	return {
+		appId: getAppParamValue("app_id", { defaultValue: import.meta.env.VITE_BASE44_APP_ID }),
+		token: getAppParamValue("access_token", { removeFromUrl: true }),
+		fromUrl: getAppParamValue("from_url", { defaultValue: window.location.href }),
+		functionsVersion: getAppParamValue("functions_version", { defaultValue: import.meta.env.VITE_BASE44_FUNCTIONS_VERSION }),
+		appBaseUrl: getAppParamValue("app_base_url", { defaultValue: import.meta.env.VITE_BASE44_APP_BASE_URL }),
+	}
+}
 
-const Tooltip = TooltipPrimitive.Root
 
-const TooltipTrigger = TooltipPrimitive.Trigger
-
-const TooltipContent = React.forwardRef(({ className, sideOffset = 4, ...props }, ref) => (
-  <TooltipPrimitive.Portal>
-    <TooltipPrimitive.Content
-      ref={ref}
-      sideOffset={sideOffset}
-      className={cn(
-        "z-50 overflow-hidden rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
-        className
-      )}
-      {...props} />
-  </TooltipPrimitive.Portal>
-))
-TooltipContent.displayName = TooltipPrimitive.Content.displayName
-
-export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider }
+export const appParams = {
+	...getAppParams()
+}

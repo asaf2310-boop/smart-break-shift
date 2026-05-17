@@ -1,164 +1,192 @@
-// Inspired by react-hot-toast library
-import { useState, useEffect } from "react";
+import React, { createContext, useState, useContext, useEffect } from 'react';
+import { base44 } from '@/api/base44Client';
+import { useSupabaseBackend } from '@/api/dataClient';
+import { appParams } from '@/lib/app-params';
+import { createAxiosClient } from '@base44/sdk/dist/utils/axios-client';
 
-const TOAST_LIMIT = 20;
-const TOAST_REMOVE_DELAY = 1000000;
+const AuthContext = createContext();
 
-const actionTypes = {
-  ADD_TOAST: "ADD_TOAST",
-  UPDATE_TOAST: "UPDATE_TOAST",
-  DISMISS_TOAST: "DISMISS_TOAST",
-  REMOVE_TOAST: "REMOVE_TOAST",
-};
-
-let count = 0;
-
-function genId() {
-  count = (count + 1) % Number.MAX_VALUE;
-  return count.toString();
-}
-
-const toastTimeouts = new Map();
-
-const addToRemoveQueue = (toastId) => {
-  if (toastTimeouts.has(toastId)) {
-    return;
-  }
-
-  const timeout = setTimeout(() => {
-    toastTimeouts.delete(toastId);
-    dispatch({
-      type: actionTypes.REMOVE_TOAST,
-      toastId,
-    });
-  }, TOAST_REMOVE_DELAY);
-
-  toastTimeouts.set(toastId, timeout);
-};
-
-const _clearFromRemoveQueue = (toastId) => {
-  const timeout = toastTimeouts.get(toastId);
-  if (timeout) {
-    clearTimeout(timeout);
-    toastTimeouts.delete(toastId);
-  }
-};
-
-export const reducer = (state, action) => {
-  switch (action.type) {
-    case actionTypes.ADD_TOAST:
-      return {
-        ...state,
-        toasts: [action.toast, ...state.toasts].slice(0, TOAST_LIMIT),
-      };
-
-    case actionTypes.UPDATE_TOAST:
-      return {
-        ...state,
-        toasts: state.toasts.map((t) =>
-          t.id === action.toast.id ? { ...t, ...action.toast } : t
-        ),
-      };
-
-    case actionTypes.DISMISS_TOAST: {
-      const { toastId } = action;
-
-      // ! Side effects ! - This could be extracted into a dismissToast() action,
-      // but I'll keep it here for simplicity
-      if (toastId) {
-        addToRemoveQueue(toastId);
-      } else {
-        state.toasts.forEach((toast) => {
-          addToRemoveQueue(toast.id);
-        });
-      }
-
-      return {
-        ...state,
-        toasts: state.toasts.map((t) =>
-          t.id === toastId || toastId === undefined
-            ? {
-                ...t,
-                open: false,
-              }
-            : t
-        ),
-      };
-    }
-    case actionTypes.REMOVE_TOAST:
-      if (action.toastId === undefined) {
-        return {
-          ...state,
-          toasts: [],
-        };
-      }
-      return {
-        ...state,
-        toasts: state.toasts.filter((t) => t.id !== action.toastId),
-      };
-  }
-};
-
-const listeners = [];
-
-let memoryState = { toasts: [] };
-
-function dispatch(action) {
-  memoryState = reducer(memoryState, action);
-  listeners.forEach((listener) => {
-    listener(memoryState);
-  });
-}
-
-function toast({ ...props }) {
-  const id = genId();
-
-  const update = (props) =>
-    dispatch({
-      type: actionTypes.UPDATE_TOAST,
-      toast: { ...props, id },
-    });
-
-  const dismiss = () =>
-    dispatch({ type: actionTypes.DISMISS_TOAST, toastId: id });
-
-  dispatch({
-    type: actionTypes.ADD_TOAST,
-    toast: {
-      ...props,
-      id,
-      open: true,
-      onOpenChange: (open) => {
-        if (!open) dismiss();
-      },
-    },
-  });
-
-  return {
-    id,
-    dismiss,
-    update,
-  };
-}
-
-function useToast() {
-  const [state, setState] = useState(memoryState);
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [isLoadingPublicSettings, setIsLoadingPublicSettings] = useState(true);
+  const [authError, setAuthError] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [appPublicSettings, setAppPublicSettings] = useState(null); // Contains only { id, public_settings }
 
   useEffect(() => {
-    listeners.push(setState);
-    return () => {
-      const index = listeners.indexOf(setState);
-      if (index > -1) {
-        listeners.splice(index, 1);
-      }
-    };
-  }, [state]);
+    checkAppState();
+  }, []);
 
-  return {
-    ...state,
-    toast,
-    dismiss: (toastId) => dispatch({ type: actionTypes.DISMISS_TOAST, toastId }),
+  const finishAsGuest = () => {
+    setIsLoadingPublicSettings(false);
+    setIsLoadingAuth(false);
+    setIsAuthenticated(false);
+    setAuthChecked(true);
+    setAuthError(null);
   };
-}
 
-export { useToast, toast }; 
+  const checkAppState = async () => {
+    try {
+      setIsLoadingPublicSettings(true);
+      setAuthError(null);
+
+      if (useSupabaseBackend()) {
+        finishAsGuest();
+        return;
+      }
+
+      if (!appParams.appId) {
+        console.warn("[smart-break-shift] חסר VITE_BASE44_APP_ID");
+        finishAsGuest();
+        return;
+      }
+
+      // בפיתוח מקומי: בלי כתובת שרת — לא חוסמים את הממשק
+      if (import.meta.env.DEV && !appParams.appBaseUrl) {
+        console.warn("[smart-break-shift] חסר VITE_BASE44_APP_BASE_URL — ממשיכים במצב ממשק בלבד");
+        finishAsGuest();
+        return;
+      }
+
+      if (import.meta.env.VITE_DEV_BYPASS_AUTH === "true") {
+        finishAsGuest();
+        return;
+      }
+      
+      // First, check app public settings (with token if available)
+      // This will tell us if auth is required, user not registered, etc.
+      const appClient = createAxiosClient({
+        baseURL: `/api/apps/public`,
+        headers: {
+          'X-App-Id': appParams.appId
+        },
+        token: appParams.token, // Include token if available
+        interceptResponses: true
+      });
+      
+      try {
+        const publicSettings = await appClient.get(`/prod/public-settings/by-id/${appParams.appId}`);
+        setAppPublicSettings(publicSettings);
+        
+        // If we got the app public settings successfully, check if user is authenticated
+        if (appParams.token) {
+          await checkUserAuth();
+        } else {
+          setIsLoadingAuth(false);
+          setIsAuthenticated(false);
+          setAuthChecked(true);
+        }
+        setIsLoadingPublicSettings(false);
+      } catch (appError) {
+        console.error('App state check failed:', appError);
+        
+        // Handle app-level errors
+        if (appError.status === 403 && appError.data?.extra_data?.reason) {
+          const reason = appError.data.extra_data.reason;
+          if (reason === 'auth_required') {
+            setAuthError({
+              type: 'auth_required',
+              message: 'Authentication required'
+            });
+          } else if (reason === 'user_not_registered') {
+            setAuthError({
+              type: 'user_not_registered',
+              message: 'User not registered for this app'
+            });
+          } else {
+            setAuthError({
+              type: reason,
+              message: appError.message
+            });
+          }
+        } else {
+          setAuthError({
+            type: 'unknown',
+            message: appError.message || 'Failed to load app'
+          });
+        }
+        setIsLoadingPublicSettings(false);
+        setIsLoadingAuth(false);
+      }
+    } catch (error) {
+      console.error('Unexpected error:', error);
+      setAuthError({
+        type: 'unknown',
+        message: error.message || 'An unexpected error occurred'
+      });
+      setIsLoadingPublicSettings(false);
+      setIsLoadingAuth(false);
+    }
+  };
+
+  const checkUserAuth = async () => {
+    try {
+      // Now check if the user is authenticated
+      setIsLoadingAuth(true);
+      const currentUser = await base44.auth.me();
+      setUser(currentUser);
+      setIsAuthenticated(true);
+      setIsLoadingAuth(false);
+      setAuthChecked(true);
+    } catch (error) {
+      console.error('User auth check failed:', error);
+      setIsLoadingAuth(false);
+      setIsAuthenticated(false);
+      setAuthChecked(true);
+      
+      // If user auth fails, it might be an expired token
+      if (error.status === 401 || error.status === 403) {
+        setAuthError({
+          type: 'auth_required',
+          message: 'Authentication required'
+        });
+      }
+    }
+  };
+
+  const logout = (shouldRedirect = true) => {
+    setUser(null);
+    setIsAuthenticated(false);
+    
+    if (shouldRedirect) {
+      // Use the SDK's logout method which handles token cleanup and redirect
+      base44.auth.logout(window.location.href);
+    } else {
+      // Just remove the token without redirect
+      base44.auth.logout();
+    }
+  };
+
+  const navigateToLogin = () => {
+    // Use the SDK's redirectToLogin method
+    base44.auth.redirectToLogin(window.location.href);
+  };
+
+  return (
+    <AuthContext.Provider value={{ 
+      user, 
+      isAuthenticated, 
+      isLoadingAuth,
+      isLoadingPublicSettings,
+      authError,
+      appPublicSettings,
+      authChecked,
+      logout,
+      navigateToLogin,
+      checkUserAuth,
+      checkAppState
+    }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};

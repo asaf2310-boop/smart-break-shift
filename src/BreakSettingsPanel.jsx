@@ -1,87 +1,89 @@
-import { supabase, supabaseConfigured } from "./supabase";
+@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap');
 
-function table(name) {
-  if (!supabase) throw new Error("Supabase לא מוגדר — הוסף VITE_SUPABASE_URL ו-VITE_SUPABASE_ANON_KEY");
-  return supabase.from(name);
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-function applyFilters(query, filters = {}) {
-  let q = query;
-  for (const [key, value] of Object.entries(filters)) {
-    if (value !== undefined && value !== null) {
-      q = q.eq(key, value);
-    }
+@layer base {
+  :root {
+    --font-heebo: 'Heebo', sans-serif;
+    --background: 220 20% 97%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 234 89% 62%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 93%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 220 14% 93%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 262 83% 58%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 13% 89%;
+    --input: 220 13% 89%;
+    --ring: 234 89% 62%;
+    --chart-1: 234 89% 62%;
+    --chart-2: 262 83% 58%;
+    --chart-3: 173 58% 39%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --radius: 0.75rem;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 234 89% 62%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 234 89% 62%;
   }
-  return q;
-}
 
-function createEntity(tableName) {
-  return {
-    async filter(filters = {}) {
-      const { data, error } = await applyFilters(table(tableName).select("*"), filters);
-      if (error) throw error;
-      return data ?? [];
-    },
-
-    async list(order = "-created_at", limit = 100) {
-      const desc = order.startsWith("-");
-      const col = desc ? order.slice(1) : order;
-      let q = table(tableName).select("*").order(col, { ascending: !desc }).limit(limit);
-      const { data, error } = await q;
-      if (error) throw error;
-      return data ?? [];
-    },
-
-    async create(row) {
-      const { data, error } = await table(tableName).insert(row).select().single();
-      if (error) throw error;
-      return data;
-    },
-
-    async bulkCreate(rows) {
-      if (!rows?.length) return [];
-      const { data, error } = await table(tableName).insert(rows).select();
-      if (error) throw error;
-      return data ?? [];
-    },
-
-    async update(id, row) {
-      const { data, error } = await table(tableName).update(row).eq("id", id).select().single();
-      if (error) throw error;
-      return data;
-    },
-
-    async delete(id) {
-      const { error } = await table(tableName).delete().eq("id", id);
-      if (error) throw error;
-    },
-  };
-}
-
-const ENTITY_TABLES = {
-  BreakRegistration: "break_registrations",
-  BreakSettings: "break_settings",
-  ShiftRegistration: "shift_registrations",
-  ShiftUnavailability: "shift_unavailabilities",
-  VacationRequest: "vacation_requests",
-  ConstraintConfirmation: "constraint_confirmations",
-};
-
-export function createSupabaseDataClient() {
-  const entities = {};
-  for (const [name, tableName] of Object.entries(ENTITY_TABLES)) {
-    entities[name] = createEntity(tableName);
+  .dark {
+    --background: 224 30% 8%;
+    --foreground: 210 20% 95%;
+    --card: 224 25% 12%;
+    --card-foreground: 210 20% 95%;
+    --popover: 224 25% 12%;
+    --popover-foreground: 210 20% 95%;
+    --primary: 234 89% 62%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 224 20% 18%;
+    --secondary-foreground: 210 20% 95%;
+    --muted: 224 20% 18%;
+    --muted-foreground: 220 9% 56%;
+    --accent: 262 83% 58%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 224 20% 18%;
+    --input: 224 20% 18%;
+    --ring: 234 89% 62%;
+    --chart-1: 234 89% 62%;
+    --chart-2: 262 83% 58%;
+    --chart-3: 173 58% 39%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --sidebar-background: 224 30% 8%;
+    --sidebar-foreground: 210 20% 95%;
+    --sidebar-primary: 234 89% 62%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 224 20% 18%;
+    --sidebar-accent-foreground: 210 20% 95%;
+    --sidebar-border: 224 20% 18%;
+    --sidebar-ring: 234 89% 62%;
   }
-  return {
-    entities,
-    auth: {
-      me: async () => null,
-      logout: () => {},
-      redirectToLogin: () => {},
-    },
-  };
 }
 
-export function useSupabaseBackend() {
-  return supabaseConfigured;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground font-heebo;
+  }
 }

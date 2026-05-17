@@ -1,37 +1,91 @@
-import { useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
-import { useAuth } from '@/lib/AuthContext';
-import UserNotRegisteredError from '@/components/UserNotRegisteredError';
+import React from "react";
+import { motion } from "framer-motion";
+import { Clock, User, Check, Lock } from "lucide-react";
 
-const DefaultFallback = () => (
-  <div className="fixed inset-0 flex items-center justify-center">
-    <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
-  </div>
-);
+export default function TimeSlotCard({ slot, breakType, registrations, onRegister, isRegistered, isDisabled, index, maxPerSlot = 1 }) {
+  const isLunch = breakType === "lunch";
+  const count = registrations.length;
+  const isFull = count >= maxPerSlot;
+  const canRegister = !isFull && !isRegistered && !isDisabled;
 
-export default function ProtectedRoute({ fallback = <DefaultFallback />, unauthenticatedElement }) {
-  const { isAuthenticated, isLoadingAuth, authChecked, authError, checkUserAuth } = useAuth();
+  const accentFrom = isLunch ? "from-indigo-500" : "from-purple-500";
+  const accentTo = isLunch ? "to-blue-500" : "to-pink-500";
+  const accentText = isLunch ? "text-indigo-300" : "text-purple-300";
+  const accentBg = isLunch ? "bg-indigo-500/20" : "bg-purple-500/20";
+  const accentBorder = isLunch ? "border-indigo-500/30" : "border-purple-500/30";
 
-  useEffect(() => {
-    if (!authChecked && !isLoadingAuth) {
-      checkUserAuth();
-    }
-  }, [authChecked, isLoadingAuth, checkUserAuth]);
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.03 * index }}
+      className={`
+        relative rounded-2xl border p-4 flex flex-col gap-3 transition-all duration-300 h-full
+        ${isRegistered
+          ? `border-indigo-200 bg-gradient-to-br from-indigo-50 to-purple-50 shadow-md`
+          : isFull
+            ? "border-slate-100 bg-slate-50 opacity-50"
+            : "border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 hover:shadow-sm cursor-pointer"
+        }
+      `}
+    >
+      {/* Time */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <Clock className={`w-3.5 h-3.5 ${isRegistered ? accentText : "text-slate-400"}`} />
+          <span className={`text-sm font-bold ${isRegistered ? accentText : "text-slate-700"}`}>{slot}</span>
+        </div>
 
-  if (isLoadingAuth || !authChecked) {
-    return fallback;
-  }
+        {/* Occupancy counter */}
+        <span className={`text-xs font-bold ${isFull ? "text-red-400" : "text-slate-400"}`}>
+          {count}/{maxPerSlot}
+        </span>
+      </div>
 
-  if (authError) {
-    if (authError.type === 'user_not_registered') {
-      return <UserNotRegisteredError />;
-    }
-    return unauthenticatedElement;
-  }
+      {/* Registered names + availability */}
+      <div className="space-y-1 flex-1 min-w-0">
+        {registrations.map((reg, i) => (
+          <div key={i} className="flex items-start gap-1.5 min-w-0">
+            <User className="w-3 h-3 text-slate-400 flex-shrink-0 mt-0.5" />
+            <span className="text-xs sm:text-sm text-slate-700 font-semibold break-words">{reg.agent_name}</span>
+          </div>
+        ))}
+        {!isFull && (
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full bg-green-400" />
+            <span className="text-xs text-green-600 font-medium">
+              {count === 0 ? "פנוי" : `עוד ${maxPerSlot - count} מקום`}
+            </span>
+          </div>
+        )}
+      </div>
 
-  if (!isAuthenticated) {
-    return unauthenticatedElement;
-  }
-
-  return <Outlet />;
+      {/* Action */}
+      {isRegistered ? (
+        <div className={`flex items-center gap-1.5 text-xs font-semibold ${accentText} ${accentBg} ${accentBorder} border rounded-xl px-3 py-1.5 justify-center`}>
+          <Check className="w-3.5 h-3.5" />
+          <span>ההפסקה שלי</span>
+        </div>
+      ) : isFull ? (
+        <div className="flex items-center gap-1.5 text-xs text-slate-400 justify-center">
+          <Lock className="w-3.5 h-3.5" />
+          <span>מלא</span>
+        </div>
+      ) : (
+        <button
+          disabled={!canRegister}
+          onClick={() => onRegister(slot)}
+          className={`
+            w-full py-1.5 rounded-xl text-xs font-semibold transition-all duration-200
+            ${canRegister
+              ? `bg-gradient-to-r ${accentFrom} ${accentTo} text-white shadow-md hover:shadow-lg hover:scale-[1.03] active:scale-[0.97]`
+              : "bg-white/5 text-white/20 cursor-not-allowed"
+            }
+          `}
+        >
+          {isDisabled ? "כבר נרשמת" : "הרשמה"}
+        </button>
+      )}
+    </motion.div>
+  );
 }

@@ -1,241 +1,202 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
-import { useQuery } from "@tanstack/react-query";
-import { format, addDays } from "date-fns";
-import { motion } from "framer-motion";
-import { Sun, Moon, CalendarDays, Lock, LogOut } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { format } from "date-fns";
+import { useToast } from "@/components/ui/use-toast";
+import { motion, AnimatePresence } from "framer-motion";
+import { CalendarClock, LogOut, AlertTriangle, X } from "lucide-react";
 
-const AGENT_NAMES = [
-  "רחלה מנשה", "שרון שפיר", "תהילה קיפרווסר", "בני סגל", "אופיר דוד",
-  "אוראל כליפה", "הילה שלמה", "אורפז דאבוש", "בוריס טורבין", "נהוראי וקנין",
-];
+import BreakSection from "../components/breaks/BreakSection";
+import AgentNameDialog from "../components/breaks/AgentNameDialog";
+import MyRegistrations from "../components/breaks/MyRegistrations";
+import DateSelector from "../components/breaks/DateSelector";
+import AppNav from "../components/layout/AppNav";
+import { SHORT_BREAK_SLOTS, LUNCH_BREAK_SLOTS } from "@/constants/scheduling";
 
-const DAYS = ["ראשון", "שני", "שלישי", "רביעי", "חמישי"];
+export default function BreakScheduler() {
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [agentName, setAgentName] = useState(() => localStorage.getItem("agent_name") || "");
+  const [showNotice, setShowNotice] = useState(false);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
-function getWeekStart(date) {
-  const d = new Date(date);
-  d.setDate(d.getDate() - d.getDay());
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
+  useEffect(() => {
+    if (agentName && settings?.show_shortage_notice) setShowNotice(true);
+  }, [agentName, settings?.show_shortage_notice, settings?.id]);
 
-function getWeekDays(weekStart) {
-  return Array.from({ length: 5 }, (_, i) => addDays(weekStart, i));
-}
+  const dateStr = format(selectedDate, "yyyy-MM-dd");
 
-export default function TestAgentView() {
-  const [selectedAgent, setSelectedAgent] = useState("רחלה מנשה");
-  const now = new Date();
-  const thisWeekStart = getWeekStart(now);
-  const nextWeekStart = addDays(thisWeekStart, 7);
-  const scheduleDays = useMemo(() => getWeekDays(nextWeekStart), [nextWeekStart]);
-
-  const scheduleDateFrom = format(scheduleDays[0], "yyyy-MM-dd");
-  const scheduleDateTo = format(scheduleDays[4], "yyyy-MM-dd");
-
-  const { data: nextWeekRegistrations = [], isLoading: loadingSchedule } = useQuery({
-    queryKey: ["shift-registrations", scheduleDateFrom, scheduleDateTo],
-    queryFn: () => base44.entities.ShiftRegistration.list("-date", 50),
+  const { data: registrations = [], isLoading } = useQuery({
+    queryKey: ["break-registrations", dateStr],
+    queryFn: () => base44.entities.BreakRegistration.filter({ date: dateStr }),
   });
 
-  const schedulePublished = nextWeekRegistrations.some(r =>
-    r.date >= scheduleDateFrom && r.date <= scheduleDateTo
-  );
+  const { data: settingsList = [] } = useQuery({
+    queryKey: ["break-settings", dateStr],
+    queryFn: () => base44.entities.BreakSettings.filter({ date: dateStr }),
+  });
+  const settings = settingsList[0] || null;
 
-  const scheduleWeekLabel = `${format(scheduleDays[0], "dd/MM")} – ${format(scheduleDays[4], "dd/MM/yyyy")}`;
+  const createMutation = useMutation({
+    mutationFn: (data) => base44.entities.BreakRegistration.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["break-registrations", dateStr] });
+      toast({ title: "✓ נרשמת בהצלחה!", description: "ההרשמה נשמרה" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => base44.entities.BreakRegistration.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["break-registrations", dateStr] });
+      toast({ title: "ההרשמה בוטלה", description: "ניתן להירשם מחדש" });
+    },
+  });
+
+  const handleNameSubmit = (name) => {
+    setAgentName(name);
+    localStorage.setItem("agent_name", name);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("agent_name");
+    setAgentName("");
+  };
+
+  const handleRegister = (breakType) => (slot) => {
+    createMutation.mutate({ agent_name: agentName, break_type: breakType, time_slot: slot, date: dateStr });
+  };
+
+  const handleCancel = (id) => deleteMutation.mutate(id);
+
+  const shortRegs = useMemo(() => registrations.filter(r => r.break_type === "short"), [registrations]);
+  const lunchRegs = useMemo(() => registrations.filter(r => r.break_type === "lunch"), [registrations]);
+  const myShortReg = useMemo(() => shortRegs.find(r => r.agent_name === agentName), [shortRegs, agentName]);
+  const myLunchReg = useMemo(() => lunchRegs.find(r => r.agent_name === agentName), [lunchRegs, agentName]);
+
+  if (!agentName) {
+    return <AgentNameDialog open={true} onSubmit={handleNameSubmit} />;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50" dir="rtl">
+      {/* Background decorations */}
       <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
         <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-indigo-300/20 rounded-full blur-3xl" />
         <div className="absolute bottom-[-10%] left-[-5%] w-[500px] h-[500px] bg-purple-300/20 rounded-full blur-3xl" />
       </div>
 
-      <div className="relative z-10 max-w-4xl mx-auto px-4 py-8">
+      <AnimatePresence>
+        {showNotice && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4"
+            dir="rtl"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-3xl shadow-2xl p-6 w-full max-w-sm"
+            >
+              <div className="flex flex-col items-center text-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-amber-100 flex items-center justify-center">
+                  <AlertTriangle className="w-7 h-7 text-amber-500" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-extrabold text-slate-800 mb-1">שימו לב</h2>
+                  <p className="text-slate-600 text-sm leading-relaxed">
+                    {settings?.shortage_notice_text || "עקב מחסור בנציגים, היום לא תתאפשר יציאה בזוגות להפסקת צהריים."}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowNotice(false)}
+                  className="w-full py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 text-white font-bold text-sm shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all"
+                >
+                  הבנתי
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="relative z-10 max-w-5xl mx-auto px-4 py-8">
         {/* Header */}
-        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between mb-8">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center justify-between mb-8"
+        >
           <button
-            onClick={() => setSelectedAgent("")}
-            className="text-sm text-slate-400 hover:text-slate-700 transition-colors flex items-center gap-2"
+            onClick={handleLogout}
+            className="flex items-center gap-2 text-slate-400 hover:text-slate-700 text-sm transition-colors"
           >
             <LogOut className="w-4 h-4" />
-            החלף נציג
+            <span>החלף משתמש</span>
           </button>
-          <div className="text-center flex-1">
-            <div className="flex items-center gap-3 justify-center mb-2">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/30">
-                <CalendarDays className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-extrabold text-slate-800">תצוגת שיבוץ</h1>
-                <p className="text-slate-500 text-xs">אתה רואה את: <span className="text-indigo-600 font-semibold">{selectedAgent}</span></p>
-              </div>
-            </div>
-            <p className="text-slate-500 text-sm">שבוע {scheduleWeekLabel}</p>
-          </div>
-          <div className="w-24" />
-        </motion.div>
 
-        {/* Published schedule (next week) */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-          className="rounded-3xl overflow-hidden border border-slate-200 bg-white shadow-lg shadow-slate-200/60">
-
-          <div className="px-6 py-4 bg-gradient-to-l from-amber-50 to-transparent border-b border-slate-100 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow shadow-amber-500/30">
-              <CalendarDays className="w-5 h-5 text-white" />
-            </div>
-            <div className="flex-1">
-              <h2 className="font-bold text-slate-800">שיבוץ שבוע הבא</h2>
-              <p className="text-xs text-slate-400">{scheduleWeekLabel}</p>
-            </div>
-            {schedulePublished && (
-              <div className="bg-green-100 border border-green-200 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-xl">
-                ✓ פורסם
+          <div className="text-center">
+            <div className="flex items-center gap-3 justify-center mb-1">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                <CalendarClock className="w-5 h-5 text-white" />
               </div>
-            )}
+              <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">ניהול הפסקות</h1>
+            </div>
+            <p className="text-slate-500 text-sm">
+              שלום <span className="text-indigo-600 font-semibold">{agentName}</span>
+            </p>
           </div>
 
-          {loadingSchedule ? (
-            <div className="flex justify-center py-10">
-              <div className="w-8 h-8 border-4 border-amber-500/30 border-t-amber-400 rounded-full animate-spin" />
-            </div>
-          ) : !schedulePublished ? (
-            <div className="flex flex-col items-center gap-2 py-12 text-slate-400">
-              <Lock className="w-8 h-8 opacity-30" />
-              <p className="text-sm font-medium">השיבוץ לשבוע הבא טרם פורסם</p>
-              <p className="text-xs">המנהל יפרסם בקרוב</p>
-            </div>
-          ) : (
-           <div className="p-4">
-             {/* Table with my schedule at top */}
-             <div className="grid grid-cols-6 gap-3 mb-3">
-               <div className="text-xs font-semibold text-slate-400 text-center py-2">משמרת</div>
-               {scheduleDays.map((date, i) => (
-                 <div key={i} className="text-center">
-                   <div className="text-xs font-semibold text-slate-500">{DAYS[i]}</div>
-                   <div className="text-sm font-bold text-slate-700">{format(date, "dd/MM")}</div>
-                 </div>
-               ))}
-             </div>
-
-             <div className="space-y-3">
-               {/* My schedule row */}
-               <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-                 className="rounded-2xl overflow-hidden border border-indigo-200 bg-gradient-to-r from-indigo-50 to-transparent shadow-lg shadow-indigo-100/60">
-                 <div className="p-3 grid grid-cols-6 gap-3 items-center">
-                   <div className="flex items-center gap-2 px-2">
-                     <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow shadow-indigo-500/20">
-                       <CalendarDays className="w-3.5 h-3.5 text-white" />
-                     </div>
-                     <span className="text-xs font-bold text-slate-800">השיבוץ שלך</span>
-                   </div>
-                   {scheduleDays.map((date) => {
-                     const dateStr = format(date, "yyyy-MM-dd");
-                     const myRegs = nextWeekRegistrations.filter(
-                       r => r.date === dateStr && r.agent_name === selectedAgent &&
-                       r.date >= scheduleDateFrom && r.date <= scheduleDateTo
-                     );
-                     const shiftTimes = { morning: "08:00–16:00", evening: "09:00–17:00", holiday: "09:00–14:00" };
-                     return (
-                       <div key={dateStr} className="flex flex-col gap-1 text-center">
-                         {myRegs.length > 0 ? (
-                           myRegs.map((reg, idx) => (
-                             <div
-                               key={idx}
-                               className={`px-1.5 py-1 rounded-lg text-xs border ${
-                                 reg.shift_type === "morning"
-                                   ? "bg-amber-50 border-amber-200 text-amber-700"
-                                   : reg.shift_type === "evening"
-                                   ? "bg-indigo-50 border-indigo-200 text-indigo-700"
-                                   : "bg-purple-50 border-purple-200 text-purple-700"
-                               }`}
-                             >
-                               <div className="font-bold">{reg.shift_type === "morning" ? "בוקר" : reg.shift_type === "evening" ? "ערב" : "ערב חג"}</div>
-                               <div className="text-xs opacity-70">{shiftTimes[reg.shift_type]}</div>
-                             </div>
-                           ))
-                         ) : (
-                           <div className="text-slate-300 text-xs">–</div>
-                         )}
-                       </div>
-                     );
-                   })}
-                 </div>
-               </motion.div>
-
-               {[
-                 { type: "morning", label: "משמרת בוקר", time: "08:00–16:00", icon: Sun, gradient: "from-amber-400 to-orange-500" },
-                 { type: "evening", label: "משמרת ערב", time: "09:00–17:00", icon: Moon, gradient: "from-indigo-400 to-purple-500" },
-                 { type: "holiday", label: "משמרת ערב חג", time: "09:00–14:00", icon: Sun, gradient: "from-purple-400 to-pink-500" },
-               ].map(shift => {
-                 const ShiftIcon = shift.icon;
-                 return (
-                   <motion.div key={shift.type} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
-                     className="rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-lg shadow-slate-200/60">
-                     <div className="p-3 grid grid-cols-6 gap-3 items-start">
-                       <div className="flex items-center gap-2 px-2">
-                         <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${shift.gradient} flex items-center justify-center shadow`}>
-                           <ShiftIcon className="w-3.5 h-3.5 text-white" />
-                         </div>
-                         <div>
-                           <div className="text-xs font-bold text-slate-800">{shift.label}</div>
-                           <div className="text-xs text-slate-400">{shift.time}</div>
-                         </div>
-                       </div>
-                       {scheduleDays.map((date) => {
-                         const dateStr = format(date, "yyyy-MM-dd");
-                         const dayRegs = nextWeekRegistrations.filter(
-                           r => r.date === dateStr && r.shift_type === shift.type &&
-                           r.date >= scheduleDateFrom && r.date <= scheduleDateTo &&
-                           r.agent_name !== selectedAgent
-                         );
-                         return (
-                           <div key={dateStr} className="flex flex-col gap-1 text-center">
-                             {dayRegs.length > 0 ? (
-                               dayRegs.map((reg, idx) => (
-                                 <div key={idx} className="px-1.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 border border-slate-200 text-slate-700 truncate">
-                                   {reg.agent_name}
-                                 </div>
-                               ))
-                             ) : (
-                               <div className="text-slate-300 text-xs">–</div>
-                             )}
-                           </div>
-                         );
-                       })}
-                     </div>
-                   </motion.div>
-                 );
-               })}
-             </div>
-           </div>
-          )}
+          <DateSelector selectedDate={selectedDate} onDateChange={setSelectedDate} variant="light" />
         </motion.div>
+
+        {/* Nav */}
+        <AppNav />
+
+        {/* My Registrations */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.1 }}
+          className="mb-6"
+        >
+          <MyRegistrations shortReg={myShortReg} lunchReg={myLunchReg} onCancel={handleCancel} />
+        </motion.div>
+
+        {isLoading ? (
+          <div className="flex justify-center py-24">
+            <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-400 rounded-full animate-spin" />
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <BreakSection
+              type="short"
+              title="הפסקת 10 דקות"
+              subtitle="10:00 – 12:00 · מקסימום נציג אחד למשבצת"
+              slots={SHORT_BREAK_SLOTS}
+              registrations={shortRegs}
+              onRegister={handleRegister("short")}
+              userRegistration={myShortReg}
+              agentName={agentName}
+              maxPerSlot={settings?.short_max_per_slot ?? 1}
+            />
+            <BreakSection
+              type="lunch"
+              title="הפסקת צהריים"
+              subtitle={`12:30 – 15:30 · חצי שעה · מקסימום ${settings?.lunch_max_per_slot ?? 1} נציג${(settings?.lunch_max_per_slot ?? 1) > 1 ? "ים" : ""} למשבצת`}
+              slots={LUNCH_BREAK_SLOTS}
+              registrations={lunchRegs}
+              onRegister={handleRegister("lunch")}
+              userRegistration={myLunchReg}
+              agentName={agentName}
+              maxPerSlot={settings?.lunch_max_per_slot ?? 1}
+            />
+          </div>
+        )}
       </div>
-
-      {/* Agent selector modal */}
-      {!selectedAgent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" dir="rtl">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.92 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-3xl shadow-2xl p-6 w-full max-w-sm mx-4"
-          >
-            <h2 className="font-bold text-lg text-slate-800 mb-4">בחר נציג</h2>
-            <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
-              {AGENT_NAMES.map(name => (
-                <button
-                  key={name}
-                  onClick={() => setSelectedAgent(name)}
-                  className="px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 hover:bg-indigo-50 hover:border-indigo-300 transition-all text-right"
-                >
-                  {name}
-                </button>
-              ))}
-            </div>
-          </motion.div>
-        </div>
-      )}
     </div>
   );
 }

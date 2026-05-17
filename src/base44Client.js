@@ -1,89 +1,69 @@
-@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap');
+import React, { useState } from "react";
+import { format, addDays } from "date-fns";
+import AutoScheduleBuilder from "../components/shifts/AutoScheduleBuilder";
+import { ArrowLeft } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-@layer base {
-  :root {
-    --font-heebo: 'Heebo', sans-serif;
-    --background: 220 20% 97%;
-    --foreground: 222 47% 11%;
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 234 89% 62%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 220 14% 93%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 220 14% 93%;
-    --muted-foreground: 220 9% 46%;
-    --accent: 262 83% 58%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 220 13% 89%;
-    --input: 220 13% 89%;
-    --ring: 234 89% 62%;
-    --chart-1: 234 89% 62%;
-    --chart-2: 262 83% 58%;
-    --chart-3: 173 58% 39%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --radius: 0.75rem;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 234 89% 62%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 234 89% 62%;
-  }
-
-  .dark {
-    --background: 224 30% 8%;
-    --foreground: 210 20% 95%;
-    --card: 224 25% 12%;
-    --card-foreground: 210 20% 95%;
-    --popover: 224 25% 12%;
-    --popover-foreground: 210 20% 95%;
-    --primary: 234 89% 62%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 224 20% 18%;
-    --secondary-foreground: 210 20% 95%;
-    --muted: 224 20% 18%;
-    --muted-foreground: 220 9% 56%;
-    --accent: 262 83% 58%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 224 20% 18%;
-    --input: 224 20% 18%;
-    --ring: 234 89% 62%;
-    --chart-1: 234 89% 62%;
-    --chart-2: 262 83% 58%;
-    --chart-3: 173 58% 39%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --sidebar-background: 224 30% 8%;
-    --sidebar-foreground: 210 20% 95%;
-    --sidebar-primary: 234 89% 62%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 224 20% 18%;
-    --sidebar-accent-foreground: 210 20% 95%;
-    --sidebar-border: 224 20% 18%;
-    --sidebar-ring: 234 89% 62%;
-  }
+function getWeekStart(date) {
+  const d = new Date(date);
+  d.setDate(d.getDate() - d.getDay());
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
 
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
+export default function TestAutoSchedule() {
+  const navigate = useNavigate();
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const weekStart = getWeekStart(selectedDate);
 
-  body {
-    @apply bg-background text-foreground font-heebo;
-  }
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50" dir="rtl">
+      <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+        <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-indigo-300/20 rounded-full blur-3xl" />
+        <div className="absolute bottom-[-10%] left-[-5%] w-[500px] h-[500px] bg-purple-300/20 rounded-full blur-3xl" />
+      </div>
+
+      <div className="relative z-10 max-w-4xl mx-auto px-4 py-8">
+        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+          <button
+            onClick={() => navigate("/admin/shifts")}
+            className="flex items-center gap-2 text-indigo-600 hover:text-indigo-800 font-semibold mb-4 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            חזרה לדוח שיבוץים
+          </button>
+          <h1 className="text-3xl font-extrabold text-slate-800">🧪 סביבת טסט - יצירת שיבוץ אוטומטי</h1>
+          <p className="text-slate-500 mt-2">בחר שבוע לבדיקה (לא משמרת נתונים)</p>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="mb-6 rounded-2xl bg-white border border-slate-200 p-6 shadow-md">
+          <label className="block text-sm font-semibold text-slate-700 mb-3">בחר תאריך להצגת השבוע:</label>
+          <input
+            type="date"
+            value={format(selectedDate, "yyyy-MM-dd")}
+            onChange={e => setSelectedDate(new Date(e.target.value))}
+            className="w-full border border-slate-300 rounded-lg px-4 py-2 outline-none focus:border-indigo-400 text-right"
+          />
+          <p className="text-xs text-slate-400 mt-2">
+            שבוע: {format(weekStart, "dd/MM")} – {format(addDays(weekStart, 4), "dd/MM/yyyy")}
+          </p>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+          <AutoScheduleBuilder weekStart={weekStart} />
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="mt-8 rounded-2xl bg-amber-50 border border-amber-200 p-4">
+          <h3 className="font-bold text-amber-900 mb-2">💡 דברים לבדוק:</h3>
+          <ul className="text-sm text-amber-800 space-y-1 list-disc list-inside">
+            <li>לחץ "צור שיבוץ" וראה את התוצאה ב-Console (F12)</li>
+            <li>שנה קלט על ידי עריכת הSelect בטבלה</li>
+            <li>צפה בקבוצות שונות של אילוצים והשפעתם על השיבוץ</li>
+            <li>לחץ "אשר ושמור" אם ברצונך לשמור (יוצר בדוק/אמיתי!)</li>
+          </ul>
+        </motion.div>
+      </div>
+    </div>
+  );
 }

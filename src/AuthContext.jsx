@@ -1,44 +1,22 @@
-"use client";
-import * as React from "react"
-import * as ToggleGroupPrimitive from "@radix-ui/react-toggle-group"
+import { useAuth } from "@/lib/AuthContext";
 
-import { cn } from "@/lib/utils"
-import { toggleVariants } from "@/components/ui/toggle"
+const ADMIN_SESSION_KEY = "smart_break_admin_unlocked";
 
-const ToggleGroupContext = React.createContext({
-  size: "default",
-  variant: "default",
-})
+export function unlockAdminSession() {
+  sessionStorage.setItem(ADMIN_SESSION_KEY, "true");
+}
 
-const ToggleGroup = React.forwardRef(({ className, variant, size, children, ...props }, ref) => (
-  <ToggleGroupPrimitive.Root
-    ref={ref}
-    className={cn("flex items-center justify-center gap-1", className)}
-    {...props}>
-    <ToggleGroupContext.Provider value={{ variant, size }}>
-      {children}
-    </ToggleGroupContext.Provider>
-  </ToggleGroupPrimitive.Root>
-))
+export function clearAdminSession() {
+  sessionStorage.removeItem(ADMIN_SESSION_KEY);
+}
 
-ToggleGroup.displayName = ToggleGroupPrimitive.Root.displayName
+export function useIsAdmin() {
+  const { user, isAuthenticated } = useAuth();
+  const pinRequired = Boolean(import.meta.env.VITE_ADMIN_PIN);
+  const sessionUnlocked = sessionStorage.getItem(ADMIN_SESSION_KEY) === "true";
+  const roleAdmin = isAuthenticated && user?.role === "admin";
 
-const ToggleGroupItem = React.forwardRef(({ className, children, variant, size, ...props }, ref) => {
-  const context = React.useContext(ToggleGroupContext)
-
-  return (
-    (<ToggleGroupPrimitive.Item
-      ref={ref}
-      className={cn(toggleVariants({
-        variant: context.variant || variant,
-        size: context.size || size,
-      }), className)}
-      {...props}>
-      {children}
-    </ToggleGroupPrimitive.Item>)
-  );
-})
-
-ToggleGroupItem.displayName = ToggleGroupPrimitive.Item.displayName
-
-export { ToggleGroup, ToggleGroupItem }
+  if (roleAdmin) return true;
+  if (!pinRequired) return true;
+  return sessionUnlocked;
+}

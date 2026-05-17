@@ -1,30 +1,59 @@
-import React from "react";
-import { Link } from "react-router-dom";
-import { AlertTriangle, Home } from "lucide-react";
+import React, { useState } from "react";
+import { ShieldCheck, Lock } from "lucide-react";
+import { useIsAdmin, unlockAdminSession } from "@/hooks/useIsAdmin";
 
-export default function AppLoadError({ message }) {
+export default function AdminGate({ children }) {
+  const isAdmin = useIsAdmin();
+  const pinRequired = Boolean(import.meta.env.VITE_ADMIN_PIN);
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState("");
+
+  if (isAdmin) return children;
+  if (!pinRequired) return children;
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (pin === import.meta.env.VITE_ADMIN_PIN) {
+      unlockAdminSession();
+      setError("");
+      window.location.reload();
+    } else {
+      setError("קוד גישה שגוי");
+    }
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-red-50 px-4" dir="rtl">
-      <div className="max-w-md w-full bg-white rounded-3xl shadow-xl border border-red-200 p-8">
-        <div className="flex flex-col items-center text-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-red-100 flex items-center justify-center">
-            <AlertTriangle className="w-7 h-7 text-red-600" />
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50 flex items-center justify-center px-4" dir="rtl">
+      <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl border border-slate-200 p-8">
+        <div className="flex flex-col items-center gap-4 mb-6">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
+            <ShieldCheck className="w-7 h-7 text-white" />
           </div>
-          <h1 className="text-xl font-bold text-slate-800">לא הצלחנו לטעון את האפליקציה</h1>
-          <p className="text-sm text-slate-500">{message || "בדוק את חיבור Base44 והגדרות .env.local"}</p>
-          <ul className="text-xs text-slate-500 text-right w-full space-y-1 list-disc list-inside">
-            <li>האם הרצת <code className="bg-slate-100 px-1 rounded">npm run dev</code>?</li>
-            <li>האם מולא <code className="bg-slate-100 px-1 rounded">VITE_BASE44_APP_BASE_URL</code>?</li>
-            <li>נסה לרענן את הדף אחרי שמירת .env.local</li>
-          </ul>
-          <Link
-            to="/"
-            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-2xl bg-slate-800 text-white text-sm font-semibold"
-          >
-            <Home className="w-4 h-4" />
-            דף הבית
-          </Link>
+          <div className="text-center">
+            <h1 className="text-xl font-extrabold text-slate-800">כניסת מנהל</h1>
+            <p className="text-sm text-slate-500 mt-1">הזן קוד גישה</p>
+          </div>
         </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="relative">
+            <Lock className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="password"
+              value={pin}
+              onChange={(e) => { setPin(e.target.value); setError(""); }}
+              placeholder="קוד גישה"
+              className="w-full border border-slate-200 rounded-2xl py-3 pr-11 px-4 text-sm outline-none focus:border-indigo-400 text-right"
+              autoFocus
+            />
+          </div>
+          {error && <p className="text-sm text-red-500 text-center">{error}</p>}
+          <button
+            type="submit"
+            className="w-full py-3 rounded-2xl font-bold text-white bg-gradient-to-r from-amber-400 to-orange-500 shadow-lg"
+          >
+            כניסה
+          </button>
+        </form>
       </div>
     </div>
   );

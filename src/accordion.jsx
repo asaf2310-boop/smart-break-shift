@@ -1,74 +1,69 @@
-import React from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Coffee, UtensilsCrossed, X } from "lucide-react";
+import React, { useState } from "react";
+import { motion } from "framer-motion";
+import { User, CalendarClock, ChevronDown } from "lucide-react";
 
-export default function MyRegistrations({ lunchReg, shortReg, onCancel }) {
-  if (!lunchReg && !shortReg) return null;
+import { AGENT_NAMES } from "@/constants/scheduling";
+
+export default function AgentNameDialog({ open, onSubmit }) {
+  const [selected, setSelected] = useState("");
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (selected) onSubmit(selected);
+  };
+
+  if (!open) return null;
 
   return (
-    <AnimatePresence>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-indigo-950 via-purple-950 to-slate-900">
+      <div className="absolute top-1/4 left-1/4 w-72 h-72 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-72 h-72 bg-purple-500/20 rounded-full blur-3xl pointer-events-none" />
+
       <motion.div
-        initial={{ opacity: 0, y: -10, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: -10, scale: 0.98 }}
-        className="rounded-3xl border border-slate-200 bg-white shadow-sm p-5"
+        initial={{ opacity: 0, scale: 0.92, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 260, damping: 22 }}
+        className="relative w-full max-w-md mx-4"
+        dir="rtl"
       >
-        <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-3 text-right">ההרשמות שלי היום</p>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <AnimatePresence>
-            {shortReg && (
-              <motion.div
-                key="short"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                className="flex-1 flex items-center justify-between rounded-2xl bg-purple-50 border border-purple-100 px-4 py-3"
+        <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl shadow-2xl p-8">
+          <div className="flex flex-col items-center gap-3 mb-8">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+              <CalendarClock className="w-8 h-8 text-white" />
+            </div>
+            <div className="text-center">
+              <h1 className="text-2xl font-extrabold text-white tracking-tight">ניהול הפסקות</h1>
+              <p className="text-white/60 text-sm mt-1">בחר/י את שמך להמשך</p>
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="relative">
+              <User className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40 pointer-events-none z-10" />
+              <ChevronDown className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40 pointer-events-none z-10" />
+              <select
+                value={selected}
+                onChange={(e) => setSelected(e.target.value)}
+                autoFocus
+                className="w-full bg-white/10 border border-white/20 rounded-2xl py-3 px-4 pr-11 pl-10 text-white outline-none focus:border-indigo-400 focus:bg-white/15 transition-all text-right appearance-none cursor-pointer"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center shadow-md shadow-purple-500/20">
-                    <Coffee className="w-4 h-4 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-purple-400 text-xs">הפסקת 10</p>
-                    <p className="text-slate-800 font-bold text-sm">{shortReg.time_slot}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => onCancel(shortReg.id)}
-                  className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-red-100 hover:text-red-500 text-slate-400 flex items-center justify-center transition-all"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </motion.div>
-            )}
-            {lunchReg && (
-              <motion.div
-                key="lunch"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                className="flex-1 flex items-center justify-between rounded-2xl bg-indigo-50 border border-indigo-100 px-4 py-3"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-400 to-blue-500 flex items-center justify-center shadow-md shadow-indigo-500/20">
-                    <UtensilsCrossed className="w-4 h-4 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-indigo-400 text-xs">הפסקת צהריים</p>
-                    <p className="text-slate-800 font-bold text-sm">{lunchReg.time_slot}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => onCancel(lunchReg.id)}
-                  className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-red-100 hover:text-red-500 text-slate-400 flex items-center justify-center transition-all"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                <option value="" disabled className="bg-slate-900 text-white/60">בחר/י שם...</option>
+                {AGENT_NAMES.map(name => (
+                  <option key={name} value={name} className="bg-slate-900 text-white">{name}</option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              type="submit"
+              disabled={!selected}
+              className="w-full py-3 rounded-2xl font-bold text-white bg-gradient-to-r from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:scale-100"
+            >
+              כניסה למערכת
+            </button>
+          </form>
         </div>
       </motion.div>
-    </AnimatePresence>
+    </div>
   );
 }

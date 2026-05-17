@@ -1,134 +1,96 @@
-"use client";
+"use client"
+
 import * as React from "react"
-import { Slot } from "@radix-ui/react-slot"
-import { Controller, FormProvider, useFormContext } from "react-hook-form";
+import * as DialogPrimitive from "@radix-ui/react-dialog"
+import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { Label } from "@/components/ui/label"
 
-const Form = FormProvider
+const Dialog = DialogPrimitive.Root
 
-const FormFieldContext = React.createContext({})
+const DialogTrigger = DialogPrimitive.Trigger
 
-const FormField = (
-  {
-    ...props
-  }
-) => {
-  return (
-    (<FormFieldContext.Provider value={{ name: props.name }}>
-      <Controller {...props} />
-    </FormFieldContext.Provider>)
-  );
-}
+const DialogPortal = DialogPrimitive.Portal
 
-const useFormField = () => {
-  const fieldContext = React.useContext(FormFieldContext)
-  const itemContext = React.useContext(FormItemContext)
-  const { getFieldState, formState } = useFormContext()
+const DialogClose = DialogPrimitive.Close
 
-  const fieldState = getFieldState(fieldContext.name, formState)
+const DialogOverlay = React.forwardRef(({ className, ...props }, ref) => (
+  <DialogPrimitive.Overlay
+    ref={ref}
+    className={cn(
+      "fixed inset-0 z-50 bg-black/80  data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      className
+    )}
+    {...props} />
+))
+DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
-  if (!fieldContext) {
-    throw new Error("useFormField should be used within <FormField>")
-  }
-
-  const { id } = itemContext
-
-  return {
-    id,
-    name: fieldContext.name,
-    formItemId: `${id}-form-item`,
-    formDescriptionId: `${id}-form-item-description`,
-    formMessageId: `${id}-form-item-message`,
-    ...fieldState,
-  }
-}
-
-const FormItemContext = React.createContext({})
-
-const FormItem = React.forwardRef(({ className, ...props }, ref) => {
-  const id = React.useId()
-
-  return (
-    (<FormItemContext.Provider value={{ id }}>
-      <div ref={ref} className={cn("space-y-2", className)} {...props} />
-    </FormItemContext.Provider>)
-  );
-})
-FormItem.displayName = "FormItem"
-
-const FormLabel = React.forwardRef(({ className, ...props }, ref) => {
-  const { error, formItemId } = useFormField()
-
-  return (
-    (<Label
+const DialogContent = React.forwardRef(({ className, children, ...props }, ref) => (
+  <DialogPortal>
+    <DialogOverlay />
+    <DialogPrimitive.Content
       ref={ref}
-      className={cn(error && "text-destructive", className)}
-      htmlFor={formItemId}
-      {...props} />)
-  );
-})
-FormLabel.displayName = "FormLabel"
-
-const FormControl = React.forwardRef(({ ...props }, ref) => {
-  const { error, formItemId, formDescriptionId, formMessageId } = useFormField()
-
-  return (
-    (<Slot
-      ref={ref}
-      id={formItemId}
-      aria-describedby={
-        !error
-          ? `${formDescriptionId}`
-          : `${formDescriptionId} ${formMessageId}`
-      }
-      aria-invalid={!!error}
-      {...props} />)
-  );
-})
-FormControl.displayName = "FormControl"
-
-const FormDescription = React.forwardRef(({ className, ...props }, ref) => {
-  const { formDescriptionId } = useFormField()
-
-  return (
-    (<p
-      ref={ref}
-      id={formDescriptionId}
-      className={cn("text-[0.8rem] text-muted-foreground", className)}
-      {...props} />)
-  );
-})
-FormDescription.displayName = "FormDescription"
-
-const FormMessage = React.forwardRef(({ className, children, ...props }, ref) => {
-  const { error, formMessageId } = useFormField()
-  const body = error ? String(error?.message) : children
-
-  if (!body) {
-    return null
-  }
-
-  return (
-    (<p
-      ref={ref}
-      id={formMessageId}
-      className={cn("text-[0.8rem] font-medium text-destructive", className)}
+      className={cn(
+        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
+        className
+      )}
       {...props}>
-      {body}
-    </p>)
-  );
-})
-FormMessage.displayName = "FormMessage"
+      {children}
+      <DialogPrimitive.Close
+        className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+        <X className="h-4 w-4" />
+        <span className="sr-only">Close</span>
+      </DialogPrimitive.Close>
+    </DialogPrimitive.Content>
+  </DialogPortal>
+))
+DialogContent.displayName = DialogPrimitive.Content.displayName
+
+const DialogHeader = ({
+  className,
+  ...props
+}) => (
+  <div
+    className={cn("flex flex-col space-y-1.5 text-center sm:text-left", className)}
+    {...props} />
+)
+DialogHeader.displayName = "DialogHeader"
+
+const DialogFooter = ({
+  className,
+  ...props
+}) => (
+  <div
+    className={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2", className)}
+    {...props} />
+)
+DialogFooter.displayName = "DialogFooter"
+
+const DialogTitle = React.forwardRef(({ className, ...props }, ref) => (
+  <DialogPrimitive.Title
+    ref={ref}
+    className={cn("text-lg font-semibold leading-none tracking-tight", className)}
+    {...props} />
+))
+DialogTitle.displayName = DialogPrimitive.Title.displayName
+
+const DialogDescription = React.forwardRef(({ className, ...props }, ref) => (
+  <DialogPrimitive.Description
+    ref={ref}
+    className={cn("text-sm text-muted-foreground", className)}
+    {...props} />
+))
+DialogDescription.displayName = DialogPrimitive.Description.displayName
 
 export {
-  useFormField,
-  Form,
-  FormItem,
-  FormLabel,
-  FormControl,
-  FormDescription,
-  FormMessage,
-  FormField,
+  Dialog,
+  DialogPortal,
+  DialogOverlay,
+  DialogTrigger,
+  DialogClose,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
 }

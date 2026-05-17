@@ -1,50 +1,92 @@
 import * as React from "react"
+import { Slot } from "@radix-ui/react-slot"
+import { ChevronRight, MoreHorizontal } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
-const Card = React.forwardRef(({ className, ...props }, ref) => (
-  <div
+const Breadcrumb = React.forwardRef(
+  ({ ...props }, ref) => <nav ref={ref} aria-label="breadcrumb" {...props} />
+)
+Breadcrumb.displayName = "Breadcrumb"
+
+const BreadcrumbList = React.forwardRef(({ className, ...props }, ref) => (
+  <ol
     ref={ref}
-    className={cn("rounded-xl border bg-card text-card-foreground shadow", className)}
+    className={cn(
+      "flex flex-wrap items-center gap-1.5 break-words text-sm text-muted-foreground sm:gap-2.5",
+      className
+    )}
     {...props} />
 ))
-Card.displayName = "Card"
+BreadcrumbList.displayName = "BreadcrumbList"
 
-const CardHeader = React.forwardRef(({ className, ...props }, ref) => (
-  <div
+const BreadcrumbItem = React.forwardRef(({ className, ...props }, ref) => (
+  <li
     ref={ref}
-    className={cn("flex flex-col space-y-1.5 p-6", className)}
+    className={cn("inline-flex items-center gap-1.5", className)}
     {...props} />
 ))
-CardHeader.displayName = "CardHeader"
+BreadcrumbItem.displayName = "BreadcrumbItem"
 
-const CardTitle = React.forwardRef(({ className, ...props }, ref) => (
-  <div
+const BreadcrumbLink = React.forwardRef(({ asChild, className, ...props }, ref) => {
+  const Comp = asChild ? Slot : "a"
+
+  return (
+    (<Comp
+      ref={ref}
+      className={cn("transition-colors hover:text-foreground", className)}
+      {...props} />)
+  );
+})
+BreadcrumbLink.displayName = "BreadcrumbLink"
+
+const BreadcrumbPage = React.forwardRef(({ className, ...props }, ref) => (
+  <span
     ref={ref}
-    className={cn("font-semibold leading-none tracking-tight", className)}
+    role="link"
+    aria-disabled="true"
+    aria-current="page"
+    className={cn("font-normal text-foreground", className)}
     {...props} />
 ))
-CardTitle.displayName = "CardTitle"
+BreadcrumbPage.displayName = "BreadcrumbPage"
 
-const CardDescription = React.forwardRef(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn("text-sm text-muted-foreground", className)}
-    {...props} />
-))
-CardDescription.displayName = "CardDescription"
+const BreadcrumbSeparator = ({
+  children,
+  className,
+  ...props
+}) => (
+  <li
+    role="presentation"
+    aria-hidden="true"
+    className={cn("[&>svg]:w-3.5 [&>svg]:h-3.5", className)}
+    {...props}>
+    {children ?? <ChevronRight />}
+  </li>
+)
+BreadcrumbSeparator.displayName = "BreadcrumbSeparator"
 
-const CardContent = React.forwardRef(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("p-6 pt-0", className)} {...props} />
-))
-CardContent.displayName = "CardContent"
+const BreadcrumbEllipsis = ({
+  className,
+  ...props
+}) => (
+  <span
+    role="presentation"
+    aria-hidden="true"
+    className={cn("flex h-9 w-9 items-center justify-center", className)}
+    {...props}>
+    <MoreHorizontal className="h-4 w-4" />
+    <span className="sr-only">More</span>
+  </span>
+)
+BreadcrumbEllipsis.displayName = "BreadcrumbElipssis"
 
-const CardFooter = React.forwardRef(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn("flex items-center p-6 pt-0", className)}
-    {...props} />
-))
-CardFooter.displayName = "CardFooter"
-
-export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent }
+export {
+  Breadcrumb,
+  BreadcrumbList,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+  BreadcrumbEllipsis,
+}
