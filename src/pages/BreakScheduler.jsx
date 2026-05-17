@@ -4,10 +4,10 @@ import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tansta
 import { format } from "date-fns";
 import { useToast } from "@/components/ui/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
-import { CalendarClock, LogOut, AlertTriangle, X } from "lucide-react";
+import { CalendarClock, LogOut, AlertTriangle } from "lucide-react";
+import { Navigate } from "react-router-dom";
 
 import BreakSection from "../components/breaks/BreakSection";
-import AgentNameDialog from "../components/breaks/AgentNameDialog";
 import MyRegistrations from "../components/breaks/MyRegistrations";
 import DateSelector from "../components/breaks/DateSelector";
 import AppNav from "../components/layout/AppNav";
@@ -82,11 +82,6 @@ export default function BreakScheduler() {
     },
   });
 
-  const handleNameSubmit = (name) => {
-    setAgentName(name);
-    localStorage.setItem("agent_name", name);
-  };
-
   const handleLogout = () => {
     localStorage.removeItem("agent_name");
     setAgentName("");
@@ -108,7 +103,7 @@ export default function BreakScheduler() {
   const myLunchReg = useMemo(() => lunchRegs.find(r => r.agent_name === agentName), [lunchRegs, agentName]);
 
   if (!agentName) {
-    return <AgentNameDialog open={true} onSubmit={handleNameSubmit} />;
+    return <Navigate to="/" replace />;
   }
 
   return (

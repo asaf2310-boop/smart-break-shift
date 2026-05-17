@@ -8,8 +8,8 @@ import {
   CalendarDays, LogOut, Sun, Moon, Palmtree, X, Check,
   MessageSquare, Lock, Pencil, SendHorizonal, CalendarClock
 } from "lucide-react";
+import { Navigate } from "react-router-dom";
 import AppNav from "../components/layout/AppNav";
-import AgentNameDialog from "../components/breaks/AgentNameDialog";
 
 import {
   HOLIDAY_EVE_DATES,
@@ -149,11 +149,6 @@ export default function ShiftScheduler() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["shift-unavailabilities", constraintsDateFrom, constraintsDateTo, agentName] }),
   });
 
-  const handleNameSubmit = (name) => {
-    setAgentName(name);
-    localStorage.setItem("agent_name", name);
-  };
-
   const handleLogout = () => {
     localStorage.removeItem("agent_name");
     setAgentName("");
@@ -193,7 +188,7 @@ export default function ShiftScheduler() {
   };
 
   if (!agentName) {
-    return <AgentNameDialog open={true} onSubmit={handleNameSubmit} />;
+    return <Navigate to="/" replace />;
   }
 
   const constraintsWeekLabel = `${format(constraintsDays[0], "dd/MM")} – ${format(constraintsDays[4], "dd/MM/yyyy")}`;

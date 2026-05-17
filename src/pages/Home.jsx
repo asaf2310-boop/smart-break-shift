@@ -1,9 +1,10 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { CalendarClock, CalendarDays, ShieldCheck, Users } from "lucide-react";
+import { CalendarClock, CalendarDays, LogOut, ShieldCheck, Users } from "lucide-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { AGENT_NAMES } from "@/constants/scheduling";
+import AgentNameDialog from "@/components/breaks/AgentNameDialog";
 
 const cards = [
   {
@@ -24,6 +25,21 @@ const cards = [
 
 export default function Home() {
   const isAdmin = useIsAdmin();
+  const [agentName, setAgentName] = useState(() => localStorage.getItem("agent_name") || "");
+
+  const handleNameSubmit = (name) => {
+    localStorage.setItem("agent_name", name);
+    setAgentName(name);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("agent_name");
+    setAgentName("");
+  };
+
+  if (!agentName) {
+    return <AgentNameDialog open={true} onSubmit={handleNameSubmit} />;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50" dir="rtl">
@@ -43,8 +59,16 @@ export default function Home() {
           </div>
           <h1 className="text-3xl font-extrabold text-slate-800 mb-2">מערכת הפסקות ומשמרות</h1>
           <p className="text-slate-500 text-sm">
-            {AGENT_NAMES.length} נציגים · ניהול שבועי מרוכז
+            שלום <span className="text-indigo-600 font-semibold">{agentName}</span> · {AGENT_NAMES.length} נציגים
           </p>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="mt-4 inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-slate-700 transition-colors"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            החלף נציג
+          </button>
         </motion.div>
 
         <div className="grid sm:grid-cols-2 gap-4 mb-6">
