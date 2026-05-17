@@ -20,10 +20,6 @@ export default function BreakScheduler() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  useEffect(() => {
-    if (agentName && settings?.show_shortage_notice) setShowNotice(true);
-  }, [agentName, settings?.show_shortage_notice, settings?.id]);
-
   const dateStr = format(selectedDate, "yyyy-MM-dd");
 
   const { data: registrations = [], isLoading } = useQuery({
@@ -36,6 +32,10 @@ export default function BreakScheduler() {
     queryFn: () => base44.entities.BreakSettings.filter({ date: dateStr }),
   });
   const settings = settingsList[0] || null;
+
+  useEffect(() => {
+    if (agentName && settings?.show_shortage_notice) setShowNotice(true);
+  }, [agentName, settings?.show_shortage_notice, settings?.id]);
 
   const createMutation = useMutation({
     mutationFn: (data) => base44.entities.BreakRegistration.create(data),
