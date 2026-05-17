@@ -31,41 +31,32 @@ export default function ShiftScheduler() {
   const thisWeekStart = getWeekStart(now);
   const nextWeekStart = addDays(thisWeekStart, 7);
 
-  // Fetch schedule data first to check if published
-  const scheduleDateFrom = format(addDays(nextWeekStart, 0), "yyyy-MM-dd");
-  const scheduleDateTo = format(addDays(nextWeekStart, 4), "yyyy-MM-dd");
+  const scheduleWeekStart = thisWeekStart;
+  const constraintsWeekStart = nextWeekStart;
 
-  const { data: nextWeekRegistrations = [], isLoading: loadingSchedule } = useQuery({
+  const scheduleDays = useMemo(() => getWeekDays(scheduleWeekStart), [scheduleWeekStart]);
+  const constraintsDays = useMemo(() => getWeekDays(constraintsWeekStart), [constraintsWeekStart]);
+
+  const scheduleDateFrom = format(scheduleDays[0], "yyyy-MM-dd");
+  const scheduleDateTo = format(scheduleDays[4], "yyyy-MM-dd");
+
+  const { data: scheduleRegistrations = [], isLoading: loadingSchedule } = useQuery({
     queryKey: ["shift-registrations", scheduleDateFrom, scheduleDateTo],
     queryFn: async () => {
-      const days = Array.from({ length: 5 }, (_, i) => format(addDays(nextWeekStart, i), "yyyy-MM-dd"));
+      const days = scheduleDays.map(d => format(d, "yyyy-MM-dd"));
       const results = await Promise.all(days.map(d => base44.entities.ShiftRegistration.filter({ date: d })));
       return results.flat();
     },
     enabled: !!agentName,
   });
 
-  const schedulePublished = nextWeekRegistrations.length > 0;
+  const schedulePublished = scheduleRegistrations.length > 0;
 
-  // When schedule is published, constraints are for week-after-next, so deadline is next week's Wednesday
-  const deadline = getConstraintsDeadline(schedulePublished ? nextWeekStart : thisWeekStart);
-  // Once the schedule is published, constraints for the following week are open regardless of deadline
-  const isPastDeadline = isAfter(now, deadline) && !schedulePublished;
-
-  // If schedule is published, show next week as schedule and week-after-next for constraints
-  // Otherwise, show next week for both
-  const scheduleWeekStart = nextWeekStart;
-  const constraintsWeekStart = schedulePublished ? addDays(nextWeekStart, 7) : nextWeekStart;
-
-  // Which week are we showing in the constraints panel?
-  // We always show constraintsWeekStart, no navigation needed (it's locked to the right week)
-  const constraintsDays = useMemo(() => getWeekDays(constraintsWeekStart), [constraintsWeekStart]);
-  const scheduleDays = useMemo(() => getWeekDays(scheduleWeekStart), [scheduleWeekStart]);
+  const deadline = getConstraintsDeadline(thisWeekStart);
+  const isPastDeadline = isAfter(now, deadline);
 
   const constraintsDateFrom = format(constraintsDays[0], "yyyy-MM-dd");
   const constraintsDateTo = format(constraintsDays[4], "yyyy-MM-dd");
-  const scheduleDateFromLabel = format(scheduleDays[0], "yyyy-MM-dd");
-  const scheduleDateToLabel = format(scheduleDays[4], "yyyy-MM-dd");
 
   // Fetch unavailabilities for constraints week (single query)
   const { data: unavailabilities = [], isLoading: loadingUnavail } = useQuery({
@@ -458,7 +449,7 @@ export default function ShiftScheduler() {
           ) : !schedulePublished ? (
             <div className="flex flex-col items-center gap-2 py-12 text-slate-400">
               <Lock className="w-8 h-8 opacity-30" />
-              <p className="text-sm font-medium">השיבוץ לשבוע הבא טרם פורסם</p>
+              <p className="text-sm font-medium">השיבוץ לשבוע הנוכחי טרם פורסם</p>
               <p className="text-xs">המנהל יפרסם בקרוב</p>
             </div>
           ) : (
@@ -494,10 +485,10 @@ export default function ShiftScheduler() {
                     {scheduleDays.map(date => {
                       const dateStr = format(date, "yyyy-MM-dd");
                       const isHolidayEve = HOLIDAY_EVE_DATES.includes(dateStr);
-                      const morningReg = nextWeekRegistrations.find(
+                      const morningReg = scheduleRegistrations.find(
                         r => r.agent_name === agentName && r.date === dateStr && r.shift_type === "morning"
                       );
-                      const eveningReg = nextWeekRegistrations.find(
+                      const eveningReg = scheduleRegistrations.find(
                         r => r.agent_name === agentName && r.date === dateStr && r.shift_type === "evening"
                       );
                       const myReg = morningReg || eveningReg;
@@ -557,14 +548,14 @@ export default function ShiftScheduler() {
                            const dateStr = format(date, "yyyy-MM-dd");
                            const isHolidayEveDay = HOLIDAY_EVE_DATES.includes(dateStr);
                            // On holiday eve, all registrations are stored as "morning"; show them in holiday_eve row
-                           const regs = nextWeekRegistrations.filter(r =>
+                           const regs = scheduleRegistrations.filter(r =>
                              r.date === dateStr &&
                              r.shift_type === shift.type &&
                              r.agent_name !== agentName &&
                              !isHolidayEveDay
                            ).concat(
                              isHolidayEveDay && shift.type === "holiday_eve"
-                               ? nextWeekRegistrations.filter(r => r.date === dateStr && r.agent_name !== agentName)
+                               ? scheduleRegistrations.filter(r => r.date === dateStr && r.agent_name !== agentName)
                                : []
                            );
                           const borderColor = shift.type === "morning" ? "border-amber-300" : shift.type === "evening" ? "border-indigo-300" : "border-purple-300";
