@@ -1,0 +1,60 @@
+import React, { useState } from "react";
+import { ShieldCheck, Lock } from "lucide-react";
+import { useIsAdmin, unlockAdminSession } from "@/hooks/useIsAdmin";
+
+export default function AdminGate({ children }) {
+  const isAdmin = useIsAdmin();
+  const pinRequired = Boolean(import.meta.env.VITE_ADMIN_PIN);
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState("");
+
+  if (isAdmin) return children;
+  if (!pinRequired) return children;
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (pin === import.meta.env.VITE_ADMIN_PIN) {
+      unlockAdminSession();
+      setError("");
+      window.location.reload();
+    } else {
+      setError("קוד גישה שגוי");
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50 flex items-center justify-center px-4" dir="rtl">
+      <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl border border-slate-200 p-8">
+        <div className="flex flex-col items-center gap-4 mb-6">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
+            <ShieldCheck className="w-7 h-7 text-white" />
+          </div>
+          <div className="text-center">
+            <h1 className="text-xl font-extrabold text-slate-800">כניסת מנהל</h1>
+            <p className="text-sm text-slate-500 mt-1">הזן קוד גישה</p>
+          </div>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="relative">
+            <Lock className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="password"
+              value={pin}
+              onChange={(e) => { setPin(e.target.value); setError(""); }}
+              placeholder="קוד גישה"
+              className="w-full border border-slate-200 rounded-2xl py-3 pr-11 px-4 text-sm outline-none focus:border-indigo-400 text-right"
+              autoFocus
+            />
+          </div>
+          {error && <p className="text-sm text-red-500 text-center">{error}</p>}
+          <button
+            type="submit"
+            className="w-full py-3 rounded-2xl font-bold text-white bg-gradient-to-r from-amber-400 to-orange-500 shadow-lg"
+          >
+            כניסה
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
