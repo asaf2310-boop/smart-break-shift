@@ -1,7 +1,8 @@
 import { supabaseConfigured } from "./supabase";
+import { cleanEnvValue } from "./supabase";
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = cleanEnvValue(import.meta.env.VITE_SUPABASE_URL);
+const supabaseKey = cleanEnvValue(import.meta.env.VITE_SUPABASE_ANON_KEY);
 
 function assertSupabaseConfigured() {
   if (!supabaseConfigured) {
