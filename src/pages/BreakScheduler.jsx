@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useToast } from "@/components/ui/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
@@ -22,16 +22,22 @@ export default function BreakScheduler() {
 
   const dateStr = format(selectedDate, "yyyy-MM-dd");
 
-  const { data: registrations = [], isLoading } = useQuery({
-    queryKey: ["break-registrations", dateStr],
-    queryFn: () => base44.entities.BreakRegistration.filter({ date: dateStr }),
+  const { data: breakDayData, isLoading } = useQuery({
+    queryKey: ["break-day", dateStr],
+    queryFn: async () => {
+      const [registrations, settingsList] = await Promise.all([
+        base44.entities.BreakRegistration.filter({ date: dateStr }),
+        base44.entities.BreakSettings.filter({ date: dateStr }),
+      ]);
+      return {
+        registrations,
+        settings: settingsList[0] || null,
+      };
+    },
+    placeholderData: keepPreviousData,
   });
-
-  const { data: settingsList = [] } = useQuery({
-    queryKey: ["break-settings", dateStr],
-    queryFn: () => base44.entities.BreakSettings.filter({ date: dateStr }),
-  });
-  const settings = settingsList[0] || null;
+  const registrations = breakDayData?.registrations ?? [];
+  const settings = breakDayData?.settings ?? null;
 
   useEffect(() => {
     if (agentName && settings?.show_shortage_notice) setShowNotice(true);
@@ -40,7 +46,7 @@ export default function BreakScheduler() {
   const createMutation = useMutation({
     mutationFn: (data) => base44.entities.BreakRegistration.create(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["break-registrations", dateStr] });
+      queryClient.invalidateQueries({ queryKey: ["break-day", dateStr] });
       toast({ title: "✓ נרשמת בהצלחה!", description: "ההרשמה נשמרה" });
     },
   });
@@ -48,7 +54,7 @@ export default function BreakScheduler() {
   const deleteMutation = useMutation({
     mutationFn: (id) => base44.entities.BreakRegistration.delete(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["break-registrations", dateStr] });
+      queryClient.invalidateQueries({ queryKey: ["break-day", dateStr] });
       toast({ title: "ההרשמה בוטלה", description: "ניתן להירשם מחדש" });
     },
   });
