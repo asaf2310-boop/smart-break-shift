@@ -1,59 +1,102 @@
-import { supabase, supabaseConfigured } from "./supabase";
+import { supabaseConfigured } from "./supabase";
 
-function table(name) {
-  if (!supabase) throw new Error("Supabase לא מוגדר — הוסף VITE_SUPABASE_URL ו-VITE_SUPABASE_ANON_KEY");
-  return supabase.from(name);
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+function assertSupabaseConfigured() {
+  if (!supabaseConfigured) {
+    throw new Error("Supabase לא מוגדר — הוסף VITE_SUPABASE_URL ו-VITE_SUPABASE_ANON_KEY");
+  }
 }
 
-function applyFilters(query, filters = {}) {
-  let q = query;
+function buildUrl(tableName, filters = {}, params = {}) {
+  assertSupabaseConfigured();
+  const url = new URL(`${supabaseUrl}/rest/v1/${tableName}`);
   for (const [key, value] of Object.entries(filters)) {
     if (value !== undefined && value !== null) {
-      q = q.eq(key, value);
+      url.searchParams.set(key, `eq.${value}`);
     }
   }
-  return q;
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null) {
+      url.searchParams.set(key, value);
+    }
+  }
+  return url.toString();
+}
+
+function requestHeaders(extra = {}) {
+  return {
+    apikey: supabaseKey,
+    Authorization: `Bearer ${supabaseKey}`,
+    "Content-Type": "application/json",
+    ...extra,
+  };
+}
+
+async function requestJson(url, options = {}) {
+  const response = await fetch(url, {
+    ...options,
+    headers: requestHeaders(options.headers),
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `Supabase request failed (${response.status})`);
+  }
+
+  if (response.status === 204) return null;
+  const text = await response.text();
+  return text ? JSON.parse(text) : null;
 }
 
 function createEntity(tableName) {
   return {
     async filter(filters = {}) {
-      const { data, error } = await applyFilters(table(tableName).select("*"), filters);
-      if (error) throw error;
-      return data ?? [];
+      return (await requestJson(buildUrl(tableName, filters, { select: "*" }))) ?? [];
     },
 
     async list(order = "-created_at", limit = 100) {
       const desc = order.startsWith("-");
       const col = desc ? order.slice(1) : order;
-      let q = table(tableName).select("*").order(col, { ascending: !desc }).limit(limit);
-      const { data, error } = await q;
-      if (error) throw error;
-      return data ?? [];
+      return (await requestJson(buildUrl(tableName, {}, {
+        select: "*",
+        order: `${col}.${desc ? "desc" : "asc"}`,
+        limit,
+      }))) ?? [];
     },
 
     async create(row) {
-      const { data, error } = await table(tableName).insert(row).select().single();
-      if (error) throw error;
-      return data;
+      const data = await requestJson(buildUrl(tableName, {}, { select: "*" }), {
+        method: "POST",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify(row),
+      });
+      return data?.[0] ?? data;
     },
 
     async bulkCreate(rows) {
       if (!rows?.length) return [];
-      const { data, error } = await table(tableName).insert(rows).select();
-      if (error) throw error;
-      return data ?? [];
+      return (await requestJson(buildUrl(tableName, {}, { select: "*" }), {
+        method: "POST",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify(rows),
+      })) ?? [];
     },
 
     async update(id, row) {
-      const { data, error } = await table(tableName).update(row).eq("id", id).select().single();
-      if (error) throw error;
-      return data;
+      const data = await requestJson(buildUrl(tableName, { id }, { select: "*" }), {
+        method: "PATCH",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify(row),
+      });
+      return data?.[0] ?? data;
     },
 
     async delete(id) {
-      const { error } = await table(tableName).delete().eq("id", id);
-      if (error) throw error;
+      await requestJson(buildUrl(tableName, { id }), {
+        method: "DELETE",
+      });
     },
   };
 }
