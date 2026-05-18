@@ -3,8 +3,9 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { CalendarClock, CalendarDays, LogOut, ShieldCheck, Users } from "lucide-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
-import { AGENT_NAMES } from "@/constants/scheduling";
+import { AGENT_NAMES, getStoredAgentName } from "@/constants/scheduling";
 import AgentNameDialog from "@/components/breaks/AgentNameDialog";
+import { demoModeEnabled } from "@/api/demoClient";
 
 const cards = [
   {
@@ -25,7 +26,7 @@ const cards = [
 
 export default function Home() {
   const isAdmin = useIsAdmin();
-  const [agentName, setAgentName] = useState(() => localStorage.getItem("agent_name") || "");
+  const [agentName, setAgentName] = useState(() => getStoredAgentName());
 
   const handleNameSubmit = (name) => {
     localStorage.setItem("agent_name", name);
@@ -61,6 +62,11 @@ export default function Home() {
           <p className="text-slate-500 text-sm">
             שלום <span className="text-indigo-600 font-semibold">{agentName}</span> · {AGENT_NAMES.length} נציגים
           </p>
+          {demoModeEnabled && (
+            <div className="inline-flex mt-3 px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold border border-emerald-200">
+              סביבת דמו · נתונים פיקטיביים בלבד
+            </div>
+          )}
           <button
             type="button"
             onClick={handleLogout}

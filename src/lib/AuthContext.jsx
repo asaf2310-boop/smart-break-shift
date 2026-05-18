@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useSupabaseBackend } from '@/api/dataClient';
+import { demoModeEnabled } from '@/api/demoClient';
 import { appParams } from '@/lib/app-params';
 import { createAxiosClient } from '@base44/sdk/dist/utils/axios-client';
 
@@ -27,10 +28,24 @@ export const AuthProvider = ({ children }) => {
     setAuthError(null);
   };
 
+  const finishAsDemoAdmin = () => {
+    setUser({ id: "demo-admin", role: "admin", full_name: "מנהל דמו" });
+    setIsAuthenticated(true);
+    setIsLoadingPublicSettings(false);
+    setIsLoadingAuth(false);
+    setAuthChecked(true);
+    setAuthError(null);
+  };
+
   const checkAppState = async () => {
     try {
       setIsLoadingPublicSettings(true);
       setAuthError(null);
+
+      if (demoModeEnabled) {
+        finishAsDemoAdmin();
+        return;
+      }
 
       if (useSupabaseBackend()) {
         finishAsGuest();

@@ -14,6 +14,7 @@ import AppNav from "../components/layout/AppNav";
 import {
   HOLIDAY_EVE_DATES,
   WEEKDAY_LABELS,
+  getStoredAgentName,
   getWeekStart,
   getWeekDays,
   getConstraintsDeadline,
@@ -41,7 +42,7 @@ const writeCachedSchedule = (dateFrom, dateTo, data) => {
 };
 
 export default function ShiftScheduler() {
-  const [agentName, setAgentName] = useState(() => localStorage.getItem("agent_name") || "");
+  const [agentName, setAgentName] = useState(() => getStoredAgentName());
   const [noteDialog, setNoteDialog] = useState(null); // { date, type: "unavailable"|"vacation_request" }
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState("schedule"); // "constraints" | "schedule"

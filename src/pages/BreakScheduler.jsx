@@ -11,7 +11,7 @@ import BreakSection from "../components/breaks/BreakSection";
 import MyRegistrations from "../components/breaks/MyRegistrations";
 import DateSelector from "../components/breaks/DateSelector";
 import AppNav from "../components/layout/AppNav";
-import { SHORT_BREAK_SLOTS, LUNCH_BREAK_SLOTS } from "@/constants/scheduling";
+import { SHORT_BREAK_SLOTS, LUNCH_BREAK_SLOTS, getStoredAgentName } from "@/constants/scheduling";
 
 const getBreakDayCacheKey = (dateStr) => `break-day-cache:${dateStr}`;
 
@@ -34,7 +34,7 @@ const writeCachedBreakDay = (dateStr, data) => {
 
 export default function BreakScheduler() {
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [agentName, setAgentName] = useState(() => localStorage.getItem("agent_name") || "");
+  const [agentName, setAgentName] = useState(() => getStoredAgentName());
   const [showNotice, setShowNotice] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();

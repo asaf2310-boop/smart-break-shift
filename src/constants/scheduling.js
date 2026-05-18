@@ -1,6 +1,6 @@
 import { addDays, format } from "date-fns";
 
-export const AGENT_NAMES = [
+const REAL_AGENT_NAMES = [
   "רחלה מנשה",
   "שרון שפיר",
   "תהילה קיפרווסר",
@@ -12,6 +12,35 @@ export const AGENT_NAMES = [
   "בוריס טורבין",
   "נהוראי וקנין",
 ];
+
+const DEMO_AGENT_NAMES = [
+  "נציג 01",
+  "נציג 02",
+  "נציג 03",
+  "נציג 04",
+  "נציג 05",
+  "נציג 06",
+  "נציג 07",
+  "נציג 08",
+  "נציג 09",
+  "נציג 10",
+];
+
+export const AGENT_NAMES = import.meta.env.VITE_DEMO_MODE === "true" ? DEMO_AGENT_NAMES : REAL_AGENT_NAMES;
+
+export function getStoredAgentName() {
+  if (typeof window === "undefined") return "";
+
+  const storedName = localStorage.getItem("agent_name") || "";
+  if (!storedName) return "";
+
+  if (!AGENT_NAMES.includes(storedName)) {
+    localStorage.removeItem("agent_name");
+    return "";
+  }
+
+  return storedName;
+}
 
 export const SHORT_BREAK_SLOTS = [
   "10:00-10:10", "10:10-10:20", "10:20-10:30", "10:30-10:40",
