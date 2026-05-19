@@ -1,39 +1,37 @@
-**Welcome to your Base44 project** 
+# Smart Break Shift
 
-**About**
+מערכת לניהול הפסקות, אילוצי משמרות, חופשים ושיבוץ שבועי במוקד.
 
-View and Edit  your app on [Base44.com](http://Base44.com) 
+## Backend
 
-This project contains everything you need to run your app locally.
+המערכת אינה תלויה בשירות חיצוני ייעודי. יש שני מצבי עבודה:
 
-**Edit the code in your local development environment**
+- `Supabase` לפרודקשן.
+- `VITE_DEMO_MODE=true` לסביבת דמו עם נתונים פיקטיביים ב־localStorage.
 
-Any change pushed to the repo will also be reflected in the Base44 Builder.
+## הרצה מקומית
 
-**Prerequisites:** 
-
-1. Clone the repository using the project's Git URL 
-2. Navigate to the project directory
-3. Install dependencies: `npm install`
-4. Create an `.env.local` file and set the right environment variables
-
-```
-VITE_BASE44_APP_ID=your_app_id
-VITE_BASE44_APP_BASE_URL=your_backend_url
-
-e.g.
-VITE_BASE44_APP_ID=cbef744a8545c389ef439ea6
-VITE_BASE44_APP_BASE_URL=https://my-to-do-list-81bfaad7.base44.app
+```powershell
+npm install
+npm run dev
 ```
 
-Run the app: `npm run dev`
+קובץ `.env.local` לפרודקשן/בדיקות מול Supabase:
 
-**Publish your changes**
+```env
+VITE_SUPABASE_URL=https://xxxxx.supabase.co
+VITE_SUPABASE_ANON_KEY=...
+```
 
-Open [Base44.com](http://Base44.com) and click on Publish.
+קובץ `.env.local` לדמו מקומי:
 
-**Docs & Support**
+```env
+VITE_DEMO_MODE=true
+```
 
-Documentation: [https://docs.base44.com/Integrations/Using-GitHub](https://docs.base44.com/Integrations/Using-GitHub)
+## פריסה
 
-Support: [https://app.base44.com/support](https://app.base44.com/support)
+ב־Vercel:
+
+- למערכת אמיתית: להגדיר `VITE_SUPABASE_URL` ו־`VITE_SUPABASE_ANON_KEY`.
+- לסביבת דמו: להגדיר `VITE_DEMO_MODE=true`.

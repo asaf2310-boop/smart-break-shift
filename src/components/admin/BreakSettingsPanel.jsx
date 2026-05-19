@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
+import { dataClient } from "@/api/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Settings, Save, AlertTriangle, Check } from "lucide-react";
@@ -14,7 +14,7 @@ export default function BreakSettingsPanel({ selectedDate }) {
 
   const { data: settingsList = [] } = useQuery({
     queryKey: ["break-settings", dateStr],
-    queryFn: () => base44.entities.BreakSettings.filter({ date: dateStr }),
+    queryFn: () => dataClient.entities.BreakSettings.filter({ date: dateStr }),
   });
 
   const existing = settingsList[0] || null;
@@ -47,9 +47,9 @@ export default function BreakSettingsPanel({ selectedDate }) {
   const saveMutation = useMutation({
     mutationFn: async (data) => {
       if (existing) {
-        return base44.entities.BreakSettings.update(existing.id, data);
+        return dataClient.entities.BreakSettings.update(existing.id, data);
       } else {
-        return base44.entities.BreakSettings.create({ ...data, date: dateStr });
+        return dataClient.entities.BreakSettings.create({ ...data, date: dateStr });
       }
     },
     onSuccess: () => {

@@ -14,14 +14,14 @@ export default function AuthRequiredScreen() {
         </div>
         <h1 className="text-xl font-bold text-slate-800 mb-2">נדרשת התחברות</h1>
         <p className="text-sm text-slate-500 mb-6">
-          האפליקציה מחוברת ל-Base44 ודורשת התחברות לפני שימוש.
+          האפליקציה מוגדרת לעבוד מול Supabase או סביבת דמו.
         </p>
         <button
           type="button"
           onClick={() => navigateToLogin()}
           className="w-full py-3 mb-3 rounded-2xl font-bold text-white bg-gradient-to-r from-indigo-500 to-purple-600"
         >
-          התחברות ל-Base44
+          רענון הגדרות
         </button>
         <Link
           to="/"

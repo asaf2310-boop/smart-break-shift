@@ -4,8 +4,9 @@ import { Clock, User, Check, Lock } from "lucide-react";
 
 export default function TimeSlotCard({ slot, breakType, registrations, onRegister, isRegistered, isDisabled, registrationDisabled = false, index, maxPerSlot = 1 }) {
   const isLunch = breakType === "lunch";
+  const capacity = Math.max(1, Number(maxPerSlot) || 1);
   const count = registrations.length;
-  const isFull = count >= maxPerSlot;
+  const isFull = count >= capacity;
   const canRegister = !isFull && !isRegistered && !isDisabled && !registrationDisabled;
 
   const accentFrom = isLunch ? "from-indigo-500" : "from-purple-500";
@@ -38,7 +39,7 @@ export default function TimeSlotCard({ slot, breakType, registrations, onRegiste
 
         {/* Occupancy counter */}
         <span className={`text-xs font-bold ${isFull ? "text-red-400" : "text-slate-400"}`}>
-          {count}/{maxPerSlot}
+          {count}/{capacity}
         </span>
       </div>
 
@@ -54,7 +55,7 @@ export default function TimeSlotCard({ slot, breakType, registrations, onRegiste
           <div className="flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-full bg-green-400" />
             <span className="text-xs text-green-600 font-medium">
-              {count === 0 ? "פנוי" : `עוד ${maxPerSlot - count} מקום`}
+              {count === 0 ? "פנוי" : `עוד ${capacity - count} מקום`}
             </span>
           </div>
         )}

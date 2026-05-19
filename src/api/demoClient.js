@@ -1,3 +1,5 @@
+import { validateBreakRegistration } from "@/lib/breakCapacity";
+
 const DEMO_STORE_KEY = "smart-break-shift-demo-store-v1";
 
 export const demoModeEnabled = import.meta.env.VITE_DEMO_MODE === "true";
@@ -134,6 +136,19 @@ function createEntity(entityName) {
 
     async create(row) {
       const store = readStore();
+
+      if (entityName === "BreakRegistration") {
+        const registrations = (store.breakRegistrations || []).filter((r) => r.date === row.date);
+        const settings = (store.breakSettings || []).find((s) => s.date === row.date) || null;
+        validateBreakRegistration({
+          registrations,
+          settings,
+          agentName: row.agent_name,
+          breakType: row.break_type,
+          timeSlot: row.time_slot,
+        });
+      }
+
       const saved = { id: row.id || makeId(storeKey), ...row };
       store[storeKey] = [...(store[storeKey] || []), saved];
       writeStore(store);

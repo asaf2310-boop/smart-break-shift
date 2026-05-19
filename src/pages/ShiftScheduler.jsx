@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { dataClient } from "@/api/client";
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, addDays, isBefore, isAfter } from "date-fns";
 import { useToast } from "@/components/ui/use-toast";
@@ -66,7 +66,7 @@ export default function ShiftScheduler() {
     queryKey: ["shift-registrations", scheduleDateFrom, scheduleDateTo],
     queryFn: async () => {
       const days = scheduleDays.map(d => format(d, "yyyy-MM-dd"));
-      const results = await Promise.all(days.map(d => base44.entities.ShiftRegistration.filter({ date: d })));
+      const results = await Promise.all(days.map(d => dataClient.entities.ShiftRegistration.filter({ date: d })));
       const rows = results.flat();
       writeCachedSchedule(scheduleDateFrom, scheduleDateTo, rows);
       return rows;
@@ -89,19 +89,19 @@ export default function ShiftScheduler() {
   // Fetch unavailabilities for constraints week (single query)
   const { data: unavailabilities = [], isLoading: loadingUnavail } = useQuery({
     queryKey: ["shift-unavailabilities", constraintsDateFrom, constraintsDateTo, agentName],
-    queryFn: () => base44.entities.ShiftUnavailability.filter({ agent_name: agentName }),
+    queryFn: () => dataClient.entities.ShiftUnavailability.filter({ agent_name: agentName }),
     enabled: !!agentName,
   });
 
   // Fetch vacation requests for constraints week (single query)
   const { data: vacationRequests = [] } = useQuery({
     queryKey: ["vacation-requests", constraintsDateFrom, constraintsDateTo, agentName],
-    queryFn: () => base44.entities.VacationRequest.filter({ agent_name: agentName }),
+    queryFn: () => dataClient.entities.VacationRequest.filter({ agent_name: agentName }),
     enabled: !!agentName,
   });
 
   const createVacationMutation = useMutation({
-    mutationFn: (data) => base44.entities.VacationRequest.create(data),
+    mutationFn: (data) => dataClient.entities.VacationRequest.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["vacation-requests", constraintsDateFrom, constraintsDateTo, agentName] });
       toast({ title: "✓ בקשת החופש נשלחה", description: "ממתין לאישור מנהל" });
@@ -109,7 +109,7 @@ export default function ShiftScheduler() {
   });
 
   const deleteVacationMutation = useMutation({
-    mutationFn: (id) => base44.entities.VacationRequest.delete(id),
+    mutationFn: (id) => dataClient.entities.VacationRequest.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["vacation-requests", constraintsDateFrom, constraintsDateTo, agentName] }),
   });
 
@@ -121,7 +121,7 @@ export default function ShiftScheduler() {
   // Fetch confirmation for the constraints week
   const { data: confirmations = [], isLoading: loadingConfirm } = useQuery({
     queryKey: ["constraint-confirmations", constraintsWeekStartStr, agentName],
-    queryFn: () => base44.entities.ConstraintConfirmation.filter({
+    queryFn: () => dataClient.entities.ConstraintConfirmation.filter({
       week_start: constraintsWeekStartStr, agent_name: agentName
     }),
     enabled: !!agentName,
@@ -131,7 +131,7 @@ export default function ShiftScheduler() {
   const isConfirmed = !!confirmation && !isEditing;
 
   const confirmMutation = useMutation({
-    mutationFn: (data) => base44.entities.ConstraintConfirmation.create(data),
+    mutationFn: (data) => dataClient.entities.ConstraintConfirmation.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["constraint-confirmations", constraintsWeekStartStr, agentName] });
       setIsEditing(false);
@@ -154,17 +154,17 @@ export default function ShiftScheduler() {
   };
 
   const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.ShiftUnavailability.create(data),
+    mutationFn: (data) => dataClient.entities.ShiftUnavailability.create(data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["shift-unavailabilities", constraintsDateFrom, constraintsDateTo, agentName] }),
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.ShiftUnavailability.update(id, data),
+    mutationFn: ({ id, data }) => dataClient.entities.ShiftUnavailability.update(id, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["shift-unavailabilities", constraintsDateFrom, constraintsDateTo, agentName] }),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.ShiftUnavailability.delete(id),
+    mutationFn: (id) => dataClient.entities.ShiftUnavailability.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["shift-unavailabilities", constraintsDateFrom, constraintsDateTo, agentName] }),
   });
 

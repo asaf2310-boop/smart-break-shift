@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { dataClient } from "@/api/client";
 import { useQuery } from "@tanstack/react-query";
 import { format, addDays } from "date-fns";
 import { motion } from "framer-motion";
@@ -35,7 +35,7 @@ export default function TestAgentView() {
 
   const { data: nextWeekRegistrations = [], isLoading: loadingSchedule } = useQuery({
     queryKey: ["shift-registrations", scheduleDateFrom, scheduleDateTo],
-    queryFn: () => base44.entities.ShiftRegistration.list("-date", 50),
+    queryFn: () => dataClient.entities.ShiftRegistration.list("-date", 50),
   });
 
   const schedulePublished = nextWeekRegistrations.some(r =>

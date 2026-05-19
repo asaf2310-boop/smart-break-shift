@@ -3,7 +3,7 @@ import { format, addDays, subDays } from "date-fns";
 import { motion } from "framer-motion";
 import { ShieldCheck, ChevronRight, ChevronLeft, Check, Palmtree, X, Sun, Moon } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { dataClient } from "@/api/client";
 import { Link } from "react-router-dom";
 import { AGENT_NAMES, HOLIDAY_EVE_DATES, WEEKDAY_LABELS, getWeekDays } from "@/constants/scheduling";
 import AutoScheduleBuilder from "../components/shifts/AutoScheduleBuilder";
@@ -138,7 +138,7 @@ function ConstraintsView({ weekStart }) {
     queryKey: ["all-unavailabilities-week", dateFrom, dateTo],
     queryFn: async () => {
       const results = await Promise.all(
-        weekDays.map(d => base44.entities.ShiftUnavailability.filter({ date: format(d, "yyyy-MM-dd") }))
+        weekDays.map(d => dataClient.entities.ShiftUnavailability.filter({ date: format(d, "yyyy-MM-dd") }))
       );
       return results.flat();
     },
@@ -148,7 +148,7 @@ function ConstraintsView({ weekStart }) {
     queryKey: ["all-vac-view", dateFrom, dateTo, "approved"],
     queryFn: async () => {
       const results = await Promise.all(
-        weekDays.map(d => base44.entities.VacationRequest.filter({ date: format(d, "yyyy-MM-dd") }))
+        weekDays.map(d => dataClient.entities.VacationRequest.filter({ date: format(d, "yyyy-MM-dd") }))
       );
       return results.flat();
     },
@@ -157,7 +157,7 @@ function ConstraintsView({ weekStart }) {
   // Fetch confirmations for next week
   const { data: confirmations = [], isLoading: loadingC } = useQuery({
     queryKey: ["all-confirmations", nextWeekStart],
-    queryFn: () => base44.entities.ConstraintConfirmation.filter({ week_start: nextWeekStart }),
+    queryFn: () => dataClient.entities.ConstraintConfirmation.filter({ week_start: nextWeekStart }),
   });
 
   if (loadingU || loadingV || loadingC) {

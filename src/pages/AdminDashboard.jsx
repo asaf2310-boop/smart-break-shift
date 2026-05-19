@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { dataClient } from "@/api/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useToast } from "@/components/ui/use-toast";
@@ -10,6 +10,11 @@ import { Link } from "react-router-dom";
 import BreakSettingsPanel from "../components/admin/BreakSettingsPanel";
 import { SHORT_BREAK_SLOTS, LUNCH_BREAK_SLOTS } from "@/constants/scheduling";
 import BackendConfigBanner from "@/components/BackendConfigBanner";
+import {
+  BreakRegistrationError,
+  createBreakRegistration,
+  getBreakLimits,
+} from "@/lib/breakCapacity";
 
 export default function AdminDashboard() {
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -22,31 +27,36 @@ export default function AdminDashboard() {
 
   const { data: registrations = [], isLoading } = useQuery({
     queryKey: ["break-registrations", dateStr],
-    queryFn: () => base44.entities.BreakRegistration.filter({ date: dateStr }),
+    queryFn: () => dataClient.entities.BreakRegistration.filter({ date: dateStr }),
   });
 
   const { data: settingsList = [] } = useQuery({
     queryKey: ["break-settings", dateStr],
-    queryFn: () => base44.entities.BreakSettings.filter({ date: dateStr }),
+    queryFn: () => dataClient.entities.BreakSettings.filter({ date: dateStr }),
   });
   const settings = settingsList[0] || null;
-  const limits = {
-    short: settings?.short_max_per_slot ?? 1,
-    lunch: settings?.lunch_max_per_slot ?? 1,
-  };
+  const limits = getBreakLimits(settings);
 
   const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.BreakRegistration.create(data),
+    mutationFn: (data) => createBreakRegistration(dataClient, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["break-registrations", dateStr] });
       setAddingTo(null);
       setNewName("");
       toast({ title: "✓ נציג נוסף בהצלחה" });
     },
+    onError: (error) => {
+      queryClient.invalidateQueries({ queryKey: ["break-registrations", dateStr] });
+      if (error instanceof BreakRegistrationError) {
+        toast({ title: "לא ניתן להוסיף", description: error.message });
+        return;
+      }
+      toast({ title: "שגיאה", description: "לא הצלחנו לשמור את ההרשמה" });
+    },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.BreakRegistration.delete(id),
+    mutationFn: (id) => dataClient.entities.BreakRegistration.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["break-registrations", dateStr] });
       toast({ title: "הרשמה הוסרה" });

@@ -1,5 +1,5 @@
 import React from "react";
-import { base44 } from "@/api/base44Client";
+import { dataClient } from "@/api/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
@@ -17,14 +17,14 @@ export default function VacationApprovalPanel({ weekDays }) {
     queryKey: ["vacation-requests-admin", dateFrom, dateTo],
     queryFn: async () => {
       const results = await Promise.all(
-        weekDays.map((d) => base44.entities.VacationRequest.filter({ date: format(d, "yyyy-MM-dd") }))
+        weekDays.map((d) => dataClient.entities.VacationRequest.filter({ date: format(d, "yyyy-MM-dd") }))
       );
       return results.flat().filter((r) => r.status === "pending");
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, status }) => base44.entities.VacationRequest.update(id, { status }),
+    mutationFn: ({ id, status }) => dataClient.entities.VacationRequest.update(id, { status }),
     onSuccess: (_, { status }) => {
       queryClient.invalidateQueries({ queryKey: ["vacation-requests-admin", dateFrom, dateTo] });
       queryClient.invalidateQueries({ queryKey: ["all-vac-view"] });

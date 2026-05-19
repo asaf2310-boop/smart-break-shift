@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
+import { dataClient } from "@/api/client";
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useToast } from "@/components/ui/use-toast";
@@ -12,6 +12,12 @@ import MyRegistrations from "../components/breaks/MyRegistrations";
 import DateSelector from "../components/breaks/DateSelector";
 import AppNav from "../components/layout/AppNav";
 import { SHORT_BREAK_SLOTS, LUNCH_BREAK_SLOTS, getStoredAgentName } from "@/constants/scheduling";
+import {
+  BreakRegistrationError,
+  createBreakRegistration,
+  getBreakLimits,
+  validateBreakRegistration,
+} from "@/lib/breakCapacity";
 
 const getBreakDayCacheKey = (dateStr) => `break-day-cache:${dateStr}`;
 
@@ -45,8 +51,8 @@ export default function BreakScheduler() {
     queryKey: ["break-day", dateStr],
     queryFn: async () => {
       const [registrations, settingsList] = await Promise.all([
-        base44.entities.BreakRegistration.filter({ date: dateStr }),
-        base44.entities.BreakSettings.filter({ date: dateStr }),
+        dataClient.entities.BreakRegistration.filter({ date: dateStr }),
+        dataClient.entities.BreakSettings.filter({ date: dateStr }),
       ]);
       const data = {
         registrations,
@@ -66,16 +72,31 @@ export default function BreakScheduler() {
     if (agentName && settings?.show_shortage_notice) setShowNotice(true);
   }, [agentName, settings?.show_shortage_notice, settings?.id]);
 
+  const breakLimits = useMemo(() => getBreakLimits(settings), [settings]);
+
   const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.BreakRegistration.create(data),
+    mutationFn: (data) => createBreakRegistration(dataClient, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["break-day", dateStr] });
       toast({ title: "✓ נרשמת בהצלחה!", description: "ההרשמה נשמרה" });
     },
+    onError: (error) => {
+      queryClient.invalidateQueries({ queryKey: ["break-day", dateStr] });
+      if (error instanceof BreakRegistrationError) {
+        toast({ title: "לא ניתן להירשם", description: error.message });
+        return;
+      }
+      const message = String(error?.message || "");
+      if (message.includes("break_slot_full")) {
+        toast({ title: "לא ניתן להירשם", description: "המשבצת מלאה — אין מקום נוסף" });
+        return;
+      }
+      toast({ title: "שגיאה", description: "לא הצלחנו לשמור את ההרשמה" });
+    },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.BreakRegistration.delete(id),
+    mutationFn: (id) => dataClient.entities.BreakRegistration.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["break-day", dateStr] });
       toast({ title: "ההרשמה בוטלה", description: "ניתן להירשם מחדש" });
@@ -88,11 +109,32 @@ export default function BreakScheduler() {
   };
 
   const handleRegister = (breakType) => (slot) => {
-    if (isInitialBreakLoad) {
+    if (isInitialBreakLoad || isFetching) {
       toast({ title: "רגע קטן", description: "מעדכנים זמינות להפסקות" });
       return;
     }
-    createMutation.mutate({ agent_name: agentName, break_type: breakType, time_slot: slot, date: dateStr });
+
+    try {
+      validateBreakRegistration({
+        registrations,
+        settings,
+        agentName,
+        breakType,
+        timeSlot: slot,
+      });
+    } catch (error) {
+      if (error instanceof BreakRegistrationError) {
+        toast({ title: "לא ניתן להירשם", description: error.message });
+      }
+      return;
+    }
+
+    createMutation.mutate({
+      agent_name: agentName,
+      break_type: breakType,
+      time_slot: slot,
+      date: dateStr,
+    });
   };
 
   const handleCancel = (id) => deleteMutation.mutate(id);
@@ -214,20 +256,20 @@ export default function BreakScheduler() {
             onRegister={handleRegister("short")}
             userRegistration={myShortReg}
             agentName={agentName}
-            maxPerSlot={settings?.short_max_per_slot ?? 1}
-            registrationDisabled={isInitialBreakLoad || createMutation.isPending}
+            maxPerSlot={breakLimits.short}
+            registrationDisabled={isInitialBreakLoad || isFetching || createMutation.isPending}
           />
           <BreakSection
             type="lunch"
             title="הפסקת צהריים"
-            subtitle={`12:30 – 15:30 · חצי שעה · מקסימום ${settings?.lunch_max_per_slot ?? 1} נציג${(settings?.lunch_max_per_slot ?? 1) > 1 ? "ים" : ""} למשבצת`}
+            subtitle={`12:30 – 15:30 · חצי שעה · מקסימום ${breakLimits.lunch} נציג${breakLimits.lunch > 1 ? "ים" : ""} למשבצת`}
             slots={LUNCH_BREAK_SLOTS}
             registrations={lunchRegs}
             onRegister={handleRegister("lunch")}
             userRegistration={myLunchReg}
             agentName={agentName}
-            maxPerSlot={settings?.lunch_max_per_slot ?? 1}
-            registrationDisabled={isInitialBreakLoad || createMutation.isPending}
+            maxPerSlot={breakLimits.lunch}
+            registrationDisabled={isInitialBreakLoad || isFetching || createMutation.isPending}
           />
         </div>
       </div>

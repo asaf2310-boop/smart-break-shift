@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
+import { dataClient } from "@/api/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, addDays } from "date-fns";
 import { motion } from "framer-motion";
@@ -75,7 +75,7 @@ export default function PublishedScheduleEditor({ weekStart }) {
     queryKey: ["published-regs-editor", dateFrom, dateTo],
     queryFn: async () => {
       const results = await Promise.all(
-        weekDays.map(d => base44.entities.ShiftRegistration.filter({ date: format(d, "yyyy-MM-dd") }))
+        weekDays.map(d => dataClient.entities.ShiftRegistration.filter({ date: format(d, "yyyy-MM-dd") }))
       );
       return results.flat();
     },
@@ -133,12 +133,12 @@ export default function PublishedScheduleEditor({ weekStart }) {
 
     // Delete all existing and recreate
     const allWeekRegs = await Promise.all(
-      weekDays.map(d => base44.entities.ShiftRegistration.filter({ date: format(d, "yyyy-MM-dd") }))
+      weekDays.map(d => dataClient.entities.ShiftRegistration.filter({ date: format(d, "yyyy-MM-dd") }))
     ).then(r => r.flat());
-    await Promise.all(allWeekRegs.map(r => base44.entities.ShiftRegistration.delete(r.id)));
+    await Promise.all(allWeekRegs.map(r => dataClient.entities.ShiftRegistration.delete(r.id)));
 
     if (records.length > 0) {
-      await base44.entities.ShiftRegistration.bulkCreate(records);
+      await dataClient.entities.ShiftRegistration.bulkCreate(records);
     }
 
     await queryClient.invalidateQueries({ queryKey: ["published-regs-editor", dateFrom, dateTo] });
