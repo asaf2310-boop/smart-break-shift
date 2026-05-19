@@ -2,12 +2,17 @@ import React from "react";
 import { motion } from "framer-motion";
 import { Coffee, UtensilsCrossed } from "lucide-react";
 import TimeSlotCard from "./TimeSlotCard";
+import { normalizeAgentName } from "@/lib/breakCapacity";
 
 export default function BreakSection({
   type, title, subtitle, slots, registrations, onRegister, userRegistration, agentName, maxPerSlot, registrationDisabled = false
 }) {
   const isLunch = type === "lunch";
-  const hasRegistered = !!userRegistration;
+  const normalizedAgent = normalizeAgentName(agentName);
+  const userRegsForType = registrations.filter(
+    (r) => normalizeAgentName(r.agent_name) === normalizedAgent
+  );
+  const hasRegistered = userRegsForType.length > 0 || !!userRegistration;
 
   return (
     <motion.div
@@ -51,7 +56,9 @@ export default function BreakSection({
       <div className="p-3 sm:p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3 auto-rows-fr">
         {slots.map((slot, i) => {
           const slotRegs = registrations.filter(r => r.time_slot === slot);
-          const isRegistered = userRegistration?.time_slot === slot;
+          const isRegistered =
+            userRegsForType.some((r) => r.time_slot === slot) ||
+            userRegistration?.time_slot === slot;
           return (
             <TimeSlotCard
               key={slot}

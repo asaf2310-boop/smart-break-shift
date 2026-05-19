@@ -10,6 +10,7 @@ import AutoScheduleBuilder from "../components/shifts/AutoScheduleBuilder";
 import PublishedScheduleEditor from "../components/shifts/PublishedScheduleEditor";
 import VacationApprovalPanel from "../components/admin/VacationApprovalPanel";
 import BackendConfigBanner from "@/components/BackendConfigBanner";
+import { getLiveQueryOptions } from "@/lib/liveQuery";
 
 const SHIFTS = [
   { type: "morning", label: "משמרת בוקר", time: "08:00 – 16:00", icon: Sun, gradient: "from-amber-400 to-orange-500", bg: "bg-amber-50/50" },
@@ -142,6 +143,7 @@ function ConstraintsView({ weekStart }) {
       );
       return results.flat();
     },
+    ...getLiveQueryOptions(),
   });
 
   const { data: vacationRequests = [], isLoading: loadingV } = useQuery({
@@ -152,12 +154,14 @@ function ConstraintsView({ weekStart }) {
       );
       return results.flat();
     },
+    ...getLiveQueryOptions(),
   });
 
   // Fetch confirmations for next week
   const { data: confirmations = [], isLoading: loadingC } = useQuery({
     queryKey: ["all-confirmations", nextWeekStart],
     queryFn: () => dataClient.entities.ConstraintConfirmation.filter({ week_start: nextWeekStart }),
+    ...getLiveQueryOptions(),
   });
 
   if (loadingU || loadingV || loadingC) {

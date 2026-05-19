@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Palmtree, Check, X } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { WEEKDAY_LABELS } from "@/constants/scheduling";
+import { getLiveQueryOptions } from "@/lib/liveQuery";
 
 export default function VacationApprovalPanel({ weekDays }) {
   const queryClient = useQueryClient();
@@ -21,6 +22,7 @@ export default function VacationApprovalPanel({ weekDays }) {
       );
       return results.flat().filter((r) => r.status === "pending");
     },
+    ...getLiveQueryOptions(),
   });
 
   const updateMutation = useMutation({

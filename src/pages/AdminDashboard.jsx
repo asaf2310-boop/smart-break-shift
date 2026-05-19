@@ -15,6 +15,7 @@ import {
   createBreakRegistration,
   getBreakLimits,
 } from "@/lib/breakCapacity";
+import { getLiveQueryOptions } from "@/lib/liveQuery";
 
 export default function AdminDashboard() {
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -25,14 +26,16 @@ export default function AdminDashboard() {
 
   const dateStr = format(selectedDate, "yyyy-MM-dd");
 
-  const { data: registrations = [], isLoading } = useQuery({
+  const { data: registrations = [], isLoading, isFetching } = useQuery({
     queryKey: ["break-registrations", dateStr],
     queryFn: () => dataClient.entities.BreakRegistration.filter({ date: dateStr }),
+    ...getLiveQueryOptions(),
   });
 
   const { data: settingsList = [] } = useQuery({
     queryKey: ["break-settings", dateStr],
     queryFn: () => dataClient.entities.BreakSettings.filter({ date: dateStr }),
+    ...getLiveQueryOptions(),
   });
   const settings = settingsList[0] || null;
   const limits = getBreakLimits(settings);
@@ -154,6 +157,18 @@ export default function AdminDashboard() {
           </div>
           <div className="w-24" />
         </motion.div>
+
+        {isFetching && !isLoading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mb-3 flex justify-center"
+          >
+            <motion.div className="px-3 py-1.5 rounded-full bg-white/80 border border-amber-100 text-xs font-semibold text-amber-700 shadow-sm">
+              מסנכרן הרשמות...
+            </motion.div>
+          </motion.div>
+        )}
 
         {/* Date Selector */}
         <div className="flex justify-center mb-6">

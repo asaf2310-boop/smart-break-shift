@@ -18,6 +18,7 @@ import {
   getBreakLimits,
   validateBreakRegistration,
 } from "@/lib/breakCapacity";
+import { getLiveQueryOptions } from "@/lib/liveQuery";
 
 const getBreakDayCacheKey = (dateStr) => `break-day-cache:${dateStr}`;
 
@@ -63,6 +64,7 @@ export default function BreakScheduler() {
     },
     initialData: () => readCachedBreakDay(dateStr),
     placeholderData: keepPreviousData,
+    ...getLiveQueryOptions(),
   });
   const registrations = breakDayData?.registrations ?? [];
   const settings = breakDayData?.settings ?? null;
@@ -91,6 +93,10 @@ export default function BreakScheduler() {
         toast({ title: "לא ניתן להירשם", description: "המשבצת מלאה — אין מקום נוסף" });
         return;
       }
+      if (message.includes("break_agent_already_registered")) {
+        toast({ title: "לא ניתן להירשם", description: "כבר נרשמת להפסקה מסוג זה להיום" });
+        return;
+      }
       toast({ title: "שגיאה", description: "לא הצלחנו לשמור את ההרשמה" });
     },
   });
@@ -109,6 +115,9 @@ export default function BreakScheduler() {
   };
 
   const handleRegister = (breakType) => (slot) => {
+    if (createMutation.isPending) {
+      return;
+    }
     if (isInitialBreakLoad || isFetching) {
       toast({ title: "רגע קטן", description: "מעדכנים זמינות להפסקות" });
       return;

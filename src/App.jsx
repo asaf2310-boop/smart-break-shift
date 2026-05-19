@@ -13,6 +13,7 @@ import BreakScheduler from './pages/BreakScheduler';
 import AdminDashboard from './pages/AdminDashboard';
 import ShiftScheduler from './pages/ShiftScheduler';
 import AdminShifts from './pages/AdminShifts';
+import LiveDataSync from '@/components/LiveDataSync';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -51,6 +52,7 @@ function App() {
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
+        <LiveDataSync />
         <Router>
           <AuthenticatedApp />
         </Router>

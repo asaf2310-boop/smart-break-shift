@@ -19,6 +19,7 @@ import {
   getWeekDays,
   getConstraintsDeadline,
 } from "@/constants/scheduling";
+import { getLiveQueryOptions } from "@/lib/liveQuery";
 
 const getScheduleCacheKey = (dateFrom, dateTo) => `shift-schedule-cache:${dateFrom}:${dateTo}`;
 
@@ -75,6 +76,7 @@ export default function ShiftScheduler() {
     placeholderData: keepPreviousData,
     refetchOnMount: "always",
     enabled: !!agentName,
+    ...getLiveQueryOptions(),
   });
 
   const schedulePublished = scheduleRegistrations.length > 0;
@@ -91,6 +93,7 @@ export default function ShiftScheduler() {
     queryKey: ["shift-unavailabilities", constraintsDateFrom, constraintsDateTo, agentName],
     queryFn: () => dataClient.entities.ShiftUnavailability.filter({ agent_name: agentName }),
     enabled: !!agentName,
+    ...getLiveQueryOptions(),
   });
 
   // Fetch vacation requests for constraints week (single query)
@@ -98,6 +101,7 @@ export default function ShiftScheduler() {
     queryKey: ["vacation-requests", constraintsDateFrom, constraintsDateTo, agentName],
     queryFn: () => dataClient.entities.VacationRequest.filter({ agent_name: agentName }),
     enabled: !!agentName,
+    ...getLiveQueryOptions(),
   });
 
   const createVacationMutation = useMutation({
@@ -125,6 +129,7 @@ export default function ShiftScheduler() {
       week_start: constraintsWeekStartStr, agent_name: agentName
     }),
     enabled: !!agentName,
+    ...getLiveQueryOptions(),
   });
 
   const confirmation = confirmations[0] || null;

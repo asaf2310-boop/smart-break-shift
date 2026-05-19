@@ -1,6 +1,6 @@
 import { validateBreakRegistration } from "@/lib/breakCapacity";
 
-const DEMO_STORE_KEY = "smart-break-shift-demo-store-v1";
+export const DEMO_STORE_KEY = "smart-break-shift-demo-store-v1";
 
 export const demoModeEnabled = import.meta.env.VITE_DEMO_MODE === "true";
 
@@ -110,6 +110,7 @@ function readStore() {
 
 function writeStore(store) {
   localStorage.setItem(DEMO_STORE_KEY, JSON.stringify(store));
+  window.dispatchEvent(new CustomEvent("demo-store-changed"));
 }
 
 function matchesFilters(row, filters) {

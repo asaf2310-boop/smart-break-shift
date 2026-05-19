@@ -45,8 +45,8 @@ export default function TimeSlotCard({ slot, breakType, registrations, onRegiste
 
       {/* Registered names + availability */}
       <div className="space-y-1 flex-1 min-w-0">
-        {registrations.map((reg, i) => (
-          <div key={i} className="flex items-start gap-1.5 min-w-0">
+        {registrations.map((reg) => (
+          <div key={reg.id ?? `${reg.agent_name}-${reg.time_slot}-${reg.created_at ?? ""}`} className="flex items-start gap-1.5 min-w-0">
             <User className="w-3 h-3 text-slate-400 flex-shrink-0 mt-0.5" />
             <span className="text-xs sm:text-sm text-slate-700 font-semibold break-words">{reg.agent_name}</span>
           </div>

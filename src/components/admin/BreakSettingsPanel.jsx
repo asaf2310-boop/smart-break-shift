@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Settings, Save, AlertTriangle, Check } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { getLiveQueryOptions } from "@/lib/liveQuery";
 
 const DEFAULT_NOTICE_TEXT = "עקב מחסור בנציגים, היום לא תתאפשר יציאה בזוגות להפסקת צהריים.";
 
@@ -15,6 +16,7 @@ export default function BreakSettingsPanel({ selectedDate }) {
   const { data: settingsList = [] } = useQuery({
     queryKey: ["break-settings", dateStr],
     queryFn: () => dataClient.entities.BreakSettings.filter({ date: dateStr }),
+    ...getLiveQueryOptions(),
   });
 
   const existing = settingsList[0] || null;
