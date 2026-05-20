@@ -20,6 +20,8 @@ function createMissingBackendClient() {
       ShiftUnavailability: entity,
       VacationRequest: entity,
       ConstraintConfirmation: entity,
+      ChatMessage: entity,
+      ChatPresence: entity,
     },
     auth: {
       me: async () => null,

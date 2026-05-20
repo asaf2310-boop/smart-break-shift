@@ -11,6 +11,7 @@ import PublishedScheduleEditor from "../components/shifts/PublishedScheduleEdito
 import VacationApprovalPanel from "../components/admin/VacationApprovalPanel";
 import BackendConfigBanner from "@/components/BackendConfigBanner";
 import { getLiveQueryOptions } from "@/lib/liveQuery";
+import ScheduleSmsLog from "@/components/admin/ScheduleSmsLog";
 
 const SHIFTS = [
   { type: "morning", label: "משמרת בוקר", time: "08:00 – 16:00", icon: Sun, gradient: "from-amber-400 to-orange-500", bg: "bg-amber-50/50" },
@@ -119,7 +120,7 @@ export default function AdminShifts() {
           </>
         )}
 
-
+        <ScheduleSmsLog />
       </div>
     </div>
   );

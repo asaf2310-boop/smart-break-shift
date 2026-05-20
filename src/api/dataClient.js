@@ -109,6 +109,8 @@ const ENTITY_TABLES = {
   ShiftUnavailability: "shift_unavailabilities",
   VacationRequest: "vacation_requests",
   ConstraintConfirmation: "constraint_confirmations",
+  ChatMessage: "chat_messages",
+  ChatPresence: "chat_presence",
 };
 
 export function createSupabaseDataClient() {

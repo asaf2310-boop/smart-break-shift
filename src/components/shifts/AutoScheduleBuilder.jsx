@@ -7,6 +7,9 @@ import { Zap, Sun, Moon, Check, X, RefreshCw, Plus, MessageSquare } from "lucide
 
 const DAYS = ["ראשון", "שני", "שלישי", "רביעי", "חמישי"];
 import { AGENT_NAMES, HOLIDAY_EVE_DATES } from "@/constants/scheduling";
+import { sendScheduleSmsNotifications } from "@/lib/scheduleSms";
+import { useToast } from "@/components/ui/use-toast";
+import { demoModeEnabled } from "@/api/demoClient";
 
 // Auto-schedule algorithm:
 // - For regular days: split available agents evenly between morning & evening
@@ -220,6 +223,8 @@ export default function AutoScheduleBuilder({ weekStart }) {
   const [notes, setNotes] = useState({}); // { "cellKey|agentName": "note text" }
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [sendSmsOnPublish, setSendSmsOnPublish] = useState(true);
+  const { toast } = useToast();
 
   const handleNoteChange = (cellKey, agent, value) => {
     setNotes(prev => {
@@ -294,6 +299,44 @@ export default function AutoScheduleBuilder({ weekStart }) {
 
     await queryClient.invalidateQueries({ queryKey: ["shift-registrations-builder"] });
     await queryClient.invalidateQueries({ queryKey: ["shift-registrations"] });
+
+    const smsResult = await sendScheduleSmsNotifications({
+      records,
+      weekDays,
+      enabled: sendSmsOnPublish,
+    });
+
+    if (sendSmsOnPublish) {
+      if (smsResult.simulated) {
+        toast({
+          title: `SMS דמו: ${smsResult.sent.length} הודעות`,
+          description:
+            smsResult.skipped.length > 0
+              ? `${smsResult.skipped.length} נציגים בלי מספר · ראה יומן SMS למטה`
+              : "לא נשלח SMS אמיתי — רק סימולציה",
+        });
+      } else if (smsResult.sent.length > 0) {
+        toast({
+          title: `נשלחו ${smsResult.sent.length} SMS`,
+          description:
+            smsResult.skipped.length > 0
+              ? `${smsResult.skipped.length} דולגו (ללא טלפון / הגדרות)`
+              : "הנציגים קיבלו עדכון על השיבוץ",
+        });
+      } else {
+        toast({
+          title: "השיבוץ פורסם · SMS לא נשלח",
+          description: "הגדר VITE_SCHEDULE_SMS_WEBHOOK ומספרי טלפון ב-agentPhones.js",
+        });
+      }
+      if (smsResult.failed.length > 0) {
+        toast({
+          title: "חלק מה-SMS נכשלו",
+          description: `${smsResult.failed.length} הודעות לא יצאו`,
+        });
+      }
+    }
+
     setSaving(false);
     setSaved(true);
   };
@@ -422,6 +465,21 @@ export default function AutoScheduleBuilder({ weekStart }) {
               </div>
             ))}
           </div>
+
+          <label className="flex items-center gap-2 mb-3 text-sm text-slate-600 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={sendSmsOnPublish}
+              onChange={(e) => setSendSmsOnPublish(e.target.checked)}
+              className="rounded border-slate-300"
+            />
+            <span>
+              שלח SMS לנציגים בפרסום
+              {demoModeEnabled && (
+                <span className="text-cyan-600 font-semibold"> (דמו — ללא שליחה אמיתית)</span>
+              )}
+            </span>
+          </label>
 
           <button
             onClick={handleSave}

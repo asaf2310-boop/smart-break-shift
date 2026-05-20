@@ -7,6 +7,9 @@ import { Pencil, Sun, Moon, X, Plus, Check, RefreshCw } from "lucide-react";
 
 const DAYS = ["ראשון", "שני", "שלישי", "רביעי", "חמישי"];
 import { AGENT_NAMES } from "@/constants/scheduling";
+import { sendScheduleSmsNotifications } from "@/lib/scheduleSms";
+import { useToast } from "@/components/ui/use-toast";
+import { demoModeEnabled } from "@/api/demoClient";
 
 function AgentCell({ agents, allAgentsOnDay, onRemove, onAdd }) {
   const [showDropdown, setShowDropdown] = useState(false);
@@ -61,6 +64,8 @@ export default function PublishedScheduleEditor({ weekStart }) {
   const [localRegs, setLocalRegs] = useState(null); // null = not loaded yet
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [sendSmsOnSave, setSendSmsOnSave] = useState(false);
+  const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const weekDays = useMemo(
@@ -143,6 +148,24 @@ export default function PublishedScheduleEditor({ weekStart }) {
 
     await queryClient.invalidateQueries({ queryKey: ["published-regs-editor", dateFrom, dateTo] });
     await queryClient.invalidateQueries({ queryKey: ["shift-registrations"] });
+
+    const smsResult = await sendScheduleSmsNotifications({
+      records,
+      weekDays,
+      enabled: sendSmsOnSave,
+    });
+
+    if (sendSmsOnSave) {
+      if (smsResult.simulated) {
+        toast({
+          title: `SMS דמו: ${smsResult.sent.length} הודעות`,
+          description: "עדכון שמור + סימולציית SMS ביומן הדמו",
+        });
+      } else if (smsResult.sent.length > 0) {
+        toast({ title: `נשלחו ${smsResult.sent.length} SMS עדכון` });
+      }
+    }
+
     setSaving(false);
     setSaved(true);
   };
@@ -219,6 +242,19 @@ export default function PublishedScheduleEditor({ weekStart }) {
           </div>
         ))}
       </div>
+
+      <label className="flex items-center gap-2 mb-3 text-sm text-slate-600 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={sendSmsOnSave}
+          onChange={(e) => setSendSmsOnSave(e.target.checked)}
+          className="rounded border-slate-300"
+        />
+        <span>
+          שלח עדכון SMS לנציגים אחרי שמירה
+          {demoModeEnabled && <span className="text-cyan-600 font-semibold"> (דמו)</span>}
+        </span>
+      </label>
 
       <button
         onClick={handleSave}

@@ -24,6 +24,8 @@ const ENTITY_KEYS = {
   ShiftUnavailability: "shiftUnavailabilities",
   VacationRequest: "vacationRequests",
   ConstraintConfirmation: "constraintConfirmations",
+  ChatMessage: "chatMessages",
+  ChatPresence: "chatPresence",
 };
 
 function pad(value) {
@@ -97,12 +99,48 @@ function createSeedStore() {
       { id: makeId("confirm"), agent_name: "נציג 01", week_start: formatDate(nextWeekStart), confirmed_at: new Date().toISOString() },
       { id: makeId("confirm"), agent_name: "נציג 02", week_start: formatDate(nextWeekStart), confirmed_at: new Date().toISOString() },
     ],
+    chatMessages: [
+      {
+        id: makeId("chat"),
+        sender_name: "נציג 02",
+        recipient_name: null,
+        body: "בוקר טוב לכולם",
+        created_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+      },
+      {
+        id: makeId("chat"),
+        sender_name: "נציג 04",
+        recipient_name: "נציג 02",
+        body: "אתה מכסה אותי ב-14:00?",
+        created_at: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
+      },
+    ],
+    chatPresence: AGENTS.map((agent, index) => ({
+      id: makeId("presence"),
+      agent_name: agent,
+      last_seen_at: new Date(Date.now() - index * 1000 * 45).toISOString(),
+      updated_at: new Date(Date.now() - index * 1000 * 45).toISOString(),
+    })),
   };
 }
 
 function readStore() {
   const raw = localStorage.getItem(DEMO_STORE_KEY);
-  if (raw) return JSON.parse(raw);
+  if (raw) {
+    const store = JSON.parse(raw);
+    const seed = createSeedStore();
+    let changed = false;
+    if (!store.chatMessages?.length) {
+      store.chatMessages = seed.chatMessages;
+      changed = true;
+    }
+    if (!store.chatPresence?.length) {
+      store.chatPresence = seed.chatPresence;
+      changed = true;
+    }
+    if (changed) writeStore(store);
+    return store;
+  }
   const seed = createSeedStore();
   localStorage.setItem(DEMO_STORE_KEY, JSON.stringify(seed));
   return seed;

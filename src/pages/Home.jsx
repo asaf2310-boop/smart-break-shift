@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { CalendarClock, CalendarDays, LogOut, ShieldCheck, Users } from "lucide-react";
+import { CalendarClock, CalendarDays, LogOut, MessageCircle, ShieldCheck, Users } from "lucide-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { AGENT_NAMES, getStoredAgentName } from "@/constants/scheduling";
 import AgentNameDialog from "@/components/breaks/AgentNameDialog";
@@ -21,6 +21,13 @@ const cards = [
     desc: "אילוצים, חופש ושיבוץ שבועי",
     icon: CalendarDays,
     gradient: "from-cyan-500 to-blue-600",
+  },
+  {
+    to: "/chat",
+    title: "צ'אט פנימי",
+    desc: "שיחה כללית + הודעות אישיות בין נציגים",
+    icon: MessageCircle,
+    gradient: "from-fuchsia-500 to-indigo-600",
   },
 ];
 
@@ -77,7 +84,7 @@ export default function Home() {
           </button>
         </motion.div>
 
-        <div className="grid sm:grid-cols-2 gap-4 mb-6">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
           {cards.map((card, i) => {
             const Icon = card.icon;
             return (

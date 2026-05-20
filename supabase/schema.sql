@@ -57,10 +57,29 @@ create table if not exists constraint_confirmations (
   unique (agent_name, week_start)
 );
 
+create table if not exists chat_messages (
+  id uuid primary key default gen_random_uuid(),
+  sender_name text not null,
+  recipient_name text,
+  body text not null,
+  created_at timestamptz default now()
+);
+
+create table if not exists chat_presence (
+  id uuid primary key default gen_random_uuid(),
+  agent_name text not null unique,
+  last_seen_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  created_at timestamptz default now()
+);
+
 create index if not exists idx_break_reg_date on break_registrations(date);
 create index if not exists idx_shift_reg_date on shift_registrations(date);
 create index if not exists idx_shift_unavail_date on shift_unavailabilities(date);
 create index if not exists idx_vacation_date on vacation_requests(date);
+create index if not exists idx_chat_messages_created_at on chat_messages(created_at);
+create index if not exists idx_chat_messages_recipient on chat_messages(recipient_name);
+create index if not exists idx_chat_presence_last_seen on chat_presence(last_seen_at);
 
 alter table break_registrations enable row level security;
 alter table break_settings enable row level security;
@@ -68,6 +87,8 @@ alter table shift_registrations enable row level security;
 alter table shift_unavailabilities enable row level security;
 alter table vacation_requests enable row level security;
 alter table constraint_confirmations enable row level security;
+alter table chat_messages enable row level security;
+alter table chat_presence enable row level security;
 
 -- מדיניות פתוחה לצוות פנימי (אפשר להחמיר later עם Supabase Auth)
 drop policy if exists "anon_all_break_registrations" on break_registrations;
@@ -76,6 +97,8 @@ drop policy if exists "anon_all_shift_registrations" on shift_registrations;
 drop policy if exists "anon_all_shift_unavailabilities" on shift_unavailabilities;
 drop policy if exists "anon_all_vacation_requests" on vacation_requests;
 drop policy if exists "anon_all_constraint_confirmations" on constraint_confirmations;
+drop policy if exists "anon_all_chat_messages" on chat_messages;
+drop policy if exists "anon_all_chat_presence" on chat_presence;
 
 create policy "anon_all_break_registrations" on break_registrations for all using (true) with check (true);
 create policy "anon_all_break_settings" on break_settings for all using (true) with check (true);
@@ -83,6 +106,8 @@ create policy "anon_all_shift_registrations" on shift_registrations for all usin
 create policy "anon_all_shift_unavailabilities" on shift_unavailabilities for all using (true) with check (true);
 create policy "anon_all_vacation_requests" on vacation_requests for all using (true) with check (true);
 create policy "anon_all_constraint_confirmations" on constraint_confirmations for all using (true) with check (true);
+create policy "anon_all_chat_messages" on chat_messages for all using (true) with check (true);
+create policy "anon_all_chat_presence" on chat_presence for all using (true) with check (true);
 
 -- מניעת הרשמה למשבצת מלאה (גם כששני נציגים לוחצים בו-זמנית)
 create or replace function check_break_slot_capacity()

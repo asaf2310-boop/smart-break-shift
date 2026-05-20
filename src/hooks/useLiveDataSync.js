@@ -28,6 +28,8 @@ const TABLE_QUERY_PREFIXES = {
     "all-confirmations",
     "confirmations-builder",
   ],
+  chat_messages: ["chat-messages"],
+  chat_presence: ["chat-presence"],
 };
 
 function invalidateByPrefixes(queryClient, prefixes) {
@@ -56,9 +58,11 @@ export function useLiveDataSync() {
       };
       window.addEventListener("storage", onStorage);
       window.addEventListener("demo-store-changed", refresh);
+      window.addEventListener("local-chat-changed", refresh);
       return () => {
         window.removeEventListener("storage", onStorage);
         window.removeEventListener("demo-store-changed", refresh);
+        window.removeEventListener("local-chat-changed", refresh);
       };
     }
 

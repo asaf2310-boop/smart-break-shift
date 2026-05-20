@@ -14,6 +14,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import ShiftScheduler from './pages/ShiftScheduler';
 import AdminShifts from './pages/AdminShifts';
 import LiveDataSync from '@/components/LiveDataSync';
+import InternalChat from "./pages/InternalChat";
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -41,6 +42,7 @@ const AuthenticatedApp = () => {
       <Route path="/" element={<Home />} />
       <Route path="/breaks" element={<BreakScheduler />} />
       <Route path="/shifts" element={<ShiftScheduler />} />
+      <Route path="/chat" element={<InternalChat />} />
       <Route path="/admin" element={<AdminGate><AdminDashboard /></AdminGate>} />
       <Route path="/admin/shifts" element={<AdminGate><AdminShifts /></AdminGate>} />
       <Route path="*" element={<PageNotFound />} />
