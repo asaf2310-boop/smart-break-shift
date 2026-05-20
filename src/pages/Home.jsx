@@ -6,6 +6,7 @@ import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { AGENT_NAMES, getStoredAgentName } from "@/constants/scheduling";
 import AgentNameDialog from "@/components/breaks/AgentNameDialog";
 import { demoModeEnabled } from "@/api/demoClient";
+import { useChatPanel } from "@/context/ChatPanelContext";
 
 const cards = [
   {
@@ -22,17 +23,18 @@ const cards = [
     icon: CalendarDays,
     gradient: "from-cyan-500 to-blue-600",
   },
-  {
-    to: "/chat",
-    title: "צ'אט פנימי",
-    desc: "שיחה כללית + הודעות אישיות בין נציגים",
-    icon: MessageCircle,
-    gradient: "from-fuchsia-500 to-indigo-600",
-  },
 ];
+
+const chatCard = {
+  title: "צ'אט פנימי",
+  desc: "שיחה כללית + הודעות אישיות — נפתח כחלונית",
+  icon: MessageCircle,
+  gradient: "from-fuchsia-500 to-indigo-600",
+};
 
 export default function Home() {
   const isAdmin = useIsAdmin();
+  const { openChat } = useChatPanel();
   const [agentName, setAgentName] = useState(() => getStoredAgentName());
 
   const handleNameSubmit = (name) => {
@@ -107,6 +109,23 @@ export default function Home() {
               </motion.div>
             );
           })}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: cards.length * 0.08 }}
+          >
+            <button
+              type="button"
+              onClick={openChat}
+              className="w-full text-right rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all group"
+            >
+              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${chatCard.gradient} flex items-center justify-center mb-4 shadow-md group-hover:scale-105 transition-transform`}>
+                <MessageCircle className="w-6 h-6 text-white" />
+              </div>
+              <h2 className="text-lg font-bold text-slate-800 mb-1">{chatCard.title}</h2>
+              <p className="text-sm text-slate-500">{chatCard.desc}</p>
+            </button>
+          </motion.div>
         </div>
 
         {isAdmin && (
