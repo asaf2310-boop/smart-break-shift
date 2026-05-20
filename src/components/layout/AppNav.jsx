@@ -1,13 +1,11 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { CalendarClock, CalendarDays, Home, MessageCircle, ShieldCheck } from "lucide-react";
+import { CalendarClock, CalendarDays, Home, ShieldCheck } from "lucide-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
-import { useChatPanel } from "@/context/ChatPanelContext";
 
 export default function AppNav() {
   const location = useLocation();
   const isAdmin = useIsAdmin();
-  const { open, openChat } = useChatPanel();
   const isBreaks = location.pathname === "/breaks";
   const isShifts = location.pathname === "/shifts";
 
@@ -34,10 +32,6 @@ export default function AppNav() {
           <CalendarDays className="w-4 h-4" />
           משמרות
         </Link>
-        <button type="button" onClick={openChat} className={tabClass(open)}>
-          <MessageCircle className="w-4 h-4" />
-          צ'אט
-        </button>
         {isAdmin && (
           <>
             <Link to="/admin" className={tabClass(location.pathname === "/admin")}>

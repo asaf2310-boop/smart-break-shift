@@ -14,7 +14,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import ShiftScheduler from './pages/ShiftScheduler';
 import AdminShifts from './pages/AdminShifts';
 import LiveDataSync from '@/components/LiveDataSync';
-import ChatPanelOverlay from '@/components/chat/ChatPanelOverlay';
+import FloatingChatWidget from '@/components/chat/FloatingChatWidget';
 import { ChatPanelProvider } from '@/context/ChatPanelContext';
 import ChatDeepLink from './pages/ChatDeepLink';
 
@@ -40,15 +40,18 @@ const AuthenticatedApp = () => {
   }
 
   return (
-    <Routes>
-      <Route path="/" element={<Home />} />
-      <Route path="/breaks" element={<BreakScheduler />} />
-      <Route path="/shifts" element={<ShiftScheduler />} />
-      <Route path="/chat" element={<ChatDeepLink />} />
-      <Route path="/admin" element={<AdminGate><AdminDashboard /></AdminGate>} />
-      <Route path="/admin/shifts" element={<AdminGate><AdminShifts /></AdminGate>} />
-      <Route path="*" element={<PageNotFound />} />
-    </Routes>
+    <>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/breaks" element={<BreakScheduler />} />
+        <Route path="/shifts" element={<ShiftScheduler />} />
+        <Route path="/chat" element={<ChatDeepLink />} />
+        <Route path="/admin" element={<AdminGate><AdminDashboard /></AdminGate>} />
+        <Route path="/admin/shifts" element={<AdminGate><AdminShifts /></AdminGate>} />
+        <Route path="*" element={<PageNotFound />} />
+      </Routes>
+      <FloatingChatWidget />
+    </>
   );
 };
 
@@ -59,7 +62,6 @@ function App() {
         <LiveDataSync />
         <Router>
           <ChatPanelProvider>
-            <ChatPanelOverlay />
             <AuthenticatedApp />
           </ChatPanelProvider>
         </Router>
