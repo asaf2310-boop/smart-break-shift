@@ -54,7 +54,7 @@ export default function ShiftScheduler() {
   const thisWeekStart = getWeekStart(now);
   const nextWeekStart = addDays(thisWeekStart, 7);
 
-  const scheduleWeekStart = thisWeekStart;
+  const scheduleWeekStart = nextWeekStart;
   const constraintsWeekStart = nextWeekStart;
 
   const scheduleDays = useMemo(() => getWeekDays(scheduleWeekStart), [scheduleWeekStart]);
@@ -465,7 +465,7 @@ export default function ShiftScheduler() {
               <CalendarDays className="w-5 h-5 text-white" />
             </div>
             <div className="flex-1">
-              <h2 className="font-bold text-slate-800">שיבוץ</h2>
+              <h2 className="font-bold text-slate-800">שיבוץ שבוע הבא</h2>
               <p className="text-sm font-semibold text-amber-700">{scheduleWeekLabel}</p>
             </div>
             {schedulePublished && (
@@ -489,7 +489,7 @@ export default function ShiftScheduler() {
             <div className="flex flex-col items-center gap-2 py-12 text-slate-400">
               <Lock className="w-8 h-8 opacity-30" />
               <p className="text-sm font-medium">
-                {isInitialScheduleLoad ? "טוען את השיבוץ..." : "השיבוץ לשבוע הנוכחי טרם פורסם"}
+                {isInitialScheduleLoad ? "טוען את השיבוץ..." : "השיבוץ לשבוע הבא טרם פורסם"}
               </p>
               <p className="text-xs">{isInitialScheduleLoad ? "זה יופיע מיד כשנתוני השיבוץ יגיעו" : "המנהל יפרסם בקרוב"}</p>
             </div>

@@ -11,6 +11,20 @@
 
 ## הרצה מקומית
 
+**דמו** (נתונים פיקטיביים):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\preview-shell.ps1
+```
+
+**לייב** (אותם נתונים כמו ב-Vercel / Supabase):
+
+```powershell
+# 1. צור .env.local לפי .env.live.example (מפתחות מ-Vercel)
+# 2. הרץ:
+powershell -ExecutionPolicy Bypass -File .\preview-live.ps1
+```
+
 ```powershell
 npm install
 npm run dev
