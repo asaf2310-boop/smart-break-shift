@@ -1,4 +1,4 @@
-import { AGENT_NAMES } from "@/constants/scheduling";
+import { getAgentNamesList } from "@/constants/scheduling";
 import { useSupabaseBackend } from "@/api/dataClient";
 
 const LOCAL_CHAT_KEY = "smart-break-shift-local-chat-v1";
@@ -25,19 +25,37 @@ function createSeed() {
         created_at: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
       },
     ],
-    chatPresence: AGENT_NAMES.map((agent, index) => ({
-      id: makeId("presence"),
-      agent_name: agent,
-      last_seen_at: new Date(Date.now() - index * 1000 * 45).toISOString(),
-      updated_at: new Date(Date.now() - index * 1000 * 45).toISOString(),
-    })),
+    chatPresence: getAgentNamesList().map((agent, index) => {
+      const status = index % 3 === 0 ? "available" : index % 3 === 1 ? "break" : "offline";
+      const seen =
+        status === "offline"
+          ? "1970-01-01T00:00:00.000Z"
+          : new Date(Date.now() - index * 1000 * 45).toISOString();
+      return {
+        id: makeId("presence"),
+        agent_name: agent,
+        status,
+        last_seen_at: seen,
+        updated_at: seen,
+      };
+    }),
   };
 }
 
 function readStore() {
   try {
     const raw = localStorage.getItem(LOCAL_CHAT_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const store = JSON.parse(raw);
+      let changed = false;
+      store.chatPresence = (store.chatPresence || []).map((row) => {
+        if (row.status) return row;
+        changed = true;
+        return { ...row, status: "offline" };
+      });
+      if (changed) writeStore(store);
+      return store;
+    }
   } catch {
     // ignore
   }

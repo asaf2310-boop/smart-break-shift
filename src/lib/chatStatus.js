@@ -1,3 +1,5 @@
+import { CHAT_STATUS } from "@/lib/agentChatPresence";
+
 export const OFFLINE_AFTER_MS = 2 * 60 * 1000;
 
 function parseSlotToMinutes(slot) {
@@ -19,26 +21,42 @@ function isAgentOnBreakNow(agentName, breakRegistrations, now) {
   });
 }
 
+function isPresenceStale(presence, now) {
+  if (!presence?.last_seen_at) return true;
+  const delta = now.getTime() - new Date(presence.last_seen_at).getTime();
+  return delta > OFFLINE_AFTER_MS;
+}
+
 export function resolveAgentStatus(agentName, presenceMap, breakRegistrations, now = new Date()) {
   const presence = presenceMap.get(agentName);
-  if (!presence?.last_seen_at) {
-    return { key: "offline", label: "לא מחובר", tone: "slate" };
+  const explicit = presence?.status;
+
+  if (explicit === CHAT_STATUS.offline.key) {
+    return CHAT_STATUS.offline;
   }
 
-  const delta = now.getTime() - new Date(presence.last_seen_at).getTime();
-  if (delta > OFFLINE_AFTER_MS) {
-    return { key: "offline", label: "לא מחובר", tone: "slate" };
+  if (!presence?.last_seen_at || isPresenceStale(presence, now)) {
+    return CHAT_STATUS.offline;
+  }
+
+  if (explicit === CHAT_STATUS.break.key) {
+    return CHAT_STATUS.break;
+  }
+
+  if (explicit === CHAT_STATUS.available.key) {
+    return CHAT_STATUS.available;
   }
 
   if (isAgentOnBreakNow(agentName, breakRegistrations, now)) {
-    return { key: "break", label: "בהפסקה", tone: "amber" };
+    return CHAT_STATUS.break;
   }
 
-  return { key: "available", label: "זמין", tone: "emerald" };
+  return CHAT_STATUS.available;
 }
 
-export function statusClass(tone) {
-  if (tone === "emerald") return "bg-emerald-100 text-emerald-700 border-emerald-200";
-  if (tone === "amber") return "bg-amber-100 text-amber-700 border-amber-200";
-  return "bg-slate-100 text-slate-600 border-slate-200";
+export function statusDotClass(tone) {
+  if (tone === "emerald") return "bg-emerald-500";
+  if (tone === "amber") return "bg-amber-400";
+  if (tone === "red") return "bg-red-500";
+  return "bg-slate-400";
 }

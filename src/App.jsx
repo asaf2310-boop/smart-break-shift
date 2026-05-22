@@ -13,9 +13,12 @@ import BreakScheduler from './pages/BreakScheduler';
 import AdminDashboard from './pages/AdminDashboard';
 import ShiftScheduler from './pages/ShiftScheduler';
 import AdminShifts from './pages/AdminShifts';
+import AdminUsers from './pages/AdminUsers';
+import ResetPassword from './pages/ResetPassword';
 import LiveDataSync from '@/components/LiveDataSync';
 import FloatingChatWidget from '@/components/chat/FloatingChatWidget';
 import { ChatPanelProvider } from '@/context/ChatPanelContext';
+import { ChatUnreadProvider } from '@/hooks/useChatUnread';
 import ChatDeepLink from './pages/ChatDeepLink';
 
 const AuthenticatedApp = () => {
@@ -48,6 +51,8 @@ const AuthenticatedApp = () => {
         <Route path="/chat" element={<ChatDeepLink />} />
         <Route path="/admin" element={<AdminGate><AdminDashboard /></AdminGate>} />
         <Route path="/admin/shifts" element={<AdminGate><AdminShifts /></AdminGate>} />
+        <Route path="/admin/users" element={<AdminGate><AdminUsers /></AdminGate>} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="*" element={<PageNotFound />} />
       </Routes>
       <FloatingChatWidget />
@@ -62,7 +67,9 @@ function App() {
         <LiveDataSync />
         <Router>
           <ChatPanelProvider>
-            <AuthenticatedApp />
+            <ChatUnreadProvider>
+              <AuthenticatedApp />
+            </ChatUnreadProvider>
           </ChatPanelProvider>
         </Router>
         <Toaster />

@@ -1,4 +1,10 @@
 import { validateBreakRegistration } from "@/lib/breakCapacity";
+import {
+  createDemoAppUser,
+  listAllDemoAppUsers,
+  softDeleteDemoAppUser,
+  updateDemoAppUser,
+} from "@/lib/appUsersStore";
 
 export const DEMO_STORE_KEY = "smart-break-shift-demo-store-v1";
 
@@ -115,12 +121,20 @@ function createSeedStore() {
         created_at: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
       },
     ],
-    chatPresence: AGENTS.map((agent, index) => ({
-      id: makeId("presence"),
-      agent_name: agent,
-      last_seen_at: new Date(Date.now() - index * 1000 * 45).toISOString(),
-      updated_at: new Date(Date.now() - index * 1000 * 45).toISOString(),
-    })),
+    chatPresence: AGENTS.map((agent, index) => {
+      const status = index % 3 === 0 ? "available" : index % 3 === 1 ? "break" : "offline";
+      const seen =
+        status === "offline"
+          ? "1970-01-01T00:00:00.000Z"
+          : new Date(Date.now() - index * 1000 * 45).toISOString();
+      return {
+        id: makeId("presence"),
+        agent_name: agent,
+        status,
+        last_seen_at: seen,
+        updated_at: seen,
+      };
+    }),
   };
 }
 
@@ -136,6 +150,13 @@ function readStore() {
     }
     if (!store.chatPresence?.length) {
       store.chatPresence = seed.chatPresence;
+      changed = true;
+    } else if (store.chatPresence.some((row) => !row.status)) {
+      store.chatPresence = store.chatPresence.map((row, index) => {
+        if (row.status) return row;
+        const status = index % 3 === 0 ? "available" : index % 3 === 1 ? "break" : "offline";
+        return { ...row, status };
+      });
       changed = true;
     }
     if (changed) writeStore(store);
@@ -222,11 +243,58 @@ function createEntity(entityName) {
   };
 }
 
+const demoAgentEntity = {
+  async filter() {
+    return listAllDemoAppUsers().map((u) => ({
+      id: u.id,
+      email: u.email,
+      display_name: u.name,
+      active: u.active !== false,
+      blocked: u.blocked === true,
+      needs_password_setup: u.needsPasswordSetup !== false && !u.password,
+    }));
+  },
+  async list() {
+    return demoAgentEntity.filter();
+  },
+  async create(row) {
+    const u = createDemoAppUser({ email: row.email, name: row.display_name });
+    return {
+      id: u.id,
+      email: u.email,
+      display_name: u.name,
+      active: true,
+      blocked: false,
+      needs_password_setup: true,
+    };
+  },
+  async update(id, row) {
+    const u = updateDemoAppUser(id, {
+      email: row.email,
+      name: row.display_name,
+      active: row.active,
+      blocked: row.blocked,
+    });
+    return {
+      id: u.id,
+      email: u.email,
+      display_name: u.name,
+      active: u.active !== false,
+      blocked: u.blocked === true,
+      needs_password_setup: u.needsPasswordSetup !== false && !u.password,
+    };
+  },
+  async delete(id) {
+    softDeleteDemoAppUser(id);
+  },
+};
+
 export function createDemoDataClient() {
   const entities = {};
   for (const entityName of Object.keys(ENTITY_KEYS)) {
     entities[entityName] = createEntity(entityName);
   }
+  entities.Agent = demoAgentEntity;
 
   return {
     entities,

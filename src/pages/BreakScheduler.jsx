@@ -109,9 +109,11 @@ export default function BreakScheduler() {
     },
   });
 
-  const handleLogout = () => {
-    localStorage.removeItem("agent_name");
+  const handleLogout = async () => {
+    const { agentLogout } = await import("@/lib/agentAuth");
+    await agentLogout();
     setAgentName("");
+    window.location.href = "/";
   };
 
   const handleRegister = (breakType) => (slot) => {

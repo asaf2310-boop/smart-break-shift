@@ -42,6 +42,10 @@ export default function AppNav() {
               <ShieldCheck className="w-4 h-4" />
               משמרות מנהל
             </Link>
+            <Link to="/admin/users" className={tabClass(location.pathname === "/admin/users")}>
+              <ShieldCheck className="w-4 h-4" />
+              נציגים
+            </Link>
           </>
         )}
         </div>

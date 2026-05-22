@@ -1,11 +1,13 @@
 import React, { useEffect } from "react";
 import { MessageCircle, X } from "lucide-react";
 import { useChatPanel } from "@/context/ChatPanelContext";
+import { useChatUnread } from "@/hooks/useChatUnread";
 import InternalChatPanel from "@/components/chat/InternalChatPanel";
 
 /** בועת צ'אט צפה — מופיעה בכל מסך, בלי טאב בסרגל */
 export default function FloatingChatWidget() {
   const { open, toggleChat, closeChat } = useChatPanel();
+  const { unreadGeneral, unreadDirect, hasUnread } = useChatUnread();
 
   useEffect(() => {
     if (!open) return undefined;
@@ -33,10 +35,39 @@ export default function FloatingChatWidget() {
         type="button"
         onClick={toggleChat}
         aria-expanded={open}
-        aria-label={open ? "סגור צ'אט" : "פתח צ'אט פנימי"}
-        className="pointer-events-auto w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/40 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
+        aria-label={
+          open
+            ? "סגור צ'אט"
+            : hasUnread
+              ? unreadGeneral && unreadDirect
+                ? "פתח צ'אט — הודעות חדשות בצ'אט כללי ובשיחות אישיות"
+                : unreadGeneral
+                  ? "פתח צ'אט — הודעות חדשות בצ'אט כללי"
+                  : "פתח צ'אט — הודעות חדשות בשיחה אישית"
+              : "פתח צ'אט פנימי"
+        }
+        className="pointer-events-auto relative w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/40 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
       >
         {open ? <X className="w-6 h-6" /> : <MessageCircle className="w-6 h-6" />}
+        {!open && hasUnread && (
+          <span
+            className="absolute -top-0.5 -left-0.5 flex items-center gap-1"
+            aria-hidden="true"
+          >
+            {unreadGeneral && (
+              <span
+                className="w-3 h-3 rounded-full bg-indigo-300 ring-2 ring-white shadow-sm"
+                title="הודעות חדשות בצ'אט כללי"
+              />
+            )}
+            {unreadDirect && (
+              <span
+                className="w-3 h-3 rounded-full bg-fuchsia-400 ring-2 ring-white shadow-sm"
+                title="הודעות חדשות בשיחה אישית"
+              />
+            )}
+          </span>
+        )}
       </button>
     </div>
   );

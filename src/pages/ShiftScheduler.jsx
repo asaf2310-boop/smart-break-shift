@@ -173,9 +173,10 @@ export default function ShiftScheduler() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["shift-unavailabilities", constraintsDateFrom, constraintsDateTo, agentName] }),
   });
 
-  const handleLogout = () => {
-    localStorage.removeItem("agent_name");
-    setAgentName("");
+  const handleLogout = async () => {
+    const { agentLogout } = await import("@/lib/agentAuth");
+    await agentLogout();
+    window.location.href = "/";
   };
 
   const getDayRecord = (date, shiftType) =>

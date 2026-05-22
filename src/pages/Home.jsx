@@ -1,11 +1,14 @@
-import React, { useState } from "react";
+import React from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { CalendarClock, CalendarDays, LogOut, ShieldCheck, Users } from "lucide-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
-import { AGENT_NAMES, getStoredAgentName } from "@/constants/scheduling";
-import AgentNameDialog from "@/components/breaks/AgentNameDialog";
+import { getAgentNamesList } from "@/constants/scheduling";
+import AgentLogin from "@/components/auth/AgentLogin";
 import { demoModeEnabled } from "@/api/demoClient";
+import { connectAgentAsAvailable } from "@/lib/agentChatPresence";
+import { useAgentSession } from "@/hooks/useAgentSession";
+import { agentLogout } from "@/lib/agentAuth";
 
 const cards = [
   {
@@ -26,20 +29,29 @@ const cards = [
 
 export default function Home() {
   const isAdmin = useIsAdmin();
-  const [agentName, setAgentName] = useState(() => getStoredAgentName());
+  const { displayName, isLoggedIn, bootstrapped, refresh } = useAgentSession();
+  const agentCount = getAgentNamesList().length;
 
-  const handleNameSubmit = (name) => {
-    localStorage.setItem("agent_name", name);
-    setAgentName(name);
+  const handleLoginSuccess = (session) => {
+    connectAgentAsAvailable(session.displayName).catch(() => {});
+    refresh();
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("agent_name");
-    setAgentName("");
+  const handleLogout = async () => {
+    await agentLogout();
+    refresh();
   };
 
-  if (!agentName) {
-    return <AgentNameDialog open={true} onSubmit={handleNameSubmit} />;
+  if (!bootstrapped && !demoModeEnabled) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!isLoggedIn) {
+    return <AgentLogin onSuccess={handleLoginSuccess} />;
   }
 
   return (
@@ -60,7 +72,8 @@ export default function Home() {
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-800 mb-2">מערכת הפסקות ומשמרות</h1>
           <p className="text-slate-500 text-sm">
-            שלום <span className="text-indigo-600 font-semibold">{agentName}</span> · {AGENT_NAMES.length} נציגים
+            שלום <span className="text-indigo-600 font-semibold">{displayName}</span>
+            {agentCount > 0 && <> · {agentCount} נציגים</>}
           </p>
           {demoModeEnabled && (
             <div className="inline-flex mt-3 px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold border border-emerald-200">
@@ -73,7 +86,7 @@ export default function Home() {
             className="mt-4 inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-slate-700 transition-colors"
           >
             <LogOut className="w-3.5 h-3.5" />
-            החלף נציג
+            התנתקות
           </button>
         </motion.div>
 
@@ -125,6 +138,12 @@ export default function Home() {
                 className="px-4 py-2 rounded-xl bg-white border border-amber-200 text-sm font-semibold text-slate-700 hover:border-amber-400 transition-colors"
               >
                 ניהול משמרות
+              </Link>
+              <Link
+                to="/admin/users"
+                className="px-4 py-2 rounded-xl bg-white border border-amber-200 text-sm font-semibold text-slate-700 hover:border-amber-400 transition-colors"
+              >
+                ניהול נציגים
               </Link>
             </div>
           </motion.div>

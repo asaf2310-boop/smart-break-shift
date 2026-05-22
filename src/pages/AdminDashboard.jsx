@@ -146,6 +146,7 @@ export default function AdminDashboard() {
         <BackendConfigBanner />
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between mb-8">
           <Link to="/" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">ראשי</Link>
+          <Link to="/admin/users" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">נציגים</Link>
           <Link to="/admin/shifts" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">משמרות</Link>
           <div className="text-center">
             <div className="flex items-center gap-3 justify-center mb-1">

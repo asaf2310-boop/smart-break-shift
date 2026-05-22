@@ -1,4 +1,7 @@
 import { addDays, format } from "date-fns";
+import { demoModeEnabled } from "@/api/demoClient";
+import { listDemoAppUsers } from "@/lib/appUsersStore";
+import { getAgentSession } from "@/lib/agentAuth";
 
 const REAL_AGENT_NAMES = [
   "רחלה מנשה",
@@ -28,13 +31,26 @@ const DEMO_AGENT_NAMES = [
 
 export const AGENT_NAMES = import.meta.env.VITE_DEMO_MODE === "true" ? DEMO_AGENT_NAMES : REAL_AGENT_NAMES;
 
+/** רשימת שמות נציגים — בדמו מהרשימה שמנהל מגדיר */
+export function getAgentNamesList() {
+  if (demoModeEnabled) {
+    const fromUsers = listDemoAppUsers().map((u) => u.name).filter(Boolean);
+    if (fromUsers.length) return fromUsers;
+  }
+  return AGENT_NAMES;
+}
+
 export function getStoredAgentName() {
   if (typeof window === "undefined") return "";
+
+  const session = getAgentSession();
+  if (session?.displayName) return session.displayName;
 
   const storedName = localStorage.getItem("agent_name") || "";
   if (!storedName) return "";
 
-  if (!AGENT_NAMES.includes(storedName)) {
+  const allowed = getAgentNamesList();
+  if (!allowed.includes(storedName)) {
     localStorage.removeItem("agent_name");
     return "";
   }

@@ -33,7 +33,7 @@ export const AuthProvider = ({ children }) => {
     }
 
     if (useSupabaseBackend()) {
-      finish();
+      finish({ demoAdmin: false });
       return;
     }
 

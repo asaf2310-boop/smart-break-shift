@@ -22,6 +22,7 @@ function createMissingBackendClient() {
       ConstraintConfirmation: entity,
       ChatMessage: entity,
       ChatPresence: entity,
+      Agent: entity,
     },
     auth: {
       me: async () => null,

@@ -1,13 +1,25 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MessageCircle, Send } from "lucide-react";
 import { dataClient } from "@/api/client";
 import { getChatEntities, useLocalChatStore } from "@/api/localChatStore";
 import { demoModeEnabled } from "@/api/demoClient";
-import { AGENT_NAMES, getStoredAgentName } from "@/constants/scheduling";
+import { getAgentNamesList, getStoredAgentName } from "@/constants/scheduling";
 import { getLiveQueryOptions } from "@/lib/liveQuery";
-import { resolveAgentStatus, statusClass } from "@/lib/chatStatus";
+import { resolveAgentStatus, statusDotClass } from "@/lib/chatStatus";
+import {
+  CHAT_STATUS,
+  connectAgentAsAvailable,
+  isAgentChatConnected,
+  setAgentStatus,
+} from "@/lib/agentChatPresence";
+import ChatStatusLabel from "@/components/chat/ChatStatusLabel";
+import ChatStatusPicker from "@/components/chat/ChatStatusPicker";
+import AdminAgentChatControls from "@/components/chat/AdminAgentChatControls";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { useChatUnread } from "@/hooks/useChatUnread";
+import { useChatPanel } from "@/context/ChatPanelContext";
 import { useToast } from "@/components/ui/use-toast";
 
 function formatTime(iso) {
@@ -18,16 +30,30 @@ function formatTime(iso) {
 export default function InternalChatPanel() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { open } = useChatPanel();
+  const { clearGeneralUnread, clearDmUnread } = useChatUnread();
   const agentName = getStoredAgentName();
-  const [activeTab, setActiveTab] = useState("general");
+  const isAdmin = useIsAdmin();
+  const [dmPeer, setDmPeer] = useState(null);
   const [messageText, setMessageText] = useState("");
-  const [selectedPeer, setSelectedPeer] = useState(() =>
-    AGENT_NAMES.find((name) => name !== getStoredAgentName()) || ""
-  );
+  const [chatConnected, setChatConnected] = useState(() => isAgentChatConnected());
+
+  useEffect(() => {
+    const onConnection = () => setChatConnected(isAgentChatConnected());
+    window.addEventListener("agent-chat-connection", onConnection);
+    return () => window.removeEventListener("agent-chat-connection", onConnection);
+  }, []);
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const chatEntities = getChatEntities() || dataClient.entities;
   const localChat = useLocalChatStore();
+  const isGeneral = dmPeer === null;
+
+  useEffect(() => {
+    if (!open) return;
+    if (isGeneral) clearGeneralUnread();
+    else clearDmUnread(dmPeer);
+  }, [open, isGeneral, dmPeer, clearGeneralUnread, clearDmUnread]);
 
   const { data: allMessages = [] } = useQuery({
     queryKey: ["chat-messages", localChat ? "local" : "remote"],
@@ -55,25 +81,66 @@ export default function InternalChatPanel() {
     [presences]
   );
 
-  const privatePeers = useMemo(
-    () => AGENT_NAMES.filter((name) => name !== agentName),
-    [agentName]
-  );
+  const myPresence = presenceMap.get(agentName);
+  const myStatusKey = useMemo(() => {
+    if (!chatConnected) return CHAT_STATUS.offline.key;
+    if (myPresence?.status === CHAT_STATUS.break.key) return CHAT_STATUS.break.key;
+    if (myPresence?.status === CHAT_STATUS.offline.key) return CHAT_STATUS.offline.key;
+    return CHAT_STATUS.available.key;
+  }, [myPresence, presences, chatConnected]);
+
+  const statusMutation = useMutation({
+    mutationFn: (statusKey) => setAgentStatus(agentName, statusKey),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["chat-presence"] });
+    },
+    onError: () => {
+      toast({ title: "שגיאה", description: "לא ניתן לעדכן סטטוס" });
+    },
+  });
+
+  const connectMutation = useMutation({
+    mutationFn: () => connectAgentAsAvailable(agentName),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["chat-presence"] });
+    },
+    onError: () => {
+      toast({ title: "שגיאה", description: "לא ניתן להתחבר מחדש" });
+    },
+  });
+
+  const handleStatusChange = (e) => {
+    statusMutation.mutate(e.target.value);
+  };
+
+  const handleDisconnect = () => {
+    statusMutation.mutate(CHAT_STATUS.offline.key);
+  };
+
+  const adminStatusMutation = useMutation({
+    mutationFn: ({ targetAgent, statusKey }) => setAgentStatus(targetAgent, statusKey),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["chat-presence"] });
+    },
+    onError: () => {
+      toast({ title: "שגיאה", description: "לא ניתן לעדכן סטטוס נציג" });
+    },
+  });
 
   const visibleMessages = useMemo(() => {
-    if (activeTab === "general") {
+    if (isGeneral) {
       return allMessages
         .filter((msg) => !msg.recipient_name)
         .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
     }
     return allMessages
       .filter((msg) => {
-        const isOutgoing = msg.sender_name === agentName && msg.recipient_name === selectedPeer;
-        const isIncoming = msg.sender_name === selectedPeer && msg.recipient_name === agentName;
+        const isOutgoing = msg.sender_name === agentName && msg.recipient_name === dmPeer;
+        const isIncoming = msg.sender_name === dmPeer && msg.recipient_name === agentName;
         return isOutgoing || isIncoming;
       })
       .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-  }, [activeTab, allMessages, agentName, selectedPeer]);
+  }, [isGeneral, allMessages, agentName, dmPeer]);
 
   const sendMutation = useMutation({
     mutationFn: (payload) => chatEntities.ChatMessage.create(payload),
@@ -89,14 +156,16 @@ export default function InternalChatPanel() {
   const handleSend = () => {
     const body = messageText.trim();
     if (!body || !agentName) return;
-    if (activeTab === "direct" && !selectedPeer) return;
+    if (!isGeneral && !dmPeer) return;
     sendMutation.mutate({
       sender_name: agentName,
-      recipient_name: activeTab === "general" ? null : selectedPeer,
+      recipient_name: isGeneral ? null : dmPeer,
       body,
       created_at: new Date().toISOString(),
     });
   };
+
+  const conversationTitle = isGeneral ? "צ'אט כללי" : `שיחה עם ${dmPeer}`;
 
   if (!agentName) {
     return (
@@ -115,82 +184,70 @@ export default function InternalChatPanel() {
 
   return (
     <div className="flex flex-col h-full min-h-0" dir="rtl">
-      <div className="px-4 py-3 sm:px-5 border-b border-slate-100 flex items-center gap-3 shrink-0">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center">
+      <div className="px-4 py-3 sm:px-5 border-b border-slate-100 flex items-center gap-2 sm:gap-3 shrink-0 flex-wrap">
+        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center shrink-0">
           <MessageCircle className="w-4 h-4" />
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h2 className="text-base sm:text-lg font-extrabold text-slate-800">צ'אט פנימי</h2>
-          <p className="text-[11px] text-slate-500 truncate">שיחה כללית + הודעות אישיות</p>
-          {localChat && (
-            <span className="mt-0.5 inline-flex px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold border border-emerald-200">
-              {demoModeEnabled ? "דמו פעיל" : "צ'אט מקומי (טסט)"}
-            </span>
+          <p className="text-[11px] text-slate-500 truncate">{conversationTitle}</p>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {myStatusKey === CHAT_STATUS.offline.key ? (
+            <>
+              <ChatStatusLabel status={CHAT_STATUS.offline} />
+              <button
+                type="button"
+                onClick={() => connectMutation.mutate()}
+                disabled={connectMutation.isPending}
+                className="h-8 px-2.5 rounded-lg border border-indigo-200 bg-indigo-50 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100 whitespace-nowrap"
+              >
+                התחבר
+              </button>
+            </>
+          ) : (
+            <>
+              <ChatStatusPicker
+                value={myStatusKey}
+                onChange={handleStatusChange}
+                disabled={statusMutation.isPending}
+              />
+              <button
+                type="button"
+                onClick={handleDisconnect}
+                disabled={statusMutation.isPending}
+                className="h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-[11px] font-bold text-slate-600 hover:bg-slate-50 whitespace-nowrap"
+              >
+                התנתק
+              </button>
+            </>
           )}
         </div>
+        {localChat && (
+          <span className="w-full sm:w-auto inline-flex px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold border border-emerald-200">
+            {demoModeEnabled ? "דמו פעיל" : "צ'אט מקומי (טסט)"}
+          </span>
+        )}
       </div>
 
-      <div className="grid grid-rows-[auto_1fr] lg:grid-rows-none lg:grid-cols-[240px_1fr] flex-1 min-h-0 overflow-hidden">
-        <aside className="border-b lg:border-b-0 lg:border-l border-slate-100 p-3 sm:p-4 space-y-3 shrink-0 lg:shrink lg:overflow-y-auto max-h-[28vh] lg:max-h-none">
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setActiveTab("general")}
-              className={`flex-1 rounded-xl px-3 py-2 text-sm font-bold ${
-                activeTab === "general" ? "bg-indigo-500 text-white" : "bg-slate-100 text-slate-600"
-              }`}
-            >
-              כללי
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("direct")}
-              className={`flex-1 rounded-xl px-3 py-2 text-sm font-bold ${
-                activeTab === "direct" ? "bg-indigo-500 text-white" : "bg-slate-100 text-slate-600"
-              }`}
-            >
-              אישי
-            </button>
+      <div
+        className="grid grid-rows-[auto_1fr] lg:grid-rows-none flex-1 min-h-0 overflow-hidden lg:grid-cols-[minmax(0,1fr)_240px]"
+        dir="ltr"
+      >
+        <section className="order-2 lg:order-none p-3 sm:p-4 flex flex-col min-h-0 flex-1" dir="rtl">
+          <div className="flex items-center justify-between gap-2 mb-2 shrink-0">
+            <h3 className="text-sm font-extrabold text-slate-800">{conversationTitle}</h3>
+            {!isGeneral && (
+              <button
+                type="button"
+                onClick={() => setDmPeer(null)}
+                className="text-xs font-bold text-indigo-600 hover:text-indigo-800 whitespace-nowrap"
+              >
+                חזרה לכללי
+              </button>
+            )}
           </div>
 
-          {activeTab === "direct" && (
-            <div className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">
-              {privatePeers.map((peer) => (
-                <button
-                  key={peer}
-                  type="button"
-                  onClick={() => setSelectedPeer(peer)}
-                  className={`shrink-0 lg:shrink lg:w-full text-right px-3 py-2 rounded-xl border text-sm font-semibold ${
-                    selectedPeer === peer
-                      ? "border-indigo-300 bg-indigo-50 text-indigo-700"
-                      : "border-slate-200 bg-white text-slate-700"
-                  }`}
-                >
-                  {peer}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div className="pt-2 border-t border-slate-100 hidden sm:block">
-            <h3 className="text-xs font-bold text-slate-500 mb-2">סטטוס נציגים</h3>
-            <div className="space-y-1.5 max-h-32 lg:max-h-48 overflow-y-auto pr-1">
-              {AGENT_NAMES.map((agent) => {
-                const status = resolveAgentStatus(agent, presenceMap, todayBreaks);
-                return (
-                  <div key={agent} className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold text-slate-700">{agent}</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${statusClass(status.tone)}`}>
-                      {status.label}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </aside>
-
-        <section className="p-3 sm:p-4 flex flex-col min-h-0 flex-1">
           <div className="flex-1 min-h-[200px] lg:min-h-0 rounded-2xl border border-slate-100 bg-slate-50 p-3 overflow-y-auto space-y-2">
             {visibleMessages.length === 0 ? (
               <div className="text-center text-sm text-slate-500 py-10">אין עדיין הודעות בחדר הזה</div>
@@ -226,7 +283,9 @@ export default function InternalChatPanel() {
                   handleSend();
                 }
               }}
-              placeholder={activeTab === "general" ? "כתוב הודעה לכל הנציגים..." : `הודעה ל-${selectedPeer}...`}
+              placeholder={
+                isGeneral ? "כתוב הודעה לכל הנציגים..." : `הודעה ל-${dmPeer}...`
+              }
               className="flex-1 rounded-2xl border border-slate-200 p-3 text-sm outline-none focus:border-indigo-400 resize-none"
             />
             <button
@@ -242,6 +301,83 @@ export default function InternalChatPanel() {
             </button>
           </div>
         </section>
+
+        <aside
+          className="order-1 lg:order-none border-b lg:border-b-0 lg:border-l border-slate-100 p-3 sm:p-4 shrink-0 lg:shrink lg:overflow-y-auto max-h-[28vh] lg:max-h-none"
+          dir="rtl"
+        >
+          <h3 className="text-xs font-bold text-slate-500 mb-0.5">סטטוס נציגים</h3>
+          {isAdmin && (
+            <p className="text-[10px] font-bold text-indigo-600 mb-2">ניהול סטטוס (מנהל)</p>
+          )}
+          <div className="space-y-1 max-h-32 lg:max-h-48 overflow-y-auto pr-1">
+            {getAgentNamesList().map((agent) => {
+              const status = resolveAgentStatus(agent, presenceMap, todayBreaks);
+              const presenceStatus = presenceMap.get(agent)?.status ?? CHAT_STATUS.offline.key;
+              const isSelf = agent === agentName;
+              const isActiveDm = dmPeer === agent;
+              const rowClass = `w-full rounded-lg px-2 py-1.5 transition-colors ${
+                isSelf
+                  ? "opacity-50"
+                  : isActiveDm
+                    ? "bg-indigo-50 ring-1 ring-indigo-200"
+                    : "hover:bg-slate-50"
+              }`;
+
+              if (!isAdmin || isSelf) {
+                return (
+                  <button
+                    key={agent}
+                    type="button"
+                    disabled={isSelf}
+                    onClick={() => !isSelf && setDmPeer(agent)}
+                    className={`${rowClass} flex items-center justify-start gap-1.5 text-right ${
+                      isSelf ? "cursor-default" : ""
+                    }`}
+                  >
+                    <span
+                      className={`w-2 h-2 shrink-0 rounded-full ${statusDotClass(status.tone)}`}
+                      aria-label={status.label}
+                      title={status.label}
+                    />
+                    <span className="text-xs font-semibold text-slate-700 truncate">{agent}</span>
+                  </button>
+                );
+              }
+
+              return (
+                <div key={agent} className={`${rowClass} flex items-center justify-between gap-1`}>
+                  <button
+                    type="button"
+                    onClick={() => setDmPeer(agent)}
+                    className="flex items-center justify-start gap-1.5 min-w-0 flex-1 text-right"
+                  >
+                    <span
+                      className={`w-2 h-2 shrink-0 rounded-full ${statusDotClass(status.tone)}`}
+                      aria-label={status.label}
+                      title={status.label}
+                    />
+                    <span className="text-xs font-semibold text-slate-700 truncate">{agent}</span>
+                  </button>
+                  <AdminAgentChatControls
+                    agent={agent}
+                    presenceStatus={presenceStatus}
+                    disabled={adminStatusMutation.isPending}
+                    onStatusChange={(statusKey) =>
+                      adminStatusMutation.mutate({ targetAgent: agent, statusKey })
+                    }
+                    onDisconnect={() =>
+                      adminStatusMutation.mutate({
+                        targetAgent: agent,
+                        statusKey: CHAT_STATUS.offline.key,
+                      })
+                    }
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </aside>
       </div>
     </div>
   );

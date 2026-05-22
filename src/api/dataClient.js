@@ -111,6 +111,7 @@ const ENTITY_TABLES = {
   ConstraintConfirmation: "constraint_confirmations",
   ChatMessage: "chat_messages",
   ChatPresence: "chat_presence",
+  Agent: "agents",
 };
 
 export function createSupabaseDataClient() {
