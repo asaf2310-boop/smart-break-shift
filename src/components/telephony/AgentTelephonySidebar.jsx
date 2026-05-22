@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import TelephonyStatusPicker from "@/components/telephony/TelephonyStatusPicker";
 import TelephonyDashboardView from "@/components/telephony/TelephonyDashboardView";
+import { SoftphoneDialGrid } from "@/components/telephony/SoftphoneDialPanel";
 import {
   AGENT_TELEPHONY_STATUS,
   CALL_STATUS,
@@ -53,7 +54,13 @@ export default function AgentTelephonySidebar({
   onAnswer,
   onHangup,
   onMute,
-  onOpenDialPad,
+  number = "",
+  onNumberChange,
+  onDigit,
+  onBackspace,
+  dialOpen = false,
+  onToggleDialPad,
+  onCall,
   onSimulateInbound,
   onProductionStub,
   onClose,
@@ -71,6 +78,10 @@ export default function AgentTelephonySidebar({
   useEffect(() => {
     refreshWaiting();
   }, [refreshWaiting]);
+
+  useEffect(() => {
+    if (dialOpen) setPanelView("personal");
+  }, [dialOpen]);
 
   return (
     <div
@@ -266,14 +277,64 @@ export default function AgentTelephonySidebar({
         )}
 
         {!inCall && (
-          <button
-            type="button"
-            onClick={onOpenDialPad}
-            className="w-full h-12 rounded-2xl bg-gradient-to-l from-teal-600 to-emerald-600 text-white text-sm font-bold shadow-md shadow-teal-500/25 flex items-center justify-center gap-2 hover:opacity-95"
-          >
-            <Grid3x3 className="w-5 h-5" />
-            פתיחת סופטפון
-          </button>
+          <section className="space-y-2" aria-label="חיוג יוצא">
+            <p className="m3-label-medium text-on-surface-variant">חיוג יוצא</p>
+            <div className="flex flex-row gap-2 items-stretch">
+              {isDemo && (
+                <button
+                  type="button"
+                  onClick={onCall}
+                  disabled={!String(number || "").trim()}
+                  aria-label="חיוג"
+                  className="shrink-0 w-10 h-10 rounded-xl bg-gradient-to-l from-teal-600 to-emerald-600 text-white flex items-center justify-center hover:opacity-95 disabled:opacity-40 shadow-sm shadow-teal-500/20"
+                >
+                  <PhoneCall className="w-4 h-4" />
+                </button>
+              )}
+              <input
+                type="tel"
+                value={number}
+                onChange={(e) => onNumberChange?.(e.target.value)}
+                placeholder="05X-XXXXXXX"
+                dir="ltr"
+                className="flex-1 min-w-0 rounded-xl border border-outline/30 bg-surface-container-low px-3 py-2 text-base font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500/40"
+                aria-label="מספר לחיוג"
+              />
+              <button
+                type="button"
+                onClick={onToggleDialPad}
+                aria-expanded={dialOpen}
+                aria-controls="softphone-dial-pad"
+                aria-label={dialOpen ? "סגור לוח מקשים" : "פתח לוח מקשים"}
+                className={`shrink-0 w-11 h-11 rounded-xl border flex items-center justify-center transition-colors ${
+                  dialOpen
+                    ? "bg-teal-600 border-teal-600 text-white shadow-sm"
+                    : "border-outline/25 bg-surface-container-low text-foreground hover:bg-surface-container-high"
+                }`}
+              >
+                <Grid3x3 className="w-5 h-5" />
+              </button>
+            </div>
+
+            {dialOpen && (
+              <div
+                id="softphone-dial-pad"
+                className="rounded-xl border border-outline/15 bg-surface-container-low/80 p-3 space-y-2"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-bold text-on-surface-variant">לוח מקשים</p>
+                  <button
+                    type="button"
+                    onClick={onBackspace}
+                    className="text-xs font-semibold text-on-surface-variant px-2 py-1 hover:text-foreground"
+                  >
+                    מחיקה
+                  </button>
+                </div>
+                <SoftphoneDialGrid onDigit={onDigit} />
+              </div>
+            )}
+          </section>
         )}
 
         {isDemo && !inCall && (

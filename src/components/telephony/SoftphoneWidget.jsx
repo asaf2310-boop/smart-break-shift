@@ -4,7 +4,6 @@ import { Phone, X } from "lucide-react";
 import { getStoredAgentName } from "@/constants/scheduling";
 import { useTelephony } from "@/context/TelephonyContext";
 import AgentTelephonySidebar from "@/components/telephony/AgentTelephonySidebar";
-import SoftphoneDialPanel from "@/components/telephony/SoftphoneDialPanel";
 import {
   AGENT_TELEPHONY_STATUS,
   CALL_STATUS,
@@ -61,7 +60,7 @@ export default function SoftphoneWidget() {
     dialOpen,
     toggleSoftphone,
     closeSoftphone,
-    openDialPad,
+    toggleDialPad,
     closeDialPad,
     pendingDial,
     clearPendingDial,
@@ -212,21 +211,10 @@ export default function SoftphoneWidget() {
     }
   };
 
+  const handleToggleDialPad = () => toggleDialPad();
+
   return (
     <div className={PHONE_FLOAT_CHROME_CLASS} dir="ltr">
-      {dialOpen && !inCall && (
-        <SoftphoneDialPanel
-          number={number}
-          onNumberChange={setNumber}
-          onDigit={(d) => setNumber((n) => `${n}${d}`)}
-          onBackspace={() => setNumber((n) => n.slice(0, -1))}
-          onCall={handleCall}
-          onClose={closeDialPad}
-          callDisabled={!number.trim()}
-          isDemo={isDemo}
-        />
-      )}
-
       {sidebarOpen && (
         <AgentTelephonySidebar
           agentName={agentName}
@@ -247,7 +235,13 @@ export default function SoftphoneWidget() {
           onAnswer={handleAnswer}
           onHangup={handleHangup}
           onMute={handleMute}
-          onOpenDialPad={openDialPad}
+          number={number}
+          onNumberChange={setNumber}
+          onDigit={(d) => setNumber((n) => `${n}${d}`)}
+          onBackspace={() => setNumber((n) => n.slice(0, -1))}
+          dialOpen={dialOpen && !inCall}
+          onToggleDialPad={handleToggleDialPad}
+          onCall={handleCall}
           onSimulateInbound={handleInboundDemo}
           onProductionStub={handleProductionStub}
           onClose={closeSoftphone}

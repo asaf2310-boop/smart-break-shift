@@ -14,7 +14,10 @@ export function TelephonyProvider({ children }) {
   }, []);
   const toggleSoftphone = useCallback(() => setSidebarOpen((v) => !v), []);
 
-  const openDialPad = useCallback(() => setDialOpen(true), []);
+  const openDialPad = useCallback(() => {
+    setSidebarOpen(true);
+    setDialOpen(true);
+  }, []);
   const closeDialPad = useCallback(() => setDialOpen(false), []);
   const toggleDialPad = useCallback(() => setDialOpen((v) => !v), []);
 
