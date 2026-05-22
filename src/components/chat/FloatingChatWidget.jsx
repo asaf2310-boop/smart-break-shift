@@ -11,6 +11,7 @@ import { useChatBranding } from "@/hooks/useChatBranding";
 import { dataClient } from "@/api/client";
 import { getChatEntities, isLocalChatStore } from "@/api/localChatStore";
 import { getStoredAgentName } from "@/constants/scheduling";
+import { useAgentSession } from "@/hooks/useAgentSession";
 import { getLiveQueryOptions } from "@/lib/liveQuery";
 import { resolveAgentStatus, statusDotClass } from "@/lib/chatStatus";
 import { CHAT_STATUS, isAgentChatConnected } from "@/lib/agentChatPresence";
@@ -27,21 +28,24 @@ function readRemPx() {
   return parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
 }
 
-function getBottomChromeRem(hasBottomNav) {
-  return hasBottomNav ? 4.5 : 1;
+const TOP_NAV_CHROME_REM = 4.5;
+const BOTTOM_FAB_CHROME_REM = 1;
+
+function getTopChromeRem(hasTopNav) {
+  return hasTopNav ? TOP_NAV_CHROME_REM : APP_TOP_SAFE_REM;
 }
 
-function getReservedChromeRem(hasBottomNav, panelOpen) {
-  let rem = APP_TOP_SAFE_REM + getBottomChromeRem(hasBottomNav);
+function getReservedChromeRem(hasTopNav, panelOpen) {
+  let rem = getTopChromeRem(hasTopNav) + BOTTOM_FAB_CHROME_REM;
   if (panelOpen) rem += CHAT_BUBBLE_REM + CHAT_STACK_GAP_REM;
   return rem;
 }
 
 function getMaxChatPanelHeight(
   viewportH = window.innerHeight,
-  { hasBottomNav = false, panelOpen = false } = {}
+  { hasTopNav = false, panelOpen = false } = {}
 ) {
-  return Math.round(viewportH - getReservedChromeRem(hasBottomNav, panelOpen) * readRemPx());
+  return Math.round(viewportH - getReservedChromeRem(hasTopNav, panelOpen) * readRemPx());
 }
 
 function getDefaultChatPanelHeight(
@@ -91,21 +95,22 @@ function pointerClientY(event) {
   return event.clientY;
 }
 
-const BOTTOM_NAV_PATHS = new Set(["/breaks", "/shifts"]);
+const TOP_NAV_PATHS = new Set(["/breaks", "/shifts"]);
 
 /** בועת צ'אט צפה — מופיעה בכל מסך, בלי טאב בסרגל */
 export default function FloatingChatWidget() {
   const { pathname } = useLocation();
-  const hasBottomNav = BOTTOM_NAV_PATHS.has(pathname);
+  const hasTopNav = TOP_NAV_PATHS.has(pathname);
   const { open, toggleChat, closeChat } = useChatPanel();
   const { bringToFront, getZIndex } = useFloatingWidgetsLayer();
   const { unreadTotal, hasUnread } = useChatUnread();
   const { effective: chatBranding } = useChatBranding();
   const heightOptions = useMemo(
-    () => ({ hasBottomNav, panelOpen: open }),
-    [hasBottomNav, open]
+    () => ({ hasTopNav, panelOpen: open }),
+    [hasTopNav, open]
   );
-  const agentName = getStoredAgentName();
+  const { displayName } = useAgentSession();
+  const agentName = displayName || getStoredAgentName();
   const chatEntities = getChatEntities() || dataClient.entities;
   const localChat = isLocalChatStore();
   const [chatConnected, setChatConnected] = useState(() => isAgentChatConnected());
@@ -124,12 +129,12 @@ export default function FloatingChatWidget() {
       : 600;
 
   useEffect(() => {
-    if (hasBottomNav) {
-      document.documentElement.setAttribute("data-bottom-nav", "");
+    if (hasTopNav) {
+      document.documentElement.setAttribute("data-top-nav", "");
     } else {
-      document.documentElement.removeAttribute("data-bottom-nav");
+      document.documentElement.removeAttribute("data-top-nav");
     }
-  }, [hasBottomNav]);
+  }, [hasTopNav]);
 
   useEffect(() => {
     setPanelHeight((h) => clampChatPanelHeight(h, window.innerHeight, heightOptions));

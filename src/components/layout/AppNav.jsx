@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { CalendarClock, CalendarDays, Contact, Home, ShieldCheck } from "lucide-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 
-/** גובה שורת הניווט התחתונה — משמש גם ל-FloatingChatWidget */
+/** גובה שורת הניווט העליונה — משמש גם ל-FloatingChatWidget */
 export const APP_NAV_HEIGHT = "var(--app-nav-height)";
 
 export default function AppNav() {
@@ -20,11 +20,11 @@ export default function AppNav() {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-[80] flex justify-center px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] bg-gradient-to-t from-background via-background/90 to-transparent pointer-events-none"
+      className="fixed inset-x-0 top-0 z-[80] flex justify-center px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top,0px))] bg-gradient-to-b from-background via-background/90 to-transparent pointer-events-none"
       dir="rtl"
       aria-label="ניווט ראשי"
     >
-      <div className="pointer-events-auto w-full max-w-5xl overflow-x-auto pb-1">
+      <div className="pointer-events-auto w-full max-w-5xl overflow-x-auto pt-1">
         <div className="m3-nav-bar mx-auto flex w-max min-w-full sm:min-w-0 p-1.5 gap-1 justify-center">
           <Link to="/" className={tabClass(location.pathname === "/")}>
             <Home className="w-4 h-4" />

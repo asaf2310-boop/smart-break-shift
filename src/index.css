@@ -5,6 +5,7 @@
 @layer base {
   :root {
     --app-nav-height: 4.5rem;
+    --app-top-chrome: 1rem;
     --app-bottom-chrome: 1rem;
     --softphone-docked-chrome: 0px;
     --fab-size: 3.5rem;
@@ -116,8 +117,8 @@
     @apply bg-background text-foreground font-noto antialiased;
   }
 
-  html[data-bottom-nav] {
-    --app-bottom-chrome: var(--app-nav-height);
+  html[data-top-nav] {
+    --app-top-chrome: var(--app-nav-height);
   }
 
   /* Lift chat FAB when softphone is docked + open so bubbles do not overlap */
@@ -205,8 +206,8 @@
 }
 
 @layer utilities {
-  .pb-app-nav {
-    padding-bottom: calc(var(--app-nav-height) + env(safe-area-inset-bottom, 0px));
+  .pt-app-nav {
+    padding-top: calc(var(--app-top-chrome) + env(safe-area-inset-top, 0px));
   }
 
   .shadow-elevation-1 {

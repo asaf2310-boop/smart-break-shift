@@ -27,11 +27,11 @@ import ChatDeepLink from './pages/ChatDeepLink';
 import CrmDashboard from './pages/CrmDashboard';
 import CrmCustomerDetail from './pages/CrmCustomerDetail';
 
-const BOTTOM_NAV_PATHS = new Set(['/breaks', '/shifts']);
+const TOP_NAV_PATHS = new Set(['/breaks', '/shifts']);
 
-function BottomAppNav() {
+function TopAppNav() {
   const { pathname } = useLocation();
-  if (!BOTTOM_NAV_PATHS.has(pathname)) return null;
+  if (!TOP_NAV_PATHS.has(pathname)) return null;
   return <AppNav />;
 }
 
@@ -58,6 +58,7 @@ const AuthenticatedApp = () => {
 
   return (
     <>
+      <TopAppNav />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/breaks" element={<BreakScheduler />} />
@@ -71,7 +72,6 @@ const AuthenticatedApp = () => {
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="*" element={<PageNotFound />} />
       </Routes>
-      <BottomAppNav />
       <FloatingChatWidget />
       <SoftphoneWidget />
     </>

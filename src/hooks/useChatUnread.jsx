@@ -11,6 +11,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getChatEntities, isLocalChatStore } from "@/api/localChatStore";
 import { dataClient } from "@/api/client";
 import { getStoredAgentName } from "@/constants/scheduling";
+import { useAgentSession } from "@/hooks/useAgentSession";
 import { getLiveQueryOptions } from "@/lib/liveQuery";
 import { useChatPanel } from "@/context/ChatPanelContext";
 
@@ -33,7 +34,8 @@ function isDirectMessage(msg) {
 export function ChatUnreadProvider({ children }) {
   const { open } = useChatPanel();
   const queryClient = useQueryClient();
-  const agentName = getStoredAgentName();
+  const { displayName } = useAgentSession();
+  const agentName = displayName || getStoredAgentName();
   const chatEntities = getChatEntities() || dataClient.entities;
   const localChat = isLocalChatStore();
 

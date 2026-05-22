@@ -225,7 +225,7 @@ export default function ShiftScheduler() {
         <div className="absolute bottom-[-10%] left-[-5%] w-[500px] h-[500px] bg-purple-300/20 rounded-full blur-3xl" />
       </div>
 
-      <div className="relative z-10 max-w-4xl mx-auto px-3 sm:px-4 py-5 sm:py-8 pb-app-nav">
+      <div className="relative z-10 max-w-4xl mx-auto px-3 sm:px-4 pt-app-nav pb-5 sm:pb-8">
          {/* Header */}
          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 sm:mb-8">
            <button onClick={handleLogout} className="order-2 sm:order-1 text-sm text-slate-400 hover:text-slate-700 transition-colors flex items-center gap-2">

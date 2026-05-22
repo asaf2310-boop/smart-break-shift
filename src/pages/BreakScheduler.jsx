@@ -203,7 +203,7 @@ export default function BreakScheduler() {
         )}
       </AnimatePresence>
 
-      <div className="relative z-10 max-w-5xl mx-auto px-3 sm:px-4 py-5 sm:py-8 pb-app-nav">
+      <div className="relative z-10 max-w-5xl mx-auto px-3 sm:px-4 pt-app-nav pb-5 sm:pb-8">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}

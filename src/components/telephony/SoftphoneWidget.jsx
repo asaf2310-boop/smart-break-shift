@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Phone, X } from "lucide-react";
 import { getStoredAgentName } from "@/constants/scheduling";
+import { useAgentSession } from "@/hooks/useAgentSession";
 import { useTelephony } from "@/context/TelephonyContext";
 import AgentTelephonySidebar from "@/components/telephony/AgentTelephonySidebar";
 import {
@@ -28,7 +29,7 @@ import {
 } from "@/lib/telephonyProvider";
 import { PHONE_FLOAT_CHROME_CLASS } from "@/lib/floatingWidgetChrome";
 
-const BOTTOM_NAV_PATHS = new Set(["/breaks", "/shifts"]);
+const TOP_NAV_PATHS = new Set(["/breaks", "/shifts"]);
 
 function formatDuration(sec) {
   if (!sec || sec < 1) return "0:00";
@@ -53,8 +54,9 @@ function statusTone(status) {
 
 export default function SoftphoneWidget() {
   const { pathname } = useLocation();
-  const hasBottomNav = BOTTOM_NAV_PATHS.has(pathname);
-  const agentName = getStoredAgentName();
+  const hasTopNav = TOP_NAV_PATHS.has(pathname);
+  const { displayName } = useAgentSession();
+  const agentName = displayName || getStoredAgentName();
   const {
     sidebarOpen,
     dialOpen,
@@ -272,7 +274,7 @@ export default function SoftphoneWidget() {
         </button>
       </div>
 
-      {hasBottomNav && <span className="sr-only">ניווט תחתון פעיל</span>}
+      {hasTopNav && <span className="sr-only">ניווט עליון פעיל</span>}
     </div>
   );
 }
