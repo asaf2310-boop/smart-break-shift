@@ -1,4 +1,4 @@
-import { createSupabaseDataClient, useSupabaseBackend } from "./dataClient";
+import { createSupabaseDataClient, isSupabaseBackend } from "./dataClient";
 import { createDemoDataClient, demoModeEnabled } from "./demoClient";
 
 function createMissingBackendClient() {
@@ -22,6 +22,7 @@ function createMissingBackendClient() {
       ConstraintConfirmation: entity,
       ChatMessage: entity,
       ChatPresence: entity,
+      ChatSettings: entity,
       Agent: entity,
     },
     auth: {
@@ -34,8 +35,8 @@ function createMissingBackendClient() {
 
 export const dataClient = demoModeEnabled
   ? createDemoDataClient()
-  : useSupabaseBackend()
+  : isSupabaseBackend()
     ? createSupabaseDataClient()
     : createMissingBackendClient();
 
-export const backendMode = demoModeEnabled ? "demo" : useSupabaseBackend() ? "supabase" : "missing";
+export const backendMode = demoModeEnabled ? "demo" : isSupabaseBackend() ? "supabase" : "missing";

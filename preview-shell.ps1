@@ -1,4 +1,4 @@
-# תצוגה מקדימה — מצב דמו בלבד (localStorage). ללייב: preview-live.ps1
+# Demo preview (localStorage). For live Supabase use preview-live.ps1
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $michalckNode = Join-Path (Split-Path $root -Parent) "michalck\.tools\node"
@@ -12,7 +12,7 @@ $env:PATH = "$michalckNode;$env:PATH"
 Set-Location $root
 
 if (-not (Test-Path ".env.local")) {
-    "VITE_DEMO_MODE=true" | Set-Content ".env.local" -Encoding utf8
+    "VITE_DEMO_MODE=true" | Set-Content ".env.local" -Encoding utf8NoBOM
 }
 
 if (-not (Test-Path "node_modules")) {
@@ -21,9 +21,9 @@ if (-not (Test-Path "node_modules")) {
 }
 
 Write-Host ""
-Write-Host "מצב: דמו (לא לייב)"
-Write-Host "לייב מול Supabase: preview-live.ps1"
-Write-Host "Open: http://localhost:5173"
-Write-Host "Stop: Ctrl+C"
+Write-Host "Mode: demo (not live)"
+Write-Host "Live Supabase: preview-live.ps1"
+Write-Host 'Open: http://localhost:5173'
+Write-Host 'Stop: Ctrl+C'
 Write-Host ""
 npm run dev

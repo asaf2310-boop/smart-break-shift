@@ -3,6 +3,9 @@ import { Link, useLocation } from "react-router-dom";
 import { CalendarClock, CalendarDays, Home, ShieldCheck } from "lucide-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 
+/** גובה שורת הניווט התחתונה — משמש גם ל-FloatingChatWidget */
+export const APP_NAV_HEIGHT = "var(--app-nav-height)";
+
 export default function AppNav() {
   const location = useLocation();
   const isAdmin = useIsAdmin();
@@ -17,39 +20,43 @@ export default function AppNav() {
     }`;
 
   return (
-    <div className="w-full flex flex-col items-center gap-3 mb-6" dir="rtl">
-      <div className="w-full overflow-x-auto pb-1">
+    <nav
+      className="fixed inset-x-0 bottom-0 z-[80] flex justify-center px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] bg-gradient-to-t from-slate-50 via-indigo-50/95 to-transparent pointer-events-none"
+      dir="rtl"
+      aria-label="ניווט ראשי"
+    >
+      <div className="pointer-events-auto w-full max-w-5xl overflow-x-auto pb-1">
         <div className="mx-auto flex w-max min-w-full sm:min-w-0 bg-white border border-slate-200 rounded-2xl shadow-sm p-1 gap-1 justify-center">
-        <Link to="/" className={tabClass(location.pathname === "/")}>
-          <Home className="w-4 h-4" />
-          ראשי
-        </Link>
-        <Link to="/breaks" className={tabClass(isBreaks)}>
-          <CalendarClock className="w-4 h-4" />
-          הפסקות
-        </Link>
-        <Link to="/shifts" className={tabClass(isShifts)}>
-          <CalendarDays className="w-4 h-4" />
-          משמרות
-        </Link>
-        {isAdmin && (
-          <>
-            <Link to="/admin" className={tabClass(location.pathname === "/admin")}>
-              <ShieldCheck className="w-4 h-4" />
-              מנהל
-            </Link>
-            <Link to="/admin/shifts" className={tabClass(location.pathname === "/admin/shifts")}>
-              <ShieldCheck className="w-4 h-4" />
-              משמרות מנהל
-            </Link>
-            <Link to="/admin/users" className={tabClass(location.pathname === "/admin/users")}>
-              <ShieldCheck className="w-4 h-4" />
-              נציגים
-            </Link>
-          </>
-        )}
+          <Link to="/" className={tabClass(location.pathname === "/")}>
+            <Home className="w-4 h-4" />
+            ראשי
+          </Link>
+          <Link to="/breaks" className={tabClass(isBreaks)}>
+            <CalendarClock className="w-4 h-4" />
+            הפסקות
+          </Link>
+          <Link to="/shifts" className={tabClass(isShifts)}>
+            <CalendarDays className="w-4 h-4" />
+            משמרות
+          </Link>
+          {isAdmin && (
+            <>
+              <Link to="/admin" className={tabClass(location.pathname === "/admin")}>
+                <ShieldCheck className="w-4 h-4" />
+                מנהל
+              </Link>
+              <Link to="/admin/shifts" className={tabClass(location.pathname === "/admin/shifts")}>
+                <ShieldCheck className="w-4 h-4" />
+                משמרות מנהל
+              </Link>
+              <Link to="/admin/users" className={tabClass(location.pathname === "/admin/users")}>
+                <ShieldCheck className="w-4 h-4" />
+                נציגים
+              </Link>
+            </>
+          )}
         </div>
       </div>
-    </div>
+    </nav>
   );
 }

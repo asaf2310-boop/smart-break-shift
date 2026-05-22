@@ -1,5 +1,5 @@
 import { getAgentNamesList } from "@/constants/scheduling";
-import { useSupabaseBackend } from "@/api/dataClient";
+import { isSupabaseBackend } from "@/api/dataClient";
 
 const LOCAL_CHAT_KEY = "smart-break-shift-local-chat-v1";
 
@@ -126,14 +126,14 @@ const localChatEntities = {
  * צ'אט מקומי בדפדפן — ברירת מחדל פעיל (טסט/דמו).
  * Supabase לצ'אט רק אם VITE_CHAT_USE_LOCAL=false ויש חיבור Supabase.
  */
-export function useLocalChatStore() {
-  if (import.meta.env.VITE_CHAT_USE_LOCAL === "false" && useSupabaseBackend()) {
+export function isLocalChatStore() {
+  if (import.meta.env.VITE_CHAT_USE_LOCAL === "false" && isSupabaseBackend()) {
     return false;
   }
   return true;
 }
 
 export function getChatEntities() {
-  if (useLocalChatStore()) return localChatEntities;
+  if (isLocalChatStore()) return localChatEntities;
   return null;
 }

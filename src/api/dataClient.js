@@ -111,6 +111,7 @@ const ENTITY_TABLES = {
   ConstraintConfirmation: "constraint_confirmations",
   ChatMessage: "chat_messages",
   ChatPresence: "chat_presence",
+  ChatSettings: "chat_settings",
   Agent: "agents",
 };
 
@@ -129,6 +130,7 @@ export function createSupabaseDataClient() {
   };
 }
 
-export function useSupabaseBackend() {
+/** Not a React hook — plain env check (do not prefix with use). */
+export function isSupabaseBackend() {
   return supabaseConfigured;
 }

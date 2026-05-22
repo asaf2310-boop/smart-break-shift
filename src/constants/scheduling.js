@@ -2,6 +2,7 @@ import { addDays, format } from "date-fns";
 import { demoModeEnabled } from "@/api/demoClient";
 import { listDemoAppUsers } from "@/lib/appUsersStore";
 import { getAgentSession } from "@/lib/agentAuth";
+import { clearAdminSession, isAdminSessionActive } from "@/hooks/useIsAdmin";
 
 const REAL_AGENT_NAMES = [
   "רחלה מנשה",
@@ -48,6 +49,10 @@ export function getStoredAgentName() {
 
   const storedName = localStorage.getItem("agent_name") || "";
   if (!storedName) return "";
+
+  if (isAdminSessionActive()) {
+    clearAdminSession();
+  }
 
   const allowed = getAgentNamesList();
   if (!allowed.includes(storedName)) {

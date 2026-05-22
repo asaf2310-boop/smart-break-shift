@@ -8,7 +8,7 @@ import React, {
   useState,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getChatEntities, useLocalChatStore } from "@/api/localChatStore";
+import { getChatEntities, isLocalChatStore } from "@/api/localChatStore";
 import { dataClient } from "@/api/client";
 import { getStoredAgentName } from "@/constants/scheduling";
 import { getLiveQueryOptions } from "@/lib/liveQuery";
@@ -35,10 +35,10 @@ export function ChatUnreadProvider({ children }) {
   const queryClient = useQueryClient();
   const agentName = getStoredAgentName();
   const chatEntities = getChatEntities() || dataClient.entities;
-  const localChat = useLocalChatStore();
+  const localChat = isLocalChatStore();
 
-  const [unreadGeneral, setUnreadGeneral] = useState(false);
-  const [unreadDirect, setUnreadDirect] = useState(false);
+  const [unreadGeneralCount, setUnreadGeneralCount] = useState(0);
+  const [unreadDmCountByPeer, setUnreadDmCountByPeer] = useState(() => ({}));
   const [unreadDmPeers, setUnreadDmPeers] = useState(() => new Set());
 
   const seenIdsRef = useRef(new Set());
@@ -72,12 +72,16 @@ export function ChatUnreadProvider({ children }) {
       if (open) continue;
 
       if (isGeneralMessage(msg)) {
-        setUnreadGeneral(true);
+        setUnreadGeneralCount((c) => c + 1);
       } else if (isDirectMessage(msg)) {
-        setUnreadDirect(true);
+        const peer = msg.sender_name;
+        setUnreadDmCountByPeer((prev) => ({
+          ...prev,
+          [peer]: (prev[peer] || 0) + 1,
+        }));
         setUnreadDmPeers((prev) => {
           const next = new Set(prev);
-          next.add(msg.sender_name);
+          next.add(peer);
           return next;
         });
       }
@@ -85,31 +89,46 @@ export function ChatUnreadProvider({ children }) {
   }, [allMessages, open, agentName]);
 
   const clearGeneralUnread = useCallback(() => {
-    setUnreadGeneral(false);
+    setUnreadGeneralCount(0);
   }, []);
 
   const clearDmUnread = useCallback((peer) => {
     if (!peer) return;
+    setUnreadDmCountByPeer((prev) => {
+      if (!(peer in prev)) return prev;
+      const next = { ...prev };
+      delete next[peer];
+      return next;
+    });
     setUnreadDmPeers((prev) => {
       const next = new Set(prev);
       next.delete(peer);
-      if (next.size === 0) setUnreadDirect(false);
       return next;
     });
   }, []);
 
   const clearAllUnread = useCallback(() => {
-    setUnreadGeneral(false);
-    setUnreadDirect(false);
+    setUnreadGeneralCount(0);
+    setUnreadDmCountByPeer({});
     setUnreadDmPeers(new Set());
   }, []);
 
-  const hasUnread = unreadGeneral || unreadDirect;
+  const unreadDirectCount = useMemo(
+    () => Object.values(unreadDmCountByPeer).reduce((sum, n) => sum + n, 0),
+    [unreadDmCountByPeer]
+  );
+  const unreadTotal = unreadGeneralCount + unreadDirectCount;
+  const unreadGeneral = unreadGeneralCount > 0;
+  const unreadDirect = unreadDirectCount > 0;
+  const hasUnread = unreadTotal > 0;
 
   const value = useMemo(
     () => ({
       unreadGeneral,
       unreadDirect,
+      unreadGeneralCount,
+      unreadDirectCount,
+      unreadTotal,
       unreadDmPeers,
       hasUnread,
       clearGeneralUnread,
@@ -119,6 +138,9 @@ export function ChatUnreadProvider({ children }) {
     [
       unreadGeneral,
       unreadDirect,
+      unreadGeneralCount,
+      unreadDirectCount,
+      unreadTotal,
       unreadDmPeers,
       hasUnread,
       clearGeneralUnread,

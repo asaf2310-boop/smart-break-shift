@@ -6,6 +6,8 @@
 
 @layer base {
   :root {
+    --app-nav-height: 4.5rem;
+    --app-bottom-chrome: 1rem;
     --font-heebo: 'Heebo', sans-serif;
     --background: 220 20% 97%;
     --foreground: 222 47% 11%;
@@ -85,5 +87,15 @@
 
   body {
     @apply bg-background text-foreground font-heebo;
+  }
+
+  html[data-bottom-nav] {
+    --app-bottom-chrome: var(--app-nav-height);
+  }
+}
+
+@layer utilities {
+  .pb-app-nav {
+    padding-bottom: calc(var(--app-nav-height) + env(safe-area-inset-bottom, 0px));
   }
 }

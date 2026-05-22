@@ -73,6 +73,17 @@ create table if not exists chat_presence (
   created_at timestamptz default now()
 );
 
+create table if not exists chat_settings (
+  id text primary key default 'default',
+  display_name text,
+  image_url text,
+  updated_at timestamptz default now()
+);
+
+insert into chat_settings (id)
+values ('default')
+on conflict (id) do nothing;
+
 create index if not exists idx_break_reg_date on break_registrations(date);
 create index if not exists idx_shift_reg_date on shift_registrations(date);
 create index if not exists idx_shift_unavail_date on shift_unavailabilities(date);
@@ -89,6 +100,7 @@ alter table vacation_requests enable row level security;
 alter table constraint_confirmations enable row level security;
 alter table chat_messages enable row level security;
 alter table chat_presence enable row level security;
+alter table chat_settings enable row level security;
 
 -- מדיניות פתוחה לצוות פנימי (אפשר להחמיר later עם Supabase Auth)
 drop policy if exists "anon_all_break_registrations" on break_registrations;
@@ -99,6 +111,7 @@ drop policy if exists "anon_all_vacation_requests" on vacation_requests;
 drop policy if exists "anon_all_constraint_confirmations" on constraint_confirmations;
 drop policy if exists "anon_all_chat_messages" on chat_messages;
 drop policy if exists "anon_all_chat_presence" on chat_presence;
+drop policy if exists "anon_all_chat_settings" on chat_settings;
 
 create policy "anon_all_break_registrations" on break_registrations for all using (true) with check (true);
 create policy "anon_all_break_settings" on break_settings for all using (true) with check (true);
@@ -108,6 +121,7 @@ create policy "anon_all_vacation_requests" on vacation_requests for all using (t
 create policy "anon_all_constraint_confirmations" on constraint_confirmations for all using (true) with check (true);
 create policy "anon_all_chat_messages" on chat_messages for all using (true) with check (true);
 create policy "anon_all_chat_presence" on chat_presence for all using (true) with check (true);
+create policy "anon_all_chat_settings" on chat_settings for all using (true) with check (true);
 
 -- מניעת הרשמה למשבצת מלאה (גם כששני נציגים לוחצים בו-זמנית)
 create or replace function check_break_slot_capacity()

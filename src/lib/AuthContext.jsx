@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { useSupabaseBackend } from "@/api/dataClient";
+import { isSupabaseBackend } from "@/api/dataClient";
 import { demoModeEnabled } from "@/api/demoClient";
 
 const AuthContext = createContext();
@@ -32,7 +32,7 @@ export const AuthProvider = ({ children }) => {
       return;
     }
 
-    if (useSupabaseBackend()) {
+    if (isSupabaseBackend()) {
       finish({ demoAdmin: false });
       return;
     }

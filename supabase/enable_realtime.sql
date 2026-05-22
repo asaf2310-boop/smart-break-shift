@@ -9,3 +9,4 @@ alter publication supabase_realtime add table vacation_requests;
 alter publication supabase_realtime add table constraint_confirmations;
 alter publication supabase_realtime add table chat_messages;
 alter publication supabase_realtime add table chat_presence;
+alter publication supabase_realtime add table chat_settings;

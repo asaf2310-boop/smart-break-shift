@@ -1,9 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MessageCircle, Send } from "lucide-react";
+import { MessageCircle, Send, X } from "lucide-react";
+import ChatBrandingAvatar from "@/components/chat/ChatBrandingAvatar";
+import ChatBrandingEditor from "@/components/chat/ChatBrandingEditor";
+import { useChatBranding } from "@/hooks/useChatBranding";
 import { dataClient } from "@/api/client";
-import { getChatEntities, useLocalChatStore } from "@/api/localChatStore";
+import { getChatEntities, isLocalChatStore } from "@/api/localChatStore";
 import { demoModeEnabled } from "@/api/demoClient";
 import { getAgentNamesList, getStoredAgentName } from "@/constants/scheduling";
 import { getLiveQueryOptions } from "@/lib/liveQuery";
@@ -21,6 +24,38 @@ import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useChatUnread } from "@/hooks/useChatUnread";
 import { useChatPanel } from "@/context/ChatPanelContext";
 import { useToast } from "@/components/ui/use-toast";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
+
+const CHAT_AGENTS_SPLIT_ID = "smart-break-shift-chat-agents-split";
+
+/** ~200px chat min at 320px widget; scales with panel width */
+const CHAT_PANEL_MIN_SIZE = 40;
+/** ~100px agents min at 320px */
+const AGENTS_PANEL_MIN_SIZE = 31;
+/** ~280px agents max at 520px wide widget */
+const AGENTS_PANEL_MAX_SIZE = 54;
+const AGENTS_PANEL_DEFAULT_SIZE = 28;
+
+const sessionStoragePanelStorage = {
+  getItem: (name) => {
+    try {
+      return sessionStorage.getItem(name);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (name, value) => {
+    try {
+      sessionStorage.setItem(name, value);
+    } catch {
+      /* quota / private mode */
+    }
+  },
+};
 
 function formatTime(iso) {
   const d = new Date(iso);
@@ -34,9 +69,31 @@ export default function InternalChatPanel() {
   const { clearGeneralUnread, clearDmUnread } = useChatUnread();
   const agentName = getStoredAgentName();
   const isAdmin = useIsAdmin();
-  const [dmPeer, setDmPeer] = useState(null);
+  const { effective: chatBranding } = useChatBranding();
+  const [activeConversation, setActiveConversation] = useState(null);
+  const [openDmTabs, setOpenDmTabs] = useState([]);
   const [messageText, setMessageText] = useState("");
   const [chatConnected, setChatConnected] = useState(() => isAgentChatConnected());
+
+  const isGeneral = activeConversation === null;
+
+  const openDmWith = (agent) => {
+    if (!agent || agent === agentName) return;
+    setOpenDmTabs((prev) => (prev.includes(agent) ? prev : [...prev, agent]));
+    setActiveConversation(agent);
+  };
+
+  const closeDmTab = (agent) => {
+    setOpenDmTabs((prev) => {
+      const idx = prev.indexOf(agent);
+      const next = prev.filter((name) => name !== agent);
+      setActiveConversation((current) => {
+        if (current !== agent) return current;
+        return idx > 0 ? next[idx - 1] : null;
+      });
+      return next;
+    });
+  };
 
   useEffect(() => {
     const onConnection = () => setChatConnected(isAgentChatConnected());
@@ -46,14 +103,12 @@ export default function InternalChatPanel() {
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const chatEntities = getChatEntities() || dataClient.entities;
-  const localChat = useLocalChatStore();
-  const isGeneral = dmPeer === null;
-
+  const localChat = isLocalChatStore();
   useEffect(() => {
     if (!open) return;
     if (isGeneral) clearGeneralUnread();
-    else clearDmUnread(dmPeer);
-  }, [open, isGeneral, dmPeer, clearGeneralUnread, clearDmUnread]);
+    else clearDmUnread(activeConversation);
+  }, [open, isGeneral, activeConversation, clearGeneralUnread, clearDmUnread]);
 
   const { data: allMessages = [] } = useQuery({
     queryKey: ["chat-messages", localChat ? "local" : "remote"],
@@ -135,12 +190,14 @@ export default function InternalChatPanel() {
     }
     return allMessages
       .filter((msg) => {
-        const isOutgoing = msg.sender_name === agentName && msg.recipient_name === dmPeer;
-        const isIncoming = msg.sender_name === dmPeer && msg.recipient_name === agentName;
+        const isOutgoing =
+          msg.sender_name === agentName && msg.recipient_name === activeConversation;
+        const isIncoming =
+          msg.sender_name === activeConversation && msg.recipient_name === agentName;
         return isOutgoing || isIncoming;
       })
       .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-  }, [isGeneral, allMessages, agentName, dmPeer]);
+  }, [isGeneral, allMessages, agentName, activeConversation]);
 
   const sendMutation = useMutation({
     mutationFn: (payload) => chatEntities.ChatMessage.create(payload),
@@ -156,16 +213,16 @@ export default function InternalChatPanel() {
   const handleSend = () => {
     const body = messageText.trim();
     if (!body || !agentName) return;
-    if (!isGeneral && !dmPeer) return;
+    if (!isGeneral && !activeConversation) return;
     sendMutation.mutate({
       sender_name: agentName,
-      recipient_name: isGeneral ? null : dmPeer,
+      recipient_name: isGeneral ? null : activeConversation,
       body,
       created_at: new Date().toISOString(),
     });
   };
 
-  const conversationTitle = isGeneral ? "צ'אט כללי" : `שיחה עם ${dmPeer}`;
+  const conversationTitle = isGeneral ? "צ'אט כללי" : `שיחה עם ${activeConversation}`;
 
   if (!agentName) {
     return (
@@ -183,15 +240,14 @@ export default function InternalChatPanel() {
   }
 
   return (
-    <div className="flex flex-col h-full min-h-0" dir="rtl">
-      <div className="px-4 py-3 sm:px-5 border-b border-slate-100 flex items-center gap-2 sm:gap-3 shrink-0 flex-wrap">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center shrink-0">
-          <MessageCircle className="w-4 h-4" />
-        </div>
+    <div className="flex flex-col h-full min-h-0 overflow-hidden" dir="rtl">
+      <header className="px-4 py-3 sm:px-5 border-b border-slate-100 flex items-center gap-2 sm:gap-3 shrink-0 flex-wrap">
+        <ChatBrandingAvatar imageUrl={chatBranding.imageUrl} size="sm" />
         <div className="min-w-0 flex-1">
-          <h2 className="text-base sm:text-lg font-extrabold text-slate-800">צ'אט פנימי</h2>
+          <h2 className="text-base sm:text-lg font-extrabold text-slate-800">{chatBranding.displayName}</h2>
           <p className="text-[11px] text-slate-500 truncate">{conversationTitle}</p>
         </div>
+        {isAdmin ? <ChatBrandingEditor variant="header" /> : null}
         <div className="flex items-center gap-1.5 shrink-0">
           {myStatusKey === CHAT_STATUS.offline.key ? (
             <>
@@ -228,27 +284,77 @@ export default function InternalChatPanel() {
             {demoModeEnabled ? "דמו פעיל" : "צ'אט מקומי (טסט)"}
           </span>
         )}
-      </div>
+      </header>
 
-      <div
-        className="grid grid-rows-[auto_1fr] lg:grid-rows-none flex-1 min-h-0 overflow-hidden lg:grid-cols-[minmax(0,1fr)_240px]"
+      <ResizablePanelGroup
+        direction="horizontal"
         dir="ltr"
+        autoSaveId={CHAT_AGENTS_SPLIT_ID}
+        storage={sessionStoragePanelStorage}
+        className="flex flex-1 min-h-0 min-w-0 overflow-hidden"
       >
-        <section className="order-2 lg:order-none p-3 sm:p-4 flex flex-col min-h-0 flex-1" dir="rtl">
-          <div className="flex items-center justify-between gap-2 mb-2 shrink-0">
-            <h3 className="text-sm font-extrabold text-slate-800">{conversationTitle}</h3>
-            {!isGeneral && (
-              <button
-                type="button"
-                onClick={() => setDmPeer(null)}
-                className="text-xs font-bold text-indigo-600 hover:text-indigo-800 whitespace-nowrap"
-              >
-                חזרה לכללי
-              </button>
-            )}
+        <ResizablePanel
+          id="chat-messages"
+          order={1}
+          defaultSize={100 - AGENTS_PANEL_DEFAULT_SIZE}
+          minSize={CHAT_PANEL_MIN_SIZE}
+          className="flex flex-col min-h-0 min-w-0 overflow-hidden"
+        >
+        <section className="flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden p-3 sm:p-4" dir="rtl">
+          <div
+            className="flex items-center gap-1 mb-2 shrink-0 overflow-x-auto pb-0.5"
+            role="tablist"
+            aria-label="שיחות פתוחות"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={isGeneral}
+              onClick={() => setActiveConversation(null)}
+              className={`shrink-0 inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold transition-colors ${
+                isGeneral
+                  ? "bg-indigo-600 text-white shadow-sm"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              כללי
+            </button>
+            {openDmTabs.map((peer) => {
+              const isActive = activeConversation === peer;
+              return (
+                <div
+                  key={peer}
+                  className={`shrink-0 inline-flex items-center gap-0.5 pl-2.5 pr-1 py-1 rounded-full text-xs font-bold transition-colors ${
+                    isActive
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    onClick={() => setActiveConversation(peer)}
+                    className="truncate max-w-[7rem]"
+                  >
+                    {peer}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => closeDmTab(peer)}
+                    aria-label={`סגור שיחה עם ${peer}`}
+                    className={`p-0.5 rounded-full hover:bg-black/10 ${
+                      isActive ? "text-white/90" : "text-slate-500"
+                    }`}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              );
+            })}
           </div>
 
-          <div className="flex-1 min-h-[200px] lg:min-h-0 rounded-2xl border border-slate-100 bg-slate-50 p-3 overflow-y-auto space-y-2">
+          <div className="flex-1 min-h-0 rounded-2xl border border-slate-100 bg-slate-50 p-3 overflow-y-auto space-y-2">
             {visibleMessages.length === 0 ? (
               <div className="text-center text-sm text-slate-500 py-10">אין עדיין הודעות בחדר הזה</div>
             ) : (
@@ -284,7 +390,9 @@ export default function InternalChatPanel() {
                 }
               }}
               placeholder={
-                isGeneral ? "כתוב הודעה לכל הנציגים..." : `הודעה ל-${dmPeer}...`
+                isGeneral
+                  ? "כתוב הודעה לכל הנציגים..."
+                  : `הודעה ל-${activeConversation}...`
               }
               className="flex-1 rounded-2xl border border-slate-200 p-3 text-sm outline-none focus:border-indigo-400 resize-none"
             />
@@ -292,30 +400,45 @@ export default function InternalChatPanel() {
               type="button"
               onClick={handleSend}
               disabled={sendMutation.isPending}
-              className="shrink-0 self-end h-11 px-4 rounded-2xl bg-indigo-600 text-white font-bold text-sm disabled:opacity-50"
+              aria-label="שלח"
+              title="שלח"
+              className="shrink-0 self-end flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-600 text-white disabled:opacity-50"
             >
-              <span className="inline-flex items-center gap-1.5">
-                שלח
-                <Send className="w-4 h-4" />
-              </span>
+              <Send className="w-4 h-4" aria-hidden />
             </button>
           </div>
         </section>
+        </ResizablePanel>
 
+        <ResizableHandle
+          withHandle
+          className="w-2 bg-slate-50 border-x border-slate-100 shrink-0"
+          hitAreaMargins={{ coarse: 12, fine: 6 }}
+        />
+
+        <ResizablePanel
+          id="agents-list"
+          order={2}
+          defaultSize={AGENTS_PANEL_DEFAULT_SIZE}
+          minSize={AGENTS_PANEL_MIN_SIZE}
+          maxSize={AGENTS_PANEL_MAX_SIZE}
+          className="flex flex-col min-h-0 min-w-0 overflow-hidden"
+        >
         <aside
-          className="order-1 lg:order-none border-b lg:border-b-0 lg:border-l border-slate-100 p-3 sm:p-4 shrink-0 lg:shrink lg:overflow-y-auto max-h-[28vh] lg:max-h-none"
+          className="flex flex-1 flex-col min-h-0 overflow-hidden p-3 sm:p-4"
           dir="rtl"
         >
-          <h3 className="text-xs font-bold text-slate-500 mb-0.5">סטטוס נציגים</h3>
-          {isAdmin && (
-            <p className="text-[10px] font-bold text-indigo-600 mb-2">ניהול סטטוס (מנהל)</p>
-          )}
-          <div className="space-y-1 max-h-32 lg:max-h-48 overflow-y-auto pr-1">
+          <h3 className="text-xs font-bold text-slate-500 mb-2 shrink-0">סטטוס נציגים</h3>
+          {isAdmin ? (
+            <p className="text-[10px] font-bold text-indigo-600 mb-2 shrink-0">ניהול סטטוס (מנהל)</p>
+          ) : null}
+          <div className="space-y-1 flex-1 min-h-0 overflow-y-auto pr-1">
             {getAgentNamesList().map((agent) => {
               const status = resolveAgentStatus(agent, presenceMap, todayBreaks);
               const presenceStatus = presenceMap.get(agent)?.status ?? CHAT_STATUS.offline.key;
               const isSelf = agent === agentName;
-              const isActiveDm = dmPeer === agent;
+              const isActiveDm = activeConversation === agent;
+              const showAdminControls = isAdmin && !isSelf;
               const rowClass = `w-full rounded-lg px-2 py-1.5 transition-colors ${
                 isSelf
                   ? "opacity-50"
@@ -324,23 +447,29 @@ export default function InternalChatPanel() {
                     : "hover:bg-slate-50"
               }`;
 
-              if (!isAdmin || isSelf) {
+              const agentIdentity = (
+                <>
+                  <span
+                    className={`w-2 h-2 shrink-0 rounded-full ${statusDotClass(status.tone)}`}
+                    aria-label={status.label}
+                    title={status.label}
+                  />
+                  <span className="text-xs font-semibold text-slate-700 truncate">{agent}</span>
+                </>
+              );
+
+              if (!showAdminControls) {
                 return (
                   <button
                     key={agent}
                     type="button"
                     disabled={isSelf}
-                    onClick={() => !isSelf && setDmPeer(agent)}
+                    onClick={() => !isSelf && openDmWith(agent)}
                     className={`${rowClass} flex items-center justify-start gap-1.5 text-right ${
                       isSelf ? "cursor-default" : ""
                     }`}
                   >
-                    <span
-                      className={`w-2 h-2 shrink-0 rounded-full ${statusDotClass(status.tone)}`}
-                      aria-label={status.label}
-                      title={status.label}
-                    />
-                    <span className="text-xs font-semibold text-slate-700 truncate">{agent}</span>
+                    {agentIdentity}
                   </button>
                 );
               }
@@ -349,15 +478,10 @@ export default function InternalChatPanel() {
                 <div key={agent} className={`${rowClass} flex items-center justify-between gap-1`}>
                   <button
                     type="button"
-                    onClick={() => setDmPeer(agent)}
+                    onClick={() => openDmWith(agent)}
                     className="flex items-center justify-start gap-1.5 min-w-0 flex-1 text-right"
                   >
-                    <span
-                      className={`w-2 h-2 shrink-0 rounded-full ${statusDotClass(status.tone)}`}
-                      aria-label={status.label}
-                      title={status.label}
-                    />
-                    <span className="text-xs font-semibold text-slate-700 truncate">{agent}</span>
+                    {agentIdentity}
                   </button>
                   <AdminAgentChatControls
                     agent={agent}
@@ -378,7 +502,8 @@ export default function InternalChatPanel() {
             })}
           </div>
         </aside>
-      </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </div>
   );
 }

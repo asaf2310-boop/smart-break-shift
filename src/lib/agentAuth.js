@@ -8,6 +8,7 @@ import {
   verifyDemoUserPassword,
   requestDemoPasswordReset,
 } from "@/lib/appUsersStore";
+import { clearAdminSession } from "@/hooks/useIsAdmin";
 
 export const AGENT_SESSION_KEY = "smart-break-agent-session-v1";
 export const INVALID_CREDENTIALS_MSG = "אימייל או סיסמה שגויים";
@@ -81,12 +82,14 @@ export function getAgentSession() {
 }
 
 export function setAgentSession(session) {
+  clearAdminSession();
   localStorage.setItem(AGENT_SESSION_KEY, JSON.stringify(session));
   localStorage.setItem("agent_name", session.displayName);
   window.dispatchEvent(new CustomEvent("agent-session-changed"));
 }
 
 export function clearAgentSession() {
+  clearAdminSession();
   localStorage.removeItem(AGENT_SESSION_KEY);
   localStorage.removeItem("agent_name");
   window.dispatchEvent(new CustomEvent("agent-session-changed"));

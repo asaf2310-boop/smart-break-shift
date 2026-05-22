@@ -8,6 +8,7 @@ import { ShieldCheck, Plus, X, Settings } from "lucide-react";
 import DateSelector from "../components/breaks/DateSelector";
 import { Link } from "react-router-dom";
 import BreakSettingsPanel from "../components/admin/BreakSettingsPanel";
+import ChatBrandingPanel from "../components/admin/ChatBrandingPanel";
 import { SHORT_BREAK_SLOTS, LUNCH_BREAK_SLOTS } from "@/constants/scheduling";
 import BackendConfigBanner from "@/components/BackendConfigBanner";
 import {
@@ -144,6 +145,9 @@ export default function AdminDashboard() {
 
       <div className="relative z-10 max-w-5xl mx-auto px-4 py-8">
         <BackendConfigBanner />
+        <div className="mb-6">
+          <ChatBrandingPanel />
+        </div>
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between mb-8">
           <Link to="/" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">ראשי</Link>
           <Link to="/admin/users" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">נציגים</Link>

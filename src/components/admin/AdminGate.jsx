@@ -1,15 +1,19 @@
 import React, { useState } from "react";
+import { Link, Navigate } from "react-router-dom";
 import { ShieldCheck, Lock } from "lucide-react";
-import { useIsAdmin, unlockAdminSession } from "@/hooks/useIsAdmin";
+import { isAdminPinConfigured, useIsAdmin, unlockAdminSession } from "@/hooks/useIsAdmin";
 
 export default function AdminGate({ children }) {
   const isAdmin = useIsAdmin();
-  const pinRequired = Boolean(import.meta.env.VITE_ADMIN_PIN);
+  const pinRequired = isAdminPinConfigured();
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
 
   if (isAdmin) return children;
-  if (!pinRequired) return children;
+
+  if (!pinRequired) {
+    return <Navigate to="/" replace />;
+  }
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -54,6 +58,12 @@ export default function AdminGate({ children }) {
             כניסה
           </button>
         </form>
+        <Link
+          to="/"
+          className="mt-4 block text-center text-sm text-slate-500 hover:text-slate-800 transition-colors"
+        >
+          חזרה לדף הבית
+        </Link>
       </div>
     </div>
   );

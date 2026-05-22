@@ -1,8 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { CalendarClock, CalendarDays, LogOut, ShieldCheck, Users } from "lucide-react";
-import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { CalendarClock, CalendarDays, LogOut, Users } from "lucide-react";
 import { getAgentNamesList } from "@/constants/scheduling";
 import AgentLogin from "@/components/auth/AgentLogin";
 import { demoModeEnabled } from "@/api/demoClient";
@@ -28,7 +27,6 @@ const cards = [
 ];
 
 export default function Home() {
-  const isAdmin = useIsAdmin();
   const { displayName, isLoggedIn, bootstrapped, refresh } = useAgentSession();
   const agentCount = getAgentNamesList().length;
 
@@ -114,40 +112,6 @@ export default function Home() {
             );
           })}
         </div>
-
-        {isAdmin && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-            className="rounded-3xl border border-amber-200 bg-amber-50/80 p-5"
-          >
-            <div className="flex items-center gap-2 mb-3">
-              <ShieldCheck className="w-5 h-5 text-amber-600" />
-              <span className="font-bold text-slate-800 text-sm">אזור מנהל</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Link
-                to="/admin"
-                className="px-4 py-2 rounded-xl bg-white border border-amber-200 text-sm font-semibold text-slate-700 hover:border-amber-400 transition-colors"
-              >
-                ניהול הפסקות
-              </Link>
-              <Link
-                to="/admin/shifts"
-                className="px-4 py-2 rounded-xl bg-white border border-amber-200 text-sm font-semibold text-slate-700 hover:border-amber-400 transition-colors"
-              >
-                ניהול משמרות
-              </Link>
-              <Link
-                to="/admin/users"
-                className="px-4 py-2 rounded-xl bg-white border border-amber-200 text-sm font-semibold text-slate-700 hover:border-amber-400 transition-colors"
-              >
-                ניהול נציגים
-              </Link>
-            </div>
-          </motion.div>
-        )}
       </div>
     </div>
   );

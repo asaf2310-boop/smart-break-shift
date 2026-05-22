@@ -13,6 +13,7 @@ import {
   updateManagedAgent,
 } from "@/lib/agentsApi";
 import { demoModeEnabled } from "@/api/demoClient";
+import ChatBrandingPanel from "@/components/admin/ChatBrandingPanel";
 
 export default function AdminUsers() {
   const { toast } = useToast();
@@ -122,6 +123,10 @@ export default function AdminUsers() {
             דמו: משתמשים ב-localStorage. חסימה/מחיקה מונעות התחברות עם הודעת שגיאה כללית.
           </p>
         )}
+
+        <div className="mb-6">
+          <ChatBrandingPanel />
+        </div>
 
         <button
           type="button"

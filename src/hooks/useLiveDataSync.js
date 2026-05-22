@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase, supabaseConfigured } from "@/api/supabase";
 import { demoModeEnabled, DEMO_STORE_KEY } from "@/api/demoClient";
+import { CHAT_BRANDING_STORAGE_KEY } from "@/lib/chatBranding";
 
 /** מפתחות react-query שמתעדכנים לפי טבלה ב-Supabase */
 const TABLE_QUERY_PREFIXES = {
@@ -30,6 +31,7 @@ const TABLE_QUERY_PREFIXES = {
   ],
   chat_messages: ["chat-messages"],
   chat_presence: ["chat-presence"],
+  chat_settings: ["chat-branding"],
 };
 
 function invalidateByPrefixes(queryClient, prefixes) {
@@ -54,15 +56,20 @@ export function useLiveDataSync() {
     if (demoModeEnabled) {
       const refresh = () => queryClient.invalidateQueries();
       const onStorage = (event) => {
-        if (event.key === DEMO_STORE_KEY) refresh();
+        if (event.key === DEMO_STORE_KEY || event.key === CHAT_BRANDING_STORAGE_KEY) refresh();
+      };
+      const onBranding = () => {
+        queryClient.invalidateQueries({ queryKey: ["chat-branding"] });
       };
       window.addEventListener("storage", onStorage);
       window.addEventListener("demo-store-changed", refresh);
       window.addEventListener("local-chat-changed", refresh);
+      window.addEventListener("chat-branding-changed", onBranding);
       return () => {
         window.removeEventListener("storage", onStorage);
         window.removeEventListener("demo-store-changed", refresh);
         window.removeEventListener("local-chat-changed", refresh);
+        window.removeEventListener("chat-branding-changed", onBranding);
       };
     }
 

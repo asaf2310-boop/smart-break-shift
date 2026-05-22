@@ -10,7 +10,6 @@ import { Navigate } from "react-router-dom";
 import BreakSection from "../components/breaks/BreakSection";
 import MyRegistrations from "../components/breaks/MyRegistrations";
 import DateSelector from "../components/breaks/DateSelector";
-import AppNav from "../components/layout/AppNav";
 import { SHORT_BREAK_SLOTS, LUNCH_BREAK_SLOTS, getStoredAgentName } from "@/constants/scheduling";
 import {
   BreakRegistrationError,
@@ -204,7 +203,7 @@ export default function BreakScheduler() {
         )}
       </AnimatePresence>
 
-      <div className="relative z-10 max-w-5xl mx-auto px-3 sm:px-4 py-5 sm:py-8">
+      <div className="relative z-10 max-w-5xl mx-auto px-3 sm:px-4 py-5 sm:py-8 pb-app-nav">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -235,9 +234,6 @@ export default function BreakScheduler() {
             <DateSelector selectedDate={selectedDate} onDateChange={setSelectedDate} variant="light" />
           </div>
         </motion.div>
-
-        {/* Nav */}
-        <AppNav />
 
         {/* My Registrations */}
         <motion.div

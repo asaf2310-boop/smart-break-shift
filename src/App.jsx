@@ -1,7 +1,8 @@
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
+import AppNav from '@/components/layout/AppNav';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
@@ -20,6 +21,14 @@ import FloatingChatWidget from '@/components/chat/FloatingChatWidget';
 import { ChatPanelProvider } from '@/context/ChatPanelContext';
 import { ChatUnreadProvider } from '@/hooks/useChatUnread';
 import ChatDeepLink from './pages/ChatDeepLink';
+
+const BOTTOM_NAV_PATHS = new Set(['/breaks', '/shifts']);
+
+function BottomAppNav() {
+  const { pathname } = useLocation();
+  if (!BOTTOM_NAV_PATHS.has(pathname)) return null;
+  return <AppNav />;
+}
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -55,6 +64,7 @@ const AuthenticatedApp = () => {
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="*" element={<PageNotFound />} />
       </Routes>
+      <BottomAppNav />
       <FloatingChatWidget />
     </>
   );
