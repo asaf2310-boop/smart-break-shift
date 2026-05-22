@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "react-router-dom";
 import { MessageCircle, X } from "lucide-react";
 import { useChatPanel } from "@/context/ChatPanelContext";
+import { useFloatingWidgetsLayer } from "@/context/FloatingWidgetsLayerContext";
 import { useChatUnread } from "@/hooks/useChatUnread";
 import InternalChatPanel from "@/components/chat/InternalChatPanel";
 import ChatBrandingAvatar from "@/components/chat/ChatBrandingAvatar";
@@ -13,6 +14,7 @@ import { getStoredAgentName } from "@/constants/scheduling";
 import { getLiveQueryOptions } from "@/lib/liveQuery";
 import { resolveAgentStatus, statusDotClass } from "@/lib/chatStatus";
 import { CHAT_STATUS, isAgentChatConnected } from "@/lib/agentChatPresence";
+import { CHAT_FLOAT_CHROME_CLASS } from "@/lib/floatingWidgetChrome";
 
 const CHAT_PANEL_HEIGHT_KEY = "chat-panel-height";
 const MIN_CHAT_PANEL_HEIGHT = 320;
@@ -96,6 +98,7 @@ export default function FloatingChatWidget() {
   const { pathname } = useLocation();
   const hasBottomNav = BOTTOM_NAV_PATHS.has(pathname);
   const { open, toggleChat, closeChat } = useChatPanel();
+  const { bringToFront, getZIndex } = useFloatingWidgetsLayer();
   const { unreadTotal, hasUnread } = useChatUnread();
   const { effective: chatBranding } = useChatBranding();
   const heightOptions = useMemo(
@@ -237,12 +240,22 @@ export default function FloatingChatWidget() {
 
   useEffect(() => {
     if (!open) return undefined;
+    bringToFront("chat");
     const onKey = (e) => {
       if (e.key === "Escape") closeChat();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [open, closeChat]);
+  }, [open, closeChat, bringToFront]);
+
+  const handleToggleChat = useCallback(() => {
+    bringToFront("chat");
+    toggleChat();
+  }, [bringToFront, toggleChat]);
+
+  const handleChromePointerDown = useCallback(() => {
+    if (open) bringToFront("chat");
+  }, [open, bringToFront]);
 
   const todayStr = new Date().toISOString().slice(0, 10);
 
@@ -275,7 +288,10 @@ export default function FloatingChatWidget() {
 
   return (
     <div
-      className="fixed right-4 z-[90] flex flex-col items-end justify-end gap-1 pointer-events-none bottom-[var(--app-bottom-chrome)]"
+      dir="ltr"
+      className={CHAT_FLOAT_CHROME_CLASS}
+      style={{ zIndex: getZIndex("chat") }}
+      onMouseDown={handleChromePointerDown}
     >
       {open && (
         <div
@@ -329,7 +345,7 @@ export default function FloatingChatWidget() {
 
         <button
           type="button"
-          onClick={toggleChat}
+          onClick={handleToggleChat}
           aria-expanded={open}
           aria-label={
             open

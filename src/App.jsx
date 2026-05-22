@@ -18,9 +18,14 @@ import AdminUsers from './pages/AdminUsers';
 import ResetPassword from './pages/ResetPassword';
 import LiveDataSync from '@/components/LiveDataSync';
 import FloatingChatWidget from '@/components/chat/FloatingChatWidget';
+import SoftphoneWidget from '@/components/telephony/SoftphoneWidget';
 import { ChatPanelProvider } from '@/context/ChatPanelContext';
+import { TelephonyProvider } from '@/context/TelephonyContext';
+import { FloatingWidgetsLayerProvider } from '@/context/FloatingWidgetsLayerContext';
 import { ChatUnreadProvider } from '@/hooks/useChatUnread';
 import ChatDeepLink from './pages/ChatDeepLink';
+import CrmDashboard from './pages/CrmDashboard';
+import CrmCustomerDetail from './pages/CrmCustomerDetail';
 
 const BOTTOM_NAV_PATHS = new Set(['/breaks', '/shifts']);
 
@@ -58,6 +63,8 @@ const AuthenticatedApp = () => {
         <Route path="/breaks" element={<BreakScheduler />} />
         <Route path="/shifts" element={<ShiftScheduler />} />
         <Route path="/chat" element={<ChatDeepLink />} />
+        <Route path="/crm" element={<CrmDashboard />} />
+        <Route path="/crm/:id" element={<CrmCustomerDetail />} />
         <Route path="/admin" element={<AdminGate><AdminDashboard /></AdminGate>} />
         <Route path="/admin/shifts" element={<AdminGate><AdminShifts /></AdminGate>} />
         <Route path="/admin/users" element={<AdminGate><AdminUsers /></AdminGate>} />
@@ -66,6 +73,7 @@ const AuthenticatedApp = () => {
       </Routes>
       <BottomAppNav />
       <FloatingChatWidget />
+      <SoftphoneWidget />
     </>
   );
 };
@@ -76,11 +84,15 @@ function App() {
       <QueryClientProvider client={queryClientInstance}>
         <LiveDataSync />
         <Router>
-          <ChatPanelProvider>
-            <ChatUnreadProvider>
-              <AuthenticatedApp />
-            </ChatUnreadProvider>
-          </ChatPanelProvider>
+          <FloatingWidgetsLayerProvider>
+            <ChatPanelProvider>
+              <TelephonyProvider>
+                <ChatUnreadProvider>
+                  <AuthenticatedApp />
+                </ChatUnreadProvider>
+              </TelephonyProvider>
+            </ChatPanelProvider>
+          </FloatingWidgetsLayerProvider>
         </Router>
         <Toaster />
       </QueryClientProvider>

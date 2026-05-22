@@ -5,12 +5,21 @@ module.exports = {
   theme: {
   	extend: {
   		fontFamily: {
-  			heebo: ['var(--font-heebo)']
+  			noto: ['var(--font-noto)'],
+  			heebo: ['var(--font-noto)']
   		},
   		borderRadius: {
   			lg: 'var(--radius)',
-  			md: 'calc(var(--radius) - 2px)',
-  			sm: 'calc(var(--radius) - 4px)'
+  			md: 'calc(var(--radius) - 4px)',
+  			sm: 'calc(var(--radius) - 8px)',
+  			xl: 'calc(var(--radius) + 4px)',
+  			'2xl': 'calc(var(--radius) + 8px)',
+  			'3xl': 'calc(var(--radius) + 12px)'
+  		},
+  		boxShadow: {
+  			'elevation-1': 'var(--elevation-1)',
+  			'elevation-2': 'var(--elevation-2)',
+  			'elevation-3': 'var(--elevation-3)'
   		},
   		colors: {
   			background: 'hsl(var(--background))',
@@ -27,6 +36,8 @@ module.exports = {
   				DEFAULT: 'hsl(var(--primary))',
   				foreground: 'hsl(var(--primary-foreground))'
   			},
+  			'primary-container': 'hsl(var(--primary-container))',
+  			'on-primary-container': 'hsl(var(--on-primary-container))',
   			secondary: {
   				DEFAULT: 'hsl(var(--secondary))',
   				foreground: 'hsl(var(--secondary-foreground))'
@@ -46,6 +57,14 @@ module.exports = {
   			border: 'hsl(var(--border))',
   			input: 'hsl(var(--input))',
   			ring: 'hsl(var(--ring))',
+  			outline: 'hsl(var(--outline))',
+  			'outline-variant': 'hsl(var(--outline-variant))',
+  			surface: 'hsl(var(--surface))',
+  			'surface-container-lowest': 'hsl(var(--surface-container-lowest))',
+  			'surface-container-low': 'hsl(var(--surface-container-low))',
+  			'surface-container': 'hsl(var(--surface-container))',
+  			'surface-container-high': 'hsl(var(--surface-container-high))',
+  			'on-surface-variant': 'hsl(var(--on-surface-variant))',
   			chart: {
   				'1': 'hsl(var(--chart-1))',
   				'2': 'hsl(var(--chart-2))',

@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -8,75 +6,104 @@
   :root {
     --app-nav-height: 4.5rem;
     --app-bottom-chrome: 1rem;
-    --font-heebo: 'Heebo', sans-serif;
-    --background: 220 20% 97%;
-    --foreground: 222 47% 11%;
+    --softphone-docked-chrome: 0px;
+    --fab-size: 3.5rem;
+    --fab-stack-gap: 0.75rem;
+    --font-noto: 'Noto Sans Hebrew', sans-serif;
+
+    /* MD3-inspired tokens (light) */
+    --background: 300 20% 99%;
+    --foreground: 264 20% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 264 20% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 234 89% 62%;
+    --popover-foreground: 264 20% 12%;
+    --primary: 262 52% 47%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 14% 93%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 220 14% 93%;
-    --muted-foreground: 220 9% 46%;
-    --accent: 262 83% 58%;
+    --primary-container: 262 100% 92%;
+    --on-primary-container: 262 100% 20%;
+    --secondary: 280 25% 94%;
+    --secondary-foreground: 264 20% 12%;
+    --muted: 280 20% 96%;
+    --muted-foreground: 264 8% 42%;
+    --accent: 262 52% 47%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 84% 60%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
-    --border: 220 13% 89%;
-    --input: 220 13% 89%;
-    --ring: 234 89% 62%;
-    --chart-1: 234 89% 62%;
+    --border: 280 12% 88%;
+    --input: 280 12% 88%;
+    --ring: 262 52% 47%;
+    --outline: 280 6% 58%;
+    --outline-variant: 280 10% 78%;
+    --surface: 300 20% 99%;
+    --surface-container-lowest: 0 0% 100%;
+    --surface-container-low: 280 25% 97%;
+    --surface-container: 280 25% 94%;
+    --surface-container-high: 280 20% 91%;
+    --on-surface-variant: 264 8% 42%;
+    --chart-1: 262 52% 47%;
     --chart-2: 262 83% 58%;
     --chart-3: 173 58% 39%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
-    --radius: 0.75rem;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 234 89% 62%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 234 89% 62%;
+    --radius: 1rem;
+    --sidebar-background: 280 25% 97%;
+    --sidebar-foreground: 264 20% 12%;
+    --sidebar-primary: 262 52% 47%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 280 25% 94%;
+    --sidebar-accent-foreground: 264 20% 12%;
+    --sidebar-border: 280 12% 88%;
+    --sidebar-ring: 262 52% 47%;
+
+    --elevation-1: 0 1px 2px hsl(264 20% 12% / 0.12), 0 1px 3px 1px hsl(264 20% 12% / 0.08);
+    --elevation-2: 0 1px 2px hsl(264 20% 12% / 0.14), 0 2px 6px 2px hsl(264 20% 12% / 0.1);
+    --elevation-3: 0 2px 4px hsl(264 20% 12% / 0.14), 0 4px 8px 3px hsl(264 20% 12% / 0.1);
   }
 
   .dark {
-    --background: 224 30% 8%;
-    --foreground: 210 20% 95%;
-    --card: 224 25% 12%;
-    --card-foreground: 210 20% 95%;
-    --popover: 224 25% 12%;
-    --popover-foreground: 210 20% 95%;
-    --primary: 234 89% 62%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 224 20% 18%;
-    --secondary-foreground: 210 20% 95%;
-    --muted: 224 20% 18%;
-    --muted-foreground: 220 9% 56%;
-    --accent: 262 83% 58%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 62.8% 30.6%;
+    --background: 264 24% 8%;
+    --foreground: 280 20% 95%;
+    --card: 264 20% 12%;
+    --card-foreground: 280 20% 95%;
+    --popover: 264 20% 12%;
+    --popover-foreground: 280 20% 95%;
+    --primary: 262 80% 75%;
+    --primary-foreground: 262 100% 15%;
+    --primary-container: 262 45% 28%;
+    --on-primary-container: 262 100% 92%;
+    --secondary: 264 18% 18%;
+    --secondary-foreground: 280 20% 95%;
+    --muted: 264 18% 18%;
+    --muted-foreground: 280 10% 65%;
+    --accent: 262 80% 75%;
+    --accent-foreground: 262 100% 15%;
+    --destructive: 0 62% 30%;
     --destructive-foreground: 0 0% 98%;
-    --border: 224 20% 18%;
-    --input: 224 20% 18%;
-    --ring: 234 89% 62%;
-    --chart-1: 234 89% 62%;
+    --border: 264 15% 22%;
+    --input: 264 15% 22%;
+    --ring: 262 80% 75%;
+    --outline: 280 8% 55%;
+    --outline-variant: 264 12% 32%;
+    --surface: 264 24% 8%;
+    --surface-container-lowest: 264 24% 6%;
+    --surface-container-low: 264 20% 11%;
+    --surface-container: 264 18% 15%;
+    --surface-container-high: 264 16% 19%;
+    --on-surface-variant: 280 10% 72%;
+    --chart-1: 262 80% 75%;
     --chart-2: 262 83% 58%;
     --chart-3: 173 58% 39%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
-    --sidebar-background: 224 30% 8%;
-    --sidebar-foreground: 210 20% 95%;
-    --sidebar-primary: 234 89% 62%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 224 20% 18%;
-    --sidebar-accent-foreground: 210 20% 95%;
-    --sidebar-border: 224 20% 18%;
-    --sidebar-ring: 234 89% 62%;
+    --sidebar-background: 264 24% 8%;
+    --sidebar-foreground: 280 20% 95%;
+    --sidebar-primary: 262 80% 75%;
+    --sidebar-primary-foreground: 262 100% 15%;
+    --sidebar-accent: 264 18% 15%;
+    --sidebar-accent-foreground: 280 20% 95%;
+    --sidebar-border: 264 15% 22%;
+    --sidebar-ring: 262 80% 75%;
   }
 }
 
@@ -86,16 +113,111 @@
   }
 
   body {
-    @apply bg-background text-foreground font-heebo;
+    @apply bg-background text-foreground font-noto antialiased;
   }
 
   html[data-bottom-nav] {
     --app-bottom-chrome: var(--app-nav-height);
+  }
+
+  /* Lift chat FAB when softphone is docked + open so bubbles do not overlap */
+  html[data-softphone-docked-open] {
+    --softphone-docked-chrome: min(42vh, 20rem);
+  }
+
+  html[data-softphone-docked-open] .floating-chat-chrome {
+    bottom: calc(var(--app-bottom-chrome) + var(--softphone-docked-chrome));
+  }
+}
+
+@layer components {
+  .m3-page {
+    @apply min-h-screen bg-background;
+    background: linear-gradient(
+      165deg,
+      hsl(var(--surface-container-low)) 0%,
+      hsl(var(--background)) 45%,
+      hsl(var(--surface-container-low)) 100%
+    );
+  }
+
+  .m3-card {
+    @apply rounded-2xl bg-card text-card-foreground border border-outline/25 transition-shadow duration-200;
+    box-shadow: var(--elevation-1);
+  }
+
+  .m3-card:hover {
+    box-shadow: var(--elevation-2);
+  }
+
+  .m3-surface-container {
+    @apply rounded-2xl bg-surface-container border border-outline/20;
+    box-shadow: var(--elevation-1);
+  }
+
+  .m3-btn-tonal {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-medium
+      bg-primary-container text-on-primary-container
+      hover:brightness-95 active:brightness-90 transition-all duration-200;
+    box-shadow: var(--elevation-1);
+  }
+
+  .m3-btn-outlined {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-medium
+      border border-outline bg-transparent text-foreground
+      hover:bg-surface-container-high/60 transition-colors duration-200;
+  }
+
+  .m3-label-large {
+    @apply text-sm font-medium leading-5 tracking-wide text-foreground;
+  }
+
+  .m3-label-medium {
+    @apply text-xs font-medium leading-4 tracking-wide text-on-surface-variant;
+  }
+
+  .m3-title-large {
+    @apply text-2xl font-normal leading-8 text-foreground;
+  }
+
+  .m3-headline-small {
+    @apply text-2xl font-normal leading-8 text-foreground;
+  }
+
+  .m3-nav-bar {
+    @apply bg-surface-container-lowest/95 backdrop-blur-md border border-outline/20 rounded-2xl;
+    box-shadow: var(--elevation-2);
+  }
+
+  .m3-nav-tab-active {
+    @apply bg-primary-container text-on-primary-container rounded-xl font-medium;
+    box-shadow: var(--elevation-1);
+  }
+
+  .m3-nav-tab-inactive {
+    @apply text-on-surface-variant rounded-xl font-medium hover:bg-surface-container-high/70 hover:text-foreground;
+  }
+
+  .m3-badge {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-medium
+      bg-primary-container/60 text-on-primary-container border border-outline/15;
   }
 }
 
 @layer utilities {
   .pb-app-nav {
     padding-bottom: calc(var(--app-nav-height) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .shadow-elevation-1 {
+    box-shadow: var(--elevation-1);
+  }
+
+  .shadow-elevation-2 {
+    box-shadow: var(--elevation-2);
+  }
+
+  .shadow-elevation-3 {
+    box-shadow: var(--elevation-3);
   }
 }

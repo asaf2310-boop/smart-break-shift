@@ -229,10 +229,7 @@ export default function InternalChatPanel() {
       <div className="flex flex-col items-center justify-center py-16 px-6 text-center" dir="rtl">
         <MessageCircle className="w-12 h-12 text-indigo-300 mb-4" />
         <p className="text-slate-600 font-semibold mb-3">יש לבחור שם נציג כדי להשתמש בצ'אט</p>
-        <Link
-          to="/"
-          className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700"
-        >
+        <Link to="/" className="m3-btn-tonal">
           מעבר לדף הבית
         </Link>
       </div>
@@ -241,11 +238,11 @@ export default function InternalChatPanel() {
 
   return (
     <div className="flex flex-col h-full min-h-0 overflow-hidden" dir="rtl">
-      <header className="px-4 py-3 sm:px-5 border-b border-slate-100 flex items-center gap-2 sm:gap-3 shrink-0 flex-wrap">
+      <header className="px-4 py-3 sm:px-5 border-b border-outline/20 bg-surface-container-low flex items-center gap-2 sm:gap-3 shrink-0 flex-wrap shadow-elevation-1">
         <ChatBrandingAvatar imageUrl={chatBranding.imageUrl} size="sm" />
         <div className="min-w-0 flex-1">
-          <h2 className="text-base sm:text-lg font-extrabold text-slate-800">{chatBranding.displayName}</h2>
-          <p className="text-[11px] text-slate-500 truncate">{conversationTitle}</p>
+          <h2 className="m3-label-large text-base sm:text-lg">{chatBranding.displayName}</h2>
+          <p className="m3-label-medium truncate">{conversationTitle}</p>
         </div>
         {isAdmin ? <ChatBrandingEditor variant="header" /> : null}
         <div className="flex items-center gap-1.5 shrink-0">
@@ -256,7 +253,7 @@ export default function InternalChatPanel() {
                 type="button"
                 onClick={() => connectMutation.mutate()}
                 disabled={connectMutation.isPending}
-                className="h-8 px-2.5 rounded-lg border border-indigo-200 bg-indigo-50 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100 whitespace-nowrap"
+                className="h-8 px-3 rounded-full m3-btn-tonal text-[11px] py-0 shadow-none"
               >
                 התחבר
               </button>
@@ -272,7 +269,7 @@ export default function InternalChatPanel() {
                 type="button"
                 onClick={handleDisconnect}
                 disabled={statusMutation.isPending}
-                className="h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-[11px] font-bold text-slate-600 hover:bg-slate-50 whitespace-nowrap"
+                className="h-8 px-3 rounded-full m3-btn-outlined text-[11px] py-0"
               >
                 התנתק
               </button>
@@ -280,7 +277,7 @@ export default function InternalChatPanel() {
           )}
         </div>
         {localChat && (
-          <span className="w-full sm:w-auto inline-flex px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold border border-emerald-200">
+          <span className="w-full sm:w-auto m3-badge text-[10px]">
             {demoModeEnabled ? "דמו פעיל" : "צ'אט מקומי (טסט)"}
           </span>
         )}
