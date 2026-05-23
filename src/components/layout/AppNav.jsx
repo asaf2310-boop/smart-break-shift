@@ -26,8 +26,9 @@ export default function AppNav() {
       dir="rtl"
       aria-label="ניווט ראשי"
     >
-      <div className="pointer-events-auto w-full max-w-5xl overflow-x-auto pt-1">
-        <div className="m3-nav-bar mx-auto flex w-max min-w-full sm:min-w-0 p-1.5 gap-1 justify-center">
+      <div className="pointer-events-auto w-full max-w-5xl mx-auto">
+        <div className="min-w-0 overflow-x-auto pt-1">
+        <div className="m3-nav-bar flex w-max min-w-full sm:min-w-0 p-1.5 gap-1 justify-center">
           <Link to="/" className={tabClass(location.pathname === "/")}>
             <Home className="w-4 h-4" />
             ראשי
@@ -72,6 +73,7 @@ export default function AppNav() {
               </Link>
             </>
           )}
+        </div>
         </div>
       </div>
     </nav>

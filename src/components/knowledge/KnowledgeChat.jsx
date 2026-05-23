@@ -13,22 +13,24 @@ function MessageBubble({ message }) {
       className={`flex ${isUser ? "justify-start" : "justify-end"}`}
     >
       <div
-        className={`max-w-[92%] sm:max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+        dir="rtl"
+        lang="he"
+        className={`max-w-[92%] sm:max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-7 ${
           isUser
-            ? "bg-primary text-primary-foreground rounded-br-md whitespace-pre-wrap"
-            : "bg-surface-container-high text-foreground border border-outline/15 rounded-bl-md"
+            ? "bg-primary text-primary-foreground rounded-br-md whitespace-pre-wrap break-words"
+            : "bg-surface-container-high text-foreground border border-outline/15 rounded-bl-md whitespace-normal break-words [overflow-wrap:anywhere]"
         }`}
       >
         {isUser ? (
           message.content
         ) : (
-          <div className="space-y-2 whitespace-normal">
+          <div className="space-y-2 whitespace-normal break-words [overflow-wrap:anywhere] [word-break:break-word]">
             {String(message.content || "")
               .split(/\n{2,}/)
               .map((block) => block.trim())
               .filter(Boolean)
               .map((block, i) => (
-                <p key={i} className="m-0">
+                <p key={i} className="m-0 leading-7">
                   {block.replace(/\n+/g, " ")}
                 </p>
               ))}

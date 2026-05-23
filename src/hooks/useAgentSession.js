@@ -1,22 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
-import { getAgentSession, restoreSupabaseAgentSession } from "@/lib/agentAuth";
-import { demoModeEnabled } from "@/api/demoClient";
+import { getAgentSession } from "@/lib/agentAuth";
 
 export function useAgentSession() {
   const [session, setSession] = useState(() => getAgentSession());
-  const [bootstrapped, setBootstrapped] = useState(demoModeEnabled);
 
   const refresh = useCallback(() => {
     setSession(getAgentSession());
   }, []);
 
   useEffect(() => {
-    if (!demoModeEnabled) {
-      restoreSupabaseAgentSession().then(() => {
-        setSession(getAgentSession());
-        setBootstrapped(true);
-      });
-    }
     const onChange = () => refresh();
     window.addEventListener("agent-session-changed", onChange);
     window.addEventListener("app-users-changed", onChange);
@@ -30,7 +22,7 @@ export function useAgentSession() {
     session,
     displayName: session?.displayName || "",
     isLoggedIn: Boolean(session?.displayName),
-    bootstrapped,
+    bootstrapped: true,
     refresh,
   };
 }

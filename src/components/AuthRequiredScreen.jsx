@@ -2,12 +2,11 @@ import React from "react";
 import { useAuth } from "@/lib/AuthContext";
 import { Link } from "react-router-dom";
 import { LogIn, Home } from "lucide-react";
-
 export default function AuthRequiredScreen() {
   const { navigateToLogin } = useAuth();
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-indigo-50 px-4" dir="rtl">
+    <div className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-indigo-50 px-4" dir="rtl">
       <div className="max-w-md w-full bg-white rounded-3xl shadow-xl border border-slate-200 p-8 text-center">
         <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-indigo-100 flex items-center justify-center">
           <LogIn className="w-7 h-7 text-indigo-600" />

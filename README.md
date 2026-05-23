@@ -2,6 +2,10 @@
 
 מערכת לניהול הפסקות, אילוצי משמרות, חופשים ושיבוץ שבועי במוקד.
 
+## Cursor Agent Skills
+
+סקילס לסוכן AI ב-`.cursor/skills/` (Skills IL + פרויקט). רשימה ומתי להפעיל: [`.cursor/skills/README.md`](.cursor/skills/README.md). מוקד UX: `smart-break-shift-ux`, דומיין מוקד: `call-center-hebrew`, דמו/פריסה: `smart-break-shift-demo`.
+
 ## Backend
 
 המערכת אינה תלויה בשירות חיצוני ייעודי. יש שני מצבי עבודה:

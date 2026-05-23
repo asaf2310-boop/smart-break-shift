@@ -9,8 +9,25 @@ import {
   PASSWORD_MIN_LENGTH_MSG,
   passwordMinLengthInputProps,
 } from "@/lib/agentAuth";
+import { demoModeEnabled } from "@/api/demoClient";
 
 export default function ResetPassword() {
+  if (!demoModeEnabled) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50 px-4" dir="rtl">
+        <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl border border-slate-200 p-8 text-center">
+          <p className="text-sm text-slate-600 mb-4">איפוס סיסמה זמין רק בסביבת דמו.</p>
+          <Link to="/" className="text-sm text-indigo-600 hover:text-indigo-800 font-medium">
+            חזרה לדף הראשי
+          </Link>
+        </div>
+      </div>
+    );
+  }
+  return <DemoResetPassword />;
+}
+
+function DemoResetPassword() {
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");

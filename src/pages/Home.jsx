@@ -1,7 +1,8 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { BookOpen, CalendarClock, CalendarDays, Contact, LogOut, Monitor, Users } from "lucide-react";
+import { BookOpen, CalendarClock, CalendarDays, Contact, LogOut, Monitor } from "lucide-react";
+import BrandEntryBlock from "@/components/brand/BrandEntryBlock";
 import { getAgentNamesList } from "@/constants/scheduling";
 import AgentLogin from "@/components/auth/AgentLogin";
 import { demoModeEnabled } from "@/api/demoClient";
@@ -52,7 +53,7 @@ const showAdminDemoHint =
   (import.meta.env.DEV || demoModeEnabled) && isAdminPinConfigured();
 
 export default function Home() {
-  const { displayName, isLoggedIn, bootstrapped, refresh } = useAgentSession();
+  const { displayName, isLoggedIn, refresh } = useAgentSession();
   const agentCount = getAgentNamesList().length;
   const adminPin = String(import.meta.env.VITE_ADMIN_PIN ?? "").trim();
 
@@ -66,14 +67,6 @@ export default function Home() {
     refresh();
   };
 
-  if (!bootstrapped && !demoModeEnabled) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center bg-background">
-        <div className="w-8 h-8 border-4 border-outline-variant border-t-primary rounded-full animate-spin" />
-      </div>
-    );
-  }
-
   if (!isLoggedIn) {
     return <AgentLogin onSuccess={handleLoginSuccess} />;
   }
@@ -85,16 +78,13 @@ export default function Home() {
         <div className="absolute bottom-[-10%] left-[-5%] w-[420px] h-[420px] bg-primary-container/40 rounded-full blur-3xl" />
       </div>
 
-      <div className="relative z-10 max-w-3xl mx-auto px-4 py-8 sm:py-16">
+      <div className="relative z-10 max-w-3xl mx-auto px-4 pt-14 sm:pt-16 pb-8 sm:pb-16">
         <motion.div
           initial={{ opacity: 0, y: -16 }}
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-8 sm:mb-12"
         >
-          <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-4 rounded-2xl bg-primary flex items-center justify-center shadow-elevation-2">
-            <Users className="w-7 h-7 sm:w-8 sm:h-8 text-primary-foreground" />
-          </div>
-          <h1 className="m3-headline-small font-medium mb-2">מערכת הפסקות ומשמרות</h1>
+          <BrandEntryBlock className="mx-auto mb-4" />
           <p className="m3-label-medium">
             שלום <span className="text-primary font-semibold">{displayName}</span>
             {agentCount > 0 && <> · {agentCount} נציגים</>}
@@ -120,7 +110,7 @@ export default function Home() {
           </button>
         </motion.div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6 items-stretch">
           {cards.map((card, i) => {
             const Icon = card.icon;
             return (
@@ -129,18 +119,19 @@ export default function Home() {
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.08 }}
+                className="h-full"
               >
                 <Link
                   to={card.to}
-                  className="m3-card block p-5 sm:p-6 hover:scale-[1.01] transition-transform group"
+                  className="m3-card flex flex-col h-full min-h-44 p-5 sm:p-6 hover:scale-[1.01] transition-transform group"
                 >
                   <div
-                    className={`w-12 h-12 rounded-xl ${card.iconBg} flex items-center justify-center mb-4 group-hover:scale-105 transition-transform`}
+                    className={`w-12 h-12 rounded-xl ${card.iconBg} flex items-center justify-center mb-4 group-hover:scale-105 transition-transform shrink-0`}
                   >
                     <Icon className="w-6 h-6" />
                   </div>
                   <h2 className="m3-label-large text-base font-semibold mb-1">{card.title}</h2>
-                  <p className="m3-label-medium">{card.desc}</p>
+                  <p className="m3-label-medium flex-1">{card.desc}</p>
                 </Link>
               </motion.div>
             );

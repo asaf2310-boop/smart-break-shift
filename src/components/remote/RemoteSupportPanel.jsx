@@ -12,7 +12,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -29,13 +28,13 @@ import {
   buildConsentUrl,
   buildRustDeskDeepLink,
   buildRustDeskMailtoUrl,
-  CONSENT_TEXT_DEFAULT,
   createSession,
   endSession,
   formatConnectionDetails,
-  logConsent,
+  getSession,
   remoteSupportFeaturesAvailable,
   sendRustDeskDownloadEmail,
+  subscribeRemoteSupport,
 } from "@/lib/remoteSupportStore";
 
 const PANEL_DEMO_BANNER =
@@ -43,6 +42,11 @@ const PANEL_DEMO_BANNER =
 
 const RUSTDESK_DEMO_BANNER =
   "לפרודקשן: שרת RustDesk עצמי (hbbs/hbbr) + מדיניות אבטחה; אל תשמרו סיסמאות ב-localStorage.";
+
+function isValidEmail(value) {
+  const trimmed = String(value || "").trim();
+  return trimmed.includes("@") && trimmed.length > 3;
+}
 
 function normalizeRustDeskId(value) {
   return String(value || "").replace(/\D/g, "").slice(0, 9);
@@ -60,13 +64,13 @@ export default function RemoteSupportPanel({
   const [open, setOpen] = useState(false);
   const [supportMode, setSupportMode] = useState("screen");
   const [step, setStep] = useState(1);
-  const [voiceConsent, setVoiceConsent] = useState(false);
   const [rustDeskId, setRustDeskId] = useState("");
   const [password, setPassword] = useState("");
   const [session, setSession] = useState(null);
   const [copied, setCopied] = useState(false);
   const [emailTo, setEmailTo] = useState("");
   const [sendingRustDeskEmail, setSendingRustDeskEmail] = useState(false);
+  const [startingRustDeskSession, setStartingRustDeskSession] = useState(false);
 
   const defaultCustomerEmail = useMemo(() => {
     if (customerEmailProp) return String(customerEmailProp).trim();
@@ -77,7 +81,6 @@ export default function RemoteSupportPanel({
   const resetWizard = useCallback(() => {
     setSupportMode("screen");
     setStep(1);
-    setVoiceConsent(false);
     setRustDeskId("");
     setPassword("");
     setSession(null);
@@ -91,6 +94,16 @@ export default function RemoteSupportPanel({
   useEffect(() => {
     if (open) setEmailTo(defaultCustomerEmail);
   }, [open, defaultCustomerEmail]);
+
+  useEffect(() => {
+    if (!session?.id) return undefined;
+    const refresh = () => {
+      const latest = getSession(session.id);
+      if (latest) setSession(latest);
+    };
+    refresh();
+    return subscribeRemoteSupport(refresh);
+  }, [session?.id]);
 
   const consentUrl = useMemo(() => {
     if (!session?.id) return "";
@@ -128,19 +141,40 @@ export default function RemoteSupportPanel({
     }
   };
 
-  const handleNextFromConsent = () => {
-    if (!voiceConsent) {
-      toast({
-        title: "נדרש אישור",
-        description: "סמנו שהלקוח אישר בקול לפני המשך",
-        variant: "destructive",
+  const sendRustDeskLinkEmail = async (consentUrlForEmail, sessionIdForLog = null) => {
+    const result = await sendRustDeskDownloadEmail({
+      to: emailTo,
+      sessionId: sessionIdForLog,
+      crmCustomerId,
+      agentName,
+      customerName,
+      consentUrl: consentUrlForEmail,
+    });
+    const { log, simulated, message } = result;
+    if (crmCustomerId) {
+      createEmailLog({
+        customer_id: crmCustomerId,
+        to_email: log.to,
+        subject: log.subject,
+        body: log.body,
+        agent_name: agentName,
+        status: simulated ? "simulated" : "sent",
       });
-      return;
     }
-    setStep(2);
+    if (simulated) {
+      toast({
+        title: "סשן פעיל — נרשם בדמו",
+        description: message || "לא הוגדר Resend — השתמשו ב-mailto או פרסמו ב-Vercel",
+      });
+    } else {
+      toast({
+        title: "סשן התחיל והקישור נשלח",
+        description: `קישור RustDesk נשלח ל-${log.to}`,
+      });
+    }
   };
 
-  const handleStartSession = () => {
+  const handleStartSessionAndSend = async () => {
     const normalizedId = normalizeRustDeskId(rustDeskId);
     if (normalizedId.length !== 9) {
       toast({
@@ -150,41 +184,56 @@ export default function RemoteSupportPanel({
       });
       return;
     }
-    const created = createSession({
-      crmCustomerId,
-      agentName,
-      rustDeskId: normalizedId,
-      password,
-    });
-    logConsent(created.id, { consentText: CONSENT_TEXT_DEFAULT, source: "agent" });
-    setSession(created);
-    setRustDeskId(normalizedId);
-    setStep(3);
-
-    if (crmCustomerId) {
-      createCallLog({
-        customer_id: crmCustomerId,
-        call_type: "chat",
-        summary: `תמיכה מרחוק (RustDesk) — מזהה ${normalizedId}. אישור נציג בקול. סשן: ${created.id}`,
-        agent_name: agentName,
-        duration_minutes: null,
-        referral_topic: null,
+    if (!isValidEmail(emailTo)) {
+      toast({
+        title: "מייל לא תקין",
+        description: "הזינו כתובת מייל תקינה של הלקוח",
+        variant: "destructive",
       });
+      return;
     }
 
-    toast({
-      title: "סשן נרשם",
-      description: customerName
-        ? `תיעוד נשמר עבור ${customerName}`
-        : "פרטי החיבור מוכנים",
-    });
+    setStartingRustDeskSession(true);
+    try {
+      const created = createSession({
+        crmCustomerId,
+        agentName,
+        rustDeskId: normalizedId,
+        password,
+      });
+      setSession(created);
+      setRustDeskId(normalizedId);
+
+      if (crmCustomerId) {
+        createCallLog({
+          customer_id: crmCustomerId,
+          call_type: "chat",
+          summary: `תמיכה מרחוק (RustDesk) — מזהה ${normalizedId}. ממתין לאישור לקוח בקישור. סשן: ${created.id}`,
+          agent_name: agentName,
+          duration_minutes: null,
+          referral_topic: null,
+        });
+      }
+
+      const consentUrlForEmail = buildConsentUrl(created.id);
+      await sendRustDeskLinkEmail(consentUrlForEmail, created.id);
+      setStep(3);
+    } catch (err) {
+      toast({
+        title: "לא הצליח",
+        description: err.message || "בדקו מייל, מזהה RustDesk והרשת",
+        variant: "destructive",
+      });
+    } finally {
+      setStartingRustDeskSession(false);
+    }
   };
 
   const handleCopyDetails = async () => {
     const details = formatConnectionDetails({
       rustDeskId: normalizeRustDeskId(rustDeskId),
       password,
-      consentAt: session?.consentAt || new Date().toISOString(),
+      consentAt: session?.consentAt,
     });
     const extra = consentUrl ? `\nקישור אישור ללקוח: ${consentUrl}` : "";
     try {
@@ -286,29 +335,31 @@ export default function RemoteSupportPanel({
     }
   };
 
-  const showEmailBlock = step === 1 ? voiceConsent : step >= 2;
+  const renderEmailInput = () => (
+    <div className="space-y-1.5">
+      <Label htmlFor="rs-email">מייל לקוח</Label>
+      <Input
+        id="rs-email"
+        type="email"
+        inputMode="email"
+        autoComplete="email"
+        placeholder="customer@example.com"
+        value={emailTo}
+        onChange={(e) => setEmailTo(e.target.value)}
+        className="text-left font-mono text-sm"
+        dir="ltr"
+      />
+    </div>
+  );
 
-  const renderEmailBlock = () => (
+  const renderDownloadEmailBlock = () => (
     <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
-      <div className="space-y-1.5">
-        <Label htmlFor="rs-email">מייל לקוח</Label>
-        <Input
-          id="rs-email"
-          type="email"
-          inputMode="email"
-          autoComplete="email"
-          placeholder="customer@example.com"
-          value={emailTo}
-          onChange={(e) => setEmailTo(e.target.value)}
-          className="text-left font-mono text-sm"
-          dir="ltr"
-        />
-      </div>
+      {renderEmailInput()}
       <Button
         type="button"
         variant="outline"
         onClick={handleSendRustDeskEmail}
-        disabled={!emailTo.trim().includes("@") || sendingRustDeskEmail}
+        disabled={!isValidEmail(emailTo) || sendingRustDeskEmail}
         className="w-full gap-2 border-indigo-200 text-indigo-800 hover:bg-indigo-50"
       >
         <Mail className="w-4 h-4" />
@@ -322,13 +373,19 @@ export default function RemoteSupportPanel({
           פתח בלקוח דוא״ל (mailto)
         </a>
       )}
-      {emailConsentUrl && (
-        <p className="text-[11px] text-slate-500 leading-relaxed">
-          המייל יכלול גם קישור אישור: {emailConsentUrl}
-        </p>
-      )}
     </div>
   );
+
+  const renderSessionMailtoSecondary = () =>
+    mailtoHref ? (
+      <a
+        href={mailtoHref}
+        className="flex items-center justify-center gap-2 w-full rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm text-indigo-800 hover:bg-indigo-100"
+      >
+        <Mail className="w-4 h-4" />
+        פתח בלקוח דוא״ל (mailto)
+      </a>
+    ) : null;
 
   return (
     <>
@@ -438,22 +495,15 @@ export default function RemoteSupportPanel({
                   >
                     RustDesk
                   </a>
-                  , לשתף מזהה (9 ספרות) וסיסמה חד-פעמית, ולאשר גישה מרחוק לטיפול בתקלה בלבד.
+                  , לשתף מזהה (9 ספרות) וסיסמה חד-פעמית, ולאשר גישה מרחוק בקישור האישור שנשלח במייל.
                 </p>
-                <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-indigo-200 bg-indigo-50/40 p-3">
-                  <Checkbox
-                    checked={voiceConsent}
-                    onCheckedChange={(v) => setVoiceConsent(Boolean(v))}
-                    className="mt-0.5"
-                  />
-                  <span className="font-medium text-slate-800">הלקוח אישר בקול</span>
-                </label>
-                {showEmailBlock && renderEmailBlock()}
+                {renderDownloadEmailBlock()}
               </div>
             )}
 
             {step === 2 && (
-              <div className="space-y-3">
+              <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3">
+                {renderEmailInput()}
                 <div className="space-y-1.5">
                   <Label htmlFor="rs-id">מזהה RustDesk (9 ספרות)</Label>
                   <Input
@@ -483,7 +533,6 @@ export default function RemoteSupportPanel({
                     בדמו נשמרת ב-localStorage — בפרודקשן להימנע משמירה ארוכת טווח.
                   </p>
                 </div>
-                {showEmailBlock && renderEmailBlock()}
               </div>
             )}
 
@@ -503,13 +552,19 @@ export default function RemoteSupportPanel({
                   אם הקישור <code className="text-[11px]">rustdesk://</code> לא נפתח — פתחו את אפליקציית
                   RustDesk → «חיבור» → הדביקו מזהה וסיסמה.
                 </p>
-                {showEmailBlock && renderEmailBlock()}
+                {renderSessionMailtoSecondary()}
+                {!session.consentAt && (
+                  <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed">
+                    ממתין לאישור הלקוח בקישור — שלחו קישור אישור במייל; האישור נרשם בדף{" "}
+                    <code className="text-[11px]">/support/consent/…</code>
+                  </p>
+                )}
               </div>
             )}
 
             <DialogFooter className="flex-col sm:flex-col gap-2 pt-2">
               {step === 1 && (
-                <Button type="button" onClick={handleNextFromConsent} className="w-full">
+                <Button type="button" onClick={() => setStep(2)} className="w-full">
                   המשך
                 </Button>
               )}
@@ -525,11 +580,14 @@ export default function RemoteSupportPanel({
                   </Button>
                   <Button
                     type="button"
-                    onClick={handleStartSession}
-                    disabled={!idValid}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700"
+                    onClick={handleStartSessionAndSend}
+                    disabled={!idValid || !isValidEmail(emailTo) || startingRustDeskSession}
+                    className="w-full gap-2 bg-indigo-600 hover:bg-indigo-700"
                   >
-                    התחל סשן ותעד
+                    <Mail className="w-4 h-4" />
+                    {startingRustDeskSession
+                      ? "מפעיל סשן ושולח..."
+                      : "התחל סשן ושלח קישור במייל"}
                   </Button>
                 </>
               )}

@@ -221,4 +221,10 @@
   .shadow-elevation-3 {
     box-shadow: var(--elevation-3);
   }
+
+  /** Latin brand wordmark — keeps letter order on RTL pages */
+  .dir-ltr {
+    direction: ltr;
+    unicode-bidi: isolate;
+  }
 }

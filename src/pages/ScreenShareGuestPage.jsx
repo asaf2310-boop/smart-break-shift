@@ -183,8 +183,8 @@ export default function ScreenShareGuestPage() {
             <>
               <ol className="text-sm text-slate-700 space-y-2 list-decimal list-inside bg-slate-50 rounded-xl p-3 border border-slate-100 leading-relaxed">
                 <li>השתמשו ב-Chrome או Edge (מומלץ)</li>
-                <li>סמנו אישור למטה</li>
-                <li>לחצו «אני מאשר ומשתף מסך»</li>
+                <li>סמנו «אני מאשר שיתוף מסך»</li>
+                <li>לחצו «התחל שיתוף מסך»</li>
                 <li>בחרו מסך, חלון או לשונית לשיתוף</li>
               </ol>
 
@@ -201,8 +201,8 @@ export default function ScreenShareGuestPage() {
                   className="mt-0.5"
                 />
                 <span className="text-sm font-medium text-slate-800 leading-relaxed">
-                  אני מאשר/ת שנציג התמיכה יצפה במסך שלי בדפדפן לצורך טיפול בתקלה — ללא
-                  שליטה בעכבר או במקלדת
+                  אני מאשר שיתוף מסך — נציג התמיכה יצפה במסך שלי בדפדפן לצורך טיפול בתקלה
+                  בלבד, ללא שליטה בעכבר או במקלדת
                 </span>
               </label>
 
@@ -218,7 +218,7 @@ export default function ScreenShareGuestPage() {
                 disabled={!consentChecked || sharing}
                 className="w-full h-12 text-base bg-gradient-to-l from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700"
               >
-                {sharing ? "מתחבר לנציג…" : "אני מאשר ומשתף מסך"}
+                {sharing ? "מתחבר לנציג…" : "התחל שיתוף מסך"}
               </Button>
             </>
           )}

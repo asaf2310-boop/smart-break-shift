@@ -2,11 +2,15 @@ import React, { useEffect, useRef, useState } from "react";
 import Peer from "peerjs";
 import { Loader2, Monitor, Wifi, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { endSession } from "@/lib/screenShareStore";
+import {
+  endSession,
+  getSession,
+  subscribeScreenShare,
+} from "@/lib/screenShareStore";
 
-const STATUS_LABELS = {
+const PEER_STATUS_LABELS = {
   idle: "ממתין לפתיחת חיבור",
-  waiting: "ממתין ללקוח",
+  waiting: "ממתין לשיתוף מסך",
   connected: "מחובר — צפייה במסך",
   ended: "הסתיים",
   error: "שגיאת חיבור",
@@ -27,6 +31,24 @@ export default function ScreenShareAgentView({
   const callRef = useRef(null);
   const [status, setStatus] = useState("idle");
   const [errorDetail, setErrorDetail] = useState("");
+  const [sessionRecord, setSessionRecord] = useState(() =>
+    sessionId ? getSession(sessionId) : null
+  );
+
+  useEffect(() => {
+    if (!sessionId) return undefined;
+    const refresh = () => setSessionRecord(getSession(sessionId));
+    refresh();
+    return subscribeScreenShare(refresh);
+  }, [sessionId]);
+
+  const displayStatusLabel = (() => {
+    if (status === "connected") return PEER_STATUS_LABELS.connected;
+    if (status === "ended") return PEER_STATUS_LABELS.ended;
+    if (status === "error") return PEER_STATUS_LABELS.error;
+    if (!sessionRecord?.consentAt) return "ממתין לאישור הלקוח בקישור";
+    return PEER_STATUS_LABELS[status] || status;
+  })();
 
   useEffect(() => {
     if (!sessionId) return undefined;
@@ -118,9 +140,7 @@ export default function ScreenShareAgentView({
       <div className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
         <div className="flex items-center gap-2">
           {statusIcon}
-          <span className="font-medium text-slate-800">
-            {STATUS_LABELS[status] || status}
-          </span>
+          <span className="font-medium text-slate-800">{displayStatusLabel}</span>
         </div>
         <span className="text-[11px] text-slate-500 font-mono" dir="ltr">
           {sessionId?.slice(0, 12)}…
@@ -138,7 +158,9 @@ export default function ScreenShareAgentView({
           <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-2 z-10">
             <Monitor className="w-10 h-10 opacity-50" />
             <p className="text-xs text-center px-4">
-              השאירו דף זה פתוח — הווידאו יופיע כשהלקוח ישתף מסך
+              {!sessionRecord?.consentAt
+                ? "ממתין שהלקוח יאשר בקישור וישתף מסך"
+                : "השאירו דף זה פתוח — הווידאו יופיע כשהלקוח ישתף מסך"}
             </p>
           </div>
         )}

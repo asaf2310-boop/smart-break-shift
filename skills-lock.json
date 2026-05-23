@@ -1,6 +1,54 @@
 {
   "version": 1,
   "skills": {
+    "call-center-hebrew": {
+      "source": "smart-break-shift",
+      "sourceType": "project",
+      "skillPath": ".cursor/skills/call-center-hebrew/SKILL.md",
+      "computedHash": "01771d9c1961e882feaed15a6b2bcc3a7e815198fc0f9ae90fa0ab7eaae1d0ba"
+    },
+    "smart-break-shift-demo": {
+      "source": "smart-break-shift",
+      "sourceType": "project",
+      "skillPath": ".cursor/skills/smart-break-shift-demo/SKILL.md",
+      "computedHash": "1b07374310785142581530f0584a9a77f48ee335a06222bb79dd78e3eb35c98e"
+    },
+    "smart-break-shift-ux": {
+      "source": "smart-break-shift",
+      "sourceType": "project",
+      "skillPath": ".cursor/skills/smart-break-shift-ux/SKILL.md",
+      "computedHash": "81b8097a6a82c0622fac2f59009ea2204ba6b0943e50a579fc8ced97bc4ed013"
+    },
+    "hebrew-rtl-best-practices": {
+      "source": "skills-il/localization",
+      "sourceType": "github",
+      "skillPath": "hebrew-rtl-best-practices/SKILL.md",
+      "computedHash": "8309cc064052744ce144a918d3525269d1f9aadfd41af2edcb8a6b1233354157"
+    },
+    "hebrew-i18n": {
+      "source": "skills-il/localization",
+      "sourceType": "github",
+      "skillPath": "hebrew-i18n/SKILL.md",
+      "computedHash": "6b4a6d6d63211e15cd27d1545a728650bc47a6b6fbba344c5adddf88e8b256d4"
+    },
+    "israeli-ui-design-system": {
+      "source": "skills-il/localization",
+      "sourceType": "github",
+      "skillPath": "israeli-ui-design-system/SKILL.md",
+      "computedHash": "72fd4f55f9d8ed1d8de5645f126035c9726bc1f819d774b12f1f640361832f67"
+    },
+    "israeli-accessibility-compliance": {
+      "source": "skills-il/localization",
+      "sourceType": "github",
+      "skillPath": "israeli-accessibility-compliance/SKILL.md",
+      "computedHash": "9c1c57e689fd73d5a4c6418ff49ea35d3399b58b7015f2abdc4020b523ad3a13"
+    },
+    "hebrew-content-writer": {
+      "source": "skills-il/localization",
+      "sourceType": "github",
+      "skillPath": "hebrew-content-writer/SKILL.md",
+      "computedHash": "c1082a750de1afc7ea7b779480bfec3095f5060fc79ad1f931a1691481ca911b"
+    },
     "deploy-to-vercel": {
       "source": "vercel-labs/agent-skills",
       "sourceType": "github",

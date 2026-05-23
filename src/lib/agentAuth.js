@@ -9,6 +9,7 @@ import {
   requestDemoPasswordReset,
 } from "@/lib/appUsersStore";
 import { clearAdminSession } from "@/hooks/useIsAdmin";
+import { getAgentNamesList } from "@/constants/scheduling";
 
 export const AGENT_SESSION_KEY = "smart-break-agent-session-v1";
 export const INVALID_CREDENTIALS_MSG = "אימייל או סיסמה שגויים";
@@ -106,8 +107,10 @@ async function resolveSupabaseAgentByEmail(email) {
   return mapSupabaseAgent(match);
 }
 
-/** מחזיר רשומה לפי אימייל (כולל חסום/מחוק) */
+/** מחזיר רשומה לפי אימייל (כולל חסום/מחוק) — דמו בלבד */
 export async function resolveAgentByEmail(email) {
+  if (!demoModeEnabled) return null;
+
   const normalized = String(email || "").trim().toLowerCase();
   if (!normalized) return null;
 
@@ -126,7 +129,23 @@ function credentialsError() {
   return { ok: false, error: "invalid_credentials", message: INVALID_CREDENTIALS_MSG };
 }
 
+/** כניסת נציג בפרודקשן — בחירת שם בלבד (ללא אימייל) */
+export function agentLoginByDisplayName(displayName) {
+  const name = String(displayName || "").trim();
+  const allowed = getAgentNamesList();
+  if (!name || !allowed.includes(name)) {
+    return { ok: false, message: "יש לבחור שם מהרשימה" };
+  }
+  const session = { displayName: name };
+  setAgentSession(session);
+  return { ok: true, session };
+}
+
 export async function agentLoginWithPassword(email, password) {
+  if (!demoModeEnabled) {
+    return credentialsError();
+  }
+
   const agent = await resolveAgentByEmail(email);
   if (!canAgentAuthenticate(agent)) {
     return credentialsError();
@@ -168,6 +187,10 @@ export async function agentLoginWithPassword(email, password) {
 }
 
 export async function agentSetupPassword(email, password) {
+  if (!demoModeEnabled) {
+    return credentialsError();
+  }
+
   const agent = await resolveAgentByEmail(email);
   if (!canAgentAuthenticate(agent)) {
     return credentialsError();
@@ -232,6 +255,10 @@ export async function agentSetupPassword(email, password) {
 }
 
 export async function agentRequestPasswordReset(email) {
+  if (!demoModeEnabled) {
+    return { ok: false, message: "איפוס סיסמה זמין רק בסביבת דמו" };
+  }
+
   const agent = await resolveAgentByEmail(email);
   if (!canAgentAuthenticate(agent)) {
     return { ok: false, message: "אם האימייל ברשימה, נשלח קישור לאיפוס. בדוק את תיבת הדואר." };

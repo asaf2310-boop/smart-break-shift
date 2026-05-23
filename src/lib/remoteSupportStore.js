@@ -8,8 +8,8 @@ export const RUSTDESK_DOWNLOAD_URL = "https://rustdesk.com/download";
 const EMAIL_SUBJECT_RUSTDESK =
   "קישור להורדת RustDesk — תמיכה מרחוק (באישורך בלבד)";
 
-const CONSENT_TEXT_DEFAULT =
-  "הלקוח אישר בקול רם כי נציג התמיכה יקבל גישה מרחוק למחשבו באמצעות RustDesk לצורך טיפול בתקלה.";
+export const CONSENT_TEXT_DEFAULT =
+  "אני מאשר/ת שנציג התמיכה יקבל גישה מרחוק למחשב שלי באמצעות RustDesk לצורך טיפול בתקלה בלבד.";
 
 function makeId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
@@ -159,7 +159,7 @@ export function buildRustDeskEmailBody({
     ? `נציג התמיכה (${agentName}) יבקש גישה מרחוק למחשבך — רק לאחר אישורך המפורש — לצורך טיפול בתקלה.`
     : "נציג התמיכה יבקש גישה מרחוק למחשבך — רק לאחר אישורך המפורש — לצורך טיפול בתקלה.";
   const consentBlock = consentUrl
-    ? `\nלאישור מפורש (אופציונלי):\n${consentUrl}\n`
+    ? `\nלאישור מפורש לפני חיבור:\n${consentUrl}\n`
     : "";
   return `${greeting}
 
@@ -190,7 +190,7 @@ export function buildRustDeskEmailHtml({
     : "נציג התמיכה יבקש גישה מרחוק למחשבך — רק לאחר אישורך המפורש — לצורך טיפול בתקלה.";
   const downloadUrl = escapeHtml(RUSTDESK_DOWNLOAD_URL);
   const consentBlock = consentUrl
-    ? `<p style="margin:16px 0 0;">לאישור מפורש (אופציונלי):<br><a href="${escapeHtml(consentUrl)}" style="color:#4f46e5;word-break:break-all;">${escapeHtml(consentUrl)}</a></p>`
+    ? `<p style="margin:16px 0 0;">לאישור מפורש לפני חיבור:<br><a href="${escapeHtml(consentUrl)}" style="color:#4f46e5;word-break:break-all;">${escapeHtml(consentUrl)}</a></p>`
     : "";
   return `<!DOCTYPE html>
 <html lang="he" dir="rtl">
@@ -361,5 +361,3 @@ export function subscribeRemoteSupport(callback) {
   window.addEventListener(REMOTE_SUPPORT_CHANGE_EVENT, handler);
   return () => window.removeEventListener(REMOTE_SUPPORT_CHANGE_EVENT, handler);
 }
-
-export { CONSENT_TEXT_DEFAULT };

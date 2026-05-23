@@ -72,7 +72,7 @@ export default function RemoteSupportPage() {
 
         <div className="mb-4">
           <EmailStatusBanner />
-        </motion.div>
+        </div>
 
         <motion.div
           initial={{ opacity: 0, y: 8 }}
@@ -104,7 +104,7 @@ export default function RemoteSupportPage() {
           <ol className="m3-label-medium space-y-2 list-decimal list-inside text-on-surface-variant leading-relaxed">
             <li>בכרטיס לקוח ב-CRM — «תמיכה מרחוק», או מהכפתור למטה.</li>
             <li>בחרו שלב א (דפדפן) או RustDesk לפי צורך הטיפול.</li>
-            <li>אשרו בקול, שלחו מייל (דמו) או העתיקו קישור / פרטי חיבור.</li>
+            <li>שלחו מייל (דמו) או העתיקו קישור — הלקוח מאשר בדף הקישור.</li>
             <li>סיימו את הסשן בסיום הטיפול.</li>
           </ol>
           <Link

@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { ShieldCheck, Lock } from "lucide-react";
 import { isAdminPinConfigured, useIsAdmin, unlockAdminSession } from "@/hooks/useIsAdmin";
-
 export default function AdminGate({ children }) {
   const isAdmin = useIsAdmin();
   const pinRequired = isAdminPinConfigured();
@@ -13,7 +12,7 @@ export default function AdminGate({ children }) {
 
   if (!pinRequired) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50 flex items-center justify-center px-4" dir="rtl">
+      <div className="relative min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50 flex items-center justify-center px-4" dir="rtl">
         <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-slate-200 p-8 text-center">
           <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-amber-100 flex items-center justify-center">
             <ShieldCheck className="w-7 h-7 text-amber-700" />
@@ -47,7 +46,7 @@ export default function AdminGate({ children }) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50 flex items-center justify-center px-4" dir="rtl">
+    <div className="relative min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50 flex items-center justify-center px-4" dir="rtl">
       <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl border border-slate-200 p-8">
         <div className="flex flex-col items-center gap-4 mb-6">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">

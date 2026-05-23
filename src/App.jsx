@@ -33,12 +33,12 @@ import AdminLocalhostLinksFloating from '@/components/admin/AdminLocalhostLinksF
 import RemoteSupportConsentPage from './pages/RemoteSupportConsentPage';
 import RemoteSupportPage from './pages/RemoteSupportPage';
 import ScreenShareGuestPage from './pages/ScreenShareGuestPage';
-
-const TOP_NAV_PATHS = new Set(['/breaks', '/shifts', '/knowledge', '/remote-support']);
+import BrandHeader from '@/components/brand/BrandHeader';
+import { hasTopAppNav } from '@/lib/appNavPaths';
 
 function TopAppNav() {
   const { pathname } = useLocation();
-  if (!TOP_NAV_PATHS.has(pathname)) return null;
+  if (!hasTopAppNav(pathname)) return null;
   return <AppNav />;
 }
 
@@ -65,6 +65,7 @@ const AuthenticatedApp = () => {
 
   return (
     <>
+      <BrandHeader />
       <TopAppNav />
       <Routes>
         <Route path="/" element={<Home />} />

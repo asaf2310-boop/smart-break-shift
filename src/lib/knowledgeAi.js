@@ -53,29 +53,67 @@ function normalizeText(text) {
     .trim();
 }
 
-/** Fix OCR/PDF spacing: collapse whitespace and rejoin broken Hebrew letter runs. */
+const HEBREW_CHAR = /[\u0590-\u05FF]/u;
+
+/** Fix OCR/PDF spacing: rejoin broken letters inside words; keep real word gaps. */
 export function normalizeHebrewText(text) {
   let s = normalizeText(text);
   if (!s) return "";
 
   s = s.replace(/\s+([,.;:!?…])/g, "$1");
+  s = s.replace(/([,.;:!?…])(?=[\u0590-\u05FF])/g, "$1 ");
+
+  s = s.replace(/(?:[\u0590-\u05FF](?:\s+[\u0590-\u05FF]){2,})/gu, (run) => {
+    const parts = run.split(/\s+/).filter(Boolean);
+    if (parts.length >= 3 && parts.every((p) => p.length === 1)) {
+      return parts.join("");
+    }
+    return run;
+  });
 
   let prev;
   do {
     prev = s;
+    // "מ דיניות" — orphaned letter before a longer Hebrew word
+    s = s.replace(/([\u0590-\u05FF])\s+(?=[\u0590-\u05FF]{3,})/gu, "$1");
+    // "מדיניותהחזרות" — missing space between two Hebrew words (4+ chars each)
     s = s.replace(
-      /(^|[^\u0590-\u05FF])([\u0590-\u05FF]{1,2})\s+(?=[\u0590-\u05FF])/gu,
-      "$1$2",
+      /([\u0590-\u05FF]{4,})([\u0590-\u05FF]{4,})/gu,
+      (m, a, b) => (HEBREW_CHAR.test(a) && HEBREW_CHAR.test(b) ? `${a} ${b}` : m),
     );
-    s = s.replace(/([\u0590-\u05FF]{1,2})\s+(?=[\u0590-\u05FF]{2,})/gu, "$1");
   } while (s !== prev);
 
   return s.replace(/\s+/g, " ").trim();
 }
 
+function ensureSentenceTerminal(sentence) {
+  const s = String(sentence || "").trim();
+  if (!s) return "";
+  return /[.!?…]$/.test(s) ? s : `${s}.`;
+}
+
+/** Join full sentences with a visible gap; never glue fragments. */
+export function joinSentences(sentences) {
+  const parts = (Array.isArray(sentences) ? sentences : [])
+    .map((s) => normalizeHebrewText(s))
+    .filter((s) => s.length > 0)
+    .map(ensureSentenceTerminal);
+  return normalizeHebrewText(parts.join(" "));
+}
+
+function isLikelyFullSentence(sentence) {
+  const s = normalizeHebrewText(sentence);
+  if (s.length < 12) return false;
+  const words = s.split(/\s+/).filter(Boolean);
+  if (words.length < 2) return s.length >= 24;
+  const shortWords = words.filter((w) => w.length <= 2).length;
+  if (words.length >= 3 && shortWords / words.length > 0.45) return false;
+  return true;
+}
+
 /** Split document body into overlapping chunks for RAG-lite retrieval. */
 export function chunkDocument(document) {
-  const text = normalizeText(document.content);
+  const text = normalizeHebrewText(document.content);
   if (!text) return [];
 
   const chunks = [];
@@ -183,9 +221,9 @@ function uniqueCitations(chunks) {
 function splitSentences(text) {
   const normalized = normalizeHebrewText(text);
   return normalized
-    .split(/(?<=[.!?…])\s+|[\n\r]+/)
+    .split(/(?<=[.!?…])\s+|[\n\r]+|(?<=[\u0590-\u05FF])\s*[-–—]\s*/)
     .map((s) => normalizeHebrewText(s))
-    .filter((s) => s.length > 8);
+    .filter(isLikelyFullSentence);
 }
 
 function sentenceMatchesTokens(sentence, tokens) {
@@ -213,7 +251,9 @@ function synthesizeTemplateSentences(query, chunks) {
   const seen = new Set();
 
   for (const chunk of chunks) {
-    const candidates = splitSentences(chunk.text).filter((s) => sentenceMatchesTokens(s, tokens));
+    const candidates = splitSentences(chunk.text).filter(
+      (s) => isLikelyFullSentence(s) && sentenceMatchesTokens(s, tokens),
+    );
     for (const sentence of candidates) {
       const key = sentence.toLowerCase();
       if (seen.has(key)) continue;
@@ -222,14 +262,15 @@ function synthesizeTemplateSentences(query, chunks) {
     }
   }
 
-  ranked.sort((a, b) => b.hits - a.hits || a.sentence.length - b.sentence.length);
+  ranked.sort((a, b) => b.hits - a.hits || b.sentence.length - a.sentence.length);
 
   if (ranked.length) {
     return ranked.slice(0, MAX_TEMPLATE_SENTENCES).map((r) => r.sentence);
   }
 
-  const fallback = splitSentences(chunks[0]?.text || "").slice(0, MAX_TEMPLATE_SENTENCES);
-  return fallback;
+  return splitSentences(chunks[0]?.text || "")
+    .filter(isLikelyFullSentence)
+    .slice(0, MAX_TEMPLATE_SENTENCES);
 }
 
 function buildTemplateAnswerHebrew(query, chunks) {
@@ -251,12 +292,13 @@ function buildTemplateAnswerHebrew(query, chunks) {
   }
 
   const citations = uniqueCitations(chunks);
-  const body = normalizeHebrewText(sentences.slice(0, MAX_TEMPLATE_SENTENCES).join(" "));
+  const body = joinSentences(sentences.slice(0, MAX_TEMPLATE_SENTENCES));
   const footer =
     "\n\n(סיכום אוטומטי מקטעים רלוונטיים בלבד · מצב דמו. להפעלת GPT, הגדר VITE_OPENAI_API_KEY.)";
 
+  const intro = "לפי המידע בבסיס הידע:";
   return {
-    answer: normalizeHebrewText(body) + footer,
+    answer: `${intro} ${body}${footer}`,
     citations,
     mode: "template",
   };
@@ -289,12 +331,13 @@ async function callOpenAi(query, chunks) {
   const contextBlocks = buildContextBlocks(chunks);
   const context = contextBlocks.join("\n\n");
 
-  const system = `אתה עוזר ידע לנציגי שירות. ענה בעברית בלבד.
+  const system = `אתה עוזר ידע לנציגי שירות. ענה בעברית בלבד, במשפטים מלאים וברורים.
 כללים:
-- תשובה קצרה וישירה בעברית, 2–4 משפטים לכל היותר, בלי להעתיק פסקאות שלמות.
-- המשפט הראשון: תשובה ישירה לשאלה (כן/לא או העובדה המרכזית).
-- ענה רק על השאלה — בלי רשימות, בלי bullets, בלי לסכם את כל המסמך.
-- השתמש אך ורק במידע שמופיע בקטעי ההקשר — אל תוסיף ידע חיצוני.
+- 2–4 משפטים שלמים בלבד; כל משפט מסתיים בנקודה. רווח בין מילים — לעולם אל תדביק מילים עבריות.
+- משפט ראשון: תשובה ישירה לשאלה (כן/לא, מספר, או העובדה המרכזית).
+- אל תעתיק טקסט גולמי מ-OCR; תקן רווחים שבורים בתוך מילים ושמור רווח בין מילים נפרדות.
+- בלי רשימות, בלי bullets, בלי ציטוטים ארוכים — ניסוח מחדש קצר וברור.
+- רק מידע מקטעי ההקשר; בלי ידע חיצוני.
 - אם אין תשובה בקטעים, ענה במדויק: "לא נמצא מידע רלוונטי בבסיס הידע."
 - בסוף ציין [1], [2] רק למקורות שבאמת השתמשת בהם.`;
 
@@ -324,7 +367,12 @@ async function callOpenAi(query, chunks) {
 
   const data = await res.json();
   const raw = data.choices?.[0]?.message?.content?.trim() || "לא התקבלה תשובה מהמודל.";
-  const answer = normalizeHebrewText(raw);
+  const answer = joinSentences(
+    raw
+      .split(/(?<=[.!?…])\s+/)
+      .map((s) => normalizeHebrewText(s))
+      .filter(isLikelyFullSentence),
+  ) || normalizeHebrewText(raw);
 
   return {
     answer,
