@@ -65,6 +65,7 @@ export default function RemoteSupportPanel({
   const [session, setSession] = useState(null);
   const [copied, setCopied] = useState(false);
   const [emailTo, setEmailTo] = useState("");
+  const [sendingRustDeskEmail, setSendingRustDeskEmail] = useState(false);
 
   const defaultCustomerEmail = useMemo(() => {
     if (customerEmailProp) return String(customerEmailProp).trim();
@@ -227,9 +228,10 @@ export default function RemoteSupportPanel({
     [emailTo, customerName, agentName, emailConsentUrl]
   );
 
-  const handleSendRustDeskEmail = () => {
+  const handleSendRustDeskEmail = async () => {
+    setSendingRustDeskEmail(true);
     try {
-      const log = sendRustDeskDownloadEmail({
+      const result = await sendRustDeskDownloadEmail({
         to: emailTo,
         sessionId: session?.id || null,
         crmCustomerId,
@@ -237,6 +239,7 @@ export default function RemoteSupportPanel({
         customerName,
         consentUrl: emailConsentUrl,
       });
+      const { log, simulated, message } = result;
       if (crmCustomerId) {
         createEmailLog({
           customer_id: crmCustomerId,
@@ -244,21 +247,41 @@ export default function RemoteSupportPanel({
           subject: log.subject,
           body: log.body,
           agent_name: agentName,
-          status: "simulated",
+          status: simulated ? "simulated" : "sent",
         });
       }
-      toast({
-        title: "נשלח (דמו)",
-        description: session?.id
-          ? "קישור הורדה ואישור נרשמו — ללא שליחה אמיתית"
-          : "קישור הורדה נרשם — ללא שליחה אמיתית",
-      });
+      if (simulated) {
+        toast({
+          title: "נרשם בדמו",
+          description: message || "לא הוגדר Resend — השתמשו ב-mailto או פרסמו ב-Vercel",
+        });
+      } else {
+        toast({
+          title: "נשלח למייל",
+          description: `קישור הורדת RustDesk נשלח ל-${log.to}`,
+        });
+      }
     } catch (err) {
       toast({
         title: "לא נשלח",
-        description: err.message || "בדקו את כתובת המייל",
+        description: (
+          <span>
+            {err.message || "בדקו את כתובת המייל"}
+            {mailtoHref ? (
+              <>
+                {" "}
+                — או{" "}
+                <a href={mailtoHref} className="underline font-medium">
+                  פתחו mailto
+                </a>
+              </>
+            ) : null}
+          </span>
+        ),
         variant: "destructive",
       });
+    } finally {
+      setSendingRustDeskEmail(false);
     }
   };
 
@@ -284,11 +307,11 @@ export default function RemoteSupportPanel({
         type="button"
         variant="outline"
         onClick={handleSendRustDeskEmail}
-        disabled={!emailTo.trim().includes("@")}
+        disabled={!emailTo.trim().includes("@") || sendingRustDeskEmail}
         className="w-full gap-2 border-indigo-200 text-indigo-800 hover:bg-indigo-50"
       >
         <Mail className="w-4 h-4" />
-        שלח במייל קישור להורדת RustDesk
+        {sendingRustDeskEmail ? "שולח..." : "שלח במייל קישור להורדת RustDesk"}
       </Button>
       {mailtoHref && (
         <a

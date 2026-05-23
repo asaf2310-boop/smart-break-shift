@@ -1,4 +1,5 @@
 import { demoModeEnabled } from "@/api/demoClient";
+import { escapeHtml, postSendEmail } from "@/lib/emailApi";
 
 export const REMOTE_SUPPORT_STORAGE_KEY = "smart-break-shift-remote-support-v1";
 export const REMOTE_SUPPORT_CHANGE_EVENT = "remote-support-changed";
@@ -176,6 +177,49 @@ ${consentBlock}
 צוות התמיכה`;
 }
 
+export function buildRustDeskEmailHtml({
+  customerName,
+  agentName,
+  consentUrl,
+} = {}) {
+  const greeting = customerName
+    ? `שלום ${escapeHtml(customerName)},`
+    : "שלום,";
+  const agentLine = agentName
+    ? `נציג התמיכה (<strong>${escapeHtml(agentName)}</strong>) יבקש גישה מרחוק למחשבך — רק לאחר אישורך המפורש — לצורך טיפול בתקלה.`
+    : "נציג התמיכה יבקש גישה מרחוק למחשבך — רק לאחר אישורך המפורש — לצורך טיפול בתקלה.";
+  const downloadUrl = escapeHtml(RUSTDESK_DOWNLOAD_URL);
+  const consentBlock = consentUrl
+    ? `<p style="margin:16px 0 0;">לאישור מפורש (אופציונלי):<br><a href="${escapeHtml(consentUrl)}" style="color:#4f46e5;word-break:break-all;">${escapeHtml(consentUrl)}</a></p>`
+    : "";
+  return `<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:24px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;">
+        <tr><td style="padding:24px 20px;color:#0f172a;font-size:15px;line-height:1.7;text-align:right;">
+          <p style="margin:0 0 16px;">${greeting}</p>
+          <p style="margin:0 0 16px;">${agentLine}</p>
+          <p style="margin:0 0 20px;text-align:center;">
+            <a href="${downloadUrl}" style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:bold;">הורדת RustDesk</a>
+          </p>
+          ${consentBlock}
+          <ol style="margin:20px 0;padding-right:20px;color:#334155;font-size:14px;">
+            <li>התקינו ופתחו את RustDesk</li>
+            <li>שתפו את מזהה המכשיר (9 ספרות) עם הנציג</li>
+            <li>הגדירו סיסמה חד-פעמית לפי הוראת הנציג</li>
+          </ol>
+          <p style="margin:0;color:#64748b;font-size:13px;">בברכה,<br>צוות התמיכה</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
 export function buildRustDeskMailtoUrl({ to, customerName, agentName, consentUrl }) {
   const email = String(to || "").trim();
   if (!email) return null;
@@ -197,8 +241,41 @@ export function listRemoteSupportEmailsForSession(sessionId) {
   return listRemoteSupportEmails().filter((e) => e.sessionId === sessionId);
 }
 
-/** דמו: רישום שליחת מייל עם קישור הורדה — ללא SMTP */
-export function sendRustDeskDownloadEmail({
+function appendRemoteEmailLog(log) {
+  const store = readStore();
+  writeStore({ emailLogs: [...store.emailLogs, log] });
+  return log;
+}
+
+function buildRustDeskLogBase({
+  toEmail,
+  subject,
+  body,
+  sessionId,
+  crmCustomerId,
+  agentName,
+  resolvedConsentUrl,
+  status,
+  resendId = null,
+}) {
+  return {
+    id: makeId("rs_email"),
+    to: toEmail,
+    subject,
+    body,
+    sessionId,
+    crmCustomerId,
+    agentName: String(agentName || "").trim(),
+    downloadUrl: RUSTDESK_DOWNLOAD_URL,
+    consentUrl: resolvedConsentUrl,
+    sentAt: new Date().toISOString(),
+    status,
+    resendId,
+  };
+}
+
+/** שליחת מייל הורדת RustDesk — Resend דרך /api/send-email (או סימולציה מקומית) */
+export async function sendRustDeskDownloadEmail({
   to,
   sessionId = null,
   crmCustomerId = null,
@@ -210,29 +287,56 @@ export function sendRustDeskDownloadEmail({
   if (!toEmail || !toEmail.includes("@")) {
     throw new Error("כתובת מייל לא תקינה");
   }
+  const resolvedConsentUrl =
+    consentUrl || (sessionId ? buildConsentUrl(sessionId) : null);
   const subject = EMAIL_SUBJECT_RUSTDESK;
   const body = buildRustDeskEmailBody({
     customerName,
     agentName,
-    consentUrl: consentUrl || (sessionId ? buildConsentUrl(sessionId) : null),
+    consentUrl: resolvedConsentUrl,
   });
-  const now = new Date().toISOString();
-  const log = {
-    id: makeId("rs_email"),
-    to: toEmail,
+  const html = buildRustDeskEmailHtml({
+    customerName,
+    agentName,
+    consentUrl: resolvedConsentUrl,
+  });
+
+  const apiResult = await postSendEmail({ to: toEmail, subject, html, text: body });
+
+  if (!apiResult.configured) {
+    const log = buildRustDeskLogBase({
+      toEmail,
+      subject,
+      body,
+      sessionId,
+      crmCustomerId,
+      agentName,
+      resolvedConsentUrl,
+      status: "simulated",
+    });
+    appendRemoteEmailLog(log);
+    return {
+      log,
+      simulated: true,
+      message:
+        apiResult.message ||
+        "שירות המייל לא מוגדר — נרשם בדמו בלבד. פרסמו ב-Vercel עם RESEND_API_KEY.",
+    };
+  }
+
+  const log = buildRustDeskLogBase({
+    toEmail,
     subject,
     body,
     sessionId,
     crmCustomerId,
-    agentName: String(agentName || "").trim(),
-    downloadUrl: RUSTDESK_DOWNLOAD_URL,
-    consentUrl: consentUrl || (sessionId ? buildConsentUrl(sessionId) : null),
-    sentAt: now,
-    status: "simulated",
-  };
-  const store = readStore();
-  writeStore({ emailLogs: [...store.emailLogs, log] });
-  return log;
+    agentName,
+    resolvedConsentUrl,
+    status: "sent",
+    resendId: apiResult.id,
+  });
+  appendRemoteEmailLog(log);
+  return { log, simulated: false };
 }
 
 export function buildRustDeskDeepLink(rustDeskId, password) {

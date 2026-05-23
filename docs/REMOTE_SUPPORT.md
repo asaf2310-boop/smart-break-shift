@@ -39,7 +39,7 @@
 
 1. «תמיכה מרחוק» → לשונית **שלב א — צפייה (דפדפן)**.
 2. אישור בקול → **התחל סשן צפייה** (חייב להישאר פתוח).
-3. שליחת מייל (דמו) / העתקת קישור ללקוח.
+3. שליחת מייל (Resend) / העתקת קישור ללקוח.
 4. צפייה בווידאו → **סיים סשן** בסיום.
 
 ### Signaling לפרודקשן
@@ -72,7 +72,47 @@
 ### מה הנציג עושה
 
 1. «תמיכה מרחוק» → לשונית **שליטה מלאה — RustDesk**.
-2. אשף: אישור בקול → מייל הורדה (דמו) → מזהה וסיסמה → פתיחת RustDesk.
+2. אשף: אישור בקול → מייל הורדה (Resend) → מזהה וסיסמה → פתיחת RustDesk.
+
+---
+
+## שליחת מייל אמיתית (Resend + Vercel)
+
+הדמו שולח מייל ללקוח עם קישור שיתוף מסך (ושלב ב' — קישור הורדת RustDesk) דרך **Resend**, עם מפתח API **רק בשרת** (לא `VITE_*`).
+
+### משתני סביבה (Vercel)
+
+| משתנה | דוגמה | הערות |
+|--------|--------|--------|
+| `RESEND_API_KEY` | `re_...` | מ-[resend.com](https://resend.com) |
+| `EMAIL_FROM` | `onboarding@resend.dev` | לבדיקות; בפרודקשן — כתובת מדומיין מאומת |
+
+לאחר הוספה: **Redeploy** לפרויקט.
+
+### API
+
+- `POST /api/send-email` — גוף JSON: `{ "to", "subject", "html", "text?" }`
+- CORS: same origin בלבד
+- אם המפתח לא מוגדר: `503` + `code: email_not_configured` — האפליקציה נופלת לסימולציה מקומית + הודעה
+
+### פיתוח מקומי
+
+| פקודה | שליחה אמיתית |
+|--------|----------------|
+| `npm run dev` | לא (אלא אם מריצים גם `npx vercel dev` — Vite מפנה `/api` לפורט 3000) |
+| `npx vercel dev` | כן — עם `.env.local` שמכיל `RESEND_API_KEY` ו-`EMAIL_FROM` |
+| פריסה ל-Vercel | כן |
+
+**חשוב:** אל תשימו `RESEND_API_KEY` ב-`VITE_*`. ראו `.env.example`.
+
+### קבצים
+
+| קובץ | תפקיד |
+|------|--------|
+| `api/send-email.js` | Handler ל-Vercel + Resend |
+| `src/lib/emailApi.js` | `fetch` מהדפדפן ל-API |
+| `src/lib/screenShareStore.js` | תבנית HTML RTL + `sendScreenShareEmail` |
+| `src/lib/remoteSupportStore.js` | מייל RustDesk (אופציונלי) |
 
 ---
 
@@ -88,8 +128,9 @@
 
 | קובץ | תפקיד |
 |------|--------|
-| `src/lib/screenShareStore.js` | סשני צפייה, מייל דמו, קישור אורח |
-| `src/lib/remoteSupportStore.js` | סשני RustDesk, אישור, מייל |
+| `src/lib/screenShareStore.js` | סשני צפייה, מייל (Resend), קישור אורח |
+| `src/lib/remoteSupportStore.js` | סשני RustDesk, אישור, מייל (Resend) |
+| `api/send-email.js` | שליחת מייל בשרת |
 | `src/components/remote/ScreenSharePanel.jsx` | אשף נציג — שלב א |
 | `src/components/remote/ScreenShareAgentView.jsx` | וידאו נציג (PeerJS host) |
 | `src/pages/ScreenShareGuestPage.jsx` | דף לקוח `/support/screen/:sessionId` |

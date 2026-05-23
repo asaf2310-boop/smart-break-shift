@@ -29,6 +29,7 @@ export default function ScreenSharePanel({
   const [emailTo, setEmailTo] = useState("");
   const [session, setSession] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   const defaultCustomerEmail = useMemo(() => {
     if (customerEmailProp) return String(customerEmailProp).trim();
@@ -107,7 +108,7 @@ export default function ScreenSharePanel({
     }
   };
 
-  const handleSendEmail = () => {
+  const handleSendEmail = async () => {
     if (!session?.id) {
       toast({
         title: "צרו סשן קודם",
@@ -116,8 +117,9 @@ export default function ScreenSharePanel({
       });
       return;
     }
+    setSendingEmail(true);
     try {
-      const log = sendScreenShareEmail({
+      const result = await sendScreenShareEmail({
         to: emailTo,
         sessionId: session.id,
         crmCustomerId,
@@ -125,6 +127,7 @@ export default function ScreenSharePanel({
         customerName,
         guestUrl,
       });
+      const { log, simulated, message } = result;
       if (crmCustomerId) {
         createEmailLog({
           customer_id: crmCustomerId,
@@ -132,19 +135,41 @@ export default function ScreenSharePanel({
           subject: log.subject,
           body: log.body,
           agent_name: agentName,
-          status: "simulated",
+          status: simulated ? "simulated" : "sent",
         });
       }
-      toast({
-        title: "נשלח (דמו)",
-        description: "קישור שיתוף מסך נרשם — ללא שליחה אמיתית",
-      });
+      if (simulated) {
+        toast({
+          title: "נרשם בדמו",
+          description: message || "לא הוגדר Resend — השתמשו ב-mailto או פרסמו ב-Vercel",
+        });
+      } else {
+        toast({
+          title: "נשלח למייל",
+          description: `קישור שיתוף מסך נשלח ל-${log.to}`,
+        });
+      }
     } catch (err) {
       toast({
         title: "לא נשלח",
-        description: err.message || "בדקו את כתובת המייל",
+        description: (
+          <span>
+            {err.message || "בדקו את כתובת המייל"}
+            {mailtoHref ? (
+              <>
+                {" "}
+                — או{" "}
+                <a href={mailtoHref} className="underline font-medium">
+                  פתחו mailto
+                </a>
+              </>
+            ) : null}
+          </span>
+        ),
         variant: "destructive",
       });
+    } finally {
+      setSendingEmail(false);
     }
   };
 
@@ -174,11 +199,11 @@ export default function ScreenSharePanel({
         type="button"
         variant="outline"
         onClick={handleSendEmail}
-        disabled={!emailTo.trim().includes("@") || !session?.id}
+        disabled={!emailTo.trim().includes("@") || !session?.id || sendingEmail}
         className="w-full gap-2 border-teal-200 text-teal-800 hover:bg-teal-50"
       >
         <Mail className="w-4 h-4" />
-        שלח במייל קישור שיתוף מסך
+        {sendingEmail ? "שולח..." : "שלח במייל קישור שיתוף מסך"}
       </Button>
       {mailtoHref && session?.id && (
         <a
