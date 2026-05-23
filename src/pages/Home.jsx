@@ -5,6 +5,7 @@ import { BookOpen, CalendarClock, CalendarDays, Contact, LogOut, Monitor, Users 
 import { getAgentNamesList } from "@/constants/scheduling";
 import AgentLogin from "@/components/auth/AgentLogin";
 import { demoModeEnabled } from "@/api/demoClient";
+import { isAdminPinConfigured } from "@/hooks/useIsAdmin";
 import { connectAgentAsAvailable } from "@/lib/agentChatPresence";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { agentLogout } from "@/lib/agentAuth";
@@ -34,7 +35,7 @@ const cards = [
   {
     to: "/remote-support",
     title: "השתלטות מרחוק",
-    desc: "RustDesk, אישור לקוח וסשנים",
+    desc: "שלב א: צפייה בדפדפן · RustDesk · סשנים",
     icon: Monitor,
     iconBg: "bg-violet-100 text-violet-900",
   },
@@ -47,9 +48,13 @@ const cards = [
   },
 ];
 
+const showAdminDemoHint =
+  (import.meta.env.DEV || demoModeEnabled) && isAdminPinConfigured();
+
 export default function Home() {
   const { displayName, isLoggedIn, bootstrapped, refresh } = useAgentSession();
   const agentCount = getAgentNamesList().length;
+  const adminPin = String(import.meta.env.VITE_ADMIN_PIN ?? "").trim();
 
   const handleLoginSuccess = (session) => {
     connectAgentAsAvailable(session.displayName).catch(() => {});
@@ -96,6 +101,14 @@ export default function Home() {
           </p>
           {demoModeEnabled && (
             <div className="m3-badge mt-3">סביבת דמו · נתונים פיקטיביים בלבד</div>
+          )}
+          {showAdminDemoHint && (
+            <Link
+              to="/admin"
+              className="mt-2 inline-block text-xs text-on-surface-variant hover:text-primary transition-colors"
+            >
+              כניסת מנהל: /admin (PIN: {adminPin})
+            </Link>
           )}
           <button
             type="button"

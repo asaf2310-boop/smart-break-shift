@@ -32,6 +32,7 @@ import FloatingKnowledgeWidget from '@/components/knowledge/FloatingKnowledgeWid
 import AdminLocalhostLinksFloating from '@/components/admin/AdminLocalhostLinksFloating';
 import RemoteSupportConsentPage from './pages/RemoteSupportConsentPage';
 import RemoteSupportPage from './pages/RemoteSupportPage';
+import ScreenShareGuestPage from './pages/ScreenShareGuestPage';
 
 const TOP_NAV_PATHS = new Set(['/breaks', '/shifts', '/knowledge', '/remote-support']);
 
@@ -74,6 +75,7 @@ const AuthenticatedApp = () => {
         <Route path="/crm/:id" element={<CrmCustomerDetail />} />
         <Route path="/remote-support" element={<RemoteSupportPage />} />
         <Route path="/support/consent/:token" element={<RemoteSupportConsentPage />} />
+        <Route path="/support/screen/:sessionId" element={<ScreenShareGuestPage />} />
         <Route path="/knowledge" element={<KnowledgePage />} />
         <Route path="/admin" element={<AdminGate><AdminDashboard /></AdminGate>} />
         <Route path="/admin/knowledge" element={<AdminGate><AdminKnowledge /></AdminGate>} />

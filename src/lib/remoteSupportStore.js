@@ -56,6 +56,11 @@ export function remoteSupportDemoAvailable() {
   return demoModeEnabled;
 }
 
+/** צפייה בדפדפן + RustDesk — זמין בדמו (VITE_DEMO_MODE=true) */
+export function remoteSupportFeaturesAvailable() {
+  return demoModeEnabled;
+}
+
 export function getSession(id) {
   return readSessions().find((s) => s.id === id || s.consentToken === id) || null;
 }

@@ -6,6 +6,7 @@ import {
   Link2,
   Mail,
   Monitor,
+  MonitorPlay,
   ShieldAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import ScreenSharePanel from "@/components/remote/ScreenSharePanel";
 import { useToast } from "@/components/ui/use-toast";
 import { createCallLog, createEmailLog, getCustomerById } from "@/lib/crmStore";
 import {
@@ -31,12 +34,15 @@ import {
   endSession,
   formatConnectionDetails,
   logConsent,
-  remoteSupportDemoAvailable,
+  remoteSupportFeaturesAvailable,
   sendRustDeskDownloadEmail,
 } from "@/lib/remoteSupportStore";
 
-const DEMO_BANNER =
-  "דמו — לפרודקשן: שרת RustDesk עצמי (hbbs/hbbr) + מדיניות אבטחה; אל תשמרו סיסמאות ב-localStorage.";
+const PANEL_DEMO_BANNER =
+  "דמו — בחרו למטה: שלב א צפייה בדפדפן (ללא התקנה) או שליטה מלאה ב-RustDesk.";
+
+const RUSTDESK_DEMO_BANNER =
+  "לפרודקשן: שרת RustDesk עצמי (hbbs/hbbr) + מדיניות אבטחה; אל תשמרו סיסמאות ב-localStorage.";
 
 function normalizeRustDeskId(value) {
   return String(value || "").replace(/\D/g, "").slice(0, 9);
@@ -51,6 +57,7 @@ export default function RemoteSupportPanel({
 }) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
+  const [supportMode, setSupportMode] = useState("screen");
   const [step, setStep] = useState(1);
   const [voiceConsent, setVoiceConsent] = useState(false);
   const [rustDeskId, setRustDeskId] = useState("");
@@ -66,6 +73,7 @@ export default function RemoteSupportPanel({
   }, [customerEmailProp, crmCustomerId]);
 
   const resetWizard = useCallback(() => {
+    setSupportMode("screen");
     setStep(1);
     setVoiceConsent(false);
     setRustDeskId("");
@@ -92,7 +100,7 @@ export default function RemoteSupportPanel({
     [rustDeskId, password]
   );
 
-  if (!remoteSupportDemoAvailable()) return null;
+  if (!remoteSupportFeaturesAvailable()) return null;
 
   const idValid = normalizeRustDeskId(rustDeskId).length === 9;
 
@@ -105,7 +113,17 @@ export default function RemoteSupportPanel({
       });
       return;
     }
+    setSupportMode("screen");
+    setStep(1);
     setOpen(true);
+  };
+
+  const handleOpenChange = (nextOpen) => {
+    setOpen(nextOpen);
+    if (nextOpen) {
+      setSupportMode("screen");
+      setStep(1);
+    }
   };
 
   const handleNextFromConsent = () => {
@@ -305,26 +323,73 @@ export default function RemoteSupportPanel({
         תמיכה מרחוק
       </Button>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="sm:max-w-lg rounded-2xl gap-0 p-0 overflow-hidden" dir="rtl">
-          <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-start gap-2 text-amber-950 text-xs leading-relaxed">
-            <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-amber-700" />
-            <span>{DEMO_BANNER}</span>
+          <div className="bg-violet-50 border-b border-violet-200 px-4 py-2 flex items-start gap-2 text-violet-950 text-xs leading-relaxed">
+            <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-violet-700" />
+            <span>{PANEL_DEMO_BANNER}</span>
           </div>
 
           <div className="p-5 space-y-4">
             <DialogHeader className="text-right space-y-1">
               <DialogTitle className="flex items-center gap-2 justify-end text-lg">
                 <Monitor className="w-5 h-5 text-indigo-600" />
-                תמיכה מרחוק — RustDesk
+                תמיכה מרחוק
               </DialogTitle>
               <DialogDescription>
                 {customerName
-                  ? `לקוח: ${customerName}`
-                  : "הזינו פרטי חיבור לאחר אישור הלקוח"}
+                  ? `לקוח: ${customerName} · `
+                  : ""}
+                שני מצבים: צפייה בדפדפן (שלב א) או RustDesk
               </DialogDescription>
             </DialogHeader>
 
+            <Tabs
+              value={supportMode}
+              onValueChange={setSupportMode}
+              defaultValue="screen"
+              className="w-full"
+              dir="rtl"
+            >
+              <p className="text-xs font-semibold text-slate-600 text-center mb-1">
+                בחרו מצב תמיכה
+              </p>
+              <TabsList className="grid w-full grid-cols-2 h-auto p-1 bg-slate-100">
+                <TabsTrigger
+                  value="screen"
+                  className="text-xs sm:text-sm py-2.5 gap-1 data-[state=active]:bg-teal-600 data-[state=active]:text-white"
+                >
+                  <MonitorPlay className="w-3.5 h-3.5 shrink-0" />
+                  צפייה במסך (דפדפן)
+                </TabsTrigger>
+                <TabsTrigger
+                  value="rustdesk"
+                  className="text-xs sm:text-sm py-2.5 gap-1 data-[state=active]:bg-indigo-600 data-[state=active]:text-white"
+                >
+                  <Monitor className="w-3.5 h-3.5 shrink-0" />
+                  שליטה מלאה — RustDesk
+                </TabsTrigger>
+              </TabsList>
+              <p className="text-[11px] text-center text-slate-500 mt-1">
+                {supportMode === "screen"
+                  ? "שלב א — צפייה בלבד, ללא התקנה"
+                  : "שליטה מלאה בעכבר ומקלדת"}
+              </p>
+
+              <TabsContent value="screen" className="mt-4 space-y-0">
+                <ScreenSharePanel
+                  agentName={agentName}
+                  crmCustomerId={crmCustomerId}
+                  customerName={customerName}
+                  customerEmail={customerEmailProp}
+                />
+              </TabsContent>
+
+              <TabsContent value="rustdesk" className="mt-4 space-y-4">
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 flex items-start gap-2 text-amber-950 text-xs leading-relaxed">
+              <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-amber-700" />
+              <span>{RUSTDESK_DEMO_BANNER}</span>
+            </div>
             <div className="flex gap-1 justify-center">
               {[1, 2, 3].map((n) => (
                 <span
@@ -471,6 +536,8 @@ export default function RemoteSupportPanel({
                 </>
               )}
             </DialogFooter>
+              </TabsContent>
+            </Tabs>
           </div>
         </DialogContent>
       </Dialog>

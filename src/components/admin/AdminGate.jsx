@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { ShieldCheck, Lock } from "lucide-react";
 import { isAdminPinConfigured, useIsAdmin, unlockAdminSession } from "@/hooks/useIsAdmin";
 
@@ -12,7 +12,27 @@ export default function AdminGate({ children }) {
   if (isAdmin) return children;
 
   if (!pinRequired) {
-    return <Navigate to="/" replace />;
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50 flex items-center justify-center px-4" dir="rtl">
+        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-slate-200 p-8 text-center">
+          <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-amber-100 flex items-center justify-center">
+            <ShieldCheck className="w-7 h-7 text-amber-700" />
+          </div>
+          <h1 className="text-xl font-extrabold text-slate-800 mb-2">כניסת מנהל לא זמינה</h1>
+          <p className="text-sm text-slate-600 leading-relaxed">
+            לא הוגדר <code className="text-xs bg-slate-100 px-1 rounded">VITE_ADMIN_PIN</code> בקובץ{" "}
+            <code className="text-xs bg-slate-100 px-1 rounded">.env.local</code>.
+            הוסף שורה כמו <code className="text-xs bg-slate-100 px-1 rounded">VITE_ADMIN_PIN=1234</code> והפעל מחדש את שרת הפיתוח.
+          </p>
+          <Link
+            to="/"
+            className="mt-6 inline-block text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
+          >
+            חזרה לדף הבית
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   const handleSubmit = (e) => {
