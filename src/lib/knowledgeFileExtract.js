@@ -1,0 +1,130 @@
+import mammoth from "mammoth";
+import * as pdfjsLib from "pdfjs-dist";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/build/pdf.worker.min.mjs",
+  import.meta.url
+).toString();
+
+export const MAX_KNOWLEDGE_FILE_BYTES = 5 * 1024 * 1024;
+
+const SUPPORTED_EXTENSIONS = new Set(["txt", "md", "pdf", "docx"]);
+
+function getExtension(fileName) {
+  const match = String(fileName || "").match(/\.([^.]+)$/i);
+  return match ? match[1].toLowerCase() : "";
+}
+
+export function sanitizeKnowledgeText(raw) {
+  return String(raw || "")
+    .replace(/\u0000/g, "")
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function titleFromFileName(fileName) {
+  return String(fileName || "")
+    .replace(/\.[^.]+$/i, "")
+    .trim() || "מסמך מועלה";
+}
+
+async function extractPdfText(file) {
+  const data = new Uint8Array(await file.arrayBuffer());
+  const pdf = await pdfjsLib.getDocument({ data, useWorkerFetch: false, isEvalSupported: false }).promise;
+  const parts = [];
+
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
+    const page = await pdf.getPage(pageNum);
+    const content = await page.getTextContent();
+    const pageText = content.items
+      .map((item) => ("str" in item ? item.str : ""))
+      .join(" ")
+      .trim();
+    if (pageText) parts.push(pageText);
+  }
+
+  return parts.join("\n\n");
+}
+
+async function extractDocxText(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const result = await mammoth.extractRawText({ arrayBuffer });
+  if (result.messages?.length) {
+    const hasErrors = result.messages.some((m) => m.type === "error");
+    if (hasErrors && !result.value?.trim()) {
+      throw new Error("docx_parse_failed");
+    }
+  }
+  return result.value || "";
+}
+
+/**
+ * @param {File} file
+ * @returns {Promise<{ text: string, title: string, error: string | null }>}
+ */
+export async function extractTextFromFile(file) {
+  const title = titleFromFileName(file.name);
+  const ext = getExtension(file.name);
+
+  if (!file || !(file instanceof File)) {
+    return { text: "", title, error: "לא נבחר קובץ" };
+  }
+
+  if (file.size > MAX_KNOWLEDGE_FILE_BYTES) {
+    return {
+      text: "",
+      title,
+      error: "הקובץ גדול מדי (מקסימום 5 מגה-בייט)",
+    };
+  }
+
+  if (ext === "doc") {
+    return {
+      text: "",
+      title,
+      error: "קבצי Word ישנים (.doc) אינם נתמכים. שמור את הקובץ כ-.docx והעלה שוב.",
+    };
+  }
+
+  if (!SUPPORTED_EXTENSIONS.has(ext)) {
+    return {
+      text: "",
+      title,
+      error: "סוג קובץ לא נתמך. ניתן להעלות: txt, md, pdf, docx",
+    };
+  }
+
+  try {
+    let rawText = "";
+
+    if (ext === "txt" || ext === "md") {
+      rawText = await file.text();
+    } else if (ext === "docx") {
+      rawText = await extractDocxText(file);
+    } else if (ext === "pdf") {
+      rawText = await extractPdfText(file);
+    }
+
+    const text = sanitizeKnowledgeText(rawText);
+    if (!text) {
+      return {
+        text: "",
+        title,
+        error: "לא נמצא טקסט קריא בקובץ (ייתכן שמדובר במסמך סרוק או ריק)",
+      };
+    }
+
+    return { text, title, error: null };
+  } catch {
+    if (ext === "pdf") {
+      return { text: "", title, error: "שגיאה בקריאת קובץ PDF" };
+    }
+    if (ext === "docx") {
+      return { text: "", title, error: "שגיאה בקריאת קובץ Word" };
+    }
+    return { text: "", title, error: "שגיאה בקריאת הקובץ" };
+  }
+}

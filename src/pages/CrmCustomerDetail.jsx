@@ -66,6 +66,7 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { useTelephony } from "@/context/TelephonyContext";
 import { telephonyDemoAvailable } from "@/lib/telephonyStore";
+import RemoteSupportPanel from "@/components/remote/RemoteSupportPanel";
 
 const callTypeIcon = {
   incoming: Phone,
@@ -302,6 +303,14 @@ export default function CrmCustomerDetail() {
           {customer.notes && (
             <p className="mt-4 text-sm text-slate-600 bg-slate-50 rounded-xl p-3 border border-slate-100">{customer.notes}</p>
           )}
+          <div className="mt-4 pt-4 border-t border-slate-100">
+            <RemoteSupportPanel
+              agentName={agentName}
+              crmCustomerId={customer.id}
+              customerName={customer.name}
+              customerEmail={customer.email}
+            />
+          </div>
         </motion.div>
 
         <section className="mb-6">

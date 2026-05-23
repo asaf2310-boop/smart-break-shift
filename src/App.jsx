@@ -26,8 +26,14 @@ import { ChatUnreadProvider } from '@/hooks/useChatUnread';
 import ChatDeepLink from './pages/ChatDeepLink';
 import CrmDashboard from './pages/CrmDashboard';
 import CrmCustomerDetail from './pages/CrmCustomerDetail';
+import KnowledgePage from './pages/KnowledgePage';
+import AdminKnowledge from './pages/AdminKnowledge';
+import FloatingKnowledgeWidget from '@/components/knowledge/FloatingKnowledgeWidget';
+import AdminLocalhostLinksFloating from '@/components/admin/AdminLocalhostLinksFloating';
+import RemoteSupportConsentPage from './pages/RemoteSupportConsentPage';
+import RemoteSupportPage from './pages/RemoteSupportPage';
 
-const TOP_NAV_PATHS = new Set(['/breaks', '/shifts']);
+const TOP_NAV_PATHS = new Set(['/breaks', '/shifts', '/knowledge', '/remote-support']);
 
 function TopAppNav() {
   const { pathname } = useLocation();
@@ -66,14 +72,20 @@ const AuthenticatedApp = () => {
         <Route path="/chat" element={<ChatDeepLink />} />
         <Route path="/crm" element={<CrmDashboard />} />
         <Route path="/crm/:id" element={<CrmCustomerDetail />} />
+        <Route path="/remote-support" element={<RemoteSupportPage />} />
+        <Route path="/support/consent/:token" element={<RemoteSupportConsentPage />} />
+        <Route path="/knowledge" element={<KnowledgePage />} />
         <Route path="/admin" element={<AdminGate><AdminDashboard /></AdminGate>} />
+        <Route path="/admin/knowledge" element={<AdminGate><AdminKnowledge /></AdminGate>} />
         <Route path="/admin/shifts" element={<AdminGate><AdminShifts /></AdminGate>} />
         <Route path="/admin/users" element={<AdminGate><AdminUsers /></AdminGate>} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="*" element={<PageNotFound />} />
       </Routes>
       <FloatingChatWidget />
+      <FloatingKnowledgeWidget />
       <SoftphoneWidget />
+      <AdminLocalhostLinksFloating />
     </>
   );
 };

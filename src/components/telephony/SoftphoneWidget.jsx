@@ -247,6 +247,8 @@ export default function SoftphoneWidget() {
           onSimulateInbound={handleInboundDemo}
           onProductionStub={handleProductionStub}
           onClose={closeSoftphone}
+          crmCustomerId={crmMeta?.customerId}
+          crmCustomerName={crmMeta?.customerName}
         />
       )}
 

@@ -9,3 +9,7 @@ export const CHAT_FLOAT_CHROME_CLASS =
 
 export const PHONE_FLOAT_CHROME_CLASS =
   "floating-phone-chrome fixed left-4 z-[88] flex flex-col items-start justify-end gap-3 pointer-events-none bottom-[var(--app-bottom-chrome)]";
+
+/** Telephony sidebar — personal ("שלי") view fits without inner scroll at default size. */
+export const TELEPHONY_SIDEBAR_PANEL_CLASS =
+  "min-h-[min(420px,85vh)] max-h-[min(85vh,42rem)]";

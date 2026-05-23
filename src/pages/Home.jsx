@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { CalendarClock, CalendarDays, Contact, LogOut, Users } from "lucide-react";
+import { BookOpen, CalendarClock, CalendarDays, Contact, LogOut, Monitor, Users } from "lucide-react";
 import { getAgentNamesList } from "@/constants/scheduling";
 import AgentLogin from "@/components/auth/AgentLogin";
 import { demoModeEnabled } from "@/api/demoClient";
@@ -30,6 +30,20 @@ const cards = [
     desc: "לקוחות ותיעוד שיחות",
     icon: Contact,
     iconBg: "bg-secondary text-secondary-foreground",
+  },
+  {
+    to: "/remote-support",
+    title: "השתלטות מרחוק",
+    desc: "RustDesk, אישור לקוח וסשנים",
+    icon: Monitor,
+    iconBg: "bg-violet-100 text-violet-900",
+  },
+  {
+    to: "/knowledge",
+    title: "בסיס ידע",
+    desc: "שאלות ותשובות ממסמכי הארגון",
+    icon: BookOpen,
+    iconBg: "bg-primary-container text-on-primary-container",
   },
 ];
 

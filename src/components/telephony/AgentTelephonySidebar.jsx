@@ -22,6 +22,8 @@ import {
   subscribeTelephony,
 } from "@/lib/telephonyStore";
 import { telephonyStatusDotClass } from "@/lib/telephonyStatus";
+import { TELEPHONY_SIDEBAR_PANEL_CLASS } from "@/lib/floatingWidgetChrome";
+import RemoteSupportPanel from "@/components/remote/RemoteSupportPanel";
 
 function callStatusTone(status) {
   switch (status) {
@@ -64,6 +66,8 @@ export default function AgentTelephonySidebar({
   onSimulateInbound,
   onProductionStub,
   onClose,
+  crmCustomerId = null,
+  crmCustomerName = null,
 }) {
   const [panelView, setPanelView] = useState("personal");
   const [waitingCount, setWaitingCount] = useState(() => getCenterStats().waiting);
@@ -87,7 +91,7 @@ export default function AgentTelephonySidebar({
     <div
       role="dialog"
       aria-label="סרגל טלפוניה"
-      className="pointer-events-auto w-[min(calc(100vw-2rem),300px)] min-w-[260px] max-h-[min(70vh,28rem)] flex flex-col bg-surface-container-lowest rounded-2xl border border-outline/20 shadow-elevation-3 overflow-hidden animate-in slide-in-from-bottom-2 fade-in-0 duration-200"
+      className={`pointer-events-auto w-[min(calc(100vw-2rem),300px)] min-w-[260px] ${TELEPHONY_SIDEBAR_PANEL_CLASS} flex flex-col bg-surface-container-lowest rounded-2xl border border-outline/20 shadow-elevation-3 overflow-hidden animate-in slide-in-from-bottom-2 fade-in-0 duration-200`}
       dir="rtl"
     >
       <header className="flex items-center justify-between gap-2 px-4 py-3 border-b border-outline/15 bg-gradient-to-l from-teal-600 to-emerald-600 text-white shrink-0">
@@ -149,12 +153,18 @@ export default function AgentTelephonySidebar({
         </button>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+      <div
+        className={`p-3 space-y-3 ${
+          showDashboard || dialOpen
+            ? "flex-1 min-h-0 overflow-y-auto"
+            : "overflow-visible shrink-0"
+        }`}
+      >
         {showDashboard ? (
           <TelephonyDashboardView agentName={agentName} isDemo={isDemo} />
         ) : (
           <>
-        <section className="space-y-2">
+        <section className="space-y-1.5">
           <p className="m3-label-medium text-on-surface-variant">זמינות נציג</p>
           {statusKey === AGENT_TELEPHONY_STATUS.offline.key ? (
             <div className="flex flex-col gap-2">
@@ -277,7 +287,7 @@ export default function AgentTelephonySidebar({
         )}
 
         {!inCall && (
-          <section className="space-y-2" aria-label="חיוג יוצא">
+          <section className="space-y-1.5" aria-label="חיוג יוצא">
             <p className="m3-label-medium text-on-surface-variant">חיוג יוצא</p>
             <div className="flex flex-row gap-2 items-stretch">
               {isDemo && (
@@ -346,6 +356,15 @@ export default function AgentTelephonySidebar({
             <PhoneIncoming className="w-4 h-4" />
             שיחה נכנסת (דמו)
           </button>
+        )}
+
+        {crmCustomerId && (
+          <RemoteSupportPanel
+            agentName={agentName}
+            crmCustomerId={crmCustomerId}
+            customerName={crmCustomerName}
+            compact
+          />
         )}
 
         {!isDemo && (

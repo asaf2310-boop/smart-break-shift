@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { CalendarClock, CalendarDays, Contact, Home, ShieldCheck } from "lucide-react";
+import { BookOpen, CalendarClock, CalendarDays, Contact, Home, Monitor, ShieldCheck } from "lucide-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 
 /** גובה שורת הניווט העליונה — משמש גם ל-FloatingChatWidget */
@@ -12,6 +12,8 @@ export default function AppNav() {
   const isBreaks = location.pathname === "/breaks";
   const isShifts = location.pathname === "/shifts";
   const isCrm = location.pathname.startsWith("/crm");
+  const isKnowledge = location.pathname.startsWith("/knowledge");
+  const isRemoteSupport = location.pathname.startsWith("/remote-support");
 
   const tabClass = (active) =>
     `flex flex-1 sm:flex-none items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 text-xs sm:text-sm whitespace-nowrap transition-all duration-200 ${
@@ -42,6 +44,14 @@ export default function AppNav() {
             <Contact className="w-4 h-4" />
             CRM
           </Link>
+          <Link to="/remote-support" className={tabClass(isRemoteSupport)}>
+            <Monitor className="w-4 h-4" />
+            השתלטות מרחוק
+          </Link>
+          <Link to="/knowledge" className={tabClass(isKnowledge)}>
+            <BookOpen className="w-4 h-4" />
+            בסיס ידע
+          </Link>
           {isAdmin && (
             <>
               <Link to="/admin" className={tabClass(location.pathname === "/admin")}>
@@ -55,6 +65,10 @@ export default function AppNav() {
               <Link to="/admin/users" className={tabClass(location.pathname === "/admin/users")}>
                 <ShieldCheck className="w-4 h-4" />
                 נציגים
+              </Link>
+              <Link to="/admin/knowledge" className={tabClass(location.pathname === "/admin/knowledge")}>
+                <BookOpen className="w-4 h-4" />
+                ניהול ידע
               </Link>
             </>
           )}

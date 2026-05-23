@@ -95,7 +95,7 @@ function pointerClientY(event) {
   return event.clientY;
 }
 
-const TOP_NAV_PATHS = new Set(["/breaks", "/shifts"]);
+const TOP_NAV_PATHS = new Set(["/breaks", "/shifts", "/knowledge"]);
 
 /** בועת צ'אט צפה — מופיעה בכל מסך, בלי טאב בסרגל */
 export default function FloatingChatWidget() {
