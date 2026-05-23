@@ -11,7 +11,7 @@ import { connectAgentAsAvailable } from "@/lib/agentChatPresence";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { agentLogout } from "@/lib/agentAuth";
 
-const cards = [
+const productionCards = [
   {
     to: "/breaks",
     title: "הפסקות",
@@ -26,6 +26,9 @@ const cards = [
     icon: CalendarDays,
     iconBg: "bg-surface-container-high text-primary",
   },
+];
+
+const demoOnlyCards = [
   {
     to: "/crm",
     title: "CRM",
@@ -48,6 +51,10 @@ const cards = [
     iconBg: "bg-primary-container text-on-primary-container",
   },
 ];
+
+const homeCards = demoModeEnabled
+  ? [...productionCards, ...demoOnlyCards]
+  : productionCards;
 
 const showAdminDemoHint =
   (import.meta.env.DEV || demoModeEnabled) && isAdminPinConfigured();
@@ -84,7 +91,7 @@ export default function Home() {
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-8 sm:mb-12"
         >
-          <BrandEntryBlock className="mx-auto mb-4" />
+          {demoModeEnabled && <BrandEntryBlock className="mx-auto mb-4" />}
           <p className="m3-label-medium">
             שלום <span className="text-primary font-semibold">{displayName}</span>
             {agentCount > 0 && <> · {agentCount} נציגים</>}
@@ -111,7 +118,7 @@ export default function Home() {
         </motion.div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6 items-stretch">
-          {cards.map((card, i) => {
+          {homeCards.map((card, i) => {
             const Icon = card.icon;
             return (
               <motion.div

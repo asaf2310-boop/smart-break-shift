@@ -30,7 +30,7 @@ const DEMO_AGENT_NAMES = [
   "נציג 10",
 ];
 
-export const AGENT_NAMES = import.meta.env.VITE_DEMO_MODE === "true" ? DEMO_AGENT_NAMES : REAL_AGENT_NAMES;
+export const AGENT_NAMES = demoModeEnabled ? DEMO_AGENT_NAMES : REAL_AGENT_NAMES;
 
 /** רשימת שמות נציגים — בדמו מהרשימה שמנהל מגדיר */
 export function getAgentNamesList() {

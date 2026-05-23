@@ -357,7 +357,13 @@ function LoginShell({ subtitle, showDemoBadge, children }) {
       <motion.div className="absolute top-1/4 left-1/4 w-72 h-72 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
       <motion.div className="absolute bottom-1/4 right-1/4 w-72 h-72 bg-purple-500/20 rounded-full blur-3xl pointer-events-none" />
 
-      <BrandEntryBlock onDark className="relative w-full max-w-xl mx-auto text-center mb-8 sm:mb-10 shrink-0" />
+      {demoModeEnabled ? (
+        <BrandEntryBlock onDark className="relative w-full max-w-xl mx-auto text-center mb-8 sm:mb-10 shrink-0" />
+      ) : (
+        <h1 className="relative text-2xl sm:text-3xl font-bold text-white text-center mb-8 sm:mb-10 shrink-0">
+          כניסת נציג
+        </h1>
+      )}
 
       <motion.div
         initial={{ opacity: 0, scale: 0.92, y: 20 }}

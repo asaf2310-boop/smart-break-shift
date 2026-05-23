@@ -2,6 +2,7 @@ import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { BookOpen, CalendarClock, CalendarDays, Contact, Home, Monitor, ShieldCheck } from "lucide-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { demoModeEnabled } from "@/api/demoClient";
 
 /** גובה שורת הניווט העליונה — משמש גם ל-FloatingChatWidget */
 export const APP_NAV_HEIGHT = "var(--app-nav-height)";
@@ -41,18 +42,22 @@ export default function AppNav() {
             <CalendarDays className="w-4 h-4" />
             משמרות
           </Link>
-          <Link to="/crm" className={tabClass(isCrm)}>
-            <Contact className="w-4 h-4" />
-            CRM
-          </Link>
-          <Link to="/remote-support" className={tabClass(isRemoteSupport)}>
-            <Monitor className="w-4 h-4" />
-            השתלטות מרחוק
-          </Link>
-          <Link to="/knowledge" className={tabClass(isKnowledge)}>
-            <BookOpen className="w-4 h-4" />
-            בסיס ידע
-          </Link>
+          {demoModeEnabled && (
+            <>
+              <Link to="/crm" className={tabClass(isCrm)}>
+                <Contact className="w-4 h-4" />
+                CRM
+              </Link>
+              <Link to="/remote-support" className={tabClass(isRemoteSupport)}>
+                <Monitor className="w-4 h-4" />
+                השתלטות מרחוק
+              </Link>
+              <Link to="/knowledge" className={tabClass(isKnowledge)}>
+                <BookOpen className="w-4 h-4" />
+                בסיס ידע
+              </Link>
+            </>
+          )}
           {isAdmin && (
             <>
               <Link to="/admin" className={tabClass(location.pathname === "/admin")}>
@@ -67,10 +72,12 @@ export default function AppNav() {
                 <ShieldCheck className="w-4 h-4" />
                 נציגים
               </Link>
-              <Link to="/admin/knowledge" className={tabClass(location.pathname === "/admin/knowledge")}>
-                <BookOpen className="w-4 h-4" />
-                ניהול ידע
-              </Link>
+              {demoModeEnabled && (
+                <Link to="/admin/knowledge" className={tabClass(location.pathname === "/admin/knowledge")}>
+                  <BookOpen className="w-4 h-4" />
+                  ניהול ידע
+                </Link>
+              )}
             </>
           )}
         </div>

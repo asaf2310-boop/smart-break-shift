@@ -9,6 +9,7 @@ import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import AuthRequiredScreen from '@/components/AuthRequiredScreen';
 import AppLoadError from '@/components/AppLoadError';
 import AdminGate from '@/components/admin/AdminGate';
+import DemoGate from '@/components/DemoGate';
 import Home from './pages/Home';
 import BreakScheduler from './pages/BreakScheduler';
 import AdminDashboard from './pages/AdminDashboard';
@@ -72,14 +73,14 @@ const AuthenticatedApp = () => {
         <Route path="/breaks" element={<BreakScheduler />} />
         <Route path="/shifts" element={<ShiftScheduler />} />
         <Route path="/chat" element={<ChatDeepLink />} />
-        <Route path="/crm" element={<CrmDashboard />} />
-        <Route path="/crm/:id" element={<CrmCustomerDetail />} />
-        <Route path="/remote-support" element={<RemoteSupportPage />} />
-        <Route path="/support/consent/:token" element={<RemoteSupportConsentPage />} />
-        <Route path="/support/screen/:sessionId" element={<ScreenShareGuestPage />} />
-        <Route path="/knowledge" element={<KnowledgePage />} />
+        <Route path="/crm" element={<DemoGate><CrmDashboard /></DemoGate>} />
+        <Route path="/crm/:id" element={<DemoGate><CrmCustomerDetail /></DemoGate>} />
+        <Route path="/remote-support" element={<DemoGate><RemoteSupportPage /></DemoGate>} />
+        <Route path="/support/consent/:token" element={<DemoGate><RemoteSupportConsentPage /></DemoGate>} />
+        <Route path="/support/screen/:sessionId" element={<DemoGate><ScreenShareGuestPage /></DemoGate>} />
+        <Route path="/knowledge" element={<DemoGate><KnowledgePage /></DemoGate>} />
         <Route path="/admin" element={<AdminGate><AdminDashboard /></AdminGate>} />
-        <Route path="/admin/knowledge" element={<AdminGate><AdminKnowledge /></AdminGate>} />
+        <Route path="/admin/knowledge" element={<DemoGate><AdminGate><AdminKnowledge /></AdminGate></DemoGate>} />
         <Route path="/admin/shifts" element={<AdminGate><AdminShifts /></AdminGate>} />
         <Route path="/admin/users" element={<AdminGate><AdminUsers /></AdminGate>} />
         <Route path="/reset-password" element={<ResetPassword />} />

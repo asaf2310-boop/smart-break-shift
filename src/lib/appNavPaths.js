@@ -1,9 +1,13 @@
+import { demoModeEnabled } from "@/api/demoClient";
+
+const PRODUCTION_TOP_NAV_PATHS = ["/breaks", "/shifts"];
+
+const DEMO_TOP_NAV_PATHS = ["/knowledge", "/remote-support"];
+
 /** Routes that show the main tab bar (logo is embedded in AppNav). */
 export const TOP_NAV_PATHS = new Set([
-  "/breaks",
-  "/shifts",
-  "/knowledge",
-  "/remote-support",
+  ...PRODUCTION_TOP_NAV_PATHS,
+  ...(demoModeEnabled ? DEMO_TOP_NAV_PATHS : []),
 ]);
 
 export function hasTopAppNav(pathname) {
