@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { ArrowRight, Contact, Monitor, MonitorPlay } from "lucide-react";
 import { getStoredAgentName } from "@/constants/scheduling";
 import RemoteSupportPanel from "@/components/remote/RemoteSupportPanel";
+import EmailStatusBanner from "@/components/remote/EmailStatusBanner";
 import {
   listSessions as listRustDeskSessions,
   remoteSupportFeaturesAvailable,
@@ -69,6 +70,10 @@ export default function RemoteSupportPage() {
           </Link>
         </motion.div>
 
+        <div className="mb-4">
+          <EmailStatusBanner />
+        </motion.div>
+
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -122,7 +127,7 @@ export default function RemoteSupportPage() {
               <p className="m3-label-medium mb-4">
                 התחלת סשן ללא לקוח נבחר (ניתן גם מכרטיס לקוח ב-CRM).
               </p>
-              <RemoteSupportPanel agentName={agentName} />
+              <RemoteSupportPanel agentName={agentName} hideEmailStatusBanner />
             </motion.div>
 
             <motion.div

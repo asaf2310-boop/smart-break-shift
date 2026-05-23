@@ -54,6 +54,7 @@ export default function RemoteSupportPanel({
   customerName,
   customerEmail: customerEmailProp,
   compact = false,
+  hideEmailStatusBanner = false,
 }) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
@@ -405,6 +406,7 @@ export default function RemoteSupportPanel({
                   crmCustomerId={crmCustomerId}
                   customerName={customerName}
                   customerEmail={customerEmailProp}
+                  hideEmailStatusBanner={hideEmailStatusBanner}
                 />
               </TabsContent>
 

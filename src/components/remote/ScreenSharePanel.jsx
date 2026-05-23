@@ -14,6 +14,7 @@ import {
   sendScreenShareEmail,
 } from "@/lib/screenShareStore";
 import ScreenShareAgentView from "@/components/remote/ScreenShareAgentView";
+import EmailStatusBanner from "@/components/remote/EmailStatusBanner";
 
 const DEMO_BANNER =
   "שלב א — צפייה בדפדפן בלבד (PeerJS). דמו: PeerServer ציבורי; לפרודקשן יש לארח PeerServer או Supabase Realtime.";
@@ -23,6 +24,7 @@ export default function ScreenSharePanel({
   crmCustomerId,
   customerName,
   customerEmail: customerEmailProp,
+  hideEmailStatusBanner = false,
 }) {
   const { toast } = useToast();
   const [voiceConsent, setVoiceConsent] = useState(false);
@@ -218,6 +220,7 @@ export default function ScreenSharePanel({
 
   return (
     <div className="space-y-4">
+      {!hideEmailStatusBanner && <EmailStatusBanner />}
       <div className="bg-teal-50 border border-teal-200 rounded-xl px-3 py-2 flex items-start gap-2 text-teal-950 text-xs leading-relaxed">
         <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-teal-700" />
         <span>{DEMO_BANNER}</span>

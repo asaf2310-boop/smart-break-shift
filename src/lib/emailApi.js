@@ -3,6 +3,30 @@
  * מפתח API נשאר בשרת — לעולם לא ב-VITE_*.
  */
 
+export async function fetchEmailStatus() {
+  try {
+    const res = await fetch("/api/email-status");
+    if (res.status === 404) {
+      return { configured: false, apiPresent: false };
+    }
+    let data = {};
+    try {
+      data = await res.json();
+    } catch {
+      data = {};
+    }
+    if (!res.ok) {
+      return { configured: false, apiPresent: true };
+    }
+    return {
+      configured: Boolean(data.configured),
+      apiPresent: data.apiPresent !== false,
+    };
+  } catch {
+    return { configured: false, apiPresent: false };
+  }
+}
+
 export async function postSendEmail({ to, subject, html, text }) {
   let res;
   try {
@@ -22,6 +46,13 @@ export async function postSendEmail({ to, subject, html, text }) {
     data = await res.json();
   } catch {
     data = {};
+  }
+
+  if (res.status === 404) {
+    return {
+      configured: false,
+      message: "שרת המייל לא נפרסם — העלו את תיקיית api/ ל-GitHub ו-Redeploy",
+    };
   }
 
   if (res.status === 503 && data.code === "email_not_configured") {

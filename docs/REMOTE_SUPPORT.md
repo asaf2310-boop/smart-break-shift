@@ -91,9 +91,27 @@
 
 ### API
 
+- `GET /api/email-status` — `{ "configured": boolean, "apiPresent": true }` (בודק `RESEND_API_KEY` + `EMAIL_FROM` בלי לחשוף ערכים)
 - `POST /api/send-email` — גוף JSON: `{ "to", "subject", "html", "text?" }`
 - CORS: same origin בלבד
 - אם המפתח לא מוגדר: `503` + `code: email_not_configured` — האפליקציה נופלת לסימולציה מקומית + הודעה
+- אם `/api/*` לא נפרס (404 מ-SPA): בדקו ש-`api/` קיים ב-GitHub ו-Redeploy
+
+### `vercel.json` ונתיבי API
+
+ה-rewrite `{ "source": "/((?!api/).*)", "destination": "/index.html" }` **אינו** מנתב בקשות ל-`/api/*` ל-SPA — רק נתיבים שלא מתחילים ב-`api/` נשלחים ל-`index.html`. אין צורך ב-rewrite נוסף לפונקציות Serverless.
+
+### פתרון בעיות (Vercel)
+
+1. **ודאו שה-API נפרס:** פתחו `https://<your-app>.vercel.app/api/email-status` בדפדפן.
+   - תשובה תקינה: `{ "configured": true, "apiPresent": true }` — המייל מוכן.
+   - `{ "configured": false, "apiPresent": true }` — ה-API קיים אך חסרים `RESEND_API_KEY` או `EMAIL_FROM` ב-Vercel → Settings → Environment Variables → **Redeploy**.
+   - **404 / דף SPA:** תיקיית `api/` חסרה ב-GitHub — הריצו `upload-to-github.ps1` (או `git push`) וודאו:
+     - `api/send-email.js`
+     - `api/email-status.js`
+     ואז Redeploy.
+2. **בדיקה מהאפליקציה:** בדף «השתלטות מרחוק» — באנר ירוק «מייל: פעיל» או כתום עם הוראות.
+3. **אחרי שינוי env:** תמיד Redeploy (לא רק Save) — משתני סביבה נטענים בזמן build/deploy.
 
 ### פיתוח מקומי
 
@@ -110,6 +128,7 @@
 | קובץ | תפקיד |
 |------|--------|
 | `api/send-email.js` | Handler ל-Vercel + Resend |
+| `api/email-status.js` | בדיקת הגדרת מייל (GET, ללא סודות) |
 | `src/lib/emailApi.js` | `fetch` מהדפדפן ל-API |
 | `src/lib/screenShareStore.js` | תבנית HTML RTL + `sendScreenShareEmail` |
 | `src/lib/remoteSupportStore.js` | מייל RustDesk (אופציונלי) |
@@ -131,6 +150,7 @@
 | `src/lib/screenShareStore.js` | סשני צפייה, מייל (Resend), קישור אורח |
 | `src/lib/remoteSupportStore.js` | סשני RustDesk, אישור, מייל (Resend) |
 | `api/send-email.js` | שליחת מייל בשרת |
+| `api/email-status.js` | בדיקת סטטוס מייל ב-Vercel |
 | `src/components/remote/ScreenSharePanel.jsx` | אשף נציג — שלב א |
 | `src/components/remote/ScreenShareAgentView.jsx` | וידאו נציג (PeerJS host) |
 | `src/pages/ScreenShareGuestPage.jsx` | דף לקוח `/support/screen/:sessionId` |
