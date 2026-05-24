@@ -116,8 +116,11 @@ export default function ScreenSharePanel({
       }
       if (simulated) {
         toast({
-          title: "סשן פעיל — הקישור מוכן",
+          title: demoSendRealEmailEnabled
+            ? "המייל לא נשלח"
+            : "סשן פעיל — הקישור מוכן",
           description: message || DEMO_SCREEN_SHARE_EMAIL_MESSAGE,
+          variant: demoSendRealEmailEnabled ? "destructive" : undefined,
         });
       } else if (demoSendRealEmailEnabled) {
         toast({

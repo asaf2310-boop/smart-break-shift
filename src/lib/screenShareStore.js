@@ -1,5 +1,10 @@
 import { demoModeEnabled, demoSendRealEmailEnabled } from "@/api/demoClient";
-import { escapeHtml, postSendEmail } from "@/lib/emailApi";
+import {
+  escapeHtml,
+  logEmailDelivery,
+  postSendEmail,
+  rejectDemoRealEmailFallback,
+} from "@/lib/emailApi";
 
 export const SCREEN_SHARE_STORAGE_KEY = "smart-break-shift-screen-share-v1";
 export const SCREEN_SHARE_CHANGE_EVENT = "screen-share-changed";
@@ -525,6 +530,11 @@ export async function sendScreenShareEmail({
   const sentAt = new Date().toISOString();
 
   if (demoModeEnabled && !demoSendRealEmailEnabled) {
+    logEmailDelivery(
+      "screen-share-email",
+      "simulated",
+      "דמו — VITE_DEMO_SEND_REAL_EMAIL לא מוגדר ל-true ב-build"
+    );
     const log = buildScreenShareLogBase({
       toEmail,
       subject,
@@ -548,7 +558,10 @@ export async function sendScreenShareEmail({
 
   const apiResult = await postSendEmail({ to: toEmail, subject, html, text: body });
 
+  rejectDemoRealEmailFallback(apiResult);
+
   if (!apiResult.configured) {
+    logEmailDelivery("screen-share-email", "simulated", apiResult.message);
     const log = buildScreenShareLogBase({
       toEmail,
       subject,
@@ -571,6 +584,8 @@ export async function sendScreenShareEmail({
         "שירות המייל לא מוגדר — נרשם בדמו בלבד. פרסמו ב-Vercel עם RESEND_API_KEY.",
     };
   }
+
+  logEmailDelivery("screen-share-email", "sent", { to: toEmail, id: apiResult.id });
 
   const log = buildScreenShareLogBase({
     toEmail,

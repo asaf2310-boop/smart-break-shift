@@ -1,5 +1,10 @@
 import { demoModeEnabled, demoSendRealEmailEnabled } from "@/api/demoClient";
-import { escapeHtml, postSendEmail } from "@/lib/emailApi";
+import {
+  escapeHtml,
+  logEmailDelivery,
+  postSendEmail,
+  rejectDemoRealEmailFallback,
+} from "@/lib/emailApi";
 
 export const REMOTE_SUPPORT_STORAGE_KEY = "smart-break-shift-remote-support-v1";
 export const REMOTE_SUPPORT_CHANGE_EVENT = "remote-support-changed";
@@ -308,6 +313,11 @@ export async function sendRustDeskDownloadEmail({
   const sentAt = new Date().toISOString();
 
   if (demoModeEnabled && !demoSendRealEmailEnabled) {
+    logEmailDelivery(
+      "rustdesk-email",
+      "simulated",
+      "דמו — VITE_DEMO_SEND_REAL_EMAIL לא מוגדר ל-true ב-build"
+    );
     const log = buildRustDeskLogBase({
       toEmail,
       subject,
@@ -331,7 +341,10 @@ export async function sendRustDeskDownloadEmail({
 
   const apiResult = await postSendEmail({ to: toEmail, subject, html, text: body });
 
+  rejectDemoRealEmailFallback(apiResult);
+
   if (!apiResult.configured) {
+    logEmailDelivery("rustdesk-email", "simulated", apiResult.message);
     const log = buildRustDeskLogBase({
       toEmail,
       subject,
@@ -354,6 +367,8 @@ export async function sendRustDeskDownloadEmail({
         "שירות המייל לא מוגדר — נרשם בדמו בלבד. פרסמו ב-Vercel עם RESEND_API_KEY.",
     };
   }
+
+  logEmailDelivery("rustdesk-email", "sent", { to: toEmail, id: apiResult.id });
 
   const log = buildRustDeskLogBase({
     toEmail,

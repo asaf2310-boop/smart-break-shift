@@ -185,7 +185,7 @@
 - `GET /api/email-status` — `{ "configured": boolean, "apiPresent": true }` (בודק `RESEND_API_KEY` + `EMAIL_FROM` בלי לחשוף ערכים)
 - `POST /api/send-email` — גוף JSON: `{ "to", "subject", "html", "text?" }`
 - CORS: same origin בלבד
-- אם המפתח לא מוגדר: `503` + `code: email_not_configured` — האפליקציה נופלת לסימולציה מקומית + הודעה
+- אם המפתח לא מוגדר: `503` + `code: email_not_configured` — סימולציה + הודעה; עם `VITE_DEMO_SEND_REAL_EMAIL=true` — **טוסט שגיאה** (ללא סימולציה שקטה)
 - אם `/api/*` לא נפרס (404 מ-SPA): בדקו ש-`api/` קיים ב-GitHub ו-Redeploy
 
 ### `vercel.json` ונתיבי API
@@ -223,7 +223,7 @@ EMAIL_FROM=onboarding@resend.dev
 
 **חשוב:** אל תשימו `RESEND_API_KEY` ב-`VITE_*`. ראו `.env.example`.
 
-`api/send-email.js` דורש בשרת: `RESEND_API_KEY` + `EMAIL_FROM` (אחרת `503` + `email_not_configured` והאפליקציה נופלת לסימולציה).
+`api/send-email.js` דורש בשרת: `RESEND_API_KEY` + `EMAIL_FROM` (אחרת `503` + `email_not_configured`). עם `VITE_DEMO_SEND_REAL_EMAIL=true` — שגיאה גלויה במקום סימולציה.
 
 ### קבצים
 
