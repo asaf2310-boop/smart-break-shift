@@ -11,7 +11,6 @@ import {
 } from "@/components/auth/LoginShell";
 import {
   isAdminPinConfigured,
-  isProductionAdminOpen,
   useIsAdmin,
   unlockAdminSession,
 } from "@/hooks/useIsAdmin";
@@ -23,21 +22,6 @@ export default function AdminGate({ children }) {
   const [error, setError] = useState("");
 
   if (isAdmin) {
-    if (isProductionAdminOpen()) {
-      return (
-        <div className="relative min-h-screen" dir="rtl">
-          <div
-            role="status"
-            className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-center text-sm text-amber-900"
-          >
-            כניסת מנהל ללא PIN — זמני לפרודקשן. להגדרת PIN: משתנה{" "}
-            <code className="text-xs bg-amber-100/80 px-1 rounded">VITE_ADMIN_PIN</code> ב-Vercel (build
-            מחדש).
-          </div>
-          {children}
-        </div>
-      );
-    }
     return children;
   }
 
