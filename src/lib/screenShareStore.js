@@ -1,4 +1,5 @@
 import { demoModeEnabled, demoSendRealEmailEnabled } from "@/api/demoClient";
+import { cleanEnvValue } from "@/api/supabase";
 import {
   escapeHtml,
   logEmailDelivery,
@@ -8,6 +9,9 @@ import {
 
 export const SCREEN_SHARE_STORAGE_KEY = "smart-break-shift-screen-share-v1";
 export const SCREEN_SHARE_CHANGE_EVENT = "screen-share-changed";
+/** דמו: תוקף קישור אורח — 72 שעות מיצירת הסשן (לא מחיקה אוטומטית מ-localStorage) */
+export const DEMO_GUEST_SESSION_TTL_MS = 72 * 60 * 60 * 1000;
+export const GUEST_BOOTSTRAP_QUERY_KEY = "b";
 
 const EMAIL_SUBJECT_SCREEN =
   "שיתוף מסך לתמיכה טכנית (צפייה בלבד) — באישורך";
@@ -70,6 +74,136 @@ export function screenShareFeaturesAvailable() {
 
 export function getSession(id) {
   return readSessions().find((s) => s.id === id) || null;
+}
+
+/** כתובת ציבורית לקישורים במייל — VITE_APP_URL או origin; מ-localhost מעדיף env */
+export function getPublicAppOrigin() {
+  const fromEnv = cleanEnvValue(import.meta.env.VITE_APP_URL)?.replace(/\/$/, "") || "";
+  if (typeof window === "undefined") return fromEnv;
+  const origin = window.location.origin;
+  const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(origin);
+  if (isLocal && fromEnv) return fromEnv;
+  return fromEnv || origin;
+}
+
+function toBase64Url(str) {
+  if (typeof btoa === "undefined") return "";
+  const bytes = new TextEncoder().encode(str);
+  let binary = "";
+  bytes.forEach((b) => {
+    binary += String.fromCharCode(b);
+  });
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function fromBase64Url(encoded) {
+  if (!encoded || typeof atob === "undefined") return null;
+  try {
+    const padded = encoded.replace(/-/g, "+").replace(/_/g, "/");
+    const padLen = (4 - (padded.length % 4)) % 4;
+    const binary = atob(padded + "=".repeat(padLen));
+    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
+function encodeGuestBootstrapPayload(session) {
+  if (!session?.id || !session.createdAt) return "";
+  const payload = {
+    c: session.createdAt,
+    a: String(session.agentName || "").slice(0, 120),
+    e: String(session.customerEmail || "").slice(0, 200),
+    r: session.crmCustomerId || null,
+  };
+  return toBase64Url(JSON.stringify(payload));
+}
+
+function decodeGuestBootstrapPayload(encoded) {
+  const json = fromBase64Url(encoded);
+  if (!json) return null;
+  try {
+    const parsed = JSON.parse(json);
+    if (!parsed?.c || Number.isNaN(new Date(parsed.c).getTime())) return null;
+    return {
+      createdAt: parsed.c,
+      agentName: String(parsed.a || "").slice(0, 120),
+      customerEmail: String(parsed.e || "").slice(0, 200),
+      crmCustomerId: parsed.r || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function isGuestSessionExpired(session) {
+  if (!session?.createdAt) return true;
+  const created = new Date(session.createdAt).getTime();
+  if (Number.isNaN(created)) return true;
+  return Date.now() - created > DEMO_GUEST_SESSION_TTL_MS;
+}
+
+/**
+ * דמו: יוצר סשן ב-localStorage של האורח מפרמטר bootstrap ב-URL (מכשיר/דפדפן אחר).
+ */
+export function bootstrapGuestSessionFromUrl(sessionId, bootstrapParam) {
+  if (!demoModeEnabled || !sessionId || !bootstrapParam) return null;
+
+  const payload = decodeGuestBootstrapPayload(bootstrapParam);
+  if (!payload) return null;
+
+  const existing = getSession(sessionId);
+  if (existing) {
+    if (existing.status === "ended") return existing;
+    return existing;
+  }
+
+  const session = {
+    id: sessionId,
+    crmCustomerId: payload.crmCustomerId,
+    agentName: payload.agentName,
+    customerEmail: payload.customerEmail,
+    status: "active",
+    createdAt: payload.createdAt,
+    consentAt: null,
+    recordingConsentAt: null,
+    recordingActiveAt: null,
+    recordingStoppedAt: null,
+    recordings: [],
+    emailSentAt: null,
+    endedAt: null,
+  };
+
+  if (isGuestSessionExpired(session)) return null;
+
+  writeSessions([...readSessions(), session]);
+  return session;
+}
+
+/**
+ * מחזיר סשן לאורח: localStorage → bootstrap מ-URL → בדיקת תוקף.
+ * @param {string} sessionId
+ * @param {URLSearchParams|string|null} searchParamsOrBootstrap
+ */
+export function resolveGuestSession(sessionId, searchParamsOrBootstrap = null) {
+  if (!sessionId) return null;
+
+  let bootstrapParam = null;
+  if (typeof searchParamsOrBootstrap === "string") {
+    bootstrapParam = searchParamsOrBootstrap;
+  } else if (searchParamsOrBootstrap?.get) {
+    bootstrapParam = searchParamsOrBootstrap.get(GUEST_BOOTSTRAP_QUERY_KEY);
+  }
+
+  let session = getSession(sessionId);
+  if (!session && bootstrapParam) {
+    session = bootstrapGuestSessionFromUrl(sessionId, bootstrapParam);
+  }
+
+  if (!session) return null;
+  if (session.status !== "ended" && isGuestSessionExpired(session)) return null;
+  return session;
 }
 
 export function listSessions() {
@@ -368,9 +502,34 @@ export function endSession(id) {
   });
 }
 
-export function buildScreenShareGuestUrl(sessionId, origin) {
-  const base = origin || (typeof window !== "undefined" ? window.location.origin : "");
-  return `${base}/support/screen/${sessionId}`;
+/**
+ * @param {string|{ id: string, createdAt?: string, agentName?: string, customerEmail?: string, crmCustomerId?: string|null }} sessionOrId
+ * @param {string} [origin] — ברירת מחדל getPublicAppOrigin()
+ */
+export function buildScreenShareGuestUrl(sessionOrId, origin) {
+  const base = (origin || getPublicAppOrigin()).replace(/\/$/, "");
+  let sessionId;
+  let session = null;
+
+  if (sessionOrId && typeof sessionOrId === "object" && sessionOrId.id) {
+    session = sessionOrId;
+    sessionId = session.id;
+  } else {
+    sessionId = String(sessionOrId || "").trim();
+    session = sessionId ? getSession(sessionId) : null;
+  }
+
+  if (!sessionId) return "";
+
+  const path = `${base}/support/screen/${encodeURIComponent(sessionId)}`;
+  if (!demoModeEnabled || !session?.createdAt) return path;
+
+  const bootstrap = encodeGuestBootstrapPayload(session);
+  if (!bootstrap) return path;
+
+  const params = new URLSearchParams();
+  params.set(GUEST_BOOTSTRAP_QUERY_KEY, bootstrap);
+  return `${path}?${params.toString()}`;
 }
 
 export function buildScreenShareEmailBody({
@@ -464,6 +623,13 @@ export function listScreenShareEmails() {
   );
 }
 
+export function getLastEmailLogForSession(sessionId) {
+  if (!sessionId) return null;
+  const logs = readStore().emailLogs.filter((log) => log.sessionId === sessionId);
+  if (!logs.length) return null;
+  return logs.sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt))[0];
+}
+
 function appendEmailLog(log) {
   const store = readStore();
   writeStore({ emailLogs: [...store.emailLogs, log] });
@@ -480,6 +646,7 @@ function buildScreenShareLogBase({
   guestUrl,
   status,
   resendId = null,
+  errorMessage = null,
 }) {
   return {
     id: makeId("ss_email"),
@@ -493,6 +660,7 @@ function buildScreenShareLogBase({
     sentAt: new Date().toISOString(),
     status,
     resendId,
+    ...(errorMessage ? { errorMessage: String(errorMessage) } : {}),
   };
 }
 
@@ -512,8 +680,9 @@ export async function sendScreenShareEmail({
   if (!toEmail || !toEmail.includes("@")) {
     throw new Error("כתובת מייל לא תקינה");
   }
+  const sessionForUrl = sessionId ? getSession(sessionId) : null;
   const url =
-    guestUrl || (sessionId ? buildScreenShareGuestUrl(sessionId) : null);
+    guestUrl || (sessionId ? buildScreenShareGuestUrl(sessionForUrl || sessionId) : null);
   if (!url) throw new Error("חסר קישור ללקוח");
   const subject = EMAIL_SUBJECT_SCREEN;
   const body = buildScreenShareEmailBody({
@@ -556,7 +725,25 @@ export async function sendScreenShareEmail({
     };
   }
 
-  const apiResult = await postSendEmail({ to: toEmail, subject, html, text: body });
+  let apiResult;
+  try {
+    apiResult = await postSendEmail({ to: toEmail, subject, html, text: body });
+  } catch (err) {
+    logEmailDelivery("screen-share-email", "failed", err?.message || err);
+    const failedLog = buildScreenShareLogBase({
+      toEmail,
+      subject,
+      body,
+      sessionId,
+      crmCustomerId,
+      agentName,
+      guestUrl: url,
+      status: "failed",
+      errorMessage: err?.message || "שליחת המייל נכשלה",
+    });
+    appendEmailLog(failedLog);
+    throw err;
+  }
 
   rejectDemoRealEmailFallback(apiResult);
 

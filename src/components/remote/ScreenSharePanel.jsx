@@ -12,12 +12,15 @@ import {
   createScreenSession,
   DEMO_SCREEN_SHARE_EMAIL_MESSAGE,
   endSession,
+  getLastEmailLogForSession,
   getSession,
   sendScreenShareEmail,
   subscribeScreenShare,
 } from "@/lib/screenShareStore";
 import ScreenShareAgentView from "@/components/remote/ScreenShareAgentView";
 import EmailStatusBanner from "@/components/remote/EmailStatusBanner";
+import EmailDiagnosticButton from "@/components/remote/EmailDiagnosticButton";
+import SessionEmailStatus from "@/components/remote/SessionEmailStatus";
 
 const DEMO_BANNER =
   "שלב א — צפייה בדפדפן בלבד (PeerJS). דמו: PeerServer ציבורי; לפרודקשן יש לארח PeerServer או Supabase Realtime.";
@@ -39,6 +42,8 @@ export default function ScreenSharePanel({
   const [session, setSession] = useState(null);
   const [copied, setCopied] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [emailLogRevision, setEmailLogRevision] = useState(0);
 
   const defaultCustomerEmail = useMemo(() => {
     if (customerEmailProp) return String(customerEmailProp).trim();
@@ -55,15 +60,21 @@ export default function ScreenSharePanel({
     const refresh = () => {
       const latest = getSession(session.id);
       if (latest) setSession(latest);
+      setEmailLogRevision((n) => n + 1);
     };
     refresh();
     return subscribeScreenShare(refresh);
   }, [session?.id]);
 
+  const lastEmailLog = useMemo(() => {
+    if (!session?.id) return null;
+    return getLastEmailLogForSession(session.id);
+  }, [session?.id, session?.emailSentAt, emailLogRevision]);
+
   const guestUrl = useMemo(() => {
     if (!session?.id) return "";
-    return buildScreenShareGuestUrl(session.id);
-  }, [session?.id]);
+    return buildScreenShareGuestUrl(session);
+  }, [session]);
 
   const mailtoHref = useMemo(
     () =>
@@ -161,14 +172,19 @@ export default function ScreenSharePanel({
         logSessionStart(created);
       }
 
-      const url = buildScreenShareGuestUrl(activeSession.id);
+      const url = buildScreenShareGuestUrl(activeSession);
       await sendGuestLinkEmail(activeSession, url);
     } catch (err) {
+      setEmailLogRevision((n) => n + 1);
+      const rateLimited = err.status === 429;
       toast({
-        title: "לא הצליח",
+        title: rateLimited ? "מגבלת שליחה (10 לשעה)" : "לא הצליח",
         description: (
           <span>
-            {err.message || "בדקו את כתובת המייל והרשת"}
+            {err.message ||
+              (rateLimited
+                ? "יותר מדי שליחות מהדפדפן הזה — נסו שוב בעוד שעה או השתמשו ב-mailto"
+                : "בדקו את כתובת המייל והרשת")}
             {session?.id && mailtoHref ? (
               <>
                 {" "}
@@ -184,6 +200,33 @@ export default function ScreenSharePanel({
       });
     } finally {
       setStarting(false);
+    }
+  };
+
+  const handleResendEmail = async () => {
+    if (!session?.id || !guestUrl) return;
+    if (!isValidEmail(emailTo)) {
+      toast({
+        title: "מייל לא תקין",
+        description: "הזינו כתובת מייל תקינה של הלקוח",
+        variant: "destructive",
+      });
+      return;
+    }
+    setResending(true);
+    try {
+      await sendGuestLinkEmail(session, guestUrl);
+      setEmailLogRevision((n) => n + 1);
+    } catch (err) {
+      setEmailLogRevision((n) => n + 1);
+      const rateLimited = err.status === 429;
+      toast({
+        title: rateLimited ? "מגבלת שליחה (10 לשעה)" : "לא הצליח לשלוח שוב",
+        description: err.message || "בדקו את כתובת המייל והרשת",
+        variant: "destructive",
+      });
+    } finally {
+      setResending(false);
     }
   };
 
@@ -238,6 +281,9 @@ export default function ScreenSharePanel({
               dir="ltr"
             />
           </div>
+          <div className="flex justify-end">
+            <EmailDiagnosticButton />
+          </div>
           <Button
             type="button"
             onClick={handleStartSessionAndSend}
@@ -261,7 +307,11 @@ export default function ScreenSharePanel({
               ממתין לאישור הלקוח בקישור —{" "}
               {demoModeEnabled && !demoSendRealEmailEnabled
                 ? "העתיקו את הקישור למטה או פתחו mailto; "
-                : "הקישור נשלח במייל; "}
+                : lastEmailLog?.status === "sent"
+                  ? "הקישור נשלח במייל; "
+                  : lastEmailLog?.status === "failed"
+                    ? "שליחת המייל נכשלה — לחצו «שלח שוב במייל» או mailto; "
+                    : "שלחו את הקישור במייל (כפתור «שלח שוב במייל»); "}
               האישור נרשם כשהלקוח מאשר בדף שיתוף המסך.
             </p>
           )}
@@ -287,6 +337,37 @@ export default function ScreenSharePanel({
               העתק
             </Button>
           </div>
+          <SessionEmailStatus
+            log={lastEmailLog}
+            sessionEmailSentAt={session.emailSentAt}
+          />
+
+          <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="ss-email-resend">מייל לקוח (לשליחה מחדש)</Label>
+              <Input
+                id="ss-email-resend"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                value={emailTo}
+                onChange={(e) => setEmailTo(e.target.value)}
+                className="text-left font-mono text-sm"
+                dir="ltr"
+              />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleResendEmail}
+              disabled={!isValidEmail(emailTo) || resending || starting}
+              className="w-full gap-2 border-teal-300 text-teal-900 hover:bg-teal-50"
+            >
+              <Mail className="w-4 h-4" />
+              {resending ? "שולח שוב..." : "שלח שוב במייל"}
+            </Button>
+          </div>
+
           {mailtoHref && (
             <a
               href={mailtoHref}

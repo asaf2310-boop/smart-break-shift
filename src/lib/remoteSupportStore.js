@@ -266,6 +266,7 @@ function buildRustDeskLogBase({
   resolvedConsentUrl,
   status,
   resendId = null,
+  errorMessage = null,
 }) {
   return {
     id: makeId("rs_email"),
@@ -280,6 +281,7 @@ function buildRustDeskLogBase({
     sentAt: new Date().toISOString(),
     status,
     resendId,
+    ...(errorMessage ? { errorMessage: String(errorMessage) } : {}),
   };
 }
 
@@ -339,7 +341,25 @@ export async function sendRustDeskDownloadEmail({
     };
   }
 
-  const apiResult = await postSendEmail({ to: toEmail, subject, html, text: body });
+  let apiResult;
+  try {
+    apiResult = await postSendEmail({ to: toEmail, subject, html, text: body });
+  } catch (err) {
+    logEmailDelivery("rustdesk-email", "failed", err?.message || err);
+    const failedLog = buildRustDeskLogBase({
+      toEmail,
+      subject,
+      body,
+      sessionId,
+      crmCustomerId,
+      agentName,
+      resolvedConsentUrl,
+      status: "failed",
+      errorMessage: err?.message || "שליחת המייל נכשלה",
+    });
+    appendRemoteEmailLog(failedLog);
+    throw err;
+  }
 
   rejectDemoRealEmailFallback(apiResult);
 

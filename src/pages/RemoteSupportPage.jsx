@@ -13,6 +13,7 @@ import {
   subscribeRemoteSupport,
 } from "@/lib/remoteSupportStore";
 import {
+  getLastEmailLogForSession,
   listSessions as listScreenSessions,
   screenShareFeaturesAvailable,
   subscribeScreenShare,
@@ -149,7 +150,19 @@ export default function RemoteSupportPage() {
                 <p className="m3-label-medium text-on-surface-variant">אין סשני צפייה עדיין.</p>
               ) : (
                 <ul className="divide-y divide-outline-variant/40">
-                  {screenSessions.slice(0, 15).map((s) => (
+                  {screenSessions.slice(0, 15).map((s) => {
+                    const lastMail = getLastEmailLogForSession(s.id);
+                    const mailLabel =
+                      lastMail?.status === "sent"
+                        ? `מייל: נשלח ${formatWhen(lastMail.sentAt)}`
+                        : lastMail?.status === "failed"
+                          ? "מייל: נכשל"
+                          : lastMail?.status === "simulated"
+                            ? "מייל: סימולציה"
+                            : s.emailSentAt
+                              ? `מייל: ${formatWhen(s.emailSentAt)}`
+                              : null;
+                    return (
                     <li key={s.id} className="py-3 flex flex-wrap items-center justify-between gap-2">
                       <div className="min-w-0">
                         <p className="m3-label-medium font-mono text-left text-xs" dir="ltr">
@@ -159,6 +172,9 @@ export default function RemoteSupportPage() {
                           {s.agentName || "נציג"} · {formatWhen(s.createdAt)}
                           {s.customerEmail ? ` · ${s.customerEmail}` : ""}
                         </p>
+                        {mailLabel ? (
+                          <p className="m3-label-medium text-xs mt-0.5 text-teal-800">{mailLabel}</p>
+                        ) : null}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <span
@@ -180,7 +196,8 @@ export default function RemoteSupportPage() {
                         )}
                       </div>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               )}
             </motion.div>

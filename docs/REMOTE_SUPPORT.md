@@ -30,7 +30,7 @@
 
 ### מה הלקוח עושה
 
-1. לפתוח את הקישור מהמייל: `{origin}/support/screen/{sessionId}`
+1. לפתוח את הקישור מהמייל: `{origin}/support/screen/{sessionId}?b=…` (בדמו — פרמטר `b` מכיל מטא-דאטה מינימלי ליצירת הסשן בדפדפן האורח)
 2. לקרוא את ההסבר, לסמן אישור.
 3. ללחוץ «אני מאשר ומשתף מסך».
 4. לבחור מסך / חלון / לשונית בשיתוף הדפדפן.
@@ -165,6 +165,7 @@
 |--------|------|--------|
 | `VITE_DEMO_MODE` | `true` | כבר קיים |
 | `VITE_DEMO_SEND_REAL_EMAIL` | `true` | **חדש** — build-time; Redeploy אחרי שינוי |
+| `VITE_APP_URL` | `https://smart-break-shift-demo.vercel.app` | **מומלץ** — קישורי מייל; חובה אם בונים מ-localhost |
 | `RESEND_API_KEY` | `re_...` | מ-[resend.com](https://resend.com) |
 | `EMAIL_FROM` | `noreply@your-verified-domain.com` | חייב להיות מדומיין **מאומת** ב-Resend |
 
@@ -224,6 +225,18 @@ EMAIL_FROM=onboarding@resend.dev
 **חשוב:** אל תשימו `RESEND_API_KEY` ב-`VITE_*`. ראו `.env.example`.
 
 `api/send-email.js` דורש בשרת: `RESEND_API_KEY` + `EMAIL_FROM` (אחרת `503` + `email_not_configured`). עם `VITE_DEMO_SEND_REAL_EMAIL=true` — שגיאה גלויה במקום סימולציה.
+
+### דמו: למי מותר לשלוח (Resend)
+
+| `EMAIL_FROM` | נמען (למשל Gmail / hyp.co.il) | מה קורה |
+|--------------|----------------------------------|---------|
+| `onboarding@resend.dev` | רק המייל של **חשבון Resend** | שליחה לכתובות אחרות → **403 מ-Resend** → האפליקציה מציגה טוסט שגיאה + `emailLogs` עם `status: failed` |
+| כתובת מדומיין **מאומת** (DNS) | כל נמען תקין | Resend מקבל (`200` + `id`) — אם לא מגיע: בדקו **Resend → Emails** (Delivered/Bounced) ותיבת ספאם אצל הנמען |
+| לא מוגדר / `npm run dev` בלבד | — | סימולציה או `503` (עם `VITE_DEMO_SEND_REAL_EMAIL=true` — טוסט, בלי «נשלח» שקט) |
+
+**אין** במסלול החינמי של Resend הגבלה «רק Gmail» — ההבדל הוא בדרך כלל `EMAIL_FROM` (בדיקה מול דומיין מאומת) ולא ספק הנמען.
+
+**hyp.co.il:** אם Resend דוחה בשליחה — תראו שגיאה באפליקציה. אם Resend מציג **Delivered** ואין מייל — זה לרוב ספאם/סינון אצל hyp.co.il (לא באג בשרת Vercel).
 
 ### קבצים
 
@@ -334,6 +347,23 @@ EMAIL_FROM=onboarding@resend.dev
 
 1. לשונית RustDesk → אשף קיים → מזהה 9 ספרות וכו'.
 
-### שני מכשירים
+### שני מכשירים (נציג בדמו / Vercel + לקוח במייל)
 
-אותה זרימה; ודאו ששני המכשירים באותו `origin` (אותו `npm run dev` / דומיין) כדי ש-`localStorage` של הסשן יהיה זמין לדף האורח בדמו.
+1. נציג ב-`https://smart-break-shift-demo.vercel.app` (או `vercel dev` עם `VITE_APP_URL` לדומיין הדמו) → **התחל סשן** → שליחת מייל / העתקת קישור.
+2. הקישור כולל `?b=` (bootstrap) — האורח **לא** צריך את אותו `localStorage` כמו הנציג.
+3. לקוח פותח ב-Chrome/Edge (גם incognito) → דף אישור, לא «קישור לא תקין».
+4. הנציג משאיר מסך הצפייה פתוח; PeerJS מתחבר לפי `sessionId` בנתיב.
+
+**מגבלות דמו (מכשירים נפרדים):** `consentAt` / `recordingActiveAt` ב-localStorage — הנציג לא רואה עדכון אישור מהלקוח בזמן אמת אם הם לא באותו דפדפן; שיתוף הווידאו ב-PeerJS עדיין עובד. הקלטה ותג «מוקלט» אצל האורח — לפי localStorage של האורח בלבד.
+
+**תוקף קישור:** 72 שעות מ-`createdAt` (אחרת «קישור לא תקין או שפג תוקפו»). קישורים ישנים בלי `?b=` — בקשו מהנציג לשלוח קישור חדש.
+
+### קישורי מייל ו-host
+
+| מצב | התנהגות |
+|-----|----------|
+| נציג על Vercel דמו | `window.location.origin` — תקין |
+| נציג על `localhost` + מייל אמיתי | הגדירו `VITE_APP_URL=https://…vercel.app` — אחרת המייל עלול להכיל `127.0.0.1` |
+| `getPublicAppOrigin()` | `VITE_APP_URL` (אם מוגדר) או `origin` נוכחי |
+
+פונקציות: `buildScreenShareGuestUrl`, `resolveGuestSession`, `bootstrapGuestSessionFromUrl` ב-`screenShareStore.js`.

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import Peer from "peerjs";
 import { motion } from "framer-motion";
 import {
@@ -12,9 +12,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  getSession,
   logRecordingConsent,
   logScreenConsent,
+  GUEST_BOOTSTRAP_QUERY_KEY,
+  resolveGuestSession,
   screenShareDemoAvailable,
   subscribeScreenShare,
 } from "@/lib/screenShareStore";
@@ -33,7 +34,11 @@ function displayMediaSystemAudioSupported() {
 
 export default function ScreenShareGuestPage() {
   const { sessionId } = useParams();
-  const [session, setSession] = useState(() => getSession(sessionId));
+  const [searchParams] = useSearchParams();
+  const bootstrapKey = searchParams.get(GUEST_BOOTSTRAP_QUERY_KEY);
+  const [session, setSession] = useState(() =>
+    resolveGuestSession(sessionId, bootstrapKey)
+  );
   const [consentChecked, setConsentChecked] = useState(false);
   const [recordingConsentChecked, setRecordingConsentChecked] = useState(false);
   const [includeSystemAudio, setIncludeSystemAudio] = useState(false);
@@ -46,17 +51,17 @@ export default function ScreenShareGuestPage() {
   const streamRef = useRef(null);
 
   useEffect(() => {
-    const refresh = () => setSession(getSession(sessionId));
+    const refresh = () => setSession(resolveGuestSession(sessionId, bootstrapKey));
     refresh();
     return subscribeScreenShare(refresh);
-  }, [sessionId]);
+  }, [sessionId, bootstrapKey]);
 
   useEffect(() => {
     if (!shared || !sessionId) return undefined;
     let intervalMs = 1500;
     let timer;
     const tick = () => {
-      const latest = getSession(sessionId);
+      const latest = resolveGuestSession(sessionId, bootstrapKey);
       setSession(latest);
       const nextMs =
         latest?.recordingConsentAt && latest?.recordingActiveAt ? 500 : 1500;
@@ -69,7 +74,7 @@ export default function ScreenShareGuestPage() {
     tick();
     timer = setInterval(tick, intervalMs);
     return () => clearInterval(timer);
-  }, [shared, sessionId]);
+  }, [shared, sessionId, bootstrapKey]);
 
   useEffect(() => {
     return () => {
@@ -115,7 +120,7 @@ export default function ScreenShareGuestPage() {
       if (recordingConsentChecked) {
         logRecordingConsent(session.id);
       }
-      setSession(getSession(sessionId));
+      setSession(resolveGuestSession(sessionId, bootstrapKey));
 
       const peer = new Peer({ debug: 0 });
       peerRef.current = peer;

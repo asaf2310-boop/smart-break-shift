@@ -5,16 +5,46 @@
 
 import { demoSendRealEmailEnabled } from "@/api/demoClient";
 
+function hebrewHintForResendMessage(message, resendStatus) {
+  const m = String(message || "").toLowerCase();
+  if (
+    resendStatus === 403 ||
+    m.includes("testing emails") ||
+    m.includes("verify a domain") ||
+    m.includes("resend.dev")
+  ) {
+    return " — עם onboarding@resend.dev אפשר לשלוח רק למייל של חשבון Resend. ללקוחות (למשל hyp.co.il) אמתו דומיין ב-Resend והגדירו EMAIL_FROM ממנו.";
+  }
+  if (resendStatus === 422 || m.includes("invalid") || m.includes("unprocessable")) {
+    return " — כתובת הנמען נדחתה על ידי Resend (בדיקה/דומיין חסום).";
+  }
+  return "";
+}
+
 export function formatSendEmailError(data = {}, status) {
-  if (data.message) return String(data.message);
+  if (data.code === "resend_sandbox_recipient") {
+    return (
+      "Resend במצב בדיקות (onboarding@resend.dev) — אפשר לשלוח רק למייל של חשבון Resend. " +
+      "ללקוחות ב-Gmail או בדומיין הארגון: אמתו דומיין ב-resend.com/domains והגדירו EMAIL_FROM מהדומיין."
+    );
+  }
+  if (data.message) {
+    const base = String(data.message);
+    return base + hebrewHintForResendMessage(base, data.resendStatus);
+  }
   if (status === 503 && data.code === "email_not_configured") {
     return "שירות המייל לא מוגדר — הגדירו RESEND_API_KEY ו-EMAIL_FROM ב-Vercel ועשו Redeploy";
   }
   if (status === 502) {
-    return "שגיאת Resend (502) — בדקו ש-EMAIL_FROM מאומת בדומיין ב-Resend";
+    return "שגיאת Resend — בדקו בלוח Resend → Emails / Domains: EMAIL_FROM מדומיין מאומת, והרשאות לנמען החיצוני";
   }
   if (status === 429) {
-    return data.message || "יותר מדי שליחות — נסו שוב בעוד שעה";
+    const retryMin =
+      data.retryAfterSec != null
+        ? Math.max(1, Math.ceil(Number(data.retryAfterSec) / 60))
+        : null;
+    const suffix = retryMin ? ` — נסו שוב בעוד כ-${retryMin} דקות` : "";
+    return (data.message || "יותר מדי שליחות מהשרת") + suffix;
   }
   if (status === 403) {
     return "גישה נדחתה — פתחו את האפליקציה מהדומיין הרשמי (CORS)";
@@ -64,10 +94,48 @@ export async function fetchEmailStatus() {
     return {
       configured: Boolean(data.configured),
       apiPresent: data.apiPresent !== false,
+      fromDomain: data.fromDomain || null,
+      sandboxMode: Boolean(data.sandboxMode),
+      demoDeployment: Boolean(data.demoDeployment),
+      rateLimitPerHour: data.rateLimitPerHour ?? null,
+      hint: data.hint || null,
     };
   } catch {
     return { configured: false, apiPresent: false };
   }
+}
+
+/** טקסט אבחון בעברית לכפתור «בדיקת מייל» */
+export function formatEmailDiagnosticReport(status, { demoSendRealEmail } = {}) {
+  const lines = [];
+  if (!status?.apiPresent) {
+    lines.push("שרת API: לא נפרס (העלו api/ ו-Redeploy)");
+    return lines.join("\n");
+  }
+  lines.push(`שרת API: פעיל`);
+  lines.push(`Resend מוגדר: ${status.configured ? "כן" : "לא"}`);
+  if (status.fromDomain) {
+    lines.push(`דומיין שולח (EMAIL_FROM): ${status.fromDomain}`);
+  }
+  if (status.sandboxMode) {
+    lines.push(
+      "מצב בדיקות Resend: onboarding@resend.dev — שליחה רק למייל של חשבון Resend, לא ללקוחות"
+    );
+  } else if (status.configured) {
+    lines.push("מצב שליחה: דומיין מאומת (נמענים חיצוניים מותרים)");
+  }
+  if (status.rateLimitPerHour) {
+    lines.push(`מגבלת שליחה: ${status.rateLimitPerHour} מיילים לשעה ל-IP`);
+  }
+  if (demoSendRealEmail != null) {
+    lines.push(
+      `בניית דמו (VITE_DEMO_SEND_REAL_EMAIL): ${demoSendRealEmail ? "מייל אמיתי" : "סימולציה בלבד"}`
+    );
+  }
+  if (status.hint) {
+    lines.push(`המלצה: ${status.hint}`);
+  }
+  return lines.join("\n");
 }
 
 export async function postSendEmail({ to, subject, html, text }) {
@@ -104,8 +172,10 @@ export async function postSendEmail({ to, subject, html, text }) {
 
   if (!res.ok) {
     const err = new Error(formatSendEmailError(data, res.status));
-    err.code = data.error || data.code || "send_failed";
+    err.code = data.code || data.error || "send_failed";
     err.status = res.status;
+    err.resendStatus = data.resendStatus;
+    err.resendMessage = data.message;
     throw err;
   }
 
