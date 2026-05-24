@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { ChevronDown, Lock, Mail, User } from "lucide-react";
-import BrandEntryBlock from "@/components/brand/BrandEntryBlock";
 import { Input } from "@/components/ui/input";
 import {
   agentLoginByDisplayName,
@@ -17,6 +16,7 @@ import {
 } from "@/lib/agentAuth";
 import { demoModeEnabled } from "@/api/demoClient";
 import { getAgentNamesList } from "@/constants/scheduling";
+import { cn } from "@/lib/utils";
 
 const MODES = {
   LOGIN: "login",
@@ -196,7 +196,7 @@ function DemoEmailLogin({ onSuccess }) {
         : "התחברות עם אימייל וסיסמה (דמו)";
 
   return (
-    <LoginShell subtitle={subtitle} showDemoBadge>
+    <LoginShell subtitle={subtitle} showDemoBadge demoHero>
       {mode === MODES.FORGOT ? (
         <form onSubmit={handleForgot} className="space-y-4">
           <Field icon={Mail} label="אימייל">
@@ -204,7 +204,7 @@ function DemoEmailLogin({ onSuccess }) {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="bg-white/10 border-white/20 text-white text-right"
+              className={DEMO_FIELD_CLASS}
               required
               dir="ltr"
             />
@@ -214,7 +214,7 @@ function DemoEmailLogin({ onSuccess }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 rounded-2xl font-bold text-white bg-gradient-to-r from-indigo-500 to-purple-600 disabled:opacity-50"
+            className={DEMO_SUBMIT_CLASS}
           >
             {loading ? "שולח..." : "שלח קישור לאיפוס"}
           </button>
@@ -237,7 +237,7 @@ function DemoEmailLogin({ onSuccess }) {
               type="email"
               value={email}
               readOnly
-              className="bg-white/5 border-white/10 text-white/80 text-right"
+              className={`${DEMO_FIELD_CLASS} text-white/80`}
               dir="ltr"
             />
           </Field>
@@ -246,7 +246,7 @@ function DemoEmailLogin({ onSuccess }) {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="bg-white/10 border-white/20 text-white text-right"
+              className={DEMO_FIELD_CLASS}
               required
               {...passwordMinLengthInputProps()}
             />
@@ -256,7 +256,7 @@ function DemoEmailLogin({ onSuccess }) {
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="bg-white/10 border-white/20 text-white text-right"
+              className={DEMO_FIELD_CLASS}
               required
               {...passwordMinLengthInputProps()}
             />
@@ -265,7 +265,7 @@ function DemoEmailLogin({ onSuccess }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 rounded-2xl font-bold text-white bg-gradient-to-r from-indigo-500 to-purple-600 disabled:opacity-50"
+            className={DEMO_SUBMIT_CLASS}
           >
             {loading ? "שומר..." : "שמירה וכניסה"}
           </button>
@@ -290,7 +290,7 @@ function DemoEmailLogin({ onSuccess }) {
                 setEmail(e.target.value);
                 setEmailStepDone(false);
               }}
-              className="bg-white/10 border-white/20 text-white text-right"
+              className={DEMO_FIELD_CLASS}
               required
               readOnly={emailStepDone}
               autoFocus
@@ -303,7 +303,7 @@ function DemoEmailLogin({ onSuccess }) {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="bg-white/10 border-white/20 text-white text-right"
+                className={DEMO_FIELD_CLASS}
                 required
                 autoFocus
               />
@@ -314,7 +314,7 @@ function DemoEmailLogin({ onSuccess }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 rounded-2xl font-bold text-white bg-gradient-to-r from-indigo-500 to-purple-600 disabled:opacity-50"
+            className={DEMO_SUBMIT_CLASS}
           >
             {loading ? "מתחבר..." : emailStepDone ? "כניסה" : "המשך"}
           </button>
@@ -348,33 +348,47 @@ function DemoEmailLogin({ onSuccess }) {
   );
 }
 
-function LoginShell({ subtitle, showDemoBadge, children }) {
+const DEMO_FIELD_CLASS = "text-white text-right rounded-2xl";
+const DEMO_SUBMIT_CLASS =
+  "w-full py-3 rounded-2xl font-bold text-white disabled:opacity-50 login-demo-submit";
+
+function LoginShell({ subtitle, showDemoBadge, demoHero = false, children }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center min-h-screen overflow-y-auto bg-gradient-to-br from-indigo-950 via-purple-950 to-slate-900 p-4 sm:p-6"
+      className={cn("login-shell", demoHero && "login-shell--demo login-hero-bg")}
       dir="rtl"
     >
-      <motion.div className="absolute top-1/4 left-1/4 w-72 h-72 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
-      <motion.div className="absolute bottom-1/4 right-1/4 w-72 h-72 bg-purple-500/20 rounded-full blur-3xl pointer-events-none" />
-
-      {demoModeEnabled ? (
-        <BrandEntryBlock onDark className="relative w-full max-w-xl mx-auto text-center mb-8 sm:mb-10 shrink-0" />
-      ) : (
-        <h1 className="relative text-2xl sm:text-3xl font-bold text-white text-center mb-8 sm:mb-10 shrink-0">
+      {!demoHero && (
+        <h1 className="relative z-10 text-2xl sm:text-3xl font-bold text-white text-center mb-8 sm:mb-10 shrink-0">
           כניסת נציג
         </h1>
+      )}
+
+      {demoHero && (
+        <>
+          <span className="sr-only">AllInCenter — CONNECT • MANAGE • GROW</span>
+          <div className="login-shell__brand-zone" aria-hidden />
+        </>
       )}
 
       <motion.div
         initial={{ opacity: 0, scale: 0.92, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="relative w-full max-w-sm sm:max-w-md px-2"
+        className={cn(
+          "relative z-10 w-full",
+          demoHero ? "login-shell__card-wrap" : "max-w-sm sm:max-w-md px-2"
+        )}
       >
-        <div className="w-full bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl shadow-2xl p-5 sm:p-8">
+        <div
+          className={cn(
+            "login-shell__card w-full rounded-3xl",
+            demoHero ? "p-4 sm:p-6 md:p-8" : "p-5 sm:p-8"
+          )}
+        >
           <div className="flex flex-col items-center gap-3 mb-6">
             <p className="text-white/60 text-sm text-center">{subtitle}</p>
             {showDemoBadge && (
-              <span className="text-xs font-bold text-emerald-300 bg-emerald-500/20 px-3 py-1 rounded-full">
+              <span className="login-demo-badge text-xs font-bold px-3 py-1 rounded-full">
                 סביבת דמו
               </span>
             )}

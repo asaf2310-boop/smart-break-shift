@@ -49,7 +49,11 @@ VITE_DEMO_MODE=true
 
 ## פריסה
 
-ב־Vercel:
+**שני פרויקטי Vercel מומלצים** (דמו + פרודקשן) על אותו repo `asaf2310-boop/smart-break-shift` — ההפרדה היא במשתני סביבה בזמן build, לא בשני repos. פירוט מלא: [`docs/DEMO_VS_PRODUCTION.md`](docs/DEMO_VS_PRODUCTION.md).
 
-- למערכת אמיתית: להגדיר `VITE_SUPABASE_URL` ו־`VITE_SUPABASE_ANON_KEY`.
-- לסביבת דמו: להגדיר `VITE_DEMO_MODE=true`.
+| פרויקט | `VITE_DEMO_MODE` (Production) | חובה גם |
+|--------|-------------------------------|---------|
+| **smart-break-shift** (לייב) | **לא** — אל תגדיר `true` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` |
+| **smart-break-shift-demo** (הדגמה) | `true` | אופציונלי |
+
+אחרי שינוי משתני `VITE_*` ב-Vercel — חובה **Redeploy** (הערכים נכנסים רק ב-build חדש).

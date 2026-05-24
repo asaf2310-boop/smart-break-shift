@@ -1,4 +1,5 @@
-# Demo preview (localStorage). For live Supabase use preview-live.ps1
+﻿# Demo preview (localStorage). For live Supabase use preview-live.ps1
+# Run: powershell -ExecutionPolicy Bypass -File .\preview-shell.ps1  (if scripts are blocked)
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $michalckNode = Join-Path (Split-Path $root -Parent) "michalck\.tools\node"
@@ -41,7 +42,9 @@ if (Test-Path ".env.local") {
 }
 $envLines = Set-EnvLocalValue $envLines "VITE_DEMO_MODE" "true"
 $envLines = Set-EnvLocalValue $envLines "VITE_ADMIN_PIN" "1234"
-$envLines | Set-Content ".env.local" -Encoding utf8NoBOM
+$envLocalPath = Join-Path $root ".env.local"
+$utf8NoBom = New-Object System.Text.UTF8Encoding $false
+[System.IO.File]::WriteAllLines($envLocalPath, $envLines, $utf8NoBom)
 
 if (-not (Test-Path "node_modules")) {
     Write-Host "npm install (first time)..."
@@ -58,3 +61,4 @@ Write-Host ""
 Write-Host "If you changed .env.local earlier, restart this script so Vite reloads env."
 Write-Host ""
 npm run dev
+

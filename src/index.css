@@ -203,6 +203,139 @@
     @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-medium
       bg-primary-container/60 text-on-primary-container border border-outline/15;
   }
+
+  /** Agent login — prod gradient; demo uses .login-hero-bg */
+  .login-shell {
+    @apply fixed inset-0 z-50 flex flex-col items-center justify-center min-h-[100dvh] overflow-y-auto p-4 sm:p-6;
+    background: linear-gradient(
+      168deg,
+      hsl(243 47% 28%) 0%,
+      hsl(263 55% 34%) 38%,
+      hsl(271 58% 26%) 72%,
+      hsl(244 47% 16%) 100%
+    );
+  }
+
+  /** Demo login — lockup PNG as page background (width matches glass card) */
+  .login-shell--demo.login-hero-bg {
+    @apply justify-start items-center gap-3;
+    min-height: 100dvh;
+    padding-top: max(0.75rem, env(safe-area-inset-top, 0px));
+    padding-bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
+    --login-demo-lockup-width: min(24rem, 88vw);
+    --login-bg-edge: #1a0a2e;
+    --login-bg-mid: #2d1b4e;
+    --login-bg-deep: #0f0618;
+    --login-accent-violet: #8b5cf6;
+    --login-accent-cyan: #22d3ee;
+    /* Solid base + viewport-fixed gradient; lockup layer unchanged */
+    background-color: var(--login-bg-deep);
+    background-image:
+      url("/brand/allincenter-login-v2.png"),
+      linear-gradient(
+        180deg,
+        var(--login-bg-mid) 0%,
+        var(--login-bg-edge) 30%,
+        #140820 58%,
+        var(--login-bg-deep) 100%
+      );
+    background-size: var(--login-demo-lockup-width) auto, 100vw 100dvh;
+    background-position: center top, center top;
+    background-repeat: no-repeat, no-repeat;
+    background-attachment: scroll, fixed;
+  }
+
+  /** Reserves height for scaled lockup (card sits directly below) */
+  .login-shell--demo .login-shell__brand-zone {
+    flex: 0 0 auto;
+    width: var(--login-demo-lockup-width);
+    max-width: 100%;
+    height: var(--login-demo-lockup-width);
+    pointer-events: none;
+  }
+
+  .login-shell--demo .login-shell__card-wrap {
+    @apply relative z-10 shrink-0 w-full px-2;
+    max-width: var(--login-demo-lockup-width);
+    margin-top: 0;
+  }
+
+  @media (max-width: 639px) {
+    .login-shell--demo .login-shell__card {
+      @apply p-4;
+    }
+  }
+
+  .login-shell__card {
+    @apply bg-white/10 backdrop-blur-xl border border-white/25 shadow-2xl;
+    box-shadow:
+      0 8px 32px hsl(244 47% 8% / 0.45),
+      0 0 0 1px hsl(0 0% 100% / 0.06) inset;
+  }
+
+  /** Demo card — glass harmonized with logo palette */
+  .login-shell--demo .login-shell__card {
+    @apply relative overflow-hidden border-0 bg-violet-950/40 backdrop-blur-2xl;
+    box-shadow:
+      0 8px 32px rgb(139 92 246 / 0.18),
+      0 0 56px rgb(34 211 238 / 0.08),
+      inset 0 0 0 1px rgb(139 92 246 / 0.22);
+  }
+
+  .login-shell--demo .login-shell__card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      135deg,
+      rgb(139 92 246 / 0.45),
+      rgb(124 58 237 / 0.2) 45%,
+      rgb(34 211 238 / 0.35)
+    );
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  .login-shell--demo .login-shell__card input,
+  .login-shell--demo .login-shell__card select {
+    @apply border-violet-500/30 bg-violet-950/50 text-white;
+  }
+
+  .login-shell--demo .login-shell__card input:focus-visible,
+  .login-shell--demo .login-shell__card select:focus-visible {
+    @apply border-cyan-400/50 outline-none ring-2 ring-cyan-400/25;
+  }
+
+  .login-shell--demo .login-shell__card input[readonly] {
+    @apply border-violet-500/15 bg-violet-950/30 text-white/75;
+  }
+
+  .login-shell--demo .login-shell__card button.login-demo-submit {
+    background: linear-gradient(
+      90deg,
+      var(--login-accent-violet) 0%,
+      #6366f1 52%,
+      var(--login-accent-cyan) 100%
+    );
+    box-shadow: 0 4px 20px rgb(139 92 246 / 0.35);
+  }
+
+  .login-shell--demo .login-shell__card button.login-demo-submit:not(:disabled):hover {
+    filter: brightness(1.06);
+  }
+
+  .login-shell--demo .login-demo-badge {
+    @apply border border-violet-400/30 bg-violet-500/20 text-cyan-200;
+  }
 }
 
 @layer utilities {

@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from "react";
-import { dataClient } from "@/api/client";
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { format, addDays, isBefore, isAfter } from "date-fns";
+import { format, addDays, isAfter } from "date-fns";
 import { useToast } from "@/components/ui/use-toast";
 import { motion } from "framer-motion";
 import {
@@ -18,30 +17,17 @@ import {
   getConstraintsDeadline,
 } from "@/constants/scheduling";
 import { getLiveQueryOptions } from "@/lib/liveQuery";
+import {
+  fetchWeekShiftRegistrations,
+  readCachedSchedule,
+  writeCachedSchedule,
+} from "@/lib/shiftScheduleQuery";
+import WeeklySchedulePanel from "@/components/shifts/WeeklySchedulePanel";
+import BackendConfigBanner from "@/components/BackendConfigBanner";
 
-const getScheduleCacheKey = (dateFrom, dateTo) => `shift-schedule-cache:${dateFrom}:${dateTo}`;
-
-const readCachedSchedule = (dateFrom, dateTo) => {
-  try {
-    const raw = sessionStorage.getItem(getScheduleCacheKey(dateFrom, dateTo));
-    const parsed = raw ? JSON.parse(raw) : undefined;
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : undefined;
-  } catch {
-    return undefined;
-  }
-};
-
-const writeCachedSchedule = (dateFrom, dateTo, data) => {
-  if (!Array.isArray(data) || data.length === 0) return;
-  try {
-    sessionStorage.setItem(getScheduleCacheKey(dateFrom, dateTo), JSON.stringify(data));
-  } catch {
-    // Cache is only a speed boost; ignore browsers that block storage.
-  }
-};
+import { dataClient } from "@/api/client";
 
 export default function ShiftScheduler() {
-  const [agentName, setAgentName] = useState(() => getStoredAgentName());
   const [noteDialog, setNoteDialog] = useState(null); // { date, type: "unavailable"|"vacation_request" }
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState("schedule"); // "constraints" | "schedule"
@@ -52,33 +38,45 @@ export default function ShiftScheduler() {
   const thisWeekStart = getWeekStart(now);
   const nextWeekStart = addDays(thisWeekStart, 7);
 
-  const scheduleWeekStart = nextWeekStart;
   const constraintsWeekStart = nextWeekStart;
-
-  const scheduleDays = useMemo(() => getWeekDays(scheduleWeekStart), [scheduleWeekStart]);
+  const currentWeekDays = useMemo(() => getWeekDays(thisWeekStart), [thisWeekStart]);
+  const scheduleDays = useMemo(() => getWeekDays(nextWeekStart), [nextWeekStart]);
   const constraintsDays = useMemo(() => getWeekDays(constraintsWeekStart), [constraintsWeekStart]);
 
+  const currentDateFrom = format(currentWeekDays[0], "yyyy-MM-dd");
+  const currentDateTo = format(currentWeekDays[4], "yyyy-MM-dd");
   const scheduleDateFrom = format(scheduleDays[0], "yyyy-MM-dd");
   const scheduleDateTo = format(scheduleDays[4], "yyyy-MM-dd");
 
-  const { data: scheduleRegistrations = [], isLoading: loadingSchedule, isFetching: fetchingSchedule } = useQuery({
-    queryKey: ["shift-registrations", scheduleDateFrom, scheduleDateTo],
+  const weekScheduleQueryOptions = (dateFrom, dateTo, weekDays) => ({
+    queryKey: ["shift-registrations", dateFrom, dateTo],
     queryFn: async () => {
-      const days = scheduleDays.map(d => format(d, "yyyy-MM-dd"));
-      const results = await Promise.all(days.map(d => dataClient.entities.ShiftRegistration.filter({ date: d })));
-      const rows = results.flat();
-      writeCachedSchedule(scheduleDateFrom, scheduleDateTo, rows);
+      const rows = await fetchWeekShiftRegistrations(weekDays);
+      writeCachedSchedule(dateFrom, dateTo, rows);
       return rows;
     },
-    initialData: () => readCachedSchedule(scheduleDateFrom, scheduleDateTo),
+    initialData: () => readCachedSchedule(dateFrom, dateTo),
     placeholderData: keepPreviousData,
     refetchOnMount: "always",
     enabled: !!agentName,
     ...getLiveQueryOptions(),
   });
 
-  const schedulePublished = scheduleRegistrations.length > 0;
-  const isInitialScheduleLoad = loadingSchedule && scheduleRegistrations.length === 0;
+  const {
+    data: currentWeekRegistrations = [],
+    isLoading: loadingCurrentWeek,
+    isFetching: fetchingCurrentWeek,
+    isError: currentWeekError,
+    error: currentWeekErrorObj,
+  } = useQuery(weekScheduleQueryOptions(currentDateFrom, currentDateTo, currentWeekDays));
+
+  const {
+    data: scheduleRegistrations = [],
+    isLoading: loadingSchedule,
+    isFetching: fetchingSchedule,
+    isError: scheduleError,
+    error: scheduleErrorObj,
+  } = useQuery(weekScheduleQueryOptions(scheduleDateFrom, scheduleDateTo, scheduleDays));
 
   const deadline = getConstraintsDeadline(thisWeekStart);
   const isPastDeadline = isAfter(now, deadline);
@@ -215,6 +213,7 @@ export default function ShiftScheduler() {
   }
 
   const constraintsWeekLabel = `${format(constraintsDays[0], "dd/MM")} – ${format(constraintsDays[4], "dd/MM/yyyy")}`;
+  const currentWeekLabel = `${format(currentWeekDays[0], "dd/MM")} – ${format(currentWeekDays[4], "dd/MM/yyyy")}`;
   const scheduleWeekLabel = `${format(scheduleDays[0], "dd/MM")} – ${format(scheduleDays[4], "dd/MM/yyyy")}`;
   const deadlineLabel = format(deadline, "dd/MM בשעה HH:mm");
 
@@ -452,179 +451,39 @@ export default function ShiftScheduler() {
         </motion.div>
         )}
 
-        {/* ─── SECTION 2: Published schedule (next week) ─── */}
+        {/* ─── SECTION 2: Published schedules ─── */}
         {activeTab === "schedule" && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-          className="rounded-3xl overflow-hidden border border-slate-200 bg-white shadow-lg shadow-slate-200/60">
-
-          <div className="px-6 py-4 bg-gradient-to-l from-amber-50 to-transparent border-b border-slate-100 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow shadow-amber-500/30">
-              <CalendarDays className="w-5 h-5 text-white" />
-            </div>
-            <div className="flex-1">
-              <h2 className="font-bold text-slate-800">שיבוץ שבוע הבא</h2>
-              <p className="text-sm font-semibold text-amber-700">{scheduleWeekLabel}</p>
-            </div>
-            {schedulePublished && (
-              <div className="bg-green-100 border border-green-200 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-xl">
-                ✓ פורסם
-              </div>
-            )}
+          <div className="space-y-6">
+            <BackendConfigBanner />
+            <WeeklySchedulePanel
+              title="שיבוץ השבוע"
+              weekLabel={currentWeekLabel}
+              scheduleDays={currentWeekDays}
+              scheduleRegistrations={currentWeekRegistrations}
+              agentName={agentName}
+              isLoading={loadingCurrentWeek}
+              isFetching={fetchingCurrentWeek}
+              isError={currentWeekError}
+              error={currentWeekErrorObj}
+              emptyTitle="השיבוץ לשבוע הנוכחי טרם פורסם"
+              emptyHint="המנהל יפרסם בלוח «משמרות» → «שיבוץ נוכחי»"
+              accent="emerald"
+            />
+            <WeeklySchedulePanel
+              title="שיבוץ שבוע הבא"
+              weekLabel={scheduleWeekLabel}
+              scheduleDays={scheduleDays}
+              scheduleRegistrations={scheduleRegistrations}
+              agentName={agentName}
+              isLoading={loadingSchedule}
+              isFetching={fetchingSchedule}
+              isError={scheduleError}
+              error={scheduleErrorObj}
+              emptyTitle="השיבוץ לשבוע הבא טרם פורסם"
+              emptyHint="המנהל יפרסם בלוח «משמרות» → «שיבוץ שבוע הבא»"
+              accent="amber"
+            />
           </div>
-
-
-
-          {fetchingSchedule && (
-            <div className="mx-4 mt-4 flex justify-center">
-              <div className="px-3 py-1.5 rounded-full bg-amber-50 border border-amber-100 text-xs font-semibold text-amber-700">
-                מעדכן שיבוץ...
-              </div>
-            </div>
-          )}
-
-          {!schedulePublished ? (
-            <div className="flex flex-col items-center gap-2 py-12 text-slate-400">
-              <Lock className="w-8 h-8 opacity-30" />
-              <p className="text-sm font-medium">
-                {isInitialScheduleLoad ? "טוען את השיבוץ..." : "השיבוץ לשבוע הבא טרם פורסם"}
-              </p>
-              <p className="text-xs">{isInitialScheduleLoad ? "זה יופיע מיד כשנתוני השיבוץ יגיעו" : "המנהל יפרסם בקרוב"}</p>
-            </div>
-          ) : (
-            <div className="p-4">
-              {/* My schedule section */}
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                className="mb-4 rounded-3xl overflow-hidden border border-indigo-200 bg-white shadow-lg shadow-indigo-200/40">
-                <div className="px-6 py-3 bg-gradient-to-l from-indigo-50 to-transparent border-b border-indigo-100 flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center shadow shadow-indigo-500/30">
-                    <Check className="w-4 h-4 text-white" />
-                  </div>
-                  <h3 className="font-bold text-slate-800">השיבוץ שלי</h3>
-                </div>
-                <div className="p-3 sm:p-4 overflow-x-auto">
-                  <div className="min-w-[640px]">
-                    <div className="grid grid-cols-6 gap-3 mb-2">
-                      <div></div>
-                      {scheduleDays.map((date, i) => (
-                        <div key={i} className="text-center">
-                          <div className="text-xs font-semibold text-slate-500">{WEEKDAY_LABELS[i]}</div>
-                          <div className="text-sm font-bold text-slate-700">{format(date, "dd/MM")}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="grid grid-cols-6 gap-3">
-                      <div className="flex flex-col items-center justify-center gap-1 px-2">
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center shadow">
-                          <Check className="w-4 h-4 text-white" />
-                        </div>
-                        <div className="text-center">
-                          <div className="text-xs font-bold text-slate-800">משמרת</div>
-                        </div>
-                      </div>
-                      {scheduleDays.map(date => {
-                        const dateStr = format(date, "yyyy-MM-dd");
-                        const isHolidayEve = HOLIDAY_EVE_DATES.includes(dateStr);
-                        const morningReg = scheduleRegistrations.find(
-                          r => r.agent_name === agentName && r.date === dateStr && r.shift_type === "morning"
-                        );
-                        const eveningReg = scheduleRegistrations.find(
-                          r => r.agent_name === agentName && r.date === dateStr && r.shift_type === "evening"
-                        );
-                        const myReg = morningReg || eveningReg;
-                        const time = isHolidayEve && morningReg ? "09:00–14:00" : morningReg ? "08:00–16:00" : eveningReg ? "09:00–17:00" : null;
-                        const shiftLabel = isHolidayEve && morningReg ? "ערב חג" : morningReg ? "בוקר" : eveningReg ? "ערב" : null;
-                        return (
-                          <div key={dateStr} className="py-2 px-1 flex flex-col items-center justify-center">
-                            {myReg ? (
-                              <div className="w-full px-2 py-2 rounded-lg border-2 bg-indigo-50 border-indigo-300 flex flex-col items-center justify-center gap-1">
-                                <div className="text-xs font-bold text-indigo-700">{shiftLabel}</div>
-                                <div className="text-xs text-indigo-600 font-semibold">{time}</div>
-                              </div>
-                            ) : (
-                              <div className="w-full px-2 py-2 rounded-lg border-2 border-dashed border-slate-200 flex items-center justify-center">
-                                <span className="text-xs text-slate-300">–</span>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* All registrations table */}
-              <h3 className="font-bold text-slate-800 mb-3">כל הנציגים</h3>
-              <div className="space-y-3">
-                {[
-                   { type: "morning", label: "משמרת בוקר", time: "08:00–16:00", icon: Sun, gradient: "from-amber-400 to-orange-500" },
-                   { type: "evening", label: "משמרת ערב", time: "09:00–17:00", icon: Moon, gradient: "from-indigo-400 to-purple-500" },
-                   { type: "holiday_eve", label: "ערב חג", time: "09:00–14:00", icon: Palmtree, gradient: "from-purple-400 to-violet-500" },
-                 ].map(shift => {
-                  const ShiftIcon = shift.icon;
-                  return (
-                    <motion.div key={shift.type} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
-                      className="rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-lg shadow-slate-200/60">
-                      <div className="overflow-x-auto">
-                        <div className="min-w-[640px]">
-                          <div className="px-3 pt-2 pb-0 grid grid-cols-6 gap-3 border-b border-slate-100">
-                            <div></div>
-                            {scheduleDays.map((date, i) => (
-                              <div key={i} className="text-center pb-2">
-                                <div className="text-xs font-semibold text-slate-500">{WEEKDAY_LABELS[i]}</div>
-                                <div className="text-xs font-bold text-slate-700">{format(date, "dd/MM")}</div>
-                              </div>
-                            ))}
-                          </div>
-                          <div className="p-3 grid grid-cols-6 gap-3 items-start">
-                            <div className="flex items-center gap-2 px-2">
-                              <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${shift.gradient} flex items-center justify-center shadow`}>
-                                <ShiftIcon className="w-3.5 h-3.5 text-white" />
-                              </div>
-                              <div>
-                                <div className="text-xs font-bold text-slate-800">{shift.label}</div>
-                                <div className="text-xs text-slate-400">{shift.time}</div>
-                              </div>
-                            </div>
-                            {scheduleDays.map((date) => {
-                               const dateStr = format(date, "yyyy-MM-dd");
-                               const isHolidayEveDay = HOLIDAY_EVE_DATES.includes(dateStr);
-                               // On holiday eve, all registrations are stored as "morning"; show them in holiday_eve row
-                               const regs = scheduleRegistrations.filter(r =>
-                                 r.date === dateStr &&
-                                 r.shift_type === shift.type &&
-                                 r.agent_name !== agentName &&
-                                 !isHolidayEveDay
-                               ).concat(
-                                 isHolidayEveDay && shift.type === "holiday_eve"
-                                   ? scheduleRegistrations.filter(r => r.date === dateStr && r.agent_name !== agentName)
-                                   : []
-                               );
-                              const borderColor = shift.type === "morning" ? "border-amber-300" : shift.type === "evening" ? "border-indigo-300" : "border-purple-300";
-                              const bgColor = shift.type === "morning" ? "bg-amber-50" : shift.type === "evening" ? "bg-indigo-50" : "bg-purple-50";
-                              const textColor = shift.type === "morning" ? "text-amber-700" : shift.type === "evening" ? "text-indigo-700" : "text-purple-700";
-                              return (
-                                <div key={dateStr} className="flex flex-col gap-1">
-                                  {regs.length > 0 ? regs.map(reg => (
-                                    <div key={reg.id} className={`px-2 py-1.5 rounded-lg text-xs font-semibold border-2 ${bgColor} ${borderColor} ${textColor}`}>
-                                      {reg.agent_name}
-                                    </div>
-                                  )) : (
-                                    <div className="text-slate-300 text-xs text-center">–</div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </motion.div>
         )}
       </div>
 

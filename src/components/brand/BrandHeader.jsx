@@ -22,7 +22,7 @@ export default function BrandHeader() {
         variant="full"
         onDark={onDark}
         className="pointer-events-auto opacity-90 hover:opacity-100 transition-opacity"
-        imgClassName={onDark ? "brightness-110 contrast-105" : undefined}
+        imgClassName={onDark ? "brightness-110 contrast-105" : "drop-shadow-sm"}
       />
     </header>
   );

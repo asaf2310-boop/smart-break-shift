@@ -2,14 +2,19 @@ import React from "react";
 import { cn } from "@/lib/utils";
 import BrandLogo from "@/components/brand/BrandLogo";
 
-/**
- * Entry hero: full primary PNG on light surfaces; hub icon + bright wordmark on dark login.
- */
+/** Entry hero — home: full bright PNG; `variant="login"`: subtitle only (no logo). */
 export default function BrandEntryBlock({
   onDark = false,
+  variant = "full",
+  size,
   subtitle = "מערכת מוקד",
   className,
+  hideLogo = false,
 }) {
+  const isLogin = variant === "login" || hideLogo;
+  const logoVariant = variant;
+  const logoSize = size ?? (onDark ? "hero" : "xl");
+
   return (
     <div
       className={cn(
@@ -17,22 +22,18 @@ export default function BrandEntryBlock({
         className,
       )}
     >
-      {onDark ? (
+      {!isLogin ? (
         <BrandLogo
-          variant="lockup"
-          onDark
+          variant={logoVariant}
+          onDark={onDark}
           linkToHome={false}
-          size="lg"
-          height={96}
-          className="mx-auto justify-center drop-shadow-[0_4px_24px_rgba(0,0,0,0.35)]"
+          size={logoSize}
+          className={cn(
+            "mx-auto w-full justify-center",
+            onDark ? "max-w-[min(90vw,960px)]" : "max-w-lg sm:max-w-xl",
+          )}
         />
-      ) : (
-        <img
-          src="/allincenter-logo.png"
-          alt="AllInCenter"
-          className="w-full max-w-lg sm:max-w-xl mx-auto h-auto object-contain brightness-105"
-        />
-      )}
+      ) : null}
       {subtitle ? (
         <p
           className={cn(
