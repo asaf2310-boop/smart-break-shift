@@ -1,4 +1,5 @@
-/** Vercel serverless — בדיקת הגדרת Resend (ללא חשיפת סודות) */
+/** Vercel serverless — בדיקת הגדרת Resend (ללא חשיפת סודות).
+ *  לא קוראים VITE_* כאן — משתני build נבדקים בדפדפן (getDemoEmailBuildDiagnostic). */
 
 const DEMO_HOST_SUFFIXES = ["smart-break-shift-demo.vercel.app"];
 

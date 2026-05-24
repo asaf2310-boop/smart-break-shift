@@ -5,6 +5,10 @@ import {
   postSendEmail,
   rejectDemoRealEmailFallback,
 } from "@/lib/emailApi";
+import {
+  simulatedReasonForApiResult,
+  simulatedReasonForDemoSendDisabled,
+} from "@/lib/emailSimulatedReason";
 
 export const REMOTE_SUPPORT_STORAGE_KEY = "smart-break-shift-remote-support-v1";
 export const REMOTE_SUPPORT_CHANGE_EVENT = "remote-support-changed";
@@ -267,6 +271,8 @@ function buildRustDeskLogBase({
   status,
   resendId = null,
   errorMessage = null,
+  simulatedReason = null,
+  simulatedReasonHint = null,
 }) {
   return {
     id: makeId("rs_email"),
@@ -282,6 +288,8 @@ function buildRustDeskLogBase({
     status,
     resendId,
     ...(errorMessage ? { errorMessage: String(errorMessage) } : {}),
+    ...(simulatedReason ? { simulatedReason } : {}),
+    ...(simulatedReasonHint ? { simulatedReasonHint } : {}),
   };
 }
 
@@ -315,11 +323,8 @@ export async function sendRustDeskDownloadEmail({
   const sentAt = new Date().toISOString();
 
   if (demoModeEnabled && !demoSendRealEmailEnabled) {
-    logEmailDelivery(
-      "rustdesk-email",
-      "simulated",
-      "דמו — VITE_DEMO_SEND_REAL_EMAIL לא מוגדר ל-true ב-build"
-    );
+    const reason = simulatedReasonForDemoSendDisabled();
+    logEmailDelivery("rustdesk-email", "simulated", reason.simulatedReasonHint);
     const log = buildRustDeskLogBase({
       toEmail,
       subject,
@@ -329,6 +334,7 @@ export async function sendRustDeskDownloadEmail({
       agentName,
       resolvedConsentUrl,
       status: "simulated",
+      ...reason,
     });
     appendRemoteEmailLog(log);
     if (sessionId) {
@@ -364,7 +370,8 @@ export async function sendRustDeskDownloadEmail({
   rejectDemoRealEmailFallback(apiResult);
 
   if (!apiResult.configured) {
-    logEmailDelivery("rustdesk-email", "simulated", apiResult.message);
+    const reason = simulatedReasonForApiResult(apiResult);
+    logEmailDelivery("rustdesk-email", "simulated", reason.simulatedReasonHint);
     const log = buildRustDeskLogBase({
       toEmail,
       subject,
@@ -374,6 +381,7 @@ export async function sendRustDeskDownloadEmail({
       agentName,
       resolvedConsentUrl,
       status: "simulated",
+      ...reason,
     });
     appendRemoteEmailLog(log);
     if (sessionId) {

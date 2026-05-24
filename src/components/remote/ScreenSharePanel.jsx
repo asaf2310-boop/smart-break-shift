@@ -177,8 +177,9 @@ export default function ScreenSharePanel({
     } catch (err) {
       setEmailLogRevision((n) => n + 1);
       const rateLimited = err.status === 429;
+      const rateLimitLabel = err.limit ? `${err.limit} לשעה` : "מהשרת";
       toast({
-        title: rateLimited ? "מגבלת שליחה (10 לשעה)" : "לא הצליח",
+        title: rateLimited ? `מגבלת שליחה (${rateLimitLabel})` : "לא הצליח",
         description: (
           <span>
             {err.message ||
@@ -220,8 +221,9 @@ export default function ScreenSharePanel({
     } catch (err) {
       setEmailLogRevision((n) => n + 1);
       const rateLimited = err.status === 429;
+      const rateLimitLabel = err.limit ? `${err.limit} לשעה` : "מהשרת";
       toast({
-        title: rateLimited ? "מגבלת שליחה (10 לשעה)" : "לא הצליח לשלוח שוב",
+        title: rateLimited ? `מגבלת שליחה (${rateLimitLabel})` : "לא הצליח לשלוח שוב",
         description: err.message || "בדקו את כתובת המייל והרשת",
         variant: "destructive",
       });

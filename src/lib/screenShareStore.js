@@ -6,6 +6,10 @@ import {
   postSendEmail,
   rejectDemoRealEmailFallback,
 } from "@/lib/emailApi";
+import {
+  simulatedReasonForApiResult,
+  simulatedReasonForDemoSendDisabled,
+} from "@/lib/emailSimulatedReason";
 
 export const SCREEN_SHARE_STORAGE_KEY = "smart-break-shift-screen-share-v1";
 export const SCREEN_SHARE_CHANGE_EVENT = "screen-share-changed";
@@ -647,6 +651,8 @@ function buildScreenShareLogBase({
   status,
   resendId = null,
   errorMessage = null,
+  simulatedReason = null,
+  simulatedReasonHint = null,
 }) {
   return {
     id: makeId("ss_email"),
@@ -661,6 +667,8 @@ function buildScreenShareLogBase({
     status,
     resendId,
     ...(errorMessage ? { errorMessage: String(errorMessage) } : {}),
+    ...(simulatedReason ? { simulatedReason } : {}),
+    ...(simulatedReasonHint ? { simulatedReasonHint } : {}),
   };
 }
 
@@ -699,11 +707,8 @@ export async function sendScreenShareEmail({
   const sentAt = new Date().toISOString();
 
   if (demoModeEnabled && !demoSendRealEmailEnabled) {
-    logEmailDelivery(
-      "screen-share-email",
-      "simulated",
-      "דמו — VITE_DEMO_SEND_REAL_EMAIL לא מוגדר ל-true ב-build"
-    );
+    const reason = simulatedReasonForDemoSendDisabled();
+    logEmailDelivery("screen-share-email", "simulated", reason.simulatedReasonHint);
     const log = buildScreenShareLogBase({
       toEmail,
       subject,
@@ -713,6 +718,7 @@ export async function sendScreenShareEmail({
       agentName,
       guestUrl: url,
       status: "simulated",
+      ...reason,
     });
     appendEmailLog(log);
     if (sessionId) {
@@ -748,7 +754,8 @@ export async function sendScreenShareEmail({
   rejectDemoRealEmailFallback(apiResult);
 
   if (!apiResult.configured) {
-    logEmailDelivery("screen-share-email", "simulated", apiResult.message);
+    const reason = simulatedReasonForApiResult(apiResult);
+    logEmailDelivery("screen-share-email", "simulated", reason.simulatedReasonHint);
     const log = buildScreenShareLogBase({
       toEmail,
       subject,
@@ -758,6 +765,7 @@ export async function sendScreenShareEmail({
       agentName,
       guestUrl: url,
       status: "simulated",
+      ...reason,
     });
     appendEmailLog(log);
     if (sessionId) {

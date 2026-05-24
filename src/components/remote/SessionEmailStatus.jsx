@@ -1,5 +1,6 @@
 import React from "react";
 import { AlertCircle, CheckCircle2, Mail } from "lucide-react";
+import { getSimulatedStatusHint } from "@/lib/emailSimulatedReason";
 
 const STATUS_STYLES = {
   sent: {
@@ -37,6 +38,7 @@ export default function SessionEmailStatus({ log, sessionEmailSentAt }) {
   const status = log?.status || (sessionEmailSentAt ? "sent" : null);
   const style = STATUS_STYLES[status] || STATUS_STYLES.simulated;
   const Icon = style.icon;
+  const simulatedHint = status === "simulated" ? getSimulatedStatusHint(log) : null;
 
   return (
     <div
@@ -52,6 +54,9 @@ export default function SessionEmailStatus({ log, sessionEmailSentAt }) {
           <p className="font-mono text-left text-[11px] opacity-90" dir="ltr">
             {log.to}
           </p>
+        ) : null}
+        {simulatedHint ? (
+          <p className="text-[11px] opacity-95 leading-snug">{simulatedHint}</p>
         ) : null}
       </div>
     </div>

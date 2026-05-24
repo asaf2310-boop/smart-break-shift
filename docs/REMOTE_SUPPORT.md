@@ -154,8 +154,8 @@
 
 ## שליחת מייל אמיתית (Resend + Vercel)
 
-ברירת מחדל בדמו (`VITE_DEMO_MODE=true` בלי `VITE_DEMO_SEND_REAL_EMAIL`): מייל **מדומה** — הקישור מוכן להעתקה / mailto.  
-כדי לשלוח מייל **אמיתי** גם באתר הדמו, הגדירו את הדגל למטה + מפתחות Resend בשרת.
+ברירת מחדל בדמו (`VITE_DEMO_MODE=true`): האפליקצ **מנסה** לשלוח מייל אמיתי דרך `/api/send-email`.  
+אם Resend לא מוגדר, אין `/api` (localhost + `npm run dev`), או כיביתם מפורש `VITE_DEMO_SEND_REAL_EMAIL=false` — תראו **סימולציה** + הסבר בבאנר «מייל אחרון».
 
 שיתוף מסך ו-RustDesk משתמשים ב-**Resend** דרך `/api/send-email`; מפתח API **רק בשרת** (לא `VITE_*`).
 
@@ -164,7 +164,7 @@
 | משתנה | ערך | הערות |
 |--------|------|--------|
 | `VITE_DEMO_MODE` | `true` | כבר קיים |
-| `VITE_DEMO_SEND_REAL_EMAIL` | `true` | **חדש** — build-time; Redeploy אחרי שינוי |
+| `VITE_DEMO_SEND_REAL_EMAIL` | (לא חובה) | ברירת מחדל: שליחה אמיתית; `false` לכיבוי — Redeploy אחרי שינוי |
 | `VITE_APP_URL` | `https://smart-break-shift-demo.vercel.app` | **מומלץ** — קישורי מייל; חובה אם בונים מ-localhost |
 | `RESEND_API_KEY` | `re_...` | מ-[resend.com](https://resend.com) |
 | `EMAIL_FROM` | `noreply@your-verified-domain.com` | חייב להיות מדומיין **מאומת** ב-Resend |
@@ -177,7 +177,7 @@
 |--------|--------|--------|
 | `RESEND_API_KEY` | `re_...` | מ-[resend.com](https://resend.com) |
 | `EMAIL_FROM` | `onboarding@resend.dev` | לבדיקות; בפרודקשן — כתובת מדומיין מאומת |
-| `VITE_DEMO_SEND_REAL_EMAIL` | `true` | אופציונלי — רק יחד עם `VITE_DEMO_MODE=true` |
+| `VITE_DEMO_SEND_REAL_EMAIL` | `false` | אופציונלי — רק לכיבוי שליחה אמיתית בדמו |
 
 לאחר הוספה: **Redeploy** לפרויקט.
 
@@ -186,7 +186,7 @@
 - `GET /api/email-status` — `{ "configured": boolean, "apiPresent": true }` (בודק `RESEND_API_KEY` + `EMAIL_FROM` בלי לחשוף ערכים)
 - `POST /api/send-email` — גוף JSON: `{ "to", "subject", "html", "text?" }`
 - CORS: same origin בלבד
-- אם המפתח לא מוגדר: `503` + `code: email_not_configured` — סימולציה + הודעה; עם `VITE_DEMO_SEND_REAL_EMAIL=true` — **טוסט שגיאה** (ללא סימולציה שקטה)
+- אם המפתח לא מוגדר: `503` + `code: email_not_configured` — בדמו (ברירת מחדל) **טוסט שגיאה**; רק עם `VITE_DEMO_SEND_REAL_EMAIL=false` — סימולציה שקטה
 - אם `/api/*` לא נפרס (404 מ-SPA): בדקו ש-`api/` קיים ב-GitHub ו-Redeploy
 
 ### `vercel.json` ונתיבי API
@@ -211,7 +211,6 @@
 
 ```env
 VITE_DEMO_MODE=true
-VITE_DEMO_SEND_REAL_EMAIL=true
 RESEND_API_KEY=re_...
 EMAIL_FROM=onboarding@resend.dev
 ```
@@ -224,7 +223,7 @@ EMAIL_FROM=onboarding@resend.dev
 
 **חשוב:** אל תשימו `RESEND_API_KEY` ב-`VITE_*`. ראו `.env.example`.
 
-`api/send-email.js` דורש בשרת: `RESEND_API_KEY` + `EMAIL_FROM` (אחרת `503` + `email_not_configured`). עם `VITE_DEMO_SEND_REAL_EMAIL=true` — שגיאה גלויה במקום סימולציה.
+`api/send-email.js` דורש בשרת: `RESEND_API_KEY` + `EMAIL_FROM` (אחרת `503` + `email_not_configured`). בדמו (ברירת מחדל) — שגיאה גלויה במקום סימולציה שקטה.
 
 ### דמו: למי מותר לשלוח (Resend)
 
@@ -232,7 +231,7 @@ EMAIL_FROM=onboarding@resend.dev
 |--------------|----------------------------------|---------|
 | `onboarding@resend.dev` | רק המייל של **חשבון Resend** | שליחה לכתובות אחרות → **403 מ-Resend** → האפליקציה מציגה טוסט שגיאה + `emailLogs` עם `status: failed` |
 | כתובת מדומיין **מאומת** (DNS) | כל נמען תקין | Resend מקבל (`200` + `id`) — אם לא מגיע: בדקו **Resend → Emails** (Delivered/Bounced) ותיבת ספאם אצל הנמען |
-| לא מוגדר / `npm run dev` בלבד | — | סימולציה או `503` (עם `VITE_DEMO_SEND_REAL_EMAIL=true` — טוסט, בלי «נשלח» שקט) |
+| לא מוגדר / `npm run dev` בלבד | — | סימולציה + הסבר בבאנר, או טוסט שגיאה (דמו ברירת מחדל) |
 
 **אין** במסלול החינמי של Resend הגבלה «רק Gmail» — ההבדל הוא בדרך כלל `EMAIL_FROM` (בדיקה מול דומיין מאומת) ולא ספק הנמען.
 

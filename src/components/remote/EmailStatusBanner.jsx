@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Mail, MailWarning } from "lucide-react";
-import { demoSendRealEmailEnabled } from "@/api/demoClient";
+import { demoModeEnabled, demoSendRealEmailEnabled } from "@/api/demoClient";
 import { fetchEmailStatus } from "@/lib/emailApi";
 import EmailDiagnosticButton from "@/components/remote/EmailDiagnosticButton";
 
@@ -21,7 +21,8 @@ export default function EmailStatusBanner() {
 
   const notDeployed = status.apiPresent === false;
   const sandbox = status.configured && status.sandboxMode;
-  const productionReady = status.configured && !sandbox;
+  const legacyOnly = status.configured && status.legacyStatusOnly;
+  const productionReady = status.configured && !sandbox && !legacyOnly;
   const needsEnv = !status.configured && status.apiPresent !== false;
 
   let message;
@@ -31,6 +32,10 @@ export default function EmailStatusBanner() {
     message = "מייל: שרת לא נפרסם — העלו api/ ל-GitHub ו-Redeploy";
   } else if (needsEnv) {
     message = "מייל: לא מוגדר — הגדירו RESEND_API_KEY + EMAIL_FROM ב-Vercel";
+  } else if (legacyOnly) {
+    message =
+      "מייל: Resend מוגדר — Redeploy לסטטוס מלא (sandbox/דומיין). לחצו «בדיקת מייל»";
+    tone = "amber";
   } else if (sandbox) {
     message =
       "מייל: Resend בדיקות (onboarding@resend.dev) — נשלח רק למייל של חשבון Resend. ללקוחות: אמתו דומיין והחליפו EMAIL_FROM";
@@ -46,8 +51,10 @@ export default function EmailStatusBanner() {
 
   if (demoSendRealEmailEnabled && sandbox) {
     message += " · בדמו: שליחה אמיתית מופעלת אך Resend חוסם נמענים חיצוניים";
-  } else if (!demoSendRealEmailEnabled && status.configured) {
-    message += " · בדמו: VITE_DEMO_SEND_REAL_EMAIL=false — סימולציה, לא נשלח מייל";
+  } else if (demoModeEnabled && !demoSendRealEmailEnabled && status.configured) {
+    message += " · בדמו: שליחה אמיתית כבויה (VITE_DEMO_SEND_REAL_EMAIL=false — Redeploy)";
+  } else if (demoSendRealEmailEnabled && !status.configured && status.apiPresent !== false) {
+    message += " · בדמו: מנסים מייל אמיתי — חסרים RESEND_API_KEY / EMAIL_FROM";
   }
 
   const boxClass =

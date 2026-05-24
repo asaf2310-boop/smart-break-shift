@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Stethoscope } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { demoSendRealEmailEnabled } from "@/api/demoClient";
+import { getDemoEmailBuildDiagnostic } from "@/api/demoClient";
 import { fetchEmailStatus, formatEmailDiagnosticReport } from "@/lib/emailApi";
 
 export default function EmailDiagnosticButton({
@@ -17,18 +17,27 @@ export default function EmailDiagnosticButton({
     setLoading(true);
     try {
       const status = await fetchEmailStatus();
-      const report = formatEmailDiagnosticReport(status, {
-        demoSendRealEmail: demoSendRealEmailEnabled,
-      });
+      const buildFlags = getDemoEmailBuildDiagnostic();
+      const report = formatEmailDiagnosticReport(status, buildFlags);
+      const needsAttention =
+        !status.apiPresent ||
+        !status.configured ||
+        status.sandboxMode ||
+        status.legacyStatusOnly ||
+        (buildFlags.demoModeEnabled && !buildFlags.attemptsRealEmailInDemo);
       toast({
-        title: status.sandboxMode ? "מייל — מצב בדיקות Resend" : "בדיקת מייל",
+        title: status.sandboxMode
+          ? "מייל — מצב בדיקות Resend"
+          : needsAttention
+            ? "בדיקת מייל — נדרשת פעולה"
+            : "בדיקת מייל",
         description: (
           <pre className="whitespace-pre-wrap text-xs font-sans text-right leading-relaxed mt-1">
             {report}
           </pre>
         ),
-        duration: status.sandboxMode ? 12000 : 8000,
-        variant: status.sandboxMode ? "destructive" : undefined,
+        duration: needsAttention ? 14000 : 8000,
+        variant: needsAttention ? "destructive" : undefined,
       });
     } catch {
       toast({
