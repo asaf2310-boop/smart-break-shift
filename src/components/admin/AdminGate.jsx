@@ -11,17 +11,19 @@ import {
 } from "@/components/auth/LoginShell";
 import {
   isAdminPinConfigured,
+  isProductionAdminOpen,
   useIsAdmin,
   unlockAdminSession,
 } from "@/hooks/useIsAdmin";
 
 export default function AdminGate({ children }) {
   const isAdmin = useIsAdmin();
+  const productionOpen = isProductionAdminOpen();
   const pinRequired = isAdminPinConfigured();
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
 
-  if (isAdmin) {
+  if (isAdmin || productionOpen) {
     return children;
   }
 

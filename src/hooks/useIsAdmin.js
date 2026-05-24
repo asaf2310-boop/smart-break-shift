@@ -13,6 +13,11 @@ export function isDemoAdminPinRequired() {
   return demoModeEnabled && isAdminPinConfigured();
 }
 
+/** פרודקשן: /admin פתוח בלי PIN כשאין VITE_ADMIN_PIN ב-build (לא משפיע על ניווט נציג). */
+export function isProductionAdminOpen() {
+  return !demoModeEnabled && !isAdminPinConfigured();
+}
+
 function subscribeAdminSession(onStoreChange) {
   const onStorage = (e) => {
     if (e.key === ADMIN_SESSION_KEY) onStoreChange();
@@ -48,6 +53,7 @@ export function clearAdminSession() {
   window.dispatchEvent(new CustomEvent("admin-session-changed"));
 }
 
+/** ניווט/הרשאות UI — רק אחרי PIN מוצלח; לא כולל isProductionAdminOpen. */
 export function useIsAdmin() {
   const sessionUnlocked = useSyncExternalStore(
     subscribeAdminSession,
