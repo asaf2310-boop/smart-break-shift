@@ -1,5 +1,4 @@
-import React, { useState } from "react";
-import { motion } from "framer-motion";
+﻿import React, { useState } from "react";
 import { ChevronDown, Lock, Mail, User } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,6 +16,12 @@ import {
 import { demoModeEnabled } from "@/api/demoClient";
 import { getAgentNamesList } from "@/constants/scheduling";
 import { cn } from "@/lib/utils";
+import {
+  DEMO_FIELD_CLASS,
+  DEMO_SUBMIT_CLASS,
+  Field,
+  LoginShell,
+} from "@/components/auth/LoginShell";
 
 const MODES = {
   LOGIN: "login",
@@ -44,7 +49,7 @@ function ProdNameLogin({ onSuccess }) {
     try {
       const result = agentLoginByDisplayName(selected);
       if (!result.ok) {
-        setError(result.message || "יש לבחור שם מהרשימה");
+        setError(result.message || "×™×© ×œ×‘×—×•×¨ ×©× ×ž×”×¨×©×™×ž×”");
         return;
       }
       onSuccess?.(result.session);
@@ -54,35 +59,31 @@ function ProdNameLogin({ onSuccess }) {
   };
 
   return (
-    <LoginShell subtitle="בחר/י את שמך להמשך">
+    <LoginShell subtitle="×‘×—×¨/×™ ××ª ×©×ž×š ×œ×”×ž×©×š" production>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="relative">
-          <User className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40 pointer-events-none z-10" />
-          <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40 pointer-events-none z-10" />
+          <User className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10" />
+          <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10" />
           <select
             value={selected}
             onChange={(e) => setSelected(e.target.value)}
             required
             autoFocus
-            className="w-full bg-white/10 border border-white/20 rounded-2xl py-3 px-4 pr-10 pl-10 text-white outline-none focus:border-indigo-400 text-right appearance-none cursor-pointer"
+            className="w-full rounded-2xl border border-input bg-white py-3 px-4 pr-10 pl-10 text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 text-right appearance-none cursor-pointer"
           >
-            <option value="" disabled className="bg-slate-900 text-white/60">
-              בחר/י שם...
+            <option value="" disabled>
+              ×‘×—×¨/×™ ×©×...
             </option>
             {agentNames.map((name) => (
-              <option key={name} value={name} className="bg-slate-900 text-white">
+              <option key={name} value={name}>
                 {name}
               </option>
             ))}
           </select>
         </div>
-        {error && <p className="text-sm text-red-300 text-center">{error}</p>}
-        <button
-          type="submit"
-          disabled={loading || !selected}
-          className="w-full py-3 rounded-2xl font-bold text-white bg-gradient-to-r from-indigo-500 to-purple-600 disabled:opacity-50"
-        >
-          {loading ? "נכנס..." : "כניסה למערכת"}
+        {error && <p className="text-sm text-destructive text-center">{error}</p>}
+        <button type="submit" disabled={loading || !selected} className="m3-btn-primary w-full py-3">
+          {loading ? "× ×›× ×¡..." : "×›× ×™×¡×” ×œ×ž×¢×¨×›×ª"}
         </button>
       </form>
     </LoginShell>
@@ -156,7 +157,7 @@ function DemoEmailLogin({ onSuccess }) {
       return;
     }
     if (password !== confirmPassword) {
-      setError("הסיסמאות אינן תואמות");
+      setError("×”×¡×™×¡×ž××•×ª ××™× ×Ÿ ×ª×•××ž×•×ª");
       return;
     }
     setLoading(true);
@@ -181,7 +182,7 @@ function DemoEmailLogin({ onSuccess }) {
       if (result.ok) {
         setInfo(result.message);
       } else {
-        setInfo("אם האימייל ברשימה, נשלח קישור לאיפוס. בדוק את תיבת הדואר.");
+        setInfo("×× ×”××™×ž×™×™×œ ×‘×¨×©×™×ž×”, × ×©×œ×— ×§×™×©×•×¨ ×œ××™×¤×•×¡. ×‘×“×•×§ ××ª ×ª×™×‘×ª ×”×“×•××¨.");
       }
     } finally {
       setLoading(false);
@@ -190,16 +191,16 @@ function DemoEmailLogin({ onSuccess }) {
 
   const subtitle =
     mode === MODES.SETUP
-      ? "הגדרת סיסמה — כניסה ראשונה"
+      ? "×”×’×“×¨×ª ×¡×™×¡×ž×” â€” ×›× ×™×¡×” ×¨××©×•× ×”"
       : mode === MODES.FORGOT
-        ? "שכחתי סיסמה"
-        : "התחברות עם אימייל וסיסמה (דמו)";
+        ? "×©×›×—×ª×™ ×¡×™×¡×ž×”"
+        : "×”×ª×—×‘×¨×•×ª ×¢× ××™×ž×™×™×œ ×•×¡×™×¡×ž×” (×“×ž×•)";
 
   return (
     <LoginShell subtitle={subtitle} showDemoBadge demoHero>
       {mode === MODES.FORGOT ? (
-        <form onSubmit={handleForgot} className="space-y-4">
-          <Field icon={Mail} label="אימייל">
+        <form onSubmit={handleForgot}>
+          <Field icon={Mail} label="××™×ž×™×™×œ">
             <Input
               type="email"
               value={email}
@@ -216,7 +217,7 @@ function DemoEmailLogin({ onSuccess }) {
             disabled={loading}
             className={DEMO_SUBMIT_CLASS}
           >
-            {loading ? "שולח..." : "שלח קישור לאיפוס"}
+            {loading ? "×©×•×œ×—..." : "×©×œ×— ×§×™×©×•×¨ ×œ××™×¤×•×¡"}
           </button>
           <button
             type="button"
@@ -224,24 +225,26 @@ function DemoEmailLogin({ onSuccess }) {
               setMode(MODES.LOGIN);
               resetMessages();
             }}
-            className="w-full text-sm text-white/60 hover:text-white"
+            className="login-demo-link w-full text-sm"
           >
-            חזרה להתחברות
+            ×—×–×¨×” ×œ×”×ª×—×‘×¨×•×ª
           </button>
         </form>
       ) : mode === MODES.SETUP ? (
-        <form onSubmit={handleSetup} className="space-y-4">
-          <p className="text-sm text-white/70 text-center">זו הכניסה הראשונה שלך. בחר/י סיסמה.</p>
-          <Field icon={Mail} label="אימייל">
+        <form onSubmit={handleSetup}>
+          <p className="text-sm text-muted-foreground text-center leading-relaxed">
+            ×–×• ×”×›× ×™×¡×” ×”×¨××©×•× ×” ×©×œ×š. ×‘×—×¨/×™ ×¡×™×¡×ž×”.
+          </p>
+          <Field icon={Mail} label="××™×ž×™×™×œ">
             <Input
               type="email"
               value={email}
               readOnly
-              className={`${DEMO_FIELD_CLASS} text-white/80`}
+              className={cn(DEMO_FIELD_CLASS, "text-muted-foreground")}
               dir="ltr"
             />
           </Field>
-          <Field icon={Lock} label="סיסמה חדשה">
+          <Field icon={Lock} label="×¡×™×¡×ž×” ×—×“×©×”">
             <Input
               type="password"
               value={password}
@@ -251,7 +254,7 @@ function DemoEmailLogin({ onSuccess }) {
               {...passwordMinLengthInputProps()}
             />
           </Field>
-          <Field icon={Lock} label="אימות סיסמה">
+          <Field icon={Lock} label="××™×ž×•×ª ×¡×™×¡×ž×”">
             <Input
               type="password"
               value={confirmPassword}
@@ -267,7 +270,7 @@ function DemoEmailLogin({ onSuccess }) {
             disabled={loading}
             className={DEMO_SUBMIT_CLASS}
           >
-            {loading ? "שומר..." : "שמירה וכניסה"}
+            {loading ? "×©×•×ž×¨..." : "×©×ž×™×¨×” ×•×›× ×™×¡×”"}
           </button>
           <button
             type="button"
@@ -275,14 +278,14 @@ function DemoEmailLogin({ onSuccess }) {
               setMode(MODES.LOGIN);
               resetMessages();
             }}
-            className="w-full text-sm text-white/60 hover:text-white"
+            className="login-demo-link w-full text-sm"
           >
-            יש לי כבר סיסמה
+            ×™×© ×œ×™ ×›×‘×¨ ×¡×™×¡×ž×”
           </button>
         </form>
       ) : (
-        <form onSubmit={emailStepDone ? handleLogin : handleEmailContinue} className="space-y-4">
-          <Field icon={Mail} label="אימייל">
+        <form onSubmit={emailStepDone ? handleLogin : handleEmailContinue}>
+          <Field icon={Mail} label="××™×ž×™×™×œ">
             <Input
               type="email"
               value={email}
@@ -298,7 +301,7 @@ function DemoEmailLogin({ onSuccess }) {
             />
           </Field>
           {emailStepDone && (
-            <Field icon={Lock} label="סיסמה">
+            <Field icon={Lock} label="×¡×™×¡×ž×”">
               <Input
                 type="password"
                 value={password}
@@ -316,7 +319,7 @@ function DemoEmailLogin({ onSuccess }) {
             disabled={loading}
             className={DEMO_SUBMIT_CLASS}
           >
-            {loading ? "מתחבר..." : emailStepDone ? "כניסה" : "המשך"}
+            {loading ? "×ž×ª×—×‘×¨..." : emailStepDone ? "×›× ×™×¡×”" : "×”×ž×©×š"}
           </button>
           {emailStepDone && (
             <div className="flex flex-col gap-2 text-center">
@@ -326,9 +329,9 @@ function DemoEmailLogin({ onSuccess }) {
                   setEmailStepDone(false);
                   resetMessages();
                 }}
-                className="text-sm text-white/60 hover:text-white"
+                className="login-demo-link text-sm"
               >
-                שינוי אימייל
+                ×©×™× ×•×™ ××™×ž×™×™×œ
               </button>
               <button
                 type="button"
@@ -336,78 +339,14 @@ function DemoEmailLogin({ onSuccess }) {
                   setMode(MODES.FORGOT);
                   resetMessages();
                 }}
-                className="text-sm text-white/60 hover:text-white"
+                className="login-demo-link text-sm"
               >
-                שכחתי סיסמה
+                ×©×›×—×ª×™ ×¡×™×¡×ž×”
               </button>
             </div>
           )}
         </form>
       )}
     </LoginShell>
-  );
-}
-
-const DEMO_FIELD_CLASS = "text-white text-right rounded-2xl";
-const DEMO_SUBMIT_CLASS =
-  "w-full py-3 rounded-2xl font-bold text-white disabled:opacity-50 login-demo-submit";
-
-function LoginShell({ subtitle, showDemoBadge, demoHero = false, children }) {
-  return (
-    <div
-      className={cn("login-shell", demoHero && "login-shell--demo login-hero-bg")}
-      dir="rtl"
-    >
-      {!demoHero && (
-        <h1 className="relative z-10 text-2xl sm:text-3xl font-bold text-white text-center mb-8 sm:mb-10 shrink-0">
-          כניסת נציג
-        </h1>
-      )}
-
-      {demoHero && (
-        <>
-          <span className="sr-only">AllInCenter — CONNECT • MANAGE • GROW</span>
-          <div className="login-shell__brand-zone" aria-hidden />
-        </>
-      )}
-
-      <motion.div
-        initial={{ opacity: 0, scale: 0.92, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        className={cn(
-          "relative z-10 w-full",
-          demoHero ? "login-shell__card-wrap" : "max-w-sm sm:max-w-md px-2"
-        )}
-      >
-        <div
-          className={cn(
-            "login-shell__card w-full rounded-3xl",
-            demoHero ? "p-4 sm:p-6 md:p-8" : "p-5 sm:p-8"
-          )}
-        >
-          <div className="flex flex-col items-center gap-3 mb-6">
-            <p className="text-white/60 text-sm text-center">{subtitle}</p>
-            {showDemoBadge && (
-              <span className="login-demo-badge text-xs font-bold px-3 py-1 rounded-full">
-                סביבת דמו
-              </span>
-            )}
-          </div>
-          {children}
-        </div>
-      </motion.div>
-    </div>
-  );
-}
-
-function Field({ icon: Icon, label, children }) {
-  return (
-    <div>
-      <label className="block text-xs text-white/50 mb-1 pr-1">{label}</label>
-      <div className="relative">
-        <Icon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40 pointer-events-none" />
-        <div className="pr-10">{children}</div>
-      </div>
-    </div>
   );
 }

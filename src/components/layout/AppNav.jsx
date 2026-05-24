@@ -23,7 +23,7 @@ export default function AppNav() {
 
   return (
     <nav
-      className="fixed inset-x-0 top-0 z-[80] flex justify-center px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top,0px))] bg-gradient-to-b from-background via-background/90 to-transparent pointer-events-none"
+      className="fixed inset-x-0 top-0 z-[80] flex justify-center px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top,0px))] bg-gradient-to-b from-[#f7f3fb]/90 via-[#f7f3fb]/60 to-transparent pointer-events-none"
       dir="rtl"
       aria-label="ניווט ראשי"
     >

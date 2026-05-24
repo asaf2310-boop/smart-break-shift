@@ -1,11 +1,27 @@
-import { demoModeEnabled } from "@/api/demoClient";
-import { escapeHtml, postSendEmail } from "@/lib/emailApi";
+import { demoModeEnabled, demoSendRealEmailEnabled } from "@/api/demoClient";
+import { cleanEnvValue } from "@/api/supabase";
+import {
+  escapeHtml,
+  logEmailDelivery,
+  postSendEmail,
+  rejectDemoRealEmailFallback,
+} from "@/lib/emailApi";
+import {
+  simulatedReasonForApiResult,
+  simulatedReasonForDemoSendDisabled,
+} from "@/lib/emailSimulatedReason";
 
 export const SCREEN_SHARE_STORAGE_KEY = "smart-break-shift-screen-share-v1";
 export const SCREEN_SHARE_CHANGE_EVENT = "screen-share-changed";
+/** דמו: תוקף קישור אורח — 72 שעות מיצירת הסשן (לא מחיקה אוטומטית מ-localStorage) */
+export const DEMO_GUEST_SESSION_TTL_MS = 72 * 60 * 60 * 1000;
+export const GUEST_BOOTSTRAP_QUERY_KEY = "b";
 
 const EMAIL_SUBJECT_SCREEN =
   "שיתוף מסך לתמיכה טכנית (צפייה בלבד) — באישורך";
+
+export const DEMO_SCREEN_SHARE_EMAIL_MESSAGE =
+  "בדמו: הקישור מוכן — העתיקו את הקישור למטה או פתחו mailto";
 
 function makeId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
@@ -13,18 +29,19 @@ function makeId(prefix) {
 
 function readStore() {
   if (!demoModeEnabled || typeof window === "undefined") {
-    return { sessions: [], emailLogs: [] };
+    return { sessions: [], emailLogs: [], recordings: [] };
   }
   try {
     const raw = localStorage.getItem(SCREEN_SHARE_STORAGE_KEY);
-    if (!raw) return { sessions: [], emailLogs: [] };
+    if (!raw) return { sessions: [], emailLogs: [], recordings: [] };
     const parsed = JSON.parse(raw);
     return {
       sessions: Array.isArray(parsed.sessions) ? parsed.sessions : [],
       emailLogs: Array.isArray(parsed.emailLogs) ? parsed.emailLogs : [],
+      recordings: Array.isArray(parsed.recordings) ? parsed.recordings : [],
     };
   } catch {
-    return { sessions: [], emailLogs: [] };
+    return { sessions: [], emailLogs: [], recordings: [] };
   }
 }
 
@@ -32,7 +49,7 @@ function readSessions() {
   return readStore().sessions;
 }
 
-function writeStore({ sessions, emailLogs }) {
+function writeStore({ sessions, emailLogs, recordings }) {
   if (!demoModeEnabled || typeof window === "undefined") return;
   const current = readStore();
   localStorage.setItem(
@@ -40,6 +57,7 @@ function writeStore({ sessions, emailLogs }) {
     JSON.stringify({
       sessions: sessions ?? current.sessions,
       emailLogs: emailLogs ?? current.emailLogs,
+      recordings: recordings ?? current.recordings,
     })
   );
   window.dispatchEvent(new CustomEvent(SCREEN_SHARE_CHANGE_EVENT));
@@ -60,6 +78,136 @@ export function screenShareFeaturesAvailable() {
 
 export function getSession(id) {
   return readSessions().find((s) => s.id === id) || null;
+}
+
+/** כתובת ציבורית לקישורים במייל — VITE_APP_URL או origin; מ-localhost מעדיף env */
+export function getPublicAppOrigin() {
+  const fromEnv = cleanEnvValue(import.meta.env.VITE_APP_URL)?.replace(/\/$/, "") || "";
+  if (typeof window === "undefined") return fromEnv;
+  const origin = window.location.origin;
+  const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(origin);
+  if (isLocal && fromEnv) return fromEnv;
+  return fromEnv || origin;
+}
+
+function toBase64Url(str) {
+  if (typeof btoa === "undefined") return "";
+  const bytes = new TextEncoder().encode(str);
+  let binary = "";
+  bytes.forEach((b) => {
+    binary += String.fromCharCode(b);
+  });
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function fromBase64Url(encoded) {
+  if (!encoded || typeof atob === "undefined") return null;
+  try {
+    const padded = encoded.replace(/-/g, "+").replace(/_/g, "/");
+    const padLen = (4 - (padded.length % 4)) % 4;
+    const binary = atob(padded + "=".repeat(padLen));
+    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
+function encodeGuestBootstrapPayload(session) {
+  if (!session?.id || !session.createdAt) return "";
+  const payload = {
+    c: session.createdAt,
+    a: String(session.agentName || "").slice(0, 120),
+    e: String(session.customerEmail || "").slice(0, 200),
+    r: session.crmCustomerId || null,
+  };
+  return toBase64Url(JSON.stringify(payload));
+}
+
+function decodeGuestBootstrapPayload(encoded) {
+  const json = fromBase64Url(encoded);
+  if (!json) return null;
+  try {
+    const parsed = JSON.parse(json);
+    if (!parsed?.c || Number.isNaN(new Date(parsed.c).getTime())) return null;
+    return {
+      createdAt: parsed.c,
+      agentName: String(parsed.a || "").slice(0, 120),
+      customerEmail: String(parsed.e || "").slice(0, 200),
+      crmCustomerId: parsed.r || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function isGuestSessionExpired(session) {
+  if (!session?.createdAt) return true;
+  const created = new Date(session.createdAt).getTime();
+  if (Number.isNaN(created)) return true;
+  return Date.now() - created > DEMO_GUEST_SESSION_TTL_MS;
+}
+
+/**
+ * דמו: יוצר סשן ב-localStorage של האורח מפרמטר bootstrap ב-URL (מכשיר/דפדפן אחר).
+ */
+export function bootstrapGuestSessionFromUrl(sessionId, bootstrapParam) {
+  if (!demoModeEnabled || !sessionId || !bootstrapParam) return null;
+
+  const payload = decodeGuestBootstrapPayload(bootstrapParam);
+  if (!payload) return null;
+
+  const existing = getSession(sessionId);
+  if (existing) {
+    if (existing.status === "ended") return existing;
+    return existing;
+  }
+
+  const session = {
+    id: sessionId,
+    crmCustomerId: payload.crmCustomerId,
+    agentName: payload.agentName,
+    customerEmail: payload.customerEmail,
+    status: "active",
+    createdAt: payload.createdAt,
+    consentAt: null,
+    recordingConsentAt: null,
+    recordingActiveAt: null,
+    recordingStoppedAt: null,
+    recordings: [],
+    emailSentAt: null,
+    endedAt: null,
+  };
+
+  if (isGuestSessionExpired(session)) return null;
+
+  writeSessions([...readSessions(), session]);
+  return session;
+}
+
+/**
+ * מחזיר סשן לאורח: localStorage → bootstrap מ-URL → בדיקת תוקף.
+ * @param {string} sessionId
+ * @param {URLSearchParams|string|null} searchParamsOrBootstrap
+ */
+export function resolveGuestSession(sessionId, searchParamsOrBootstrap = null) {
+  if (!sessionId) return null;
+
+  let bootstrapParam = null;
+  if (typeof searchParamsOrBootstrap === "string") {
+    bootstrapParam = searchParamsOrBootstrap;
+  } else if (searchParamsOrBootstrap?.get) {
+    bootstrapParam = searchParamsOrBootstrap.get(GUEST_BOOTSTRAP_QUERY_KEY);
+  }
+
+  let session = getSession(sessionId);
+  if (!session && bootstrapParam) {
+    session = bootstrapGuestSessionFromUrl(sessionId, bootstrapParam);
+  }
+
+  if (!session) return null;
+  if (session.status !== "ended" && isGuestSessionExpired(session)) return null;
+  return session;
 }
 
 export function listSessions() {
@@ -85,6 +233,11 @@ export function createScreenSession({
     status: "active",
     createdAt: now,
     consentAt: null,
+    recordingConsentAt: null,
+    recordingActiveAt: null,
+    recordingStoppedAt: null,
+    recordings: [],
+    emailSentAt: null,
     endedAt: null,
   };
   const sessions = [...readSessions(), session];
@@ -108,14 +261,279 @@ export function logScreenConsent(id) {
   return updateSession(id, { consentAt: now, status: "active" });
 }
 
-export function endSession(id) {
+/** אישור הקלטת מסך (דמו) — נפרד מאישור צפייה */
+export function logRecordingConsent(id) {
   const now = new Date().toISOString();
-  return updateSession(id, { status: "ended", endedAt: now });
+  return updateSession(id, { recordingConsentAt: now });
 }
 
-export function buildScreenShareGuestUrl(sessionId, origin) {
-  const base = origin || (typeof window !== "undefined" ? window.location.origin : "");
-  return `${base}/support/screen/${sessionId}`;
+/** נציג התחיל הקלטה — מוצג לאורח (דמו) */
+export function setRecordingActive(id) {
+  const now = new Date().toISOString();
+  return updateSession(id, { recordingActiveAt: now });
+}
+
+/** נציג עצר הקלטה */
+export function setRecordingStopped(id) {
+  const now = new Date().toISOString();
+  return updateSession(id, { recordingActiveAt: null, recordingStoppedAt: now });
+}
+
+function mergeRecordingRows(rows) {
+  const byId = new Map();
+  rows.forEach((r) => {
+    if (r?.id) byId.set(r.id, { ...byId.get(r.id), ...r });
+  });
+  return [...byId.values()].sort(
+    (a, b) => new Date(b.stoppedAt || b.startedAt) - new Date(a.stoppedAt || a.startedAt)
+  );
+}
+
+function enrichRecordingMeta(rec) {
+  const session = getSession(rec.sessionId);
+  return {
+    ...rec,
+    crmCustomerId: rec.crmCustomerId ?? session?.crmCustomerId ?? null,
+    agentName: rec.agentName ?? session?.agentName ?? null,
+    customerEmail: rec.customerEmail ?? session?.customerEmail ?? null,
+  };
+}
+
+export function listRecordingsForSession(sessionId) {
+  const session = getSession(sessionId);
+  const fromSession = Array.isArray(session?.recordings) ? session.recordings : [];
+  const global = readStore().recordings.filter((r) => r.sessionId === sessionId);
+  return mergeRecordingRows([...fromSession, ...global]).map(enrichRecordingMeta);
+}
+
+/** הקלטות המשויכות ללקוח CRM (דמו) */
+export function listRecordingsForCustomer(crmCustomerId) {
+  if (!crmCustomerId) return [];
+  return listAllRecordings().filter((r) => r.crmCustomerId === crmCustomerId);
+}
+
+/** מזהה קישור נגן (דמו): sessionId::recordingId מקודד */
+export function buildRecordingPlayId(sessionId, recordingId) {
+  return encodeURIComponent(`${sessionId}::${recordingId}`);
+}
+
+export function parseRecordingPlayId(encodedId) {
+  if (!encodedId) return null;
+  try {
+    const raw = decodeURIComponent(encodedId);
+    const sep = raw.indexOf("::");
+    if (sep < 0) {
+      const byId = listAllRecordings().find((r) => r.id === raw);
+      if (byId) return { sessionId: byId.sessionId, recordingId: byId.id };
+      return null;
+    }
+    return {
+      sessionId: raw.slice(0, sep),
+      recordingId: raw.slice(sep + 2),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function findRecordingByPlayId(playId) {
+  const parsed = parseRecordingPlayId(playId);
+  if (!parsed) return null;
+  return (
+    listAllRecordings().find(
+      (r) => r.sessionId === parsed.sessionId && r.id === parsed.recordingId
+    ) || null
+  );
+}
+
+/** כל מטא-דאטה ההקלטות (דמו) — מ-localStorage */
+export function listAllRecordings() {
+  const store = readStore();
+  const rows = [];
+  store.recordings.forEach((r) => rows.push(r));
+  store.sessions.forEach((s) => {
+    (s.recordings || []).forEach((r) => rows.push(r));
+  });
+  return mergeRecordingRows(rows).map(enrichRecordingMeta);
+}
+
+export function deleteRecordingMetadata(sessionId, recordingId) {
+  const store = readStore();
+  const patchRemove = (list) =>
+    (list || []).filter((r) => !(r.sessionId === sessionId && r.id === recordingId));
+  const sessions = store.sessions.map((s) => {
+    if (s.id !== sessionId) return s;
+    return { ...s, recordings: patchRemove(s.recordings) };
+  });
+  const recordings = store.recordings.filter(
+    (r) => !(r.sessionId === sessionId && r.id === recordingId)
+  );
+  writeStore({ sessions, recordings });
+  return true;
+}
+
+/**
+ * שמירת מטא-דאטה הקלטה (דמו) — ב-session ובמאגר גלובלי ל-localStorage.
+ */
+export function appendSessionRecording(sessionId, meta) {
+  const session = getSession(sessionId);
+  if (!session) return null;
+  const entry = {
+    id: makeId("ss_rec"),
+    sessionId,
+    startedAt: meta.startedAt,
+    stoppedAt: meta.stoppedAt,
+    durationSec: meta.durationSec ?? 0,
+    fileName: meta.fileName || "",
+    consentAt: meta.consentAt || session.recordingConsentAt || null,
+    downloadedAt: meta.downloadedAt || null,
+    fileSizeBytes: meta.fileSizeBytes ?? null,
+    hasAudio: meta.hasAudio ?? null,
+    crmCustomerId: session.crmCustomerId || null,
+    agentName: session.agentName || null,
+    customerEmail: session.customerEmail || null,
+  };
+  const sessionRecordings = [...(session.recordings || []), entry];
+  const store = readStore();
+  writeStore({
+    sessions: store.sessions.map((s) =>
+      s.id === sessionId ? { ...s, recordings: sessionRecordings } : s
+    ),
+    recordings: [...store.recordings, entry],
+  });
+  return entry;
+}
+
+export function markRecordingDownloaded(sessionId, recordingId) {
+  const now = new Date().toISOString();
+  return updateRecordingMetadata(sessionId, recordingId, { downloadedAt: now });
+}
+
+/** עדכון שדות מטא-דאטה להקלטה (דמו) */
+export function updateRecordingMetadata(sessionId, recordingId, patch) {
+  if (!sessionId || !recordingId || !patch) return null;
+  const store = readStore();
+  const patchRecording = (r) =>
+    r.sessionId === sessionId && r.id === recordingId ? { ...r, ...patch } : r;
+  const sessions = store.sessions.map((s) => {
+    if (s.id !== sessionId) return s;
+    return {
+      ...s,
+      recordings: (s.recordings || []).map(patchRecording),
+    };
+  });
+  const recordings = store.recordings.map(patchRecording);
+  writeStore({ sessions, recordings });
+  return getSession(sessionId);
+}
+
+/**
+ * ייצוא יומן אודיט הקלטות (דמו) — ללא וידאו, רק הסכמות ומטא-דאטה.
+ */
+export function buildDemoRecordingAuditExport() {
+  if (!demoModeEnabled) {
+    return { exportedAt: new Date().toISOString(), demoMode: false, sessions: [], recordings: [] };
+  }
+  const store = readStore();
+  const allRecordings = listAllRecordings();
+  const sessions = listSessions().map((s) => ({
+    sessionId: s.id,
+    status: s.status,
+    createdAt: s.createdAt,
+    endedAt: s.endedAt,
+    screenConsentAt: s.consentAt,
+    recordingConsentAt: s.recordingConsentAt,
+    recordingActiveAt: s.recordingActiveAt,
+    recordingStoppedAt: s.recordingStoppedAt,
+    agentName: s.agentName,
+    customerEmail: s.customerEmail,
+    crmCustomerId: s.crmCustomerId,
+    recordings: (s.recordings || []).map((r) => ({
+      recordingId: r.id,
+      startedAt: r.startedAt,
+      stoppedAt: r.stoppedAt,
+      durationSec: r.durationSec,
+      fileName: r.fileName,
+      consentAt: r.consentAt,
+      downloadedAt: r.downloadedAt,
+      fileSizeBytes: r.fileSizeBytes ?? null,
+      hasAudio: r.hasAudio ?? null,
+      demoCloudSaved: r.demoCloudSaved ?? null,
+      demoCloudSavedAt: r.demoCloudSavedAt ?? null,
+      demoCloudPath: r.demoCloudPath ?? null,
+    })),
+  }));
+  return {
+    exportedAt: new Date().toISOString(),
+    demoMode: true,
+    note: "ייצוא דמו — ללא קבצי וידאו. הסכמות ומטא-דאטה בלבד.",
+    sessions,
+    recordings: allRecordings.map((r) => ({
+      recordingId: r.id,
+      sessionId: r.sessionId,
+      startedAt: r.startedAt,
+      stoppedAt: r.stoppedAt,
+      durationSec: r.durationSec,
+      fileName: r.fileName,
+      screenConsentAt: getSession(r.sessionId)?.consentAt ?? null,
+      recordingConsentAt: r.consentAt,
+      downloadedAt: r.downloadedAt,
+      fileSizeBytes: r.fileSizeBytes ?? null,
+      hasAudio: r.hasAudio ?? null,
+      agentName: r.agentName,
+      customerEmail: r.customerEmail,
+      crmCustomerId: r.crmCustomerId,
+      demoCloudSaved: r.demoCloudSaved ?? null,
+      demoCloudSavedAt: r.demoCloudSavedAt ?? null,
+      demoCloudPath: r.demoCloudPath ?? null,
+    })),
+    emailLogs: store.emailLogs.map((log) => ({
+      id: log.id,
+      sessionId: log.sessionId,
+      to: log.to,
+      sentAt: log.sentAt,
+      status: log.status,
+    })),
+  };
+}
+
+export function endSession(id) {
+  const now = new Date().toISOString();
+  return updateSession(id, {
+    status: "ended",
+    endedAt: now,
+    recordingActiveAt: null,
+  });
+}
+
+/**
+ * @param {string|{ id: string, createdAt?: string, agentName?: string, customerEmail?: string, crmCustomerId?: string|null }} sessionOrId
+ * @param {string} [origin] — ברירת מחדל getPublicAppOrigin()
+ */
+export function buildScreenShareGuestUrl(sessionOrId, origin) {
+  const base = (origin || getPublicAppOrigin()).replace(/\/$/, "");
+  let sessionId;
+  let session = null;
+
+  if (sessionOrId && typeof sessionOrId === "object" && sessionOrId.id) {
+    session = sessionOrId;
+    sessionId = session.id;
+  } else {
+    sessionId = String(sessionOrId || "").trim();
+    session = sessionId ? getSession(sessionId) : null;
+  }
+
+  if (!sessionId) return "";
+
+  const path = `${base}/support/screen/${encodeURIComponent(sessionId)}`;
+  if (!demoModeEnabled || !session?.createdAt) return path;
+
+  const bootstrap = encodeGuestBootstrapPayload(session);
+  if (!bootstrap) return path;
+
+  const params = new URLSearchParams();
+  params.set(GUEST_BOOTSTRAP_QUERY_KEY, bootstrap);
+  return `${path}?${params.toString()}`;
 }
 
 export function buildScreenShareEmailBody({
@@ -209,6 +627,13 @@ export function listScreenShareEmails() {
   );
 }
 
+export function getLastEmailLogForSession(sessionId) {
+  if (!sessionId) return null;
+  const logs = readStore().emailLogs.filter((log) => log.sessionId === sessionId);
+  if (!logs.length) return null;
+  return logs.sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt))[0];
+}
+
 function appendEmailLog(log) {
   const store = readStore();
   writeStore({ emailLogs: [...store.emailLogs, log] });
@@ -225,6 +650,9 @@ function buildScreenShareLogBase({
   guestUrl,
   status,
   resendId = null,
+  errorMessage = null,
+  simulatedReason = null,
+  simulatedReasonHint = null,
 }) {
   return {
     id: makeId("ss_email"),
@@ -238,6 +666,9 @@ function buildScreenShareLogBase({
     sentAt: new Date().toISOString(),
     status,
     resendId,
+    ...(errorMessage ? { errorMessage: String(errorMessage) } : {}),
+    ...(simulatedReason ? { simulatedReason } : {}),
+    ...(simulatedReasonHint ? { simulatedReasonHint } : {}),
   };
 }
 
@@ -257,8 +688,9 @@ export async function sendScreenShareEmail({
   if (!toEmail || !toEmail.includes("@")) {
     throw new Error("כתובת מייל לא תקינה");
   }
+  const sessionForUrl = sessionId ? getSession(sessionId) : null;
   const url =
-    guestUrl || (sessionId ? buildScreenShareGuestUrl(sessionId) : null);
+    guestUrl || (sessionId ? buildScreenShareGuestUrl(sessionForUrl || sessionId) : null);
   if (!url) throw new Error("חסר קישור ללקוח");
   const subject = EMAIL_SUBJECT_SCREEN;
   const body = buildScreenShareEmailBody({
@@ -272,9 +704,11 @@ export async function sendScreenShareEmail({
     guestUrl: url,
   });
 
-  const apiResult = await postSendEmail({ to: toEmail, subject, html, text: body });
+  const sentAt = new Date().toISOString();
 
-  if (!apiResult.configured) {
+  if (demoModeEnabled && !demoSendRealEmailEnabled) {
+    const reason = simulatedReasonForDemoSendDisabled();
+    logEmailDelivery("screen-share-email", "simulated", reason.simulatedReasonHint);
     const log = buildScreenShareLogBase({
       toEmail,
       subject,
@@ -284,8 +718,59 @@ export async function sendScreenShareEmail({
       agentName,
       guestUrl: url,
       status: "simulated",
+      ...reason,
     });
     appendEmailLog(log);
+    if (sessionId) {
+      updateSession(sessionId, { emailSentAt: sentAt });
+    }
+    return {
+      log,
+      simulated: true,
+      message: DEMO_SCREEN_SHARE_EMAIL_MESSAGE,
+    };
+  }
+
+  let apiResult;
+  try {
+    apiResult = await postSendEmail({ to: toEmail, subject, html, text: body });
+  } catch (err) {
+    logEmailDelivery("screen-share-email", "failed", err?.message || err);
+    const failedLog = buildScreenShareLogBase({
+      toEmail,
+      subject,
+      body,
+      sessionId,
+      crmCustomerId,
+      agentName,
+      guestUrl: url,
+      status: "failed",
+      errorMessage: err?.message || "שליחת המייל נכשלה",
+    });
+    appendEmailLog(failedLog);
+    throw err;
+  }
+
+  rejectDemoRealEmailFallback(apiResult);
+
+  if (!apiResult.configured) {
+    const reason = simulatedReasonForApiResult(apiResult);
+    logEmailDelivery("screen-share-email", "simulated", reason.simulatedReasonHint);
+    const log = buildScreenShareLogBase({
+      toEmail,
+      subject,
+      body,
+      sessionId,
+      crmCustomerId,
+      agentName,
+      guestUrl: url,
+      status: "simulated",
+      ...reason,
+    });
+    appendEmailLog(log);
+    if (sessionId) {
+      updateSession(sessionId, { emailSentAt: sentAt });
+    }
     return {
       log,
       simulated: true,
@@ -294,6 +779,8 @@ export async function sendScreenShareEmail({
         "שירות המייל לא מוגדר — נרשם בדמו בלבד. פרסמו ב-Vercel עם RESEND_API_KEY.",
     };
   }
+
+  logEmailDelivery("screen-share-email", "sent", { to: toEmail, id: apiResult.id });
 
   const log = buildScreenShareLogBase({
     toEmail,
@@ -307,6 +794,9 @@ export async function sendScreenShareEmail({
     resendId: apiResult.id,
   });
   appendEmailLog(log);
+  if (sessionId) {
+    updateSession(sessionId, { emailSentAt: sentAt });
+  }
   return { log, simulated: false };
 }
 

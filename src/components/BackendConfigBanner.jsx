@@ -6,24 +6,35 @@ import { backendMode } from "@/api/client";
 export default function BackendConfigBanner() {
   if (backendMode === "demo") {
     return (
-      <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 flex items-center gap-2 text-sm text-emerald-800" dir="rtl">
+      <div className="demo-config-banner" dir="rtl" role="status">
         <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-        סביבת דמו פעילה
+        סביבת דמו פעילה · נתונים מקומיים
       </div>
     );
   }
 
   if (backendMode === "supabase") {
     return (
-      <div className="mb-4 rounded-xl border border-green-200 bg-green-50 px-3 py-2 flex items-center gap-2 text-sm text-green-800" dir="rtl">
-        <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+      <div
+        className="demo-config-banner border-accent/30"
+        style={{
+          background:
+            "linear-gradient(90deg, hsl(189 89% 53% / 0.1) 0%, hsl(271 76% 53% / 0.08) 100%)",
+        }}
+        dir="rtl"
+        role="status"
+      >
+        <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-accent" />
         מחובר ל-Supabase
       </div>
     );
   }
 
   return (
-    <div className="mb-6 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 flex gap-3 items-start" dir="rtl">
+    <div
+      className="mb-6 rounded-2xl border border-amber-300/80 bg-amber-50/90 backdrop-blur-sm px-4 py-3 flex gap-3 items-start shadow-elevation-1"
+      dir="rtl"
+    >
       <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
       <div className="text-sm text-amber-900">
         <p className="font-bold mb-1">אין חיבור לשרת נתונים</p>

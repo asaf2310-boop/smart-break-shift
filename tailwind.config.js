@@ -6,7 +6,12 @@ module.exports = {
   	extend: {
   		fontFamily: {
   			noto: ['var(--font-noto)'],
+  			sans: ['var(--font-sans)'],
   			heebo: ['var(--font-noto)']
+  		},
+  		backgroundImage: {
+  			'brand-gradient': 'var(--brand-gradient)',
+  			'brand-gradient-hover': 'var(--brand-gradient-hover)'
   		},
   		borderRadius: {
   			lg: 'var(--radius)',
@@ -22,6 +27,13 @@ module.exports = {
   			'elevation-3': 'var(--elevation-3)'
   		},
   		colors: {
+  			brand: {
+  				bg: 'var(--brand-bg)',
+  				surface: 'var(--brand-surface)',
+  				purple: 'var(--brand-purple)',
+  				'purple-light': 'var(--brand-purple-light)',
+  				cyan: 'var(--brand-cyan)'
+  			},
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
   			card: {

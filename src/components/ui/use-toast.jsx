@@ -3,6 +3,8 @@ import { useState, useEffect } from "react";
 
 const TOAST_LIMIT = 20;
 const TOAST_REMOVE_DELAY = 1000000;
+const DEFAULT_TOAST_DURATION = 1000;
+const ERROR_TOAST_DURATION = 5000;
 
 const actionTypes = {
   ADD_TOAST: "ADD_TOAST",
@@ -110,7 +112,7 @@ function dispatch(action) {
   });
 }
 
-function toast({ ...props }) {
+function toast({ duration, variant, ...props }) {
   const id = genId();
 
   const update = (props) =>
@@ -122,10 +124,15 @@ function toast({ ...props }) {
   const dismiss = () =>
     dispatch({ type: actionTypes.DISMISS_TOAST, toastId: id });
 
+  const resolvedDuration =
+    duration ??
+    (variant === "destructive" ? ERROR_TOAST_DURATION : DEFAULT_TOAST_DURATION);
+
   dispatch({
     type: actionTypes.ADD_TOAST,
     toast: {
       ...props,
+      variant,
       id,
       open: true,
       onOpenChange: (open) => {
@@ -133,6 +140,12 @@ function toast({ ...props }) {
       },
     },
   });
+
+  if (resolvedDuration > 0) {
+    setTimeout(() => {
+      dismiss();
+    }, resolvedDuration);
+  }
 
   return {
     id,

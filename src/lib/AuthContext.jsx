@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { isSupabaseBackend } from "@/api/dataClient";
 import { demoModeEnabled } from "@/api/demoClient";
 
 const AuthContext = createContext();
@@ -32,17 +31,9 @@ export const AuthProvider = ({ children }) => {
       return;
     }
 
-    if (isSupabaseBackend()) {
-      finish({ demoAdmin: false });
-      return;
-    }
-
-    finish({
-      error: {
-        type: "unknown",
-        message: "לא הוגדר חיבור Supabase. אפשר להפעיל VITE_DEMO_MODE=true לסביבת דמו.",
-      },
-    });
+    // Live mode: agent login is client-side; missing Supabase still allows UI preview
+    // (preview-live.ps1 -AllowMissingSupabase). Data routes will fail until env is set.
+    finish({ demoAdmin: false });
   };
 
   useEffect(() => {

@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ScreenSharePanel from "@/components/remote/ScreenSharePanel";
+import EmailDiagnosticButton from "@/components/remote/EmailDiagnosticButton";
 import { useToast } from "@/components/ui/use-toast";
 import { createCallLog, createEmailLog, getCustomerById } from "@/lib/crmStore";
 import {
@@ -163,8 +164,8 @@ export default function RemoteSupportPanel({
     }
     if (simulated) {
       toast({
-        title: "סשן פעיל — נרשם בדמו",
-        description: message || "לא הוגדר Resend — השתמשו ב-mailto או פרסמו ב-Vercel",
+        title: "סשן פעיל — הקישור מוכן",
+        description: message || "בדמו: הקישור מוכן — העתיקו את הקישור או פתחו mailto",
       });
     } else {
       toast({
@@ -219,8 +220,9 @@ export default function RemoteSupportPanel({
       await sendRustDeskLinkEmail(consentUrlForEmail, created.id);
       setStep(3);
     } catch (err) {
+      const rateLimited = err.status === 429;
       toast({
-        title: "לא הצליח",
+        title: rateLimited ? "מגבלת שליחה" : "לא הצליח",
         description: err.message || "בדקו מייל, מזהה RustDesk והרשת",
         variant: "destructive",
       });
@@ -302,8 +304,8 @@ export default function RemoteSupportPanel({
       }
       if (simulated) {
         toast({
-          title: "נרשם בדמו",
-          description: message || "לא הוגדר Resend — השתמשו ב-mailto או פרסמו ב-Vercel",
+          title: "הקישור מוכן (דמו)",
+          description: message || "בדמו: הקישור מוכן — העתיקו את הקישור או פתחו mailto",
         });
       } else {
         toast({
@@ -355,6 +357,9 @@ export default function RemoteSupportPanel({
   const renderDownloadEmailBlock = () => (
     <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
       {renderEmailInput()}
+      <div className="flex justify-end">
+        <EmailDiagnosticButton />
+      </div>
       <Button
         type="button"
         variant="outline"

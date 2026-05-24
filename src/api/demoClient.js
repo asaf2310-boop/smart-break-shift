@@ -11,6 +11,27 @@ export const DEMO_STORE_KEY = "smart-break-shift-demo-store-v1";
 /** Build-time only (Vercel `VITE_*` at deploy). Off unless value is exactly "true". */
 export const demoModeEnabled = import.meta.env.VITE_DEMO_MODE === "true";
 
+/**
+ * בדמו: שליחת מייל אמיתית דרך /api/send-email (Resend).
+ * ברירת מחדל: מופעלת כש-demoModeEnabled; כיבוי מפורש ב-build: VITE_DEMO_SEND_REAL_EMAIL=false
+ */
+export const demoSendRealEmailEnabled =
+  demoModeEnabled && import.meta.env.VITE_DEMO_SEND_REAL_EMAIL !== "false";
+
+/** לכפתור «בדיקת מייל» — רק מ-import.meta.env (לא מהשרת) */
+export function getDemoEmailBuildDiagnostic() {
+  const raw = import.meta.env.VITE_DEMO_SEND_REAL_EMAIL;
+  const viteSendRaw =
+    raw === undefined || raw === "" ? "(לא הוגדר — ברירת מחדל: מייל אמיתי)" : String(raw);
+  return {
+    demoModeEnabled,
+    demoSendRealEmailEnabled,
+    viteSendRaw,
+    attemptsRealEmailInDemo:
+      demoModeEnabled && import.meta.env.VITE_DEMO_SEND_REAL_EMAIL !== "false",
+  };
+}
+
 const AGENTS = [
   "נציג 01",
   "נציג 02",

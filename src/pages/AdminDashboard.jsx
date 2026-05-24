@@ -11,6 +11,7 @@ import BreakSettingsPanel from "../components/admin/BreakSettingsPanel";
 import ChatBrandingPanel from "../components/admin/ChatBrandingPanel";
 import { SHORT_BREAK_SLOTS, LUNCH_BREAK_SLOTS } from "@/constants/scheduling";
 import BackendConfigBanner from "@/components/BackendConfigBanner";
+import { demoModeEnabled } from "@/api/demoClient";
 import AdminLocalhostLinksPanel from "@/components/admin/AdminLocalhostLinksPanel";
 import {
   BreakRegistrationError,
@@ -156,7 +157,11 @@ export default function AdminDashboard() {
           <Link to="/" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">ראשי</Link>
           <Link to="/admin/users" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">נציגים</Link>
           <Link to="/admin/shifts" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">משמרות</Link>
-          <Link to="/admin/knowledge" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">ניהול ידע</Link>
+          {demoModeEnabled && (
+            <Link to="/admin/knowledge" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">
+              ניהול ידע
+            </Link>
+          )}
           <div className="text-center">
             <div className="flex items-center gap-3 justify-center mb-1">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/30">

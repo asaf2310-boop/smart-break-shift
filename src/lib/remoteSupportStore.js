@@ -1,5 +1,14 @@
-import { demoModeEnabled } from "@/api/demoClient";
-import { escapeHtml, postSendEmail } from "@/lib/emailApi";
+import { demoModeEnabled, demoSendRealEmailEnabled } from "@/api/demoClient";
+import {
+  escapeHtml,
+  logEmailDelivery,
+  postSendEmail,
+  rejectDemoRealEmailFallback,
+} from "@/lib/emailApi";
+import {
+  simulatedReasonForApiResult,
+  simulatedReasonForDemoSendDisabled,
+} from "@/lib/emailSimulatedReason";
 
 export const REMOTE_SUPPORT_STORAGE_KEY = "smart-break-shift-remote-support-v1";
 export const REMOTE_SUPPORT_CHANGE_EVENT = "remote-support-changed";
@@ -7,6 +16,9 @@ export const RUSTDESK_DOWNLOAD_URL = "https://rustdesk.com/download";
 
 const EMAIL_SUBJECT_RUSTDESK =
   "קישור להורדת RustDesk — תמיכה מרחוק (באישורך בלבד)";
+
+export const DEMO_RUSTDESK_EMAIL_MESSAGE =
+  "בדמו: הקישור מוכן — העתיקו את הקישור או פתחו mailto";
 
 export const CONSENT_TEXT_DEFAULT =
   "אני מאשר/ת שנציג התמיכה יקבל גישה מרחוק למחשב שלי באמצעות RustDesk לצורך טיפול בתקלה בלבד.";
@@ -94,6 +106,7 @@ export function createSession({ crmCustomerId, agentName, rustDeskId, password }
     consentSource: null,
     status: "active",
     createdAt: now,
+    emailSentAt: null,
     endedAt: null,
   };
   const sessions = [...readSessions(), session];
@@ -257,6 +270,9 @@ function buildRustDeskLogBase({
   resolvedConsentUrl,
   status,
   resendId = null,
+  errorMessage = null,
+  simulatedReason = null,
+  simulatedReasonHint = null,
 }) {
   return {
     id: makeId("rs_email"),
@@ -271,6 +287,9 @@ function buildRustDeskLogBase({
     sentAt: new Date().toISOString(),
     status,
     resendId,
+    ...(errorMessage ? { errorMessage: String(errorMessage) } : {}),
+    ...(simulatedReason ? { simulatedReason } : {}),
+    ...(simulatedReasonHint ? { simulatedReasonHint } : {}),
   };
 }
 
@@ -301,9 +320,11 @@ export async function sendRustDeskDownloadEmail({
     consentUrl: resolvedConsentUrl,
   });
 
-  const apiResult = await postSendEmail({ to: toEmail, subject, html, text: body });
+  const sentAt = new Date().toISOString();
 
-  if (!apiResult.configured) {
+  if (demoModeEnabled && !demoSendRealEmailEnabled) {
+    const reason = simulatedReasonForDemoSendDisabled();
+    logEmailDelivery("rustdesk-email", "simulated", reason.simulatedReasonHint);
     const log = buildRustDeskLogBase({
       toEmail,
       subject,
@@ -313,8 +334,59 @@ export async function sendRustDeskDownloadEmail({
       agentName,
       resolvedConsentUrl,
       status: "simulated",
+      ...reason,
     });
     appendRemoteEmailLog(log);
+    if (sessionId) {
+      updateSession(sessionId, { emailSentAt: sentAt });
+    }
+    return {
+      log,
+      simulated: true,
+      message: DEMO_RUSTDESK_EMAIL_MESSAGE,
+    };
+  }
+
+  let apiResult;
+  try {
+    apiResult = await postSendEmail({ to: toEmail, subject, html, text: body });
+  } catch (err) {
+    logEmailDelivery("rustdesk-email", "failed", err?.message || err);
+    const failedLog = buildRustDeskLogBase({
+      toEmail,
+      subject,
+      body,
+      sessionId,
+      crmCustomerId,
+      agentName,
+      resolvedConsentUrl,
+      status: "failed",
+      errorMessage: err?.message || "שליחת המייל נכשלה",
+    });
+    appendRemoteEmailLog(failedLog);
+    throw err;
+  }
+
+  rejectDemoRealEmailFallback(apiResult);
+
+  if (!apiResult.configured) {
+    const reason = simulatedReasonForApiResult(apiResult);
+    logEmailDelivery("rustdesk-email", "simulated", reason.simulatedReasonHint);
+    const log = buildRustDeskLogBase({
+      toEmail,
+      subject,
+      body,
+      sessionId,
+      crmCustomerId,
+      agentName,
+      resolvedConsentUrl,
+      status: "simulated",
+      ...reason,
+    });
+    appendRemoteEmailLog(log);
+    if (sessionId) {
+      updateSession(sessionId, { emailSentAt: sentAt });
+    }
     return {
       log,
       simulated: true,
@@ -323,6 +395,8 @@ export async function sendRustDeskDownloadEmail({
         "שירות המייל לא מוגדר — נרשם בדמו בלבד. פרסמו ב-Vercel עם RESEND_API_KEY.",
     };
   }
+
+  logEmailDelivery("rustdesk-email", "sent", { to: toEmail, id: apiResult.id });
 
   const log = buildRustDeskLogBase({
     toEmail,
@@ -336,6 +410,9 @@ export async function sendRustDeskDownloadEmail({
     resendId: apiResult.id,
   });
   appendRemoteEmailLog(log);
+  if (sessionId) {
+    updateSession(sessionId, { emailSentAt: sentAt });
+  }
   return { log, simulated: false };
 }
 

@@ -2,7 +2,6 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { BookOpen, CalendarClock, CalendarDays, Contact, LogOut, Monitor } from "lucide-react";
-import BrandEntryBlock from "@/components/brand/BrandEntryBlock";
 import { getAgentNamesList } from "@/constants/scheduling";
 import AgentLogin from "@/components/auth/AgentLogin";
 import { demoModeEnabled } from "@/api/demoClient";
@@ -17,14 +16,14 @@ const productionCards = [
     title: "הפסקות",
     desc: "הזמנת הפסקת 10 דקות וצהריים",
     icon: CalendarClock,
-    iconBg: "bg-primary-container text-on-primary-container",
+    iconTile: "m3-icon-tile",
   },
   {
     to: "/shifts",
     title: "משמרות",
     desc: "אילוצים, חופש ושיבוץ שבועי",
     icon: CalendarDays,
-    iconBg: "bg-surface-container-high text-primary",
+    iconTile: "m3-icon-tile",
   },
 ];
 
@@ -34,21 +33,21 @@ const demoOnlyCards = [
     title: "CRM",
     desc: "לקוחות ותיעוד שיחות",
     icon: Contact,
-    iconBg: "bg-secondary text-secondary-foreground",
+    iconTile: "m3-icon-tile",
   },
   {
     to: "/remote-support",
     title: "השתלטות מרחוק",
     desc: "שלב א: צפייה בדפדפן · RustDesk · סשנים",
     icon: Monitor,
-    iconBg: "bg-violet-100 text-violet-900",
+    iconTile: "m3-icon-tile",
   },
   {
     to: "/knowledge",
     title: "בסיס ידע",
     desc: "שאלות ותשובות ממסמכי הארגון",
     icon: BookOpen,
-    iconBg: "bg-primary-container text-on-primary-container",
+    iconTile: "m3-icon-tile",
   },
 ];
 
@@ -80,18 +79,13 @@ export default function Home() {
 
   return (
     <div className="m3-page" dir="rtl">
-      <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] right-[-5%] w-[480px] h-[480px] bg-primary/8 rounded-full blur-3xl" />
-        <div className="absolute bottom-[-10%] left-[-5%] w-[420px] h-[420px] bg-primary-container/40 rounded-full blur-3xl" />
-      </div>
-
-      <div className="relative z-10 max-w-3xl mx-auto px-4 pt-14 sm:pt-16 pb-8 sm:pb-16">
+      <motion.div className="relative z-10 max-w-3xl mx-auto px-4 pt-14 sm:pt-16 pb-8 sm:pb-16">
         <motion.div
           initial={{ opacity: 0, y: -16 }}
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-8 sm:mb-12"
         >
-          {demoModeEnabled && <BrandEntryBlock className="mx-auto mb-4" />}
+          <h1 className="m3-headline-small mb-2 text-brand-gradient">מרכז השליטה</h1>
           <p className="m3-label-medium">
             שלום <span className="text-primary font-semibold">{displayName}</span>
             {agentCount > 0 && <> · {agentCount} נציגים</>}
@@ -130,10 +124,10 @@ export default function Home() {
               >
                 <Link
                   to={card.to}
-                  className="m3-card flex flex-col h-full min-h-44 p-5 sm:p-6 hover:scale-[1.01] transition-transform group"
+                  className="m3-card flex flex-col h-full min-h-44 p-5 sm:p-6 group"
                 >
                   <div
-                    className={`w-12 h-12 rounded-xl ${card.iconBg} flex items-center justify-center mb-4 group-hover:scale-105 transition-transform shrink-0`}
+                    className={`w-12 h-12 mb-4 group-hover:scale-105 transition-transform ${card.iconTile}`}
                   >
                     <Icon className="w-6 h-6" />
                   </div>
@@ -144,7 +138,7 @@ export default function Home() {
             );
           })}
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

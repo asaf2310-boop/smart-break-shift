@@ -34,7 +34,7 @@ import AdminLocalhostLinksFloating from '@/components/admin/AdminLocalhostLinksF
 import RemoteSupportConsentPage from './pages/RemoteSupportConsentPage';
 import RemoteSupportPage from './pages/RemoteSupportPage';
 import ScreenShareGuestPage from './pages/ScreenShareGuestPage';
-import BrandHeader from '@/components/brand/BrandHeader';
+import DemoRecordingPlayPage from './pages/DemoRecordingPlayPage';
 import RouteErrorBoundary from '@/components/RouteErrorBoundary';
 import { hasTopAppNav } from '@/lib/appNavPaths';
 
@@ -49,8 +49,12 @@ const AuthenticatedApp = () => {
 
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin" />
+      <div className="fixed inset-0 flex items-center justify-center m3-page">
+        <div
+          className="w-10 h-10 rounded-full border-[3px] border-primary/20 border-t-primary animate-spin"
+          style={{ boxShadow: "var(--brand-glow-purple)" }}
+          aria-hidden
+        />
       </div>
     );
   }
@@ -67,7 +71,6 @@ const AuthenticatedApp = () => {
 
   return (
     <>
-      <BrandHeader />
       <TopAppNav />
       <Routes>
         <Route path="/" element={<Home />} />
@@ -77,6 +80,10 @@ const AuthenticatedApp = () => {
         <Route path="/crm" element={<DemoGate><CrmDashboard /></DemoGate>} />
         <Route path="/crm/:id" element={<DemoGate><CrmCustomerDetail /></DemoGate>} />
         <Route path="/remote-support" element={<DemoGate><RemoteSupportPage /></DemoGate>} />
+        <Route
+          path="/remote-support/recordings/play"
+          element={<DemoGate><DemoRecordingPlayPage /></DemoGate>}
+        />
         <Route path="/support/consent/:token" element={<DemoGate><RemoteSupportConsentPage /></DemoGate>} />
         <Route path="/support/screen/:sessionId" element={<DemoGate><ScreenShareGuestPage /></DemoGate>} />
         <Route path="/knowledge" element={<DemoGate><KnowledgePage /></DemoGate>} />

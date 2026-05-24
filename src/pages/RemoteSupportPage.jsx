@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowRight, Contact, Monitor, MonitorPlay } from "lucide-react";
+import { ArrowRight, Contact, Film, Monitor, MonitorPlay } from "lucide-react";
+import DemoRecordingsLibrary from "@/components/remote/DemoRecordingsLibrary";
+import { demoModeEnabled } from "@/api/demoClient";
 import { getStoredAgentName } from "@/constants/scheduling";
 import RemoteSupportPanel from "@/components/remote/RemoteSupportPanel";
 import EmailStatusBanner from "@/components/remote/EmailStatusBanner";
@@ -11,6 +13,7 @@ import {
   subscribeRemoteSupport,
 } from "@/lib/remoteSupportStore";
 import {
+  getLastEmailLogForSession,
   listSessions as listScreenSessions,
   screenShareFeaturesAvailable,
   subscribeScreenShare,
@@ -147,7 +150,19 @@ export default function RemoteSupportPage() {
                 <p className="m3-label-medium text-on-surface-variant">אין סשני צפייה עדיין.</p>
               ) : (
                 <ul className="divide-y divide-outline-variant/40">
-                  {screenSessions.slice(0, 15).map((s) => (
+                  {screenSessions.slice(0, 15).map((s) => {
+                    const lastMail = getLastEmailLogForSession(s.id);
+                    const mailLabel =
+                      lastMail?.status === "sent"
+                        ? `מייל: נשלח ${formatWhen(lastMail.sentAt)}`
+                        : lastMail?.status === "failed"
+                          ? "מייל: נכשל"
+                          : lastMail?.status === "simulated"
+                            ? "מייל: סימולציה"
+                            : s.emailSentAt
+                              ? `מייל: ${formatWhen(s.emailSentAt)}`
+                              : null;
+                    return (
                     <li key={s.id} className="py-3 flex flex-wrap items-center justify-between gap-2">
                       <div className="min-w-0">
                         <p className="m3-label-medium font-mono text-left text-xs" dir="ltr">
@@ -157,6 +172,9 @@ export default function RemoteSupportPage() {
                           {s.agentName || "נציג"} · {formatWhen(s.createdAt)}
                           {s.customerEmail ? ` · ${s.customerEmail}` : ""}
                         </p>
+                        {mailLabel ? (
+                          <p className="m3-label-medium text-xs mt-0.5 text-teal-800">{mailLabel}</p>
+                        ) : null}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <span
@@ -178,10 +196,26 @@ export default function RemoteSupportPage() {
                         )}
                       </div>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               )}
             </motion.div>
+
+            {demoModeEnabled && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.14 }}
+                className="m3-card p-4 sm:p-6 mb-4"
+              >
+                <h2 className="m3-label-large font-semibold flex items-center gap-2 mb-4">
+                  <Film className="w-4 h-4 text-rose-700" />
+                  הקלטות שמורות (דמו)
+                </h2>
+                <DemoRecordingsLibrary />
+              </motion.div>
+            )}
 
             <motion.div
               initial={{ opacity: 0, y: 8 }}
