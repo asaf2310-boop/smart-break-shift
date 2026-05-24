@@ -11,6 +11,10 @@ export const DEMO_STORE_KEY = "smart-break-shift-demo-store-v1";
 /** Build-time only (Vercel `VITE_*` at deploy). Off unless value is exactly "true". */
 export const demoModeEnabled = import.meta.env.VITE_DEMO_MODE === "true";
 
+/** בדמו: שליחת מייל אמיתית דרך /api/send-email (Resend) — דורש גם RESEND_API_KEY ב-Vercel */
+export const demoSendRealEmailEnabled =
+  demoModeEnabled && import.meta.env.VITE_DEMO_SEND_REAL_EMAIL === "true";
+
 const AGENTS = [
   "נציג 01",
   "נציג 02",

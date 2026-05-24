@@ -1,4 +1,4 @@
-import { demoModeEnabled } from "@/api/demoClient";
+import { demoModeEnabled, demoSendRealEmailEnabled } from "@/api/demoClient";
 import { escapeHtml, postSendEmail } from "@/lib/emailApi";
 
 export const REMOTE_SUPPORT_STORAGE_KEY = "smart-break-shift-remote-support-v1";
@@ -307,7 +307,7 @@ export async function sendRustDeskDownloadEmail({
 
   const sentAt = new Date().toISOString();
 
-  if (demoModeEnabled) {
+  if (demoModeEnabled && !demoSendRealEmailEnabled) {
     const log = buildRustDeskLogBase({
       toEmail,
       subject,

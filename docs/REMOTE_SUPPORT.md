@@ -154,14 +154,29 @@
 
 ## שליחת מייל אמיתית (Resend + Vercel)
 
-הדמו שולח מייל ללקוח עם קישור שיתוף מסך (ושלב ב' — קישור הורדת RustDesk) דרך **Resend**, עם מפתח API **רק בשרת** (לא `VITE_*`).
+ברירת מחדל בדמו (`VITE_DEMO_MODE=true` בלי `VITE_DEMO_SEND_REAL_EMAIL`): מייל **מדומה** — הקישור מוכן להעתקה / mailto.  
+כדי לשלוח מייל **אמיתי** גם באתר הדמו, הגדירו את הדגל למטה + מפתחות Resend בשרת.
 
-### משתני סביבה (Vercel)
+שיתוף מסך ו-RustDesk משתמשים ב-**Resend** דרך `/api/send-email`; מפתח API **רק בשרת** (לא `VITE_*`).
+
+### פרויקט Vercel: smart-break-shift-demo (Production)
+
+| משתנה | ערך | הערות |
+|--------|------|--------|
+| `VITE_DEMO_MODE` | `true` | כבר קיים |
+| `VITE_DEMO_SEND_REAL_EMAIL` | `true` | **חדש** — build-time; Redeploy אחרי שינוי |
+| `RESEND_API_KEY` | `re_...` | מ-[resend.com](https://resend.com) |
+| `EMAIL_FROM` | `noreply@your-verified-domain.com` | חייב להיות מדומיין **מאומת** ב-Resend |
+
+לאחר הוספה או שינוי: **Redeploy** (לא רק Save).
+
+### משתני סביבה (Vercel — כל פרויקט עם מייל אמיתי)
 
 | משתנה | דוגמה | הערות |
 |--------|--------|--------|
 | `RESEND_API_KEY` | `re_...` | מ-[resend.com](https://resend.com) |
 | `EMAIL_FROM` | `onboarding@resend.dev` | לבדיקות; בפרודקשן — כתובת מדומיין מאומת |
+| `VITE_DEMO_SEND_REAL_EMAIL` | `true` | אופציונלי — רק יחד עם `VITE_DEMO_MODE=true` |
 
 לאחר הוספה: **Redeploy** לפרויקט.
 
@@ -189,15 +204,26 @@
 2. **בדיקה מהאפליקציה:** בדף «השתלטות מרחוק» — באנר ירוק «מייל: פעיל» או כתום עם הוראות.
 3. **אחרי שינוי env:** תמיד Redeploy (לא רק Save) — משתני סביבה נטענים בזמן build/deploy.
 
-### פיתוח מקומי
+### פיתוח מקומי (דמו + מייל אמיתי)
+
+ב-`.env.local` (או env של `vercel dev`):
+
+```env
+VITE_DEMO_MODE=true
+VITE_DEMO_SEND_REAL_EMAIL=true
+RESEND_API_KEY=re_...
+EMAIL_FROM=onboarding@resend.dev
+```
 
 | פקודה | שליחה אמיתית |
 |--------|----------------|
-| `npm run dev` | לא (אלא אם מריצים גם `npx vercel dev` — Vite מפנה `/api` לפורט 3000) |
-| `npx vercel dev` | כן — עם `.env.local` שמכיל `RESEND_API_KEY` ו-`EMAIL_FROM` |
-| פריסה ל-Vercel | כן |
+| `npm run dev` בלבד | **לא** — אין handler ל-`/api/send-email` (רק SPA) |
+| `npx vercel dev` | **כן** — Vite מפנה `/api` ל-`127.0.0.1:3000` (ראו `vite.config.js`) |
+| פריסה ל-Vercel (דמו + דגל) | **כן** — אחרי Redeploy עם כל המשתנים למעלה |
 
 **חשוב:** אל תשימו `RESEND_API_KEY` ב-`VITE_*`. ראו `.env.example`.
+
+`api/send-email.js` דורש בשרת: `RESEND_API_KEY` + `EMAIL_FROM` (אחרת `503` + `email_not_configured` והאפליקציה נופלת לסימולציה).
 
 ### קבצים
 

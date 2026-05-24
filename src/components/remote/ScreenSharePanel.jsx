@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Copy, Link2, Mail, MonitorPlay, ShieldAlert } from "lucide-react";
-import { demoModeEnabled } from "@/api/demoClient";
+import { demoModeEnabled, demoSendRealEmailEnabled } from "@/api/demoClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -118,6 +118,11 @@ export default function ScreenSharePanel({
         toast({
           title: "סשן פעיל — הקישור מוכן",
           description: message || DEMO_SCREEN_SHARE_EMAIL_MESSAGE,
+        });
+      } else if (demoSendRealEmailEnabled) {
+        toast({
+          title: "סשן פעיל — הקישור מוכן",
+          description: "נשלח במייל",
         });
       } else {
         toast({
@@ -237,7 +242,13 @@ export default function ScreenSharePanel({
             className="w-full gap-2 bg-teal-600 hover:bg-teal-700"
           >
             <MonitorPlay className="w-4 h-4" />
-            {starting ? "מפעיל סשן ושולח..." : "התחל סשן ושלח קישור במייל"}
+            {starting
+              ? "מפעיל סשן ושולח..."
+              : demoSendRealEmailEnabled
+                ? "התחל סשן ושלח קישור במייל"
+                : demoModeEnabled
+                  ? "התחל סשן (דמו — העתקת קישור)"
+                  : "התחל סשן ושלח קישור במייל"}
           </Button>
         </div>
       ) : (
@@ -245,7 +256,7 @@ export default function ScreenSharePanel({
           {!session.consentAt && (
             <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 leading-relaxed">
               ממתין לאישור הלקוח בקישור —{" "}
-              {demoModeEnabled
+              {demoModeEnabled && !demoSendRealEmailEnabled
                 ? "העתיקו את הקישור למטה או פתחו mailto; "
                 : "הקישור נשלח במייל; "}
               האישור נרשם כשהלקוח מאשר בדף שיתוף המסך.

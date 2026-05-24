@@ -1,4 +1,4 @@
-import { demoModeEnabled } from "@/api/demoClient";
+import { demoModeEnabled, demoSendRealEmailEnabled } from "@/api/demoClient";
 import { escapeHtml, postSendEmail } from "@/lib/emailApi";
 
 export const SCREEN_SHARE_STORAGE_KEY = "smart-break-shift-screen-share-v1";
@@ -524,7 +524,7 @@ export async function sendScreenShareEmail({
 
   const sentAt = new Date().toISOString();
 
-  if (demoModeEnabled) {
+  if (demoModeEnabled && !demoSendRealEmailEnabled) {
     const log = buildScreenShareLogBase({
       toEmail,
       subject,
