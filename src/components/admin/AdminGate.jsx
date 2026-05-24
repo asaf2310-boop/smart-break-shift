@@ -1,14 +1,37 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { ShieldCheck, Lock } from "lucide-react";
-import { isAdminPinConfigured, useIsAdmin, unlockAdminSession } from "@/hooks/useIsAdmin";
+import {
+  isAdminPinConfigured,
+  isProductionAdminOpen,
+  useIsAdmin,
+  unlockAdminSession,
+} from "@/hooks/useIsAdmin";
+
 export default function AdminGate({ children }) {
   const isAdmin = useIsAdmin();
   const pinRequired = isAdminPinConfigured();
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
 
-  if (isAdmin) return children;
+  if (isAdmin) {
+    if (isProductionAdminOpen()) {
+      return (
+        <div className="relative min-h-screen" dir="rtl">
+          <div
+            role="status"
+            className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-center text-sm text-amber-900"
+          >
+            כניסת מנהל ללא PIN — זמני לפרודקשן. להגדרת PIN: משתנה{" "}
+            <code className="text-xs bg-amber-100/80 px-1 rounded">VITE_ADMIN_PIN</code> ב-Vercel (build
+            מחדש).
+          </div>
+          {children}
+        </div>
+      );
+    }
+    return children;
+  }
 
   if (!pinRequired) {
     return (
@@ -19,9 +42,9 @@ export default function AdminGate({ children }) {
           </div>
           <h1 className="text-xl font-extrabold text-slate-800 mb-2">כניסת מנהל לא זמינה</h1>
           <p className="text-sm text-slate-600 leading-relaxed">
-            לא הוגדר <code className="text-xs bg-slate-100 px-1 rounded">VITE_ADMIN_PIN</code> בקובץ{" "}
-            <code className="text-xs bg-slate-100 px-1 rounded">.env.local</code>.
-            הוסף שורה כמו <code className="text-xs bg-slate-100 px-1 rounded">VITE_ADMIN_PIN=1234</code> והפעל מחדש את שרת הפיתוח.
+            לא הוגדר <code className="text-xs bg-slate-100 px-1 rounded">VITE_ADMIN_PIN</code> במשתני
+            הסביבה של הבילד. בפיתוח: <code className="text-xs bg-slate-100 px-1 rounded">.env.local</code>
+            ; בפריסה: Vercel → Environment Variables. הפעל build מחדש אחרי השינוי.
           </p>
           <Link
             to="/"

@@ -4,6 +4,7 @@ import Peer from "peerjs";
 import { motion } from "framer-motion";
 import {
   CheckCircle2,
+  Circle,
   Monitor,
   ShieldAlert,
   AlertCircle,
@@ -12,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   getSession,
+  logRecordingConsent,
   logScreenConsent,
   screenShareDemoAvailable,
   subscribeScreenShare,
@@ -20,10 +22,22 @@ import {
 const DEMO_BANNER =
   "דמו — שיתוף מסך בדפדפן (צפייה בלבד). מומלץ Chrome או Edge. לפרודקשן: PeerServer עצמי.";
 
+/** אודיו מערכת ב-getDisplayMedia — בדרך כלל Chrome/Edge בדסקטופ */
+function displayMediaSystemAudioSupported() {
+  if (typeof navigator === "undefined" || !navigator.mediaDevices?.getDisplayMedia) {
+    return false;
+  }
+  const ua = navigator.userAgent;
+  return /Chrome|Edg/.test(ua) && !/Firefox/i.test(ua);
+}
+
 export default function ScreenShareGuestPage() {
   const { sessionId } = useParams();
   const [session, setSession] = useState(() => getSession(sessionId));
   const [consentChecked, setConsentChecked] = useState(false);
+  const [recordingConsentChecked, setRecordingConsentChecked] = useState(false);
+  const [includeSystemAudio, setIncludeSystemAudio] = useState(false);
+  const systemAudioSupported = displayMediaSystemAudioSupported();
   const [sharing, setSharing] = useState(false);
   const [shared, setShared] = useState(false);
   const [error, setError] = useState("");
@@ -36,6 +50,26 @@ export default function ScreenShareGuestPage() {
     refresh();
     return subscribeScreenShare(refresh);
   }, [sessionId]);
+
+  useEffect(() => {
+    if (!shared || !sessionId) return undefined;
+    let intervalMs = 1500;
+    let timer;
+    const tick = () => {
+      const latest = getSession(sessionId);
+      setSession(latest);
+      const nextMs =
+        latest?.recordingConsentAt && latest?.recordingActiveAt ? 500 : 1500;
+      if (nextMs !== intervalMs) {
+        intervalMs = nextMs;
+        clearInterval(timer);
+        timer = setInterval(tick, intervalMs);
+      }
+    };
+    tick();
+    timer = setInterval(tick, intervalMs);
+    return () => clearInterval(timer);
+  }, [shared, sessionId]);
 
   useEffect(() => {
     return () => {
@@ -68,7 +102,7 @@ export default function ScreenShareGuestPage() {
 
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: { displaySurface: "monitor" },
-        audio: false,
+        audio: includeSystemAudio && systemAudioSupported,
       });
       streamRef.current = stream;
 
@@ -78,6 +112,9 @@ export default function ScreenShareGuestPage() {
       });
 
       logScreenConsent(session.id);
+      if (recordingConsentChecked) {
+        logRecordingConsent(session.id);
+      }
       setSession(getSession(sessionId));
 
       const peer = new Peer({ debug: 0 });
@@ -139,11 +176,23 @@ export default function ScreenShareGuestPage() {
     );
   }
 
+  const showRecordingWatermark =
+    shared && Boolean(session?.recordingConsentAt && session?.recordingActiveAt);
+
   return (
     <div
-      className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50 to-cyan-50 flex items-center justify-center p-4"
+      className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50 to-cyan-50 flex items-center justify-center p-4 relative"
       dir="rtl"
     >
+      {showRecordingWatermark && (
+        <div
+          className="fixed bottom-4 left-4 z-50 pointer-events-none select-none text-sm font-semibold text-slate-800/45 tracking-wide"
+          role="status"
+          aria-live="polite"
+        >
+          מוקלט
+        </div>
+      )}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -171,9 +220,19 @@ export default function ScreenShareGuestPage() {
           ) : session.status === "ended" ? (
             <p className="text-sm text-center text-slate-600">סשן שיתוף המסך הסתיים.</p>
           ) : shared ? (
-            <div className="text-center space-y-2">
+            <div className="text-center space-y-3">
               <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" />
               <p className="font-semibold text-emerald-800">המסך משותף לנציג</p>
+              {session.recordingConsentAt && session.recordingActiveAt && (
+                <div
+                  className="inline-flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-semibold text-red-800"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <Circle className="w-2.5 h-2.5 fill-red-600 text-red-600 animate-pulse" />
+                  המסך מוקלט
+                </div>
+              )}
               <p className="text-xs text-slate-500 leading-relaxed">
                 השאירו דף זה פתוח. לעצירה — לחצו «הפסק שיתוף» בחלון הדפדפן או סגרו את
                 השיתוף.
@@ -184,6 +243,7 @@ export default function ScreenShareGuestPage() {
               <ol className="text-sm text-slate-700 space-y-2 list-decimal list-inside bg-slate-50 rounded-xl p-3 border border-slate-100 leading-relaxed">
                 <li>השתמשו ב-Chrome או Edge (מומלץ)</li>
                 <li>סמנו «אני מאשר שיתוף מסך»</li>
+                <li>אם הנציג עשוי להקליט — סמנו גם «אישור הקלטה» (אופציונלי לצפייה בלבד)</li>
                 <li>לחצו «התחל שיתוף מסך»</li>
                 <li>בחרו מסך, חלון או לשונית לשיתוף</li>
               </ol>
@@ -205,6 +265,32 @@ export default function ScreenShareGuestPage() {
                   בלבד, ללא שליטה בעכבר או במקלדת
                 </span>
               </label>
+
+              <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-rose-200 bg-rose-50/50 p-3">
+                <Checkbox
+                  checked={recordingConsentChecked}
+                  onCheckedChange={(v) => setRecordingConsentChecked(Boolean(v))}
+                  className="mt-0.5"
+                />
+                <span className="text-sm font-medium text-slate-800 leading-relaxed">
+                  אני מאשר שהנציג יוכל להקליט את שיתוף המסך לצורך תיעוד הטיפול (דמו) — הקובץ
+                  נשמר אצל הנציג בלבד ולא נשלח אוטומטית לשרת
+                </span>
+              </label>
+
+              {systemAudioSupported && (
+                <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+                  <Checkbox
+                    checked={includeSystemAudio}
+                    onCheckedChange={(v) => setIncludeSystemAudio(Boolean(v))}
+                    className="mt-0.5"
+                  />
+                  <span className="text-sm text-slate-700 leading-relaxed">
+                    כלול אודיו מערכת (אופציונלי) — יש לסמן גם «שתף אודיו» בחלון הדפדפן. ברירת מחדל:
+                    ללא אודיו.
+                  </span>
+                </label>
+              )}
 
               {error && (
                 <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">

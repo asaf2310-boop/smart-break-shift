@@ -67,6 +67,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useTelephony } from "@/context/TelephonyContext";
 import { telephonyDemoAvailable } from "@/lib/telephonyStore";
 import RemoteSupportPanel from "@/components/remote/RemoteSupportPanel";
+import CustomerScreenRecordings from "@/components/crm/CustomerScreenRecordings";
 
 const callTypeIcon = {
   incoming: Phone,
@@ -311,6 +312,7 @@ export default function CrmCustomerDetail() {
               customerEmail={customer.email}
             />
           </div>
+          <CustomerScreenRecordings crmCustomerId={customer.id} />
         </motion.div>
 
         <section className="mb-6">

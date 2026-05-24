@@ -1,13 +1,21 @@
-/** Admin routes from App.jsx — keep in sync when adding /admin/* pages. */
-export const ADMIN_DEV_ROUTES = [
+import { demoModeEnabled } from "@/api/demoClient";
+
+const ADMIN_DEV_ROUTES_CORE = [
   { path: "/admin", label: "דשבורד מנהל" },
-  { path: "/admin/knowledge", label: "ניהול ידע" },
   { path: "/admin/shifts", label: "משמרות (מנהל)" },
   { path: "/admin/users", label: "נציגים" },
 ];
 
+const ADMIN_DEV_ROUTES_DEMO = [{ path: "/admin/knowledge", label: "ניהול ידע" }];
+
+/** Admin routes from App.jsx — keep in sync when adding /admin/* pages. */
+export const ADMIN_DEV_ROUTES = [
+  ...ADMIN_DEV_ROUTES_CORE,
+  ...(demoModeEnabled ? ADMIN_DEV_ROUTES_DEMO : []),
+];
+
 export function isAdminDevLinksVisible() {
-  return import.meta.env.DEV || import.meta.env.VITE_DEMO_MODE === "true";
+  return import.meta.env.DEV || demoModeEnabled;
 }
 
 export function buildAdminDevUrl(origin, path) {

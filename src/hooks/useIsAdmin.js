@@ -1,10 +1,16 @@
 import { useSyncExternalStore } from "react";
+import { demoModeEnabled } from "@/api/demoClient";
 
 const ADMIN_SESSION_KEY = "smart_break_admin_unlocked";
 
-/** PIN מוגדר ב-.env — בלי PIN אין מצב מנהל (גם בדמו). */
+/** PIN מוגדר ב-build env (VITE_ADMIN_PIN). */
 export function isAdminPinConfigured() {
   return Boolean(String(import.meta.env.VITE_ADMIN_PIN ?? "").trim());
+}
+
+/** זמני: בפרודקשן בלי PIN — /admin פתוח ללא שער (לא בדמו). */
+export function isProductionAdminOpen() {
+  return !demoModeEnabled && !isAdminPinConfigured();
 }
 
 function subscribeAdminSession(onStoreChange) {
@@ -29,6 +35,7 @@ function getAdminSessionSnapshot() {
 
 /** מצב מנהל פעיל — רק אחרי הזנת PIN במסך /admin (לא התחברות נציג / AuthContext דמו). */
 export function isAdminSessionActive() {
+  if (isProductionAdminOpen()) return true;
   return isAdminPinConfigured() && getAdminSessionSnapshot();
 }
 
@@ -48,5 +55,6 @@ export function useIsAdmin() {
     getAdminSessionSnapshot,
     () => false
   );
+  if (isProductionAdminOpen()) return true;
   return isAdminPinConfigured() && sessionUnlocked;
 }

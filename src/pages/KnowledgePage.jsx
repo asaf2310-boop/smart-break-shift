@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowRight, BookOpen } from "lucide-react";
 import KnowledgeChat from "@/components/knowledge/KnowledgeChat";
+import { demoModeEnabled } from "@/api/demoClient";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 
 export default function KnowledgePage() {
@@ -40,7 +41,7 @@ export default function KnowledgePage() {
           <KnowledgeChat />
         </motion.div>
 
-        {isAdmin && (
+        {demoModeEnabled && isAdmin && (
           <p className="m3-label-medium text-center mt-4">
             <Link to="/admin/knowledge" className="text-primary hover:underline">
               ניהול ידע (מנהל)

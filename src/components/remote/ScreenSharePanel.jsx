@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Copy, Link2, Mail, MonitorPlay, ShieldAlert } from "lucide-react";
+import { demoModeEnabled } from "@/api/demoClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +10,7 @@ import {
   buildScreenShareGuestUrl,
   buildScreenShareMailtoUrl,
   createScreenSession,
+  DEMO_SCREEN_SHARE_EMAIL_MESSAGE,
   endSession,
   getSession,
   sendScreenShareEmail,
@@ -114,9 +116,8 @@ export default function ScreenSharePanel({
       }
       if (simulated) {
         toast({
-          title: "סשן פעיל — נרשם בדמו",
-          description:
-            message || "לא הוגדר Resend — השתמשו ב-mailto או פרסמו ב-Vercel",
+          title: "סשן פעיל — הקישור מוכן",
+          description: message || DEMO_SCREEN_SHARE_EMAIL_MESSAGE,
         });
       } else {
         toast({
@@ -243,8 +244,17 @@ export default function ScreenSharePanel({
         <div className="space-y-3">
           {!session.consentAt && (
             <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 leading-relaxed">
-              ממתין לאישור הלקוח בקישור — הקישור נשלח במייל; האישור נרשם כשהלקוח מאשר בדף
-              שיתוף המסך.
+              ממתין לאישור הלקוח בקישור —{" "}
+              {demoModeEnabled
+                ? "העתיקו את הקישור למטה או פתחו mailto; "
+                : "הקישור נשלח במייל; "}
+              האישור נרשם כשהלקוח מאשר בדף שיתוף המסך.
+            </p>
+          )}
+          {session.consentAt && !session.recordingConsentAt && (
+            <p className="text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 leading-relaxed">
+              הלקוח אישר צפייה בלבד — כפתור «התחל הקלטה» יופעל רק אם הלקוח סימן «אישור הקלטה»
+              בקישור.
             </p>
           )}
           <div className="flex items-center gap-2 text-xs text-slate-600 break-all rounded-lg border border-slate-200 p-2 bg-slate-50">
@@ -273,7 +283,11 @@ export default function ScreenSharePanel({
             </a>
           )}
 
-          <ScreenShareAgentView sessionId={session.id} onEnded={handleEndSession} />
+          <ScreenShareAgentView
+            sessionId={session.id}
+            agentName={agentName}
+            onEnded={handleEndSession}
+          />
         </div>
       )}
     </div>

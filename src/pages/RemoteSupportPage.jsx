@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowRight, Contact, Monitor, MonitorPlay } from "lucide-react";
+import { ArrowRight, Contact, Film, Monitor, MonitorPlay } from "lucide-react";
+import DemoRecordingsLibrary from "@/components/remote/DemoRecordingsLibrary";
+import { demoModeEnabled } from "@/api/demoClient";
 import { getStoredAgentName } from "@/constants/scheduling";
 import RemoteSupportPanel from "@/components/remote/RemoteSupportPanel";
 import EmailStatusBanner from "@/components/remote/EmailStatusBanner";
@@ -182,6 +184,21 @@ export default function RemoteSupportPage() {
                 </ul>
               )}
             </motion.div>
+
+            {demoModeEnabled && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.14 }}
+                className="m3-card p-4 sm:p-6 mb-4"
+              >
+                <h2 className="m3-label-large font-semibold flex items-center gap-2 mb-4">
+                  <Film className="w-4 h-4 text-rose-700" />
+                  הקלטות שמורות (דמו)
+                </h2>
+                <DemoRecordingsLibrary />
+              </motion.div>
+            )}
 
             <motion.div
               initial={{ opacity: 0, y: 8 }}

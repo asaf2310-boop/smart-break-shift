@@ -16,6 +16,7 @@ import { getLiveQueryOptions } from "@/lib/liveQuery";
 import { resolveAgentStatus, statusDotClass } from "@/lib/chatStatus";
 import { CHAT_STATUS, isAgentChatConnected } from "@/lib/agentChatPresence";
 import { CHAT_FLOAT_CHROME_CLASS } from "@/lib/floatingWidgetChrome";
+import { hasTopAppNav } from "@/lib/appNavPaths";
 
 const CHAT_PANEL_HEIGHT_KEY = "chat-panel-height";
 const MIN_CHAT_PANEL_HEIGHT = 320;
@@ -95,12 +96,10 @@ function pointerClientY(event) {
   return event.clientY;
 }
 
-const TOP_NAV_PATHS = new Set(["/breaks", "/shifts", "/knowledge"]);
-
 /** בועת צ'אט צפה — מופיעה בכל מסך, בלי טאב בסרגל */
 export default function FloatingChatWidget() {
   const { pathname } = useLocation();
-  const hasTopNav = TOP_NAV_PATHS.has(pathname);
+  const hasTopNav = hasTopAppNav(pathname);
   const { open, toggleChat, closeChat } = useChatPanel();
   const { bringToFront, getZIndex } = useFloatingWidgetsLayer();
   const { unreadTotal, hasUnread } = useChatUnread();

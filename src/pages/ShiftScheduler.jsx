@@ -223,18 +223,16 @@ export default function ShiftScheduler() {
 
   if (!agentName) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50" dir="rtl">
-        <AgentLogin
-          onSuccess={(session) => {
-            const name = session?.displayName || getStoredAgentName();
-            if (name) {
-              connectAgentAsAvailable(name).catch(() => {});
-              setAgentName(name);
-            }
-            refreshAgentSession();
-          }}
-        />
-      </div>
+      <AgentLogin
+        onSuccess={(session) => {
+          const name = session?.displayName || getStoredAgentName();
+          if (name) {
+            connectAgentAsAvailable(name).catch(() => {});
+            setAgentName(name);
+          }
+          refreshAgentSession();
+        }}
+      />
     );
   }
 

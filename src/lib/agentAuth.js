@@ -96,6 +96,9 @@ export function clearAgentSession() {
   window.dispatchEvent(new CustomEvent("agent-session-changed"));
 }
 
+/** Dev/demo: clear persisted agent login so the login screen shows again. */
+export const clearLogout = clearAgentSession;
+
 async function resolveSupabaseAgentByEmail(email) {
   const normalized = String(email || "").trim().toLowerCase();
   if (!supabaseConfigured || !dataClient.entities.Agent) return null;

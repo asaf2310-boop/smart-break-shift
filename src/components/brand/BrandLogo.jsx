@@ -3,10 +3,13 @@ import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import BrandWordmark, { BRAND_DISPLAY_NAME } from "@/components/brand/BrandWordmark";
 
+/** Demo agent login hero (full lockup + tagline) — img in AgentLogin demoHero only. */
+export const BRAND_LOGIN_HERO_SRC = "/brand/allincenter-login-hero-dark.png";
+
 /** Legacy snapshot PNG (login-hero-full-v1 source — restore / scripts only). */
 export const BRAND_LOGO_SNAPSHOT_SRC = "/allincenter-logo.png";
 
-/** Transparent dark-surface lockup — hub + AllinCenter wordmark from HERO snapshot (demo login hero). */
+/** Transparent dark-surface lockup — hub + AllinCenter wordmark from HERO snapshot (demo home/header). */
 export const BRAND_LOGO_DARK_SRC = "/allincenter-logo-allincenter-hero.png";
 
 /** @deprecated Use BRAND_LOGO_DARK_SRC — hero-ac moved to brand-snapshots/. */
