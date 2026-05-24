@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, addDays, isAfter } from "date-fns";
 import { useToast } from "@/components/ui/use-toast";
@@ -7,7 +7,6 @@ import {
   CalendarDays, LogOut, Sun, Moon, Palmtree, X, Check,
   MessageSquare, Lock, Pencil, SendHorizonal, CalendarClock
 } from "lucide-react";
-import { Navigate } from "react-router-dom";
 import {
   HOLIDAY_EVE_DATES,
   WEEKDAY_LABELS,
@@ -16,6 +15,9 @@ import {
   getWeekDays,
   getConstraintsDeadline,
 } from "@/constants/scheduling";
+import AgentLogin from "@/components/auth/AgentLogin";
+import { useAgentSession } from "@/hooks/useAgentSession";
+import { connectAgentAsAvailable } from "@/lib/agentChatPresence";
 import { getLiveQueryOptions } from "@/lib/liveQuery";
 import {
   fetchWeekShiftRegistrations,
@@ -28,11 +30,19 @@ import BackendConfigBanner from "@/components/BackendConfigBanner";
 import { dataClient } from "@/api/client";
 
 export default function ShiftScheduler() {
+  const { refresh: refreshAgentSession } = useAgentSession();
+  const [agentName, setAgentName] = useState(() => getStoredAgentName());
   const [noteDialog, setNoteDialog] = useState(null); // { date, type: "unavailable"|"vacation_request" }
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState("schedule"); // "constraints" | "schedule"
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  useEffect(() => {
+    const syncAgentName = () => setAgentName(getStoredAgentName());
+    window.addEventListener("agent-session-changed", syncAgentName);
+    return () => window.removeEventListener("agent-session-changed", syncAgentName);
+  }, []);
 
   const now = new Date();
   const thisWeekStart = getWeekStart(now);
@@ -59,6 +69,7 @@ export default function ShiftScheduler() {
     placeholderData: keepPreviousData,
     refetchOnMount: "always",
     enabled: !!agentName,
+    throwOnError: false,
     ...getLiveQueryOptions(),
   });
 
@@ -172,6 +183,8 @@ export default function ShiftScheduler() {
   const handleLogout = async () => {
     const { agentLogout } = await import("@/lib/agentAuth");
     await agentLogout();
+    setAgentName("");
+    refreshAgentSession();
     window.location.href = "/";
   };
 
@@ -209,7 +222,20 @@ export default function ShiftScheduler() {
   };
 
   if (!agentName) {
-    return <Navigate to="/" replace />;
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50" dir="rtl">
+        <AgentLogin
+          onSuccess={(session) => {
+            const name = session?.displayName || getStoredAgentName();
+            if (name) {
+              connectAgentAsAvailable(name).catch(() => {});
+              setAgentName(name);
+            }
+            refreshAgentSession();
+          }}
+        />
+      </div>
+    );
   }
 
   const constraintsWeekLabel = `${format(constraintsDays[0], "dd/MM")} – ${format(constraintsDays[4], "dd/MM/yyyy")}`;

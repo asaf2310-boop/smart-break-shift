@@ -20,8 +20,9 @@ export default function WeeklySchedulePanel({
   emptyHint = "המנהל יפרסם בקרוב",
   accent = "amber",
 }) {
-  const published = scheduleRegistrations.length > 0;
-  const isInitialLoad = isLoading && scheduleRegistrations.length === 0;
+  const registrations = Array.isArray(scheduleRegistrations) ? scheduleRegistrations : [];
+  const published = registrations.length > 0;
+  const isInitialLoad = isLoading && registrations.length === 0;
   const headerGradient = accent === "emerald" ? "from-emerald-50" : "from-amber-50";
   const iconGradient = accent === "emerald"
     ? "from-emerald-400 to-teal-500 shadow-emerald-500/30"
@@ -121,10 +122,10 @@ export default function WeeklySchedulePanel({
                   {scheduleDays.map((date) => {
                     const dateStr = format(date, "yyyy-MM-dd");
                     const isHolidayEve = HOLIDAY_EVE_DATES.includes(dateStr);
-                    const morningReg = scheduleRegistrations.find(
+                    const morningReg = registrations.find(
                       (r) => r.agent_name === agentName && r.date === dateStr && r.shift_type === "morning"
                     );
-                    const eveningReg = scheduleRegistrations.find(
+                    const eveningReg = registrations.find(
                       (r) => r.agent_name === agentName && r.date === dateStr && r.shift_type === "evening"
                     );
                     const myReg = morningReg || eveningReg;
@@ -189,7 +190,7 @@ export default function WeeklySchedulePanel({
                         {scheduleDays.map((date) => {
                           const dateStr = format(date, "yyyy-MM-dd");
                           const isHolidayEveDay = HOLIDAY_EVE_DATES.includes(dateStr);
-                          const regs = scheduleRegistrations
+                          const regs = registrations
                             .filter(
                               (r) =>
                                 r.date === dateStr &&
@@ -199,7 +200,7 @@ export default function WeeklySchedulePanel({
                             )
                             .concat(
                               isHolidayEveDay && shift.type === "holiday_eve"
-                                ? scheduleRegistrations.filter(
+                                ? registrations.filter(
                                     (r) => r.date === dateStr && r.agent_name !== agentName
                                   )
                                 : []

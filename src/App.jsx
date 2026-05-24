@@ -35,6 +35,7 @@ import RemoteSupportConsentPage from './pages/RemoteSupportConsentPage';
 import RemoteSupportPage from './pages/RemoteSupportPage';
 import ScreenShareGuestPage from './pages/ScreenShareGuestPage';
 import BrandHeader from '@/components/brand/BrandHeader';
+import RouteErrorBoundary from '@/components/RouteErrorBoundary';
 import { hasTopAppNav } from '@/lib/appNavPaths';
 
 function TopAppNav() {
@@ -71,7 +72,7 @@ const AuthenticatedApp = () => {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/breaks" element={<BreakScheduler />} />
-        <Route path="/shifts" element={<ShiftScheduler />} />
+        <Route path="/shifts" element={<RouteErrorBoundary><ShiftScheduler /></RouteErrorBoundary>} />
         <Route path="/chat" element={<ChatDeepLink />} />
         <Route path="/crm" element={<DemoGate><CrmDashboard /></DemoGate>} />
         <Route path="/crm/:id" element={<DemoGate><CrmCustomerDetail /></DemoGate>} />
