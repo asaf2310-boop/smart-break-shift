@@ -2,6 +2,13 @@
 import { ChevronDown, Lock, Mail, User } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   agentLoginByDisplayName,
   agentLoginWithPassword,
   agentRequestPasswordReset,
@@ -49,7 +56,7 @@ function ProdNameLogin({ onSuccess }) {
     try {
       const result = agentLoginByDisplayName(selected);
       if (!result.ok) {
-        setError(result.message || "×™×© ×œ×‘×—×•×¨ ×©× ×ž×”×¨×©×™×ž×”");
+        setError(result.message || "יש לבחור שם מהרשימה");
         return;
       }
       onSuccess?.(result.session);
@@ -59,31 +66,36 @@ function ProdNameLogin({ onSuccess }) {
   };
 
   return (
-    <LoginShell subtitle="×‘×—×¨/×™ ××ª ×©×ž×š ×œ×”×ž×©×š" production>
+    <LoginShell subtitle="בחר/י את שמך להמשך" production>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="relative">
           <User className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10" />
           <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10" />
-          <select
-            value={selected}
-            onChange={(e) => setSelected(e.target.value)}
-            required
-            autoFocus
-            className="w-full rounded-2xl border border-input bg-white py-3 px-4 pr-10 pl-10 text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 text-right appearance-none cursor-pointer"
-          >
-            <option value="" disabled>
-              ×‘×—×¨/×™ ×©×...
-            </option>
-            {agentNames.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
+          <Select value={selected || undefined} onValueChange={setSelected}>
+            <SelectTrigger
+              autoFocus
+              className="w-full rounded-2xl border border-input bg-white py-3 px-4 pr-10 pl-10 h-auto shadow-none text-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 text-right cursor-pointer [&>svg]:hidden"
+            >
+              <SelectValue placeholder="בחר/י שם..." />
+            </SelectTrigger>
+            <SelectContent
+              side="bottom"
+              align="end"
+              avoidCollisions={false}
+              position="popper"
+              className="z-[60] max-h-72 text-right"
+            >
+              {agentNames.map((name) => (
+                <SelectItem key={name} value={name} className="text-right pr-8 pl-2">
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         {error && <p className="text-sm text-destructive text-center">{error}</p>}
         <button type="submit" disabled={loading || !selected} className="m3-btn-primary w-full py-3">
-          {loading ? "× ×›× ×¡..." : "×›× ×™×¡×” ×œ×ž×¢×¨×›×ª"}
+          {loading ? "נכנס..." : "כניסה למערכת"}
         </button>
       </form>
     </LoginShell>
@@ -157,7 +169,7 @@ function DemoEmailLogin({ onSuccess }) {
       return;
     }
     if (password !== confirmPassword) {
-      setError("×”×¡×™×¡×ž××•×ª ××™× ×Ÿ ×ª×•××ž×•×ª");
+      setError("הסיסמאות אינן תואמות");
       return;
     }
     setLoading(true);
@@ -182,7 +194,7 @@ function DemoEmailLogin({ onSuccess }) {
       if (result.ok) {
         setInfo(result.message);
       } else {
-        setInfo("×× ×”××™×ž×™×™×œ ×‘×¨×©×™×ž×”, × ×©×œ×— ×§×™×©×•×¨ ×œ××™×¤×•×¡. ×‘×“×•×§ ××ª ×ª×™×‘×ª ×”×“×•××¨.");
+        setInfo("אם האימייל ברשימה, נשלח קישור לאיפוס. בדוק את תיבת הדואר.");
       }
     } finally {
       setLoading(false);
@@ -191,16 +203,16 @@ function DemoEmailLogin({ onSuccess }) {
 
   const subtitle =
     mode === MODES.SETUP
-      ? "×”×’×“×¨×ª ×¡×™×¡×ž×” â€” ×›× ×™×¡×” ×¨××©×•× ×”"
+      ? "הגדרת סיסמה — כניסה ראשונה"
       : mode === MODES.FORGOT
-        ? "×©×›×—×ª×™ ×¡×™×¡×ž×”"
-        : "×”×ª×—×‘×¨×•×ª ×¢× ××™×ž×™×™×œ ×•×¡×™×¡×ž×” (×“×ž×•)";
+        ? "שכחתי סיסמה"
+        : "התחברות עם אימייל וסיסמה (דמו)";
 
   return (
     <LoginShell subtitle={subtitle} showDemoBadge demoHero>
       {mode === MODES.FORGOT ? (
         <form onSubmit={handleForgot}>
-          <Field icon={Mail} label="××™×ž×™×™×œ">
+          <Field icon={Mail} label="אימייל">
             <Input
               type="email"
               value={email}
@@ -217,7 +229,7 @@ function DemoEmailLogin({ onSuccess }) {
             disabled={loading}
             className={DEMO_SUBMIT_CLASS}
           >
-            {loading ? "×©×•×œ×—..." : "×©×œ×— ×§×™×©×•×¨ ×œ××™×¤×•×¡"}
+            {loading ? "שולח..." : "שלח קישור לאיפוס"}
           </button>
           <button
             type="button"
@@ -227,15 +239,15 @@ function DemoEmailLogin({ onSuccess }) {
             }}
             className="login-demo-link w-full text-sm"
           >
-            ×—×–×¨×” ×œ×”×ª×—×‘×¨×•×ª
+            חזרה להתחברות
           </button>
         </form>
       ) : mode === MODES.SETUP ? (
         <form onSubmit={handleSetup}>
           <p className="text-sm text-muted-foreground text-center leading-relaxed">
-            ×–×• ×”×›× ×™×¡×” ×”×¨××©×•× ×” ×©×œ×š. ×‘×—×¨/×™ ×¡×™×¡×ž×”.
+            זו הכניסה הראשונה שלך. בחר/י סיסמה.
           </p>
-          <Field icon={Mail} label="××™×ž×™×™×œ">
+          <Field icon={Mail} label="אימייל">
             <Input
               type="email"
               value={email}
@@ -244,7 +256,7 @@ function DemoEmailLogin({ onSuccess }) {
               dir="ltr"
             />
           </Field>
-          <Field icon={Lock} label="×¡×™×¡×ž×” ×—×“×©×”">
+          <Field icon={Lock} label="סיסמה חדשה">
             <Input
               type="password"
               value={password}
@@ -254,7 +266,7 @@ function DemoEmailLogin({ onSuccess }) {
               {...passwordMinLengthInputProps()}
             />
           </Field>
-          <Field icon={Lock} label="××™×ž×•×ª ×¡×™×¡×ž×”">
+          <Field icon={Lock} label="אימות סיסמה">
             <Input
               type="password"
               value={confirmPassword}
@@ -270,7 +282,7 @@ function DemoEmailLogin({ onSuccess }) {
             disabled={loading}
             className={DEMO_SUBMIT_CLASS}
           >
-            {loading ? "×©×•×ž×¨..." : "×©×ž×™×¨×” ×•×›× ×™×¡×”"}
+            {loading ? "שומר..." : "שמירה וכניסה"}
           </button>
           <button
             type="button"
@@ -280,12 +292,12 @@ function DemoEmailLogin({ onSuccess }) {
             }}
             className="login-demo-link w-full text-sm"
           >
-            ×™×© ×œ×™ ×›×‘×¨ ×¡×™×¡×ž×”
+            יש לי כבר סיסמה
           </button>
         </form>
       ) : (
         <form onSubmit={emailStepDone ? handleLogin : handleEmailContinue}>
-          <Field icon={Mail} label="××™×ž×™×™×œ">
+          <Field icon={Mail} label="אימייל">
             <Input
               type="email"
               value={email}
@@ -301,7 +313,7 @@ function DemoEmailLogin({ onSuccess }) {
             />
           </Field>
           {emailStepDone && (
-            <Field icon={Lock} label="×¡×™×¡×ž×”">
+            <Field icon={Lock} label="סיסמה">
               <Input
                 type="password"
                 value={password}
@@ -319,7 +331,7 @@ function DemoEmailLogin({ onSuccess }) {
             disabled={loading}
             className={DEMO_SUBMIT_CLASS}
           >
-            {loading ? "×ž×ª×—×‘×¨..." : emailStepDone ? "×›× ×™×¡×”" : "×”×ž×©×š"}
+            {loading ? "מתחבר..." : emailStepDone ? "כניסה" : "המשך"}
           </button>
           {emailStepDone && (
             <div className="flex flex-col gap-2 text-center">
@@ -331,7 +343,7 @@ function DemoEmailLogin({ onSuccess }) {
                 }}
                 className="login-demo-link text-sm"
               >
-                ×©×™× ×•×™ ××™×ž×™×™×œ
+                שינוי אימייל
               </button>
               <button
                 type="button"
@@ -341,7 +353,7 @@ function DemoEmailLogin({ onSuccess }) {
                 }}
                 className="login-demo-link text-sm"
               >
-                ×©×›×—×ª×™ ×¡×™×¡×ž×”
+                שכחתי סיסמה
               </button>
             </div>
           )}

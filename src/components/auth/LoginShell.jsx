@@ -64,16 +64,20 @@ export function LoginShell({
         transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1], delay: demoHero ? 0.08 : 0 }}
       >
         <motion.div
-          initial={
-            demoHero
+        initial={
+          demoHero || production
+            ? false
+            : typeof window !== "undefined" &&
+                window.matchMedia("(prefers-reduced-motion: reduce)").matches
               ? false
-              : typeof window !== "undefined" &&
-                  window.matchMedia("(prefers-reduced-motion: reduce)").matches
-                ? false
-                : { opacity: 0, scale: 0.96, y: 16 }
-          }
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ duration: demoHero ? 0 : 0.35, ease: [0.22, 1, 0.36, 1] }}
+              : { opacity: 0, scale: 0.96, y: 16 }
+        }
+        animate={
+          production
+            ? { opacity: 1 }
+            : { opacity: 1, scale: 1, y: 0 }
+        }
+        transition={{ duration: demoHero || production ? 0 : 0.35, ease: [0.22, 1, 0.36, 1] }}
           className={cn(
             "relative z-10 w-full min-h-0",
             demoHero ? "login-shell__card-wrap" : "max-w-sm sm:max-w-md px-2"
