@@ -18,7 +18,7 @@ import {
   subscribeKnowledgeStore,
   upsertKnowledgeDocument,
 } from "@/lib/knowledgeStore";
-import { getAllChunks } from "@/lib/knowledgeAi";
+import { getAllChunks, normalizeHebrewText, sanitizeChunkText } from "@/lib/knowledgeAi";
 import { extractTextFromFile } from "@/lib/knowledgeFileExtract";
 
 const ACCEPT_UPLOAD =
@@ -68,7 +68,7 @@ export default function KnowledgeAdmin() {
       upsertKnowledgeDocument({
         id: dialog.mode === "edit" ? dialog.id : undefined,
         title: form.title,
-        content: form.content,
+        content: normalizeHebrewText(sanitizeChunkText(form.content)),
         category: form.category,
         sourceType: dialog.sourceType || "text",
         fileName: dialog.fileName,

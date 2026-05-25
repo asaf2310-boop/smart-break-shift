@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { BookOpen, Loader2, Send, Sparkles } from "lucide-react";
 import { askKnowledgeBase, getAllChunks, isOpenAiConfigured } from "@/lib/knowledgeAi";
+import { useToast } from "@/components/ui/use-toast";
 
 function formatAssistantContent(content) {
   const text = String(content || "").trim();
@@ -79,9 +80,11 @@ function MessageBubble({ message }) {
           <p className="mt-2 text-[10px] text-on-surface-variant opacity-80">
             {message.mode === "openai"
               ? "GPT"
-              : message.mode === "template"
-                ? "סיכום אוטומטי (דמו)"
-                : ""}
+              : message.openAiFailed
+                ? "גיבוי מקומי · GPT לא זמין"
+                : message.mode === "template"
+                  ? "סיכום אוטומטי (דמו)"
+                  : ""}
           </p>
         )}
       </div>
@@ -103,6 +106,7 @@ export default function KnowledgeChat({ compact = false }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const listRef = useRef(null);
+  const { toast } = useToast();
   const chunkCount = getAllChunks().length;
   const openAiOn = isOpenAiConfigured();
 
@@ -122,6 +126,13 @@ export default function KnowledgeChat({ compact = false }) {
 
     try {
       const result = await askKnowledgeBase(text);
+      if (result.openAiFailed) {
+        toast({
+          title: "GPT לא זמין",
+          description: result.openAiError,
+          variant: "destructive",
+        });
+      }
       setMessages((prev) => [
         ...prev,
         {
@@ -130,6 +141,7 @@ export default function KnowledgeChat({ compact = false }) {
           content: result.answer,
           citations: result.citations,
           mode: result.mode,
+          openAiFailed: result.openAiFailed,
         },
       ]);
     } catch {

@@ -141,3 +141,19 @@ export function resetKnowledgeToSeed() {
   const store = { version: 1, documents: seedDocuments() };
   writeRaw(store);
 }
+
+/** One-time re-sanitize of stored document bodies (called from knowledgeAi on first chunk read). */
+export function patchKnowledgeDocumentsContent(contentPatcher) {
+  const store = readRaw();
+  let changed = false;
+  const now = new Date().toISOString();
+
+  store.documents = store.documents.map((doc) => {
+    const next = contentPatcher(doc.content);
+    if (next === doc.content) return doc;
+    changed = true;
+    return { ...doc, content: next, updatedAt: now };
+  });
+
+  if (changed) writeRaw(store);
+}

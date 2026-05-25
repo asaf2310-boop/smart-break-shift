@@ -1,4 +1,4 @@
-import { listKnowledgeDocuments } from "@/lib/knowledgeStore";
+import { listKnowledgeDocuments, patchKnowledgeDocumentsContent } from "@/lib/knowledgeStore";
 
 const CHUNK_SIZE = 480;
 const CHUNK_OVERLAP = 60;
@@ -62,11 +62,16 @@ export function sanitizeChunkText(text) {
   s = s.replace(/\)\s*[-–—]\s*\[[^\]\n]{0,160}(?:\]|$)/g, "");
   s = s.replace(/\(\s*#?[^\s)\]]{1,100}(?:[.,;:]|\s*\))?/g, "");
   s = s.replace(/\(#[^\s)\]]{1,80}/g, "");
-  s = s.replace(/^#{1,6}\s+/gm, "");
+  // Headers glued to Hebrew (###שילוב) — never eat letters after #
+  s = s.replace(/#{1,6}(?=\s|[\u0590-\u05FF])/g, " ");
+  s = s.replace(/^#{1,6}\s*/gm, "");
   s = s.replace(/^\s*[-*+]\s+/gm, "");
   s = s.replace(/\*\*([^*\n]+)\*\*/g, "$1");
   s = s.replace(/__([^_\n]+)__/g, "$1");
+  s = s.replace(/\*{2,}/g, "");
+  s = s.replace(/_{2,}/g, "");
   s = s.replace(/`([^`\n]+)`/g, "$1");
+  s = s.replace(/`+/g, "");
   s = s.replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1");
   s = s.replace(/<\/?[a-z][^>]*>/gi, " ");
   s = s.replace(/(?:^|\s)[-*•]\s+/gm, " ");
@@ -99,11 +104,11 @@ export function normalizeHebrewText(text) {
     return run;
   });
 
+  s = splitLongGluedHebrewRuns(s);
+
   let prev;
   do {
     prev = s;
-    // "מ דיניות" — orphaned letter before a longer Hebrew word
-    s = s.replace(/([\u0590-\u05FF])\s+(?=[\u0590-\u05FF]{3,})/gu, "$1");
     // "מדיניותהחזרות" — missing space between two Hebrew words (4+ chars each)
     s = s.replace(
       /([\u0590-\u05FF]{4,})([\u0590-\u05FF]{4,})/gu,
@@ -112,6 +117,22 @@ export function normalizeHebrewText(text) {
   } while (s !== prev);
 
   return s.replace(/\s+/g, " ").trim();
+}
+
+/** Split OCR-glued runs (12+ letters, no spaces) without breaking normal short words. */
+function splitLongGluedHebrewRuns(text) {
+  return String(text || "").replace(/[\u0590-\u05FF]{12,}/gu, (run) => {
+    let r = run;
+    for (let i = 0; i < 20; i += 1) {
+      const next = r.replace(
+        /([\u0590-\u05FF]{4,})([\u0590-\u05FF]{4,})/u,
+        (m, a, b) => (HEBREW_CHAR.test(a) && HEBREW_CHAR.test(b) ? `${a} ${b}` : m),
+      );
+      if (next === r) break;
+      r = next;
+    }
+    return r;
+  });
 }
 
 function ensureSentenceTerminal(sentence) {
@@ -179,7 +200,16 @@ export function chunkDocument(document) {
   return chunks;
 }
 
+let knowledgeSanitizeMigrationDone = false;
+
+function ensureKnowledgeSanitizeMigration() {
+  if (knowledgeSanitizeMigrationDone) return;
+  knowledgeSanitizeMigrationDone = true;
+  patchKnowledgeDocumentsContent((content) => normalizeHebrewText(sanitizeChunkText(content)));
+}
+
 export function getAllChunks() {
+  ensureKnowledgeSanitizeMigration();
   return listKnowledgeDocuments().flatMap(chunkDocument);
 }
 
@@ -373,6 +403,24 @@ export function isOpenAiConfigured() {
   return Boolean(String(import.meta.env.VITE_OPENAI_API_KEY ?? "").trim());
 }
 
+/** User-facing message when OpenAI call fails (never mention VITE_* in chat UI). */
+export function formatOpenAiError(err) {
+  const msg = String(err?.message || err || "");
+  if (msg.includes("openai_error:401") || msg.includes("openai_error:403")) {
+    return "מפתח OpenAI לא תקין או חסר הרשאה. בדוק ב-Vercel את VITE_OPENAI_API_KEY ופרוס מחדש.";
+  }
+  if (msg.includes("openai_error:429")) {
+    return "מגבלת קצב ב-OpenAI — נסה שוב בעוד רגע.";
+  }
+  if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
+    return "בעיית רשת בחיבור ל-OpenAI — בדוק חיבור או חומת אש.";
+  }
+  if (msg.startsWith("openai_error:")) {
+    return "שגיאה ב-OpenAI — מוצגת תשובת גיבוי מהידע השמור.";
+  }
+  return "לא ניתן להפעיל GPT כרגע — מוצגת תשובת גיבוי מהידע השמור.";
+}
+
 async function callOpenAi(query, chunks) {
   const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
   const model = import.meta.env.VITE_OPENAI_MODEL || "gpt-4o-mini";
@@ -495,8 +543,14 @@ export async function askKnowledgeBase(query) {
     try {
       const result = await callOpenAi(trimmed, chunks);
       return { ...result, chunks };
-    } catch {
-      // fall through to template on API errors
+    } catch (err) {
+      const template = buildTemplateAnswerHebrew(trimmed, chunks);
+      return {
+        ...template,
+        chunks,
+        openAiFailed: true,
+        openAiError: formatOpenAiError(err),
+      };
     }
   }
 
