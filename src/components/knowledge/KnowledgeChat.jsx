@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { BookOpen, Loader2, Send, Sparkles } from "lucide-react";
-import { askKnowledgeBase, getAllChunks, isOpenAiConfigured } from "@/lib/knowledgeAi";
+import { askKnowledgeBase, getAllChunks, probeOpenAiAvailability } from "@/lib/knowledgeAi";
 import { useToast } from "@/components/ui/use-toast";
 
 function formatAssistantContent(content) {
@@ -76,15 +76,12 @@ function MessageBubble({ message }) {
             </ul>
           </div>
         )}
-        {!isUser && message.mode && message.mode !== "no_match" && message.mode !== "system" && (
-          <p className="mt-2 text-[10px] text-on-surface-variant opacity-80">
-            {message.mode === "openai"
-              ? "GPT"
-              : message.openAiFailed
-                ? "גיבוי מקומי · GPT לא זמין"
-                : message.mode === "template"
-                  ? "סיכום אוטומטי (דמו)"
-                  : ""}
+        {!isUser && message.mode === "openai" && (
+          <p className="mt-2 text-[10px] text-on-surface-variant opacity-80">GPT</p>
+        )}
+        {!isUser && message.openAiFailed && (
+          <p className="mt-2 text-[10px] text-amber-700 dark:text-amber-400 opacity-90">
+            גיבוי מהידע השמור · GPT לא זמין
           </p>
         )}
       </div>
@@ -107,8 +104,13 @@ export default function KnowledgeChat({ compact = false }) {
   const [loading, setLoading] = useState(false);
   const listRef = useRef(null);
   const { toast } = useToast();
-  const chunkCount = getAllChunks().length;
-  const openAiOn = isOpenAiConfigured();
+  const [chunkCount, setChunkCount] = useState(() => getAllChunks().length);
+  const [openAiOn, setOpenAiOn] = useState(false);
+
+  useEffect(() => {
+    setChunkCount(getAllChunks().length);
+    probeOpenAiAvailability().then((p) => setOpenAiOn(p.available));
+  }, []);
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
@@ -171,9 +173,9 @@ export default function KnowledgeChat({ compact = false }) {
           {chunkCount > 0 ? `${chunkCount} קטעי ידע זמינים` : "אין תוכן בבסיס הידע"}
         </p>
         {openAiOn ? (
-          <span className="m3-badge text-[10px]">OpenAI פעיל</span>
+          <span className="m3-badge text-[10px]">GPT פעיל</span>
         ) : (
-          <span className="m3-badge text-[10px] opacity-80">מצב דמו · ללא API</span>
+          <span className="m3-badge text-[10px] opacity-80">ללא GPT · סיכום מקומי</span>
         )}
       </div>
 

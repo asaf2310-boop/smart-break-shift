@@ -88,6 +88,31 @@ function isHowToQuestion(query) {
 
 const HEBREW_CHAR = /[\u0590-\u05FF]/u;
 
+/** Rejoin OCR single-letter spacing only inside short runs (one word), never whole sentences. */
+function rejoinShortSingleLetterRuns(text) {
+  return String(text || "").replace(/(?:[\u0590-\u05FF](?:\s+[\u0590-\u05FF]){1,5})/gu, (run) => {
+    const parts = run.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2 && parts.length <= 6 && parts.every((p) => p.length === 1)) {
+      return parts.join("");
+    }
+    return run;
+  });
+}
+
+/** Insert spaces in glued Hebrew runs (no whitespace between words). */
+function splitGluedHebrewRuns(text, minWordLen = 3) {
+  const re = new RegExp(`([\\u0590-\\u05FF]{${minWordLen},})([\\u0590-\\u05FF]{${minWordLen},})`, "gu");
+  return String(text || "").replace(/[\u0590-\u05FF]{8,}/gu, (run) => {
+    let r = run;
+    for (let i = 0; i < 24; i += 1) {
+      const next = r.replace(re, (m, a, b) => (HEBREW_CHAR.test(a) && HEBREW_CHAR.test(b) ? `${a} ${b}` : m));
+      if (next === r) break;
+      r = next;
+    }
+    return r;
+  });
+}
+
 /** Fix OCR/PDF spacing: rejoin broken letters inside words; keep real word gaps. */
 export function normalizeHebrewText(text) {
   let s = normalizeText(text);
@@ -96,43 +121,19 @@ export function normalizeHebrewText(text) {
   s = s.replace(/\s+([,.;:!?…])/g, "$1");
   s = s.replace(/([,.;:!?…])(?=[\u0590-\u05FF])/g, "$1 ");
 
-  s = s.replace(/(?:[\u0590-\u05FF](?:\s+[\u0590-\u05FF]){2,})/gu, (run) => {
-    const parts = run.split(/\s+/).filter(Boolean);
-    if (parts.length >= 3 && parts.every((p) => p.length === 1)) {
-      return parts.join("");
-    }
-    return run;
-  });
-
-  s = splitLongGluedHebrewRuns(s);
+  s = rejoinShortSingleLetterRuns(s);
+  s = splitGluedHebrewRuns(s, 3);
 
   let prev;
   do {
     prev = s;
-    // "מדיניותהחזרות" — missing space between two Hebrew words (4+ chars each)
     s = s.replace(
-      /([\u0590-\u05FF]{4,})([\u0590-\u05FF]{4,})/gu,
+      /([\u0590-\u05FF]{3,})([\u0590-\u05FF]{3,})/gu,
       (m, a, b) => (HEBREW_CHAR.test(a) && HEBREW_CHAR.test(b) ? `${a} ${b}` : m),
     );
   } while (s !== prev);
 
   return s.replace(/\s+/g, " ").trim();
-}
-
-/** Split OCR-glued runs (12+ letters, no spaces) without breaking normal short words. */
-function splitLongGluedHebrewRuns(text) {
-  return String(text || "").replace(/[\u0590-\u05FF]{12,}/gu, (run) => {
-    let r = run;
-    for (let i = 0; i < 20; i += 1) {
-      const next = r.replace(
-        /([\u0590-\u05FF]{4,})([\u0590-\u05FF]{4,})/u,
-        (m, a, b) => (HEBREW_CHAR.test(a) && HEBREW_CHAR.test(b) ? `${a} ${b}` : m),
-      );
-      if (next === r) break;
-      r = next;
-    }
-    return r;
-  });
 }
 
 function ensureSentenceTerminal(sentence) {
@@ -200,12 +201,20 @@ export function chunkDocument(document) {
   return chunks;
 }
 
-let knowledgeSanitizeMigrationDone = false;
+const KNOWLEDGE_SANITIZE_STORAGE_KEY = "knowledge-content-sanitize-v2";
 
 function ensureKnowledgeSanitizeMigration() {
-  if (knowledgeSanitizeMigrationDone) return;
-  knowledgeSanitizeMigrationDone = true;
+  try {
+    if (localStorage.getItem(KNOWLEDGE_SANITIZE_STORAGE_KEY) === "1") return;
+  } catch {
+    // ignore
+  }
   patchKnowledgeDocumentsContent((content) => normalizeHebrewText(sanitizeChunkText(content)));
+  try {
+    localStorage.setItem(KNOWLEDGE_SANITIZE_STORAGE_KEY, "1");
+  } catch {
+    // ignore
+  }
 }
 
 export function getAllChunks() {
@@ -399,21 +408,57 @@ function buildContextBlocks(chunks) {
   return blocks;
 }
 
-export function isOpenAiConfigured() {
+function hasClientOpenAiKey() {
   return Boolean(String(import.meta.env.VITE_OPENAI_API_KEY ?? "").trim());
+}
+
+/** Sync hint for UI; prefer probeOpenAiAvailability() for accurate badge on Vercel. */
+export function isOpenAiConfigured() {
+  return hasClientOpenAiKey() || import.meta.env.PROD;
+}
+
+let openAiProbeCache = null;
+
+/** Health check: server route (Vercel) or client VITE key. */
+export async function probeOpenAiAvailability() {
+  if (openAiProbeCache) return openAiProbeCache;
+
+  try {
+    const res = await fetch("/api/knowledge-chat?health=1");
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (data.ok) {
+        openAiProbeCache = { available: true, source: "server" };
+        return openAiProbeCache;
+      }
+    }
+  } catch {
+    // local dev without vercel dev — fall through
+  }
+
+  if (hasClientOpenAiKey()) {
+    openAiProbeCache = { available: true, source: "client" };
+    return openAiProbeCache;
+  }
+
+  openAiProbeCache = { available: false, source: null };
+  return openAiProbeCache;
 }
 
 /** User-facing message when OpenAI call fails (never mention VITE_* in chat UI). */
 export function formatOpenAiError(err) {
   const msg = String(err?.message || err || "");
+  if (msg.includes("openai_not_configured") || msg.includes("openai_error:503")) {
+    return "שירות GPT לא מוגדר בשרת. הוסף OPENAI_API_KEY ב-Vercel → Environment Variables ופרוס מחדש.";
+  }
   if (msg.includes("openai_error:401") || msg.includes("openai_error:403")) {
-    return "מפתח OpenAI לא תקין או חסר הרשאה. בדוק ב-Vercel את VITE_OPENAI_API_KEY ופרוס מחדש.";
+    return "מפתח OpenAI לא תקין או חסר הרשאה. בדוק את OPENAI_API_KEY ב-Vercel ופרוס מחדש.";
   }
   if (msg.includes("openai_error:429")) {
     return "מגבלת קצב ב-OpenAI — נסה שוב בעוד רגע.";
   }
   if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
-    return "בעיית רשת בחיבור ל-OpenAI — בדוק חיבור או חומת אש.";
+    return "בעיית רשת בחיבור ל-GPT — בדוק חיבור או הרץ vercel dev עם OPENAI_API_KEY.";
   }
   if (msg.startsWith("openai_error:")) {
     return "שגיאה ב-OpenAI — מוצגת תשובת גיבוי מהידע השמור.";
@@ -421,13 +466,39 @@ export function formatOpenAiError(err) {
   return "לא ניתן להפעיל GPT כרגע — מוצגת תשובת גיבוי מהידע השמור.";
 }
 
-async function callOpenAi(query, chunks) {
+async function callOpenAiViaServer(query, chunks) {
+  const res = await fetch("/api/knowledge-chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      query,
+      chunks: chunks.map((c) => ({
+        documentTitle: c.documentTitle,
+        text: c.text,
+      })),
+    }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const code = data.error || data.code || `openai_error:${res.status}`;
+    throw new Error(String(code));
+  }
+
+  const raw = data.answer?.trim() || "לא התקבלה תשובה מהמודל.";
+  return {
+    answer: polishModelAnswer(raw, query),
+    citations: uniqueCitations(chunks),
+    mode: "openai",
+  };
+}
+
+async function callOpenAiViaClient(query, chunks) {
   const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
   const model = import.meta.env.VITE_OPENAI_MODEL || "gpt-4o-mini";
 
   const contextBlocks = buildContextBlocks(chunks);
   const context = contextBlocks.join("\n\n");
-
   const howTo = isHowToQuestion(query);
 
   const system = `אתה יועץ ידע מקצועי לנציגי שירות ב-HYP. ענה בעברית בלבד, בטון מקצועי וברור (רמת ChatGPT).
@@ -473,13 +544,28 @@ ${
 
   const data = await res.json();
   const raw = data.choices?.[0]?.message?.content?.trim() || "לא התקבלה תשובה מהמודל.";
-  const answer = polishModelAnswer(raw, query);
-
   return {
-    answer,
+    answer: polishModelAnswer(raw, query),
     citations: uniqueCitations(chunks),
     mode: "openai",
   };
+}
+
+async function callOpenAi(query, chunks) {
+  const tryServerFirst = import.meta.env.PROD || !hasClientOpenAiKey();
+
+  if (tryServerFirst) {
+    try {
+      return await callOpenAiViaServer(query, chunks);
+    } catch (serverErr) {
+      if (hasClientOpenAiKey()) {
+        return callOpenAiViaClient(query, chunks);
+      }
+      throw serverErr;
+    }
+  }
+
+  return callOpenAiViaClient(query, chunks);
 }
 
 function polishModelAnswer(raw, query) {
@@ -539,7 +625,8 @@ export async function askKnowledgeBase(query) {
     };
   }
 
-  if (isOpenAiConfigured()) {
+  const probe = await probeOpenAiAvailability();
+  if (probe.available) {
     try {
       const result = await callOpenAi(trimmed, chunks);
       return { ...result, chunks };
