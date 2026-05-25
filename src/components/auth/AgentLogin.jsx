@@ -1,7 +1,13 @@
-import React, { useState } from "react";
-import { motion } from "framer-motion";
+﻿import React, { useState } from "react";
 import { ChevronDown, Lock, Mail, User } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   agentLoginByDisplayName,
   agentLoginWithPassword,
@@ -15,9 +21,14 @@ import {
   resolveAgentByEmail,
 } from "@/lib/agentAuth";
 import { demoModeEnabled } from "@/api/demoClient";
-import { BRAND_LOGIN_HERO_SRC } from "@/components/brand/BrandLogo";
 import { getAgentNamesList } from "@/constants/scheduling";
 import { cn } from "@/lib/utils";
+import {
+  DEMO_FIELD_CLASS,
+  DEMO_SUBMIT_CLASS,
+  Field,
+  LoginShell,
+} from "@/components/auth/LoginShell";
 
 const MODES = {
   LOGIN: "login",
@@ -60,22 +71,27 @@ function ProdNameLogin({ onSuccess }) {
         <div className="relative">
           <User className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10" />
           <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10" />
-          <select
-            value={selected}
-            onChange={(e) => setSelected(e.target.value)}
-            required
-            autoFocus
-            className="w-full rounded-2xl border border-input bg-white py-3 px-4 pr-10 pl-10 text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 text-right appearance-none cursor-pointer"
-          >
-            <option value="" disabled>
-              בחר/י שם...
-            </option>
-            {agentNames.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
+          <Select value={selected || undefined} onValueChange={setSelected}>
+            <SelectTrigger
+              autoFocus
+              className="w-full rounded-2xl border border-input bg-white py-3 px-4 pr-10 pl-10 h-auto shadow-none text-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 text-right cursor-pointer [&>svg]:hidden"
+            >
+              <SelectValue placeholder="בחר/י שם..." />
+            </SelectTrigger>
+            <SelectContent
+              side="bottom"
+              align="end"
+              avoidCollisions={false}
+              position="popper"
+              className="z-[60] max-h-72 text-right"
+            >
+              {agentNames.map((name) => (
+                <SelectItem key={name} value={name} className="text-right pr-8 pl-2">
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         {error && <p className="text-sm text-destructive text-center">{error}</p>}
         <button type="submit" disabled={loading || !selected} className="m3-btn-primary w-full py-3">
@@ -344,110 +360,5 @@ function DemoEmailLogin({ onSuccess }) {
         </form>
       )}
     </LoginShell>
-  );
-}
-
-const DEMO_FIELD_CLASS = "login-demo-input text-right";
-const DEMO_SUBMIT_CLASS =
-  "login-demo-submit w-full rounded-2xl font-semibold text-white tracking-wide disabled:opacity-50 transition-all duration-200";
-
-function LoginShell({ subtitle, showDemoBadge, demoHero = false, production = false, children }) {
-  return (
-    <div
-      className={cn(
-        "login-shell",
-        demoHero && "login-shell--demo login-hero-bg",
-        production && "login-shell--prod m3-page"
-      )}
-      dir="rtl"
-    >
-      {!demoHero && (
-        <h1
-          className={cn(
-            "relative z-10 text-2xl sm:text-3xl font-bold text-center mb-8 sm:mb-10 shrink-0",
-            production ? "text-foreground" : "text-white"
-          )}
-        >
-          כניסת נציג
-        </h1>
-      )}
-
-      {demoHero && (
-        <div className="login-shell__brand-zone logo-wrapper">
-          <img
-            src={BRAND_LOGIN_HERO_SRC}
-            alt="AllInCenter — CONNECT • MANAGE • GROW"
-            className="login-shell__hero-img"
-            width={1024}
-            height={682}
-            decoding="async"
-          />
-        </div>
-      )}
-
-      <div
-        className={cn(
-          "login-shell__content",
-          demoHero && "login-shell__content--demo"
-        )}
-      >
-        <motion.div
-          initial={
-            demoHero
-              ? false
-              : typeof window !== "undefined" &&
-                  window.matchMedia("(prefers-reduced-motion: reduce)").matches
-                ? false
-                : { opacity: 0, scale: 0.96, y: 16 }
-          }
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ duration: demoHero ? 0 : 0.35, ease: [0.22, 1, 0.36, 1] }}
-          className={cn(
-            "relative z-10 w-full min-h-0",
-            demoHero ? "login-shell__card-wrap" : "max-w-sm sm:max-w-md px-2"
-          )}
-        >
-          <div
-            className={cn(
-              "login-shell__card w-full",
-              demoHero ? "login-shell__card--demo login-card" : "p-5 sm:p-8"
-            )}
-          >
-            <header className="login-shell__card-header">
-              {demoHero ? (
-                <h2 className="login-shell__title">{subtitle}</h2>
-              ) : (
-                <p
-                  className={cn(
-                    "login-shell__subtitle",
-                    production ? "text-muted-foreground" : ""
-                  )}
-                >
-                  {subtitle}
-                </p>
-              )}
-              {showDemoBadge && (
-                <span className="login-demo-badge" aria-label="סביבת דמו">
-                  סביבת דמו
-                </span>
-              )}
-            </header>
-            {children}
-          </div>
-        </motion.div>
-      </div>
-    </div>
-  );
-}
-
-function Field({ icon: Icon, label, children }) {
-  return (
-    <div className="login-demo-field">
-      <label className="login-demo-field__label">{label}</label>
-      <div className="relative">
-        <Icon className="login-demo-field__icon" aria-hidden />
-        <div className="pr-10">{children}</div>
-      </div>
-    </div>
   );
 }

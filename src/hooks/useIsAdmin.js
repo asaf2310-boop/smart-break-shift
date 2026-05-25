@@ -8,7 +8,12 @@ export function isAdminPinConfigured() {
   return Boolean(String(import.meta.env.VITE_ADMIN_PIN ?? "").trim());
 }
 
-/** זמני: בפרודקשן בלי PIN — /admin פתוח ללא שער (לא בדמו). */
+/** דמו בלבד: נדרש PIN רק כשהוגדר ב-build. */
+export function isDemoAdminPinRequired() {
+  return demoModeEnabled && isAdminPinConfigured();
+}
+
+/** פרודקשן: /admin פתוח בלי PIN כשאין VITE_ADMIN_PIN ב-build (לא משפיע על ניווט נציג). */
 export function isProductionAdminOpen() {
   return !demoModeEnabled && !isAdminPinConfigured();
 }
@@ -33,9 +38,8 @@ function getAdminSessionSnapshot() {
   }
 }
 
-/** מצב מנהל פעיל — רק אחרי הזנת PIN במסך /admin (לא התחברות נציג / AuthContext דמו). */
+/** מצב מנהל פעיל — רק אחרי הזנת PIN במסך /admin (לא התחברות נציג). */
 export function isAdminSessionActive() {
-  if (isProductionAdminOpen()) return true;
   return isAdminPinConfigured() && getAdminSessionSnapshot();
 }
 
@@ -49,12 +53,12 @@ export function clearAdminSession() {
   window.dispatchEvent(new CustomEvent("admin-session-changed"));
 }
 
+/** ניווט/הרשאות UI — רק אחרי PIN מוצלח; לא כולל isProductionAdminOpen. */
 export function useIsAdmin() {
   const sessionUnlocked = useSyncExternalStore(
     subscribeAdminSession,
     getAdminSessionSnapshot,
     () => false
   );
-  if (isProductionAdminOpen()) return true;
   return isAdminPinConfigured() && sessionUnlocked;
 }

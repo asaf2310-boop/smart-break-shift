@@ -34,7 +34,7 @@
 | **`preview-live.ps1`** | לייב (Supabase), בלי `VITE_DEMO_MODE`, בלי `VITE_ADMIN_PIN` | **פתוח ישירות** — אין מסך "כניסת מנהל" |
 | `preview-shell.ps1` | דמו (`VITE_DEMO_MODE=true`, `VITE_ADMIN_PIN=1234`) | מסך PIN — קוד **1234** |
 
-- `isProductionAdminOpen()` (`useIsAdmin.js`) — `/admin` ללא שער רק כש**אין** דמו **ואין** `VITE_ADMIN_PIN` ב-build.
+- `isProductionAdminOpen()` (`useIsAdmin.js`) — `/admin` ללא שער בכל build שבו **אין** `VITE_DEMO_MODE=true` (גם אם `VITE_ADMIN_PIN` מוגדר).
 - אם ראית מסך PIN או כותרת "מערכת דמו" — כנראה רצת `preview-shell.ps1` או `.env.local` עדיין עם דגלים של דמו.
 - **`preview-live.ps1`** מסיר מ-`.env.local` את `VITE_DEMO_MODE` ו-`VITE_ADMIN_PIN` (שנוספו ע"י `preview-shell.ps1`). **עצור את השרת (Ctrl+C) והרץ שוב** `preview-live.ps1` כדי ש-Vite יטען env מחדש.
 - לחזרה לדמו מקומי: `preview-shell.ps1` (מחזיר PIN 1234).

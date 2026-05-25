@@ -1,6 +1,14 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { ShieldCheck, Lock } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { demoModeEnabled } from "@/api/demoClient";
+import {
+  DEMO_FIELD_CLASS,
+  DEMO_SUBMIT_CLASS,
+  Field,
+  LoginShell,
+} from "@/components/auth/LoginShell";
 import {
   isAdminPinConfigured,
   isProductionAdminOpen,
@@ -10,51 +18,17 @@ import {
 
 export default function AdminGate({ children }) {
   const isAdmin = useIsAdmin();
+  const productionOpen = isProductionAdminOpen();
   const pinRequired = isAdminPinConfigured();
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
 
-  if (isAdmin) {
-    if (isProductionAdminOpen()) {
-      return (
-        <div className="relative min-h-screen" dir="rtl">
-          <div
-            role="status"
-            className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-center text-sm text-amber-900"
-          >
-            כניסת מנהל ללא PIN — זמני לפרודקשן. להגדרת PIN: משתנה{" "}
-            <code className="text-xs bg-amber-100/80 px-1 rounded">VITE_ADMIN_PIN</code> ב-Vercel (build
-            מחדש).
-          </div>
-          {children}
-        </div>
-      );
-    }
+  if (isAdmin || productionOpen) {
     return children;
   }
 
   if (!pinRequired) {
-    return (
-      <div className="relative min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50 flex items-center justify-center px-4" dir="rtl">
-        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-slate-200 p-8 text-center">
-          <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-amber-100 flex items-center justify-center">
-            <ShieldCheck className="w-7 h-7 text-amber-700" />
-          </div>
-          <h1 className="text-xl font-extrabold text-slate-800 mb-2">כניסת מנהל לא זמינה</h1>
-          <p className="text-sm text-slate-600 leading-relaxed">
-            לא הוגדר <code className="text-xs bg-slate-100 px-1 rounded">VITE_ADMIN_PIN</code> במשתני
-            הסביבה של הבילד. בפיתוח: <code className="text-xs bg-slate-100 px-1 rounded">.env.local</code>
-            ; בפריסה: Vercel → Environment Variables. הפעל build מחדש אחרי השינוי.
-          </p>
-          <Link
-            to="/"
-            className="mt-6 inline-block text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
-          >
-            חזרה לדף הבית
-          </Link>
-        </div>
-      </div>
-    );
+    return <AdminPinUnavailable />;
   }
 
   const handleSubmit = (e) => {
@@ -67,6 +41,35 @@ export default function AdminGate({ children }) {
       setError("קוד גישה שגוי");
     }
   };
+
+  if (demoModeEnabled) {
+    return (
+      <LoginShell subtitle="כניסת מנהל — הזן קוד גישה" showDemoBadge demoHero>
+        <form onSubmit={handleSubmit}>
+          <Field icon={Lock} label="קוד גישה">
+            <Input
+              type="password"
+              value={pin}
+              onChange={(e) => {
+                setPin(e.target.value);
+                setError("");
+              }}
+              placeholder="קוד גישה"
+              className={DEMO_FIELD_CLASS}
+              autoFocus
+            />
+          </Field>
+          {error && <p className="text-sm text-red-300 text-center">{error}</p>}
+          <button type="submit" className={DEMO_SUBMIT_CLASS}>
+            כניסה
+          </button>
+        </form>
+        <Link to="/" className="login-demo-link mt-4 block text-center text-sm">
+          חזרה לדף הבית
+        </Link>
+      </LoginShell>
+    );
+  }
 
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50 flex items-center justify-center px-4" dir="rtl">
@@ -103,6 +106,45 @@ export default function AdminGate({ children }) {
         <Link
           to="/"
           className="mt-4 block text-center text-sm text-slate-500 hover:text-slate-800 transition-colors"
+        >
+          חזרה לדף הבית
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function AdminPinUnavailable() {
+  if (demoModeEnabled) {
+    return (
+      <LoginShell subtitle="כניסת מנהל לא זמינה" showDemoBadge demoHero>
+        <p className="text-sm text-center leading-relaxed">
+          לא הוגדר <code className="text-xs bg-muted/60 px-1 rounded">VITE_ADMIN_PIN</code> במשתני
+          הסביבה של הבילד. בפיתוח: <code className="text-xs bg-muted/60 px-1 rounded">.env.local</code>
+          ; בפריסה: Vercel → Environment Variables. הפעל build מחדש אחרי השינוי.
+        </p>
+        <Link to="/" className="login-demo-link mt-6 block text-center text-sm">
+          חזרה לדף הבית
+        </Link>
+      </LoginShell>
+    );
+  }
+
+  return (
+    <div className="relative min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50 flex items-center justify-center px-4" dir="rtl">
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-slate-200 p-8 text-center">
+        <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-amber-100 flex items-center justify-center">
+          <ShieldCheck className="w-7 h-7 text-amber-700" />
+        </div>
+        <h1 className="text-xl font-extrabold text-slate-800 mb-2">כניסת מנהל לא זמינה</h1>
+        <p className="text-sm text-slate-600 leading-relaxed">
+          לא הוגדר <code className="text-xs bg-slate-100 px-1 rounded">VITE_ADMIN_PIN</code> במשתני
+          הסביבה של הבילד. בפיתוח: <code className="text-xs bg-slate-100 px-1 rounded">.env.local</code>
+          ; בפריסה: Vercel → Environment Variables. הפעל build מחדש אחרי השינוי.
+        </p>
+        <Link
+          to="/"
+          className="mt-6 inline-block text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
         >
           חזרה לדף הבית
         </Link>

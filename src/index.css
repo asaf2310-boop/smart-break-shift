@@ -966,6 +966,7 @@ body,
 
   .login-shell--prod {
     @apply min-h-screen bg-background text-foreground;
+    background-color: hsl(var(--background));
     background:
       radial-gradient(ellipse 80% 50% at 100% 0%, hsl(189 89% 53% / 0.08), transparent 55%),
       radial-gradient(ellipse 70% 45% at 0% 100%, hsl(271 76% 53% / 0.1), transparent 50%),
@@ -978,17 +979,19 @@ body,
   }
 
   .login-shell--prod .login-shell__card {
-    @apply overflow-hidden bg-white/95 border border-outline/25 text-foreground rounded-2xl;
+    @apply overflow-visible bg-white/95 border border-outline/25 text-foreground rounded-2xl;
     box-shadow:
       var(--elevation-2),
       inset 0 1px 0 rgb(255 255 255 / 0.8);
   }
 
-  .login-shell--prod .login-shell__card select {
+  .login-shell--prod .login-shell__card select,
+  .login-shell--prod .login-shell__card [data-radix-select-trigger] {
     @apply border-input bg-white text-foreground;
   }
 
-  .login-shell--prod .login-shell__card select:focus-visible {
+  .login-shell--prod .login-shell__card select:focus-visible,
+  .login-shell--prod .login-shell__card [data-radix-select-trigger]:focus-visible {
     @apply border-primary outline-none ring-2 ring-primary/20;
   }
 }
