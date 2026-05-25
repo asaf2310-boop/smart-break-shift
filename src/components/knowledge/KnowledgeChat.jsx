@@ -3,6 +3,23 @@ import { motion } from "framer-motion";
 import { BookOpen, Loader2, Send, Sparkles } from "lucide-react";
 import { askKnowledgeBase, getAllChunks, isOpenAiConfigured } from "@/lib/knowledgeAi";
 
+function formatAssistantContent(content) {
+  const text = String(content || "").trim();
+  if (!text) return [];
+
+  return text
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block) => {
+      const lines = block.split(/\n/).map((l) => l.trim()).filter(Boolean);
+      if (lines.length > 1 && lines.every((l) => /^\d+[\.\)]\s/.test(l))) {
+        return { type: "steps", lines };
+      }
+      return { type: "text", text: lines.join(" ") };
+    });
+}
+
 function MessageBubble({ message }) {
   const isUser = message.role === "user";
 
@@ -24,16 +41,22 @@ function MessageBubble({ message }) {
         {isUser ? (
           message.content
         ) : (
-          <div className="space-y-2 whitespace-normal break-words [overflow-wrap:anywhere] [word-break:break-word]">
-            {String(message.content || "")
-              .split(/\n{2,}/)
-              .map((block) => block.trim())
-              .filter(Boolean)
-              .map((block, i) => (
+          <div className="space-y-2.5 whitespace-normal break-words [overflow-wrap:anywhere] [word-break:break-word]">
+            {formatAssistantContent(message.content).map((block, i) =>
+              block.type === "steps" ? (
+                <ol key={i} className="m-0 ps-5 space-y-1.5 list-decimal leading-7">
+                  {block.lines.map((line, j) => (
+                    <li key={j} className="ps-0.5">
+                      {line.replace(/^\d+[\.\)]\s*/, "")}
+                    </li>
+                  ))}
+                </ol>
+              ) : (
                 <p key={i} className="m-0 leading-7">
-                  {block.replace(/\n+/g, " ")}
+                  {block.text}
                 </p>
-              ))}
+              ),
+            )}
           </div>
         )}
         {!isUser && message.citations?.length > 0 && (

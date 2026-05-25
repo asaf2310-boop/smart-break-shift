@@ -53,6 +53,34 @@ function normalizeText(text) {
     .trim();
 }
 
+/** Strip broken markdown / OCR link noise; separate glued Hebrew+Latin (e.g. בHYP). */
+export function sanitizeChunkText(text) {
+  let s = String(text || "");
+
+  s = s.replace(/\[([^\]\n]{1,160})\]\([^)\n]{0,240}\)/g, "$1");
+  s = s.replace(/\[[^\]\n]{1,160}\]\([^)\n]*$/g, "$1");
+  s = s.replace(/\)\s*[-–—]\s*\[[^\]\n]{0,160}(?:\]|$)/g, "");
+  s = s.replace(/\(\s*#?[^\s)\]]{1,100}(?:[.,;:]|\s*\))?/g, "");
+  s = s.replace(/\(#[^\s)\]]{1,80}/g, "");
+  s = s.replace(/^#{1,6}\s+/gm, "");
+  s = s.replace(/^\s*[-*+]\s+/gm, "");
+  s = s.replace(/\*\*([^*\n]+)\*\*/g, "$1");
+  s = s.replace(/__([^_\n]+)__/g, "$1");
+  s = s.replace(/`([^`\n]+)`/g, "$1");
+  s = s.replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1");
+  s = s.replace(/<\/?[a-z][^>]*>/gi, " ");
+  s = s.replace(/(?:^|\s)[-*•]\s+/gm, " ");
+  s = s.replace(/([\u0590-\u05FF])([A-Za-z0-9])/g, "$1 $2");
+  s = s.replace(/([A-Za-z0-9])([\u0590-\u05FF])/g, "$1 $2");
+
+  return normalizeHebrewText(s);
+}
+
+function isHowToQuestion(query) {
+  const q = normalizeText(query);
+  return /^(איך|כיצד|מהן?\s+השלבים|מה\s+התהליך|תהליך|הסבר\s+איך)/u.test(q);
+}
+
 const HEBREW_CHAR = /[\u0590-\u05FF]/u;
 
 /** Fix OCR/PDF spacing: rejoin broken letters inside words; keep real word gaps. */
@@ -113,7 +141,7 @@ function isLikelyFullSentence(sentence) {
 
 /** Split document body into overlapping chunks for RAG-lite retrieval. */
 export function chunkDocument(document) {
-  const text = normalizeHebrewText(document.content);
+  const text = sanitizeChunkText(document.content);
   if (!text) return [];
 
   const chunks = [];
@@ -157,7 +185,11 @@ export function getAllChunks() {
 
 function tokenize(query) {
   const raw = normalizeText(query).toLowerCase();
-  const words = raw.match(/[\u0590-\u05ff\w]+/g) || [];
+  const expanded = raw
+    .replace(/([\u0590-\u05ff])([a-z0-9])/gi, "$1 $2")
+    .replace(/([a-z0-9])([\u0590-\u05ff])/gi, "$1 $2");
+  const words =
+    expanded.match(/[\u0590-\u05ff][\u0590-\u05ff'"-]*|[a-z0-9][a-z0-9_.-]*/gi) || [];
   const meaningful = [...new Set(words.filter((w) => w.length > 1 && !STOP_WORDS.has(w)))];
   if (meaningful.length) return meaningful;
   return [...new Set(words.filter((w) => w.length > 1))];
@@ -165,7 +197,7 @@ function tokenize(query) {
 
 function scoreChunk(chunk, tokens) {
   if (!tokens.length) return 0;
-  const hay = `${chunk.documentTitle} ${chunk.text} ${chunk.category || ""}`.toLowerCase();
+  const hay = sanitizeChunkText(`${chunk.documentTitle} ${chunk.text} ${chunk.category || ""}`).toLowerCase();
   let score = 0;
   let matchedTokens = 0;
   for (const token of tokens) {
@@ -219,10 +251,10 @@ function uniqueCitations(chunks) {
 }
 
 function splitSentences(text) {
-  const normalized = normalizeHebrewText(text);
+  const normalized = sanitizeChunkText(text);
   return normalized
     .split(/(?<=[.!?…])\s+|[\n\r]+|(?<=[\u0590-\u05FF])\s*[-–—]\s*/)
-    .map((s) => normalizeHebrewText(s))
+    .map((s) => sanitizeChunkText(s))
     .filter(isLikelyFullSentence);
 }
 
@@ -232,7 +264,7 @@ function sentenceMatchesTokens(sentence, tokens) {
 }
 
 function truncateSnippet(text, max = MAX_SNIPPET_CHARS) {
-  const normalized = normalizeHebrewText(text);
+  const normalized = sanitizeChunkText(text);
   if (normalized.length <= max) return normalized;
   const cut = normalized.slice(0, max);
   const lastSpace = cut.lastIndexOf(" ");
@@ -273,6 +305,23 @@ function synthesizeTemplateSentences(query, chunks) {
     .slice(0, MAX_TEMPLATE_SENTENCES);
 }
 
+function formatTemplateBody(query, sentences) {
+  const cleaned = sentences
+    .map((s) => sanitizeChunkText(s))
+    .filter((s) => s.length >= 12);
+
+  if (!cleaned.length) return "";
+
+  if (isHowToQuestion(query) && cleaned.length >= 2) {
+    return cleaned
+      .slice(0, MAX_TEMPLATE_SENTENCES)
+      .map((s, i) => `${i + 1}. ${ensureSentenceTerminal(s).replace(/^\d+[\.\)]\s*/, "")}`)
+      .join("\n");
+  }
+
+  return joinSentences(cleaned.slice(0, MAX_TEMPLATE_SENTENCES));
+}
+
 function buildTemplateAnswerHebrew(query, chunks) {
   if (!chunks.length) {
     return {
@@ -283,7 +332,8 @@ function buildTemplateAnswerHebrew(query, chunks) {
   }
 
   const sentences = synthesizeTemplateSentences(query, chunks);
-  if (!sentences.length) {
+  const body = formatTemplateBody(query, sentences);
+  if (!body) {
     return {
       answer: NO_MATCH_ANSWER,
       citations: [],
@@ -292,13 +342,12 @@ function buildTemplateAnswerHebrew(query, chunks) {
   }
 
   const citations = uniqueCitations(chunks);
-  const body = joinSentences(sentences.slice(0, MAX_TEMPLATE_SENTENCES));
-  const footer =
-    "\n\n(סיכום אוטומטי מקטעים רלוונטיים בלבד · מצב דמו. להפעלת GPT, הגדר VITE_OPENAI_API_KEY.)";
+  const intro = isHowToQuestion(query)
+    ? "לפי המידע שבבסיס הידע, כך ניתן לפעול:"
+    : "לפי המידע שבבסיס הידע:";
 
-  const intro = "לפי המידע בבסיס הידע:";
   return {
-    answer: `${intro} ${body}${footer}`,
+    answer: `${intro}\n\n${body}`,
     citations,
     mode: "template",
   };
@@ -331,17 +380,26 @@ async function callOpenAi(query, chunks) {
   const contextBlocks = buildContextBlocks(chunks);
   const context = contextBlocks.join("\n\n");
 
-  const system = `אתה עוזר ידע לנציגי שירות. ענה בעברית בלבד, במשפטים מלאים וברורים.
-כללים:
-- 2–4 משפטים שלמים בלבד; כל משפט מסתיים בנקודה. רווח בין מילים — לעולם אל תדביק מילים עבריות.
-- משפט ראשון: תשובה ישירה לשאלה (כן/לא, מספר, או העובדה המרכזית).
-- אל תעתיק טקסט גולמי מ-OCR; תקן רווחים שבורים בתוך מילים ושמור רווח בין מילים נפרדות.
-- בלי רשימות, בלי bullets, בלי ציטוטים ארוכים — ניסוח מחדש קצר וברור.
-- רק מידע מקטעי ההקשר; בלי ידע חיצוני.
-- אם אין תשובה בקטעים, ענה במדויק: "לא נמצא מידע רלוונטי בבסיס הידע."
-- בסוף ציין [1], [2] רק למקורות שבאמת השתמשת בהם.`;
+  const howTo = isHowToQuestion(query);
 
-  const user = `קטעי הקשר (היחידים המותרים לשימוש):\n${context || "(ריק)"}\n\nשאלת הנציג: ${query}`;
+  const system = `אתה יועץ ידע מקצועי לנציגי שירות ב-HYP. ענה בעברית בלבד, בטון מקצועי וברור (רמת ChatGPT).
+כללים מחייבים:
+- השתמש אך ורק במידע מקטעי ההקשר — אין ידע חיצוני, אין השערות.
+- משפט ראשון: תשובה ישירה לשאלה (כן/לא, מספר, או העובדה המרכזית).
+- ניסוח מחדש; אל תעתיק טקסט גולמי, קישורי markdown, או שברי OCR.
+- בלי markdown (ללא #, ללא [], ללא \`\`), בלי אנגלית מיותרת — עברית בלבד למעט מונחים טכניים מהמסמך.
+- רווח תקין בין מילים עבריות; תקן רווחים שבורים בתוך מילים.
+${
+    howTo
+      ? `- שאלת "איך": ענה ב-3–5 שלבים ממוספרים (שורה לכל שלב: "1. ...", "2. ..."), כל שלב משפט שלם עם נקודה בסוף.`
+      : `- 2–4 משפטים שלמים; כל משפט מסתיים בנקודה.`
+  }
+- אם אין תשובה בקטעים, ענה במדויק: "לא נמצא מידע רלוונטי בבסיס הידע."
+- בסוף שורה נפרדת: "מקורות:" ואז [1], [2] רק למסמכים שבאמת נשעדת עליהם.`;
+
+  const user = `קטעי הקשר (היחידים המותרים לשימוש):\n${context || "(ריק)"}\n\nשאלת הנציג: ${query}${
+    howTo ? "\n\nסוג שאלה: הדרכה / תהליך — השב בשלבים ממוספרים." : ""
+  }`;
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -351,8 +409,8 @@ async function callOpenAi(query, chunks) {
     },
     body: JSON.stringify({
       model,
-      temperature: 0.2,
-      max_tokens: 280,
+      temperature: 0.25,
+      max_tokens: howTo ? 420 : 320,
       messages: [
         { role: "system", content: system },
         { role: "user", content: user },
@@ -367,18 +425,49 @@ async function callOpenAi(query, chunks) {
 
   const data = await res.json();
   const raw = data.choices?.[0]?.message?.content?.trim() || "לא התקבלה תשובה מהמודל.";
-  const answer = joinSentences(
-    raw
-      .split(/(?<=[.!?…])\s+/)
-      .map((s) => normalizeHebrewText(s))
-      .filter(isLikelyFullSentence),
-  ) || normalizeHebrewText(raw);
+  const answer = polishModelAnswer(raw, query);
 
   return {
     answer,
     citations: uniqueCitations(chunks),
     mode: "openai",
   };
+}
+
+function polishModelAnswer(raw, query) {
+  let text = sanitizeChunkText(raw);
+  text = text.replace(/^(#{1,6}\s+|\*\s+|-\s+)/gm, "");
+  text = text.replace(/\r\n/g, "\n").trim();
+
+  if (isHowToQuestion(query)) {
+    const lines = text
+      .split(/\n+/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const steps = lines.filter((l) => /^\d+[\.\)]\s/.test(l));
+    if (steps.length >= 2) {
+      const intro = lines.find((l) => !/^\d+[\.\)]\s/.test(l) && !/^מקורות:/i.test(l));
+      const sources = lines.find((l) => /^מקורות:/i.test(l));
+      const body = steps
+        .map((s) => ensureSentenceTerminal(sanitizeChunkText(s.replace(/^\d+[\.\)]\s*/, ""))))
+        .map((s, i) => `${i + 1}. ${s.replace(/^\d+[\.\)]\s*/, "")}`)
+        .join("\n");
+      const parts = [];
+      if (intro) parts.push(intro);
+      parts.push(body);
+      if (sources) parts.push("", sources);
+      return parts.join("\n\n").trim();
+    }
+  }
+
+  const paragraphs = text.split(/\n{2,}/).map((p) => sanitizeChunkText(p.replace(/\n+/g, " "))).filter(Boolean);
+  if (paragraphs.length > 1) return paragraphs.join("\n\n");
+
+  const sentences = text
+    .split(/(?<=[.!?…])\s+/)
+    .map((s) => sanitizeChunkText(s))
+    .filter(isLikelyFullSentence);
+  return joinSentences(sentences) || text;
 }
 
 /**

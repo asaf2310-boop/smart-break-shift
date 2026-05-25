@@ -1,6 +1,6 @@
 import mammoth from "mammoth";
 import * as pdfjsLib from "pdfjs-dist";
-import { normalizeHebrewText } from "@/lib/knowledgeAi";
+import { normalizeHebrewText, sanitizeChunkText } from "@/lib/knowledgeAi";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
@@ -137,7 +137,7 @@ export async function extractTextFromFile(file) {
       rawText = await extractPdfText(file);
     }
 
-    const text = normalizeHebrewText(sanitizeKnowledgeText(rawText));
+    const text = sanitizeChunkText(sanitizeKnowledgeText(rawText));
     if (!text) {
       return {
         text: "",
