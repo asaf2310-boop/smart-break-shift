@@ -1,4 +1,5 @@
 export const KNOWLEDGE_STORAGE_KEY = "smart-break-shift-knowledge-v1";
+export const KNOWLEDGE_CHUNKS_KEY = "smart-break-shift-knowledge-chunks-v1";
 export const KNOWLEDGE_CHANGE_EVENT = "knowledge-store-changed";
 
 const DEFAULT_CATEGORIES = ["כללי", "מוצר", "נהלים", "תמיכה"];
@@ -95,7 +96,7 @@ export function listKnowledgeCategories() {
   return [...fromDocs].sort((a, b) => a.localeCompare(b, "he"));
 }
 
-export function upsertKnowledgeDocument({ id, title, content, category, sourceType, fileName }) {
+export function upsertKnowledgeDocument({ id, title, content, category, sourceType, fileName, pages }) {
   const store = readRaw();
   const trimmedTitle = String(title || "").trim();
   const trimmedContent = String(content || "").trim();
@@ -110,6 +111,7 @@ export function upsertKnowledgeDocument({ id, title, content, category, sourceTy
     category: category?.trim() || "כללי",
     sourceType: sourceType || "text",
     fileName: fileName || null,
+    pages: Array.isArray(pages) && pages.length ? pages : null,
     updatedAt: now,
   };
 
@@ -126,6 +128,7 @@ export function upsertKnowledgeDocument({ id, title, content, category, sourceTy
   }
 
   writeRaw(store);
+  clearKnowledgeChunkIndex();
   return id ? store.documents.find((d) => d.id === id) : store.documents[store.documents.length - 1];
 }
 
@@ -135,11 +138,54 @@ export function deleteKnowledgeDocument(id) {
   store.documents = store.documents.filter((d) => d.id !== id);
   if (store.documents.length === before) throw new Error("not_found");
   writeRaw(store);
+  clearKnowledgeChunkIndex();
 }
 
 export function resetKnowledgeToSeed() {
   const store = { version: 1, documents: seedDocuments() };
   writeRaw(store);
+  clearKnowledgeChunkIndex();
+}
+
+/** Fingerprint for RAG index invalidation when documents change. */
+export function getKnowledgeDocumentsFingerprint(documents = listKnowledgeDocuments()) {
+  return documents.map((d) => `${d.id}:${d.updatedAt}:${(d.content || "").length}`).join("|");
+}
+
+function readChunkIndexRaw() {
+  try {
+    const raw = localStorage.getItem(KNOWLEDGE_CHUNKS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed?.version === 1 && Array.isArray(parsed.chunks)) return parsed;
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+export function readKnowledgeChunkIndex() {
+  return readChunkIndexRaw();
+}
+
+export function writeKnowledgeChunkIndex(chunks, fingerprint) {
+  const payload = {
+    version: 1,
+    fingerprint: fingerprint || getKnowledgeDocumentsFingerprint(),
+    updatedAt: new Date().toISOString(),
+    chunks,
+  };
+  localStorage.setItem(KNOWLEDGE_CHUNKS_KEY, JSON.stringify(payload));
+  window.dispatchEvent(new CustomEvent(KNOWLEDGE_CHANGE_EVENT));
+}
+
+export function clearKnowledgeChunkIndex() {
+  try {
+    localStorage.removeItem(KNOWLEDGE_CHUNKS_KEY);
+  } catch {
+    // ignore
+  }
+  window.dispatchEvent(new CustomEvent(KNOWLEDGE_CHANGE_EVENT));
 }
 
 /** One-time re-sanitize of stored document bodies (called from knowledgeAi on first chunk read). */

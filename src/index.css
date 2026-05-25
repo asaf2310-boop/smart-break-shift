@@ -1029,3 +1029,22 @@ body,
     unicode-bidi: isolate;
   }
 }
+
+/* Knowledge base chat — RTL / mixed-script message bubbles */
+.knowledge-chat-message,
+.chat-message {
+  direction: rtl;
+  unicode-bidi: plaintext;
+  text-align: right;
+  font-family: "Heebo", "Rubik", "Assistant", Arial, sans-serif;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+.knowledge-chat-message *,
+.chat-message * {
+  direction: inherit;
+  unicode-bidi: plaintext;
+}

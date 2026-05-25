@@ -1,8 +1,26 @@
-/** Vercel serverless — OpenAI for knowledge chat (OPENAI_API_KEY in process.env only) */
+/** Vercel serverless — OpenAI for knowledge chat (OPENAI_API_KEY in process.env only).
+ *  Expects pre-built RAG context from the client (retrieved chunk snippets only).
+ *  Does NOT accept full documents or raw document bodies.
+ */
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
-const MAX_CONTEXT_CHARS = 2200;
-const MAX_SNIPPET_CHARS = 380;
+
+const KNOWLEDGE_SYSTEM_PROMPT = `You are an AI knowledge-base assistant for a call center management system.
+Answer in Hebrew only.
+Use only the provided document context.
+If the answer does not exist in the provided context, say:
+'לא מצאתי תשובה ברורה במסמכים הקיימים.'
+Do not invent information.
+Do not answer from general knowledge.
+Write clearly, with proper Hebrew spacing, punctuation and line breaks.
+When relevant, mention which document or section the answer is based on.`;
+
+const KNOWLEDGE_ANSWER_FORMAT_HINT = `Structure every answer as:
+תשובה קצרה וברורה
+(optional) פירוט לפי סעיפים אם צריך
+מקור: שם המסמך / עמוד / כותרת`;
+
+const KNOWLEDGE_NO_CONTEXT_ANSWER = "לא מצאתי תשובה ברורה במסמכים הקיימים.";
 
 function getSiteOrigin(req) {
   const host = req.headers["x-forwarded-host"] || req.headers.host;
@@ -66,53 +84,35 @@ function isHowToQuestion(query) {
   return /^(איך|כיצד|מהן?\s+השלבים|מה\s+התהליך|תהליך|הסבר\s+איך)/u.test(q);
 }
 
-function truncateSnippet(text, max = MAX_SNIPPET_CHARS) {
-  const normalized = String(text || "").replace(/\s+/g, " ").trim();
-  if (normalized.length <= max) return normalized;
-  const cut = normalized.slice(0, max);
-  const lastSpace = cut.lastIndexOf(" ");
-  return `${(lastSpace > max * 0.55 ? cut.slice(0, lastSpace) : cut).trim()}…`;
-}
-
-function buildContextFromChunks(chunks) {
-  const blocks = [];
-  let totalChars = 0;
-  for (let i = 0; i < chunks.length; i += 1) {
-    const c = chunks[i];
-    const title = String(c.documentTitle || c.title || "מסמך").trim();
-    const snippet = truncateSnippet(c.text);
-    const block = `[${i + 1}] מסמך: ${title}\n${snippet}`;
-    if (totalChars + block.length > MAX_CONTEXT_CHARS) break;
-    blocks.push(block);
-    totalChars += block.length + 2;
+/** Reject payloads that try to send full documents instead of pre-retrieved context. */
+function rejectsFullDocumentPayload(body) {
+  if (Array.isArray(body.documents) && body.documents.length) return true;
+  if (typeof body.content === "string" && body.content.length > 500) return true;
+  const legacyChunks = Array.isArray(body.chunks) ? body.chunks : [];
+  if (legacyChunks.some((c) => typeof c?.content === "string" && c.content.length > 600)) {
+    return true;
   }
-  return blocks.join("\n\n");
+  return false;
 }
 
-function buildMessages(query, chunks) {
+function buildMessages(query, context) {
   const howTo = isHowToQuestion(query);
-  const context = buildContextFromChunks(chunks);
+  const trimmedContext = String(context || "").trim();
 
-  const system = `אתה יועץ ידע מקצועי לנציגי שירות ב-HYP. ענה בעברית בלבד, בטון מקצועי וברור (רמת ChatGPT).
-כללים מחייבים:
-- השתמש אך ורק במידע מקטעי ההקשר — אין ידע חיצוני, אין השערות.
-- משפט ראשון: תשובה ישירה לשאלה (כן/לא, מספר, או העובדה המרכזית).
-- ניסוח מחדש; אל תעתיק טקסט גולמי, קישורי markdown, או שברי OCR.
-- בלי markdown (ללא #, ללא [], ללא \`\`), בלי אנגלית מיותרת — עברית בלבד למעט מונחים טכניים מהמסמך.
-- רווח תקין בין מילים עבריות; תקן רווחים שבורים בתוך מילים.
-${
-    howTo
-      ? `- שאלת "איך": ענה ב-3–5 שלבים ממוספרים (שורה לכל שלב: "1. ...", "2. ..."), כל שלב משפט שלם עם נקודה בסוף.`
-      : `- 2–4 משפטים שלמים; כל משפט מסתיים בנקודה.`
-  }
-- אם אין תשובה בקטעים, ענה במדויק: "לא נמצא מידע רלוונטי בבסיס הידע."
-- בסוף שורה נפרדת: "מקורות:" ואז [1], [2] רק למסמכים שבאמת נשעדת עליהם.`;
-
-  const user = `קטעי הקשר (היחידים המותרים לשימוש):\n${context || "(ריק)"}\n\nשאלת הנציג: ${query}${
-    howTo ? "\n\nסוג שאלה: הדרכה / תהליך — השב בשלבים ממוספרים." : ""
+  const user = `קטעי הקשר (היחידים המותרים לשימוש):\n${trimmedContext || "(ריק)"}\n\nשאלת הנציג: ${query}\n\n${KNOWLEDGE_ANSWER_FORMAT_HINT}${
+    howTo ? "\n\nסוג שאלה: הדרכה / תהליך — השתמש בפירוט לפי סעיפים." : ""
   }`;
 
-  return { howTo, messages: [{ role: "system", content: system }, { role: "user", content: user }] };
+  return {
+    howTo,
+    messages: [
+      {
+        role: "system",
+        content: `${KNOWLEDGE_SYSTEM_PROMPT}\n\n${KNOWLEDGE_ANSWER_FORMAT_HINT}`,
+      },
+      { role: "user", content: user },
+    ],
+  };
 }
 
 export default async function handler(req, res) {
@@ -170,13 +170,18 @@ export default async function handler(req, res) {
     return json(res, 400, { error: "invalid_json" }, req);
   }
 
-  const query = String(body.query || "").trim();
-  const chunks = Array.isArray(body.chunks) ? body.chunks : [];
-  if (!query || !chunks.length) {
-    return json(res, 400, { error: "query_and_chunks_required" }, req);
+  if (rejectsFullDocumentPayload(body)) {
+    return json(res, 400, { error: "full_documents_not_allowed" }, req);
   }
 
-  const { howTo, messages } = buildMessages(query, chunks);
+  const query = String(body.query || "").trim();
+  const context = String(body.context || "").trim();
+
+  if (!query || !context) {
+    return json(res, 400, { error: "query_and_context_required" }, req);
+  }
+
+  const { howTo, messages } = buildMessages(query, context);
 
   const openaiRes = await fetch(OPENAI_URL, {
     method: "POST",
@@ -186,8 +191,8 @@ export default async function handler(req, res) {
     },
     body: JSON.stringify({
       model,
-      temperature: 0.25,
-      max_tokens: howTo ? 420 : 320,
+      temperature: 0.2,
+      max_tokens: howTo ? 480 : 380,
       messages,
     }),
   });
@@ -206,7 +211,8 @@ export default async function handler(req, res) {
   }
 
   const data = await openaiRes.json();
-  const answer = data.choices?.[0]?.message?.content?.trim() || "לא התקבלה תשובה מהמודל.";
+  const answer =
+    data.choices?.[0]?.message?.content?.trim() || KNOWLEDGE_NO_CONTEXT_ANSWER;
 
   return json(res, 200, { answer, mode: "openai" }, req);
 }
