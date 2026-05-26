@@ -20,9 +20,8 @@ import {
 } from "@/lib/knowledgeStore";
 import {
   getAllChunks,
-  normalizeHebrewText,
   rebuildKnowledgeChunkIndex,
-  sanitizeChunkText,
+  sanitizeMarkdownIngestText,
 } from "@/lib/knowledgeAi";
 import { extractTextFromFile } from "@/lib/knowledgeFileExtract";
 
@@ -75,7 +74,7 @@ export default function KnowledgeAdmin() {
       upsertKnowledgeDocument({
         id: dialog.mode === "edit" ? dialog.id : undefined,
         title: form.title,
-        content: normalizeHebrewText(sanitizeChunkText(form.content)),
+        content: sanitizeMarkdownIngestText(form.content),
         category: form.category,
         sourceType: dialog.sourceType || "text",
         fileName: dialog.fileName,
@@ -280,7 +279,8 @@ export default function KnowledgeAdmin() {
                   value={form.content}
                   onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
                   rows={10}
-                  className="w-full rounded-xl border border-outline/30 bg-surface-container-lowest px-3 py-2 text-sm outline-none focus:border-primary resize-y min-h-[160px]"
+                  dir="auto"
+                  className="w-full rounded-xl border border-outline/30 bg-surface-container-lowest px-3 py-2 text-sm outline-none focus:border-primary resize-y min-h-[160px] whitespace-pre-wrap"
                   required
                 />
               </div>

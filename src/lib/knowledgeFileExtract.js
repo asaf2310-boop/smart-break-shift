@@ -1,6 +1,10 @@
 import mammoth from "mammoth";
 import * as pdfjsLib from "pdfjs-dist";
-import { normalizeHebrewText, sanitizeChunkText } from "@/lib/knowledgeAi";
+import {
+  normalizeHebrewText,
+  sanitizeChunkText,
+  sanitizeMarkdownIngestText,
+} from "@/lib/knowledgeAi";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
@@ -147,7 +151,13 @@ export async function extractTextFromFile(file) {
       pages = pdfResult.pages;
     }
 
-    const text = sanitizeChunkText(sanitizeKnowledgeText(rawText));
+    const cleaned = sanitizeKnowledgeText(rawText);
+    const text =
+      ext === "md"
+        ? sanitizeMarkdownIngestText(cleaned)
+        : ext === "txt" || ext === "docx"
+          ? sanitizeChunkText(cleaned, { preserveLines: true })
+          : sanitizeChunkText(cleaned);
     if (!text) {
       return {
         text: "",

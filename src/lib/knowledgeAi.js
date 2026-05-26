@@ -74,31 +74,60 @@ function normalizeText(text) {
     .trim();
 }
 
-/** Strip broken markdown / OCR link noise; separate glued Hebrew+Latin (e.g. בHYP). */
-export function sanitizeChunkText(text) {
+function stripBrokenMarkdownLinks(s) {
+  let out = String(s || "");
+  out = out.replace(/\[([^\]\n]{1,160})\]\([^)\n]{0,240}\)/g, "$1");
+  out = out.replace(/\[[^\]\n]{1,160}\]\([^)\n]*$/g, "$1");
+  out = out.replace(/\)\s*[-–—]\s*\[[^\]\n]{0,160}(?:\]|$)/g, "");
+  out = out.replace(/\(\s*#?[^\s)\]]{1,100}(?:[.,;:]|\s*\))?/g, "");
+  out = out.replace(/\(#[^\s)\]]{1,80}/g, "");
+  out = out.replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1");
+  return out;
+}
+
+function stripAggressiveMarkdownFormatting(s) {
+  let out = String(s || "");
+  out = out.replace(/#{1,6}(?=\s|[\u0590-\u05FF])/g, " ");
+  out = out.replace(/^#{1,6}\s*/gm, "");
+  out = out.replace(/^\s*[-*+]\s+/gm, "");
+  out = out.replace(/\*\*([^*\n]+)\*\*/g, "$1");
+  out = out.replace(/__([^_\n]+)__/g, "$1");
+  out = out.replace(/\*{2,}/g, "");
+  out = out.replace(/_{2,}/g, "");
+  out = out.replace(/`([^`\n]+)`/g, "$1");
+  out = out.replace(/`+/g, "");
+  out = out.replace(/<\/?[a-z][^>]*>/gi, " ");
+  out = out.replace(/(?:^|\s)[-*•]\s+/gm, " ");
+  return out;
+}
+
+function separateHebrewLatinGlue(s) {
+  return String(s || "")
+    .replace(/([\u0590-\u05FF])([A-Za-z0-9])/g, "$1 $2")
+    .replace(/([A-Za-z0-9])([\u0590-\u05FF])/g, "$1 $2");
+}
+
+/**
+ * @param {string} text
+ * @param {{ preserveLines?: boolean, keepMarkdown?: boolean }} [options]
+ */
+export function sanitizeChunkText(text, options = {}) {
+  const preserveLines = options.preserveLines === true;
+  const keepMarkdown = options.keepMarkdown === true;
   let s = String(text || "");
 
-  s = s.replace(/\[([^\]\n]{1,160})\]\([^)\n]{0,240}\)/g, "$1");
-  s = s.replace(/\[[^\]\n]{1,160}\]\([^)\n]*$/g, "$1");
-  s = s.replace(/\)\s*[-–—]\s*\[[^\]\n]{0,160}(?:\]|$)/g, "");
-  s = s.replace(/\(\s*#?[^\s)\]]{1,100}(?:[.,;:]|\s*\))?/g, "");
-  s = s.replace(/\(#[^\s)\]]{1,80}/g, "");
-  s = s.replace(/#{1,6}(?=\s|[\u0590-\u05FF])/g, " ");
-  s = s.replace(/^#{1,6}\s*/gm, "");
-  s = s.replace(/^\s*[-*+]\s+/gm, "");
-  s = s.replace(/\*\*([^*\n]+)\*\*/g, "$1");
-  s = s.replace(/__([^_\n]+)__/g, "$1");
-  s = s.replace(/\*{2,}/g, "");
-  s = s.replace(/_{2,}/g, "");
-  s = s.replace(/`([^`\n]+)`/g, "$1");
-  s = s.replace(/`+/g, "");
-  s = s.replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1");
-  s = s.replace(/<\/?[a-z][^>]*>/gi, " ");
-  s = s.replace(/(?:^|\s)[-*•]\s+/gm, " ");
-  s = s.replace(/([\u0590-\u05FF])([A-Za-z0-9])/g, "$1 $2");
-  s = s.replace(/([A-Za-z0-9])([\u0590-\u05FF])/g, "$1 $2");
+  s = stripBrokenMarkdownLinks(s);
+  if (!keepMarkdown) {
+    s = stripAggressiveMarkdownFormatting(s);
+  }
+  s = separateHebrewLatinGlue(s);
 
-  return normalizeHebrewText(s);
+  return normalizeHebrewText(s, { preserveLines });
+}
+
+/** Light sanitize for uploaded markdown — keeps headings, lists, and paragraph breaks. */
+export function sanitizeMarkdownIngestText(text) {
+  return sanitizeChunkText(text, { preserveLines: true, keepMarkdown: true });
 }
 
 const HEBREW_CHAR = /[\u0590-\u05FF]/u;
@@ -114,19 +143,36 @@ function rejoinShortSingleLetterRuns(text) {
   });
 }
 
-/**
- * Fix OCR/PDF spacing without splitting real Hebrew words.
- * Preserves existing spaces; only rejoins letter-by-letter OCR artifacts.
- */
-export function normalizeHebrewText(text) {
-  let s = normalizeText(text);
+function normalizeHebrewTextSingleLine(text) {
+  let s = String(text || "")
+    .replace(/[ \t]+/g, " ")
+    .trim();
   if (!s) return "";
 
-  s = s.replace(/\s+([,.;:!?…])/g, "$1");
+  s = s.replace(/[ \t]+([,.;:!?…])/g, "$1");
   s = s.replace(/([,.;:!?…])(?=[\u0590-\u05FF])/g, "$1 ");
   s = rejoinShortSingleLetterRuns(s);
 
-  return s.replace(/\s+/g, " ").trim();
+  return s.replace(/[ \t]+/g, " ").trim();
+}
+
+/**
+ * Fix OCR/PDF spacing without splitting real Hebrew words.
+ * Preserves existing spaces; only rejoins letter-by-letter OCR artifacts.
+ * @param {string} text
+ * @param {{ preserveLines?: boolean }} [options]
+ */
+export function normalizeHebrewText(text, options = {}) {
+  if (options.preserveLines === true) {
+    return String(text || "")
+      .split("\n")
+      .map((line) => normalizeHebrewTextSingleLine(line))
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
+
+  return normalizeHebrewTextSingleLine(normalizeText(text));
 }
 
 function ensureSentenceTerminal(sentence) {
@@ -210,7 +256,7 @@ function findChunkBreak(slice, maxLen) {
 
 /** Split document body into overlapping chunks with metadata for RAG retrieval. */
 export function chunkDocument(document) {
-  const text = sanitizeChunkText(document.content);
+  const text = sanitizeChunkText(document.content, { preserveLines: true });
   if (!text) return [];
 
   const pageSections = Array.isArray(document.pages)
