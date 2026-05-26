@@ -66,7 +66,7 @@ const STOP_WORDS = new Set([
   "for",
 ]);
 
-const KNOWLEDGE_SANITIZE_STORAGE_KEY = "knowledge-content-sanitize-v3";
+const KNOWLEDGE_SANITIZE_STORAGE_KEY = "knowledge-content-sanitize-v4";
 
 function normalizeText(text) {
   return String(text || "")
@@ -132,14 +132,19 @@ export function sanitizeMarkdownIngestText(text) {
 
 const HEBREW_CHAR = /[\u0590-\u05FF]/u;
 
-/** Rejoin OCR single-letter spacing only inside short runs (one word), never whole sentences. */
+/** Rejoin OCR single-letter spacing only for isolated letter runs, not cross-word boundaries. */
 function rejoinShortSingleLetterRuns(text) {
-  return String(text || "").replace(/(?:[\u0590-\u05FF](?:\s+[\u0590-\u05FF]){1,5})/gu, (run) => {
+  const full = String(text || "");
+  return full.replace(/(?:[\u0590-\u05FF](?:\s+[\u0590-\u05FF]){1,5})/gu, (run, offset) => {
     const parts = run.split(/\s+/).filter(Boolean);
-    if (parts.length >= 2 && parts.length <= 6 && parts.every((p) => p.length === 1)) {
-      return parts.join("");
+    if (parts.length < 2 || parts.length > 6 || !parts.every((p) => p.length === 1)) {
+      return run;
     }
-    return run;
+    const before = full[offset - 1];
+    const after = full[offset + run.length];
+    if (before && HEBREW_CHAR.test(before)) return run;
+    if (after && HEBREW_CHAR.test(after)) return run;
+    return parts.join("");
   });
 }
 
@@ -256,7 +261,8 @@ function findChunkBreak(slice, maxLen) {
 
 /** Split document body into overlapping chunks with metadata for RAG retrieval. */
 export function chunkDocument(document) {
-  const text = sanitizeChunkText(document.content, { preserveLines: true });
+  const keepMarkdown = contentLooksLikeMarkdown(document.content);
+  const text = sanitizeChunkText(document.content, { preserveLines: true, keepMarkdown });
   if (!text) return [];
 
   const pageSections = Array.isArray(document.pages)
@@ -318,13 +324,26 @@ export function chunkDocument(document) {
   return chunks;
 }
 
+function contentLooksLikeMarkdown(content) {
+  const s = String(content || "");
+  return /^#{1,6}\s/m.test(s) || /\[[^\]\n]{1,160}\]\([^)\n]+\)/.test(s);
+}
+
+function sanitizeStoredKnowledgeContent(content) {
+  if (!String(content || "").trim()) return content;
+  if (contentLooksLikeMarkdown(content)) {
+    return sanitizeMarkdownIngestText(content);
+  }
+  return sanitizeChunkText(content, { preserveLines: true });
+}
+
 function ensureKnowledgeSanitizeMigration() {
   try {
     if (localStorage.getItem(KNOWLEDGE_SANITIZE_STORAGE_KEY) === "1") return;
   } catch {
     // ignore
   }
-  patchKnowledgeDocumentsContent((content) => normalizeHebrewText(sanitizeChunkText(content)));
+  patchKnowledgeDocumentsContent((content) => sanitizeStoredKnowledgeContent(content));
   try {
     localStorage.setItem(KNOWLEDGE_SANITIZE_STORAGE_KEY, "1");
   } catch {
