@@ -142,7 +142,19 @@ exit 0
 1. ודא שפרויקט **הפרודקשן** ב-Vercel **אין** בו `VITE_DEMO_MODE=true` (Production).
 2. העדף `upload-demo-only.ps1` לשינויי UI ללקוח; פרוס לייב רק אחרי בדיקות (להלן).
 
+### שגיאת «Branch update failed» / SHA שונה מהצפוי
+
+הסקריפט מעלה קבצים דרך GitHub API (לא `git push`). אם מופיעה הודעה עם **Expected** ו-**got** SHA שונים:
+
+- **סיבה נפוצה:** שני חלונות PowerShell הריצו העלאה במקביל, או push אחר לענף `demo`/`main` בזמן ההעלאה. העלאה האחרונה ניצחה; לפעמים העץ ב-GitHub כבר נכון למרות ה-SHA שונה.
+- **מה לעשות היום:**
+  1. בדוק ב-[commits לענף](https://github.com/asaf2310-boop/smart-break-shift/commits/demo) שהקומיט האחרון נראה כמו ההעלאה שלך (`Upload [Demo] to demo`).
+  2. אם כן — אין צורך בהעלאה חוזרת; בדוק deploy ב-Vercel לפרויקט הדמו.
+  3. אם לא — המתן 30 שניות והרץ **פעם אחת**: `.\upload-demo-only.ps1` (או `upload-to-github.ps1` עם הפרמטרים שלך). אל תריץ שני סקריפטים במקביל.
+- מקומי (אם יש git): `git fetch origin` ואז `git rev-parse HEAD` מול `git rev-parse origin/demo` — העלאה דרך הסקריפט **לא** מעדכנת את ה-clone המקומי; רק את GitHub.
+
 ---
+
 
 ## צ'קליסט: «אני מפריס לייב»
 

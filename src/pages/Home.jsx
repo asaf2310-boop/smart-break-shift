@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { BookOpen, CalendarClock, CalendarDays, Contact, LogOut, Monitor } from "lucide-react";
+import { BookOpen, CalendarClock, CalendarDays, Contact, GraduationCap, LogOut, Monitor } from "lucide-react";
 import { getAgentNamesList } from "@/constants/scheduling";
 import AgentLogin from "@/components/auth/AgentLogin";
 import { demoModeEnabled } from "@/api/demoClient";
@@ -23,6 +23,13 @@ const productionCards = [
     title: "משמרות",
     desc: "אילוצים, חופש ושיבוץ שבועי",
     icon: CalendarDays,
+    iconTile: "m3-icon-tile",
+  },
+  {
+    to: "/training",
+    title: "הדרכה",
+    desc: "לוח זמנים לקורס דיגיטל לנציגים חדשים",
+    icon: GraduationCap,
     iconTile: "m3-icon-tile",
   },
 ];

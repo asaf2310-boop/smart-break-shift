@@ -18,7 +18,11 @@ import {
   subscribeKnowledgeStore,
   upsertKnowledgeDocument,
 } from "@/lib/knowledgeStore";
-import { getAllChunks } from "@/lib/knowledgeAi";
+import {
+  getAllChunks,
+  rebuildKnowledgeChunkIndex,
+  sanitizeMarkdownIngestText,
+} from "@/lib/knowledgeAi";
 import { extractTextFromFile } from "@/lib/knowledgeFileExtract";
 
 const ACCEPT_UPLOAD =
@@ -33,6 +37,7 @@ export default function KnowledgeAdmin() {
     title: "",
     content: "",
     category: "כללי",
+    pages: null,
   });
   const [uploading, setUploading] = useState(false);
 
@@ -49,7 +54,7 @@ export default function KnowledgeAdmin() {
   const chunkCount = getAllChunks().length;
 
   const openCreate = () => {
-    setForm({ title: "", content: "", category: categories[0] || "כללי" });
+    setForm({ title: "", content: "", category: categories[0] || "כללי", pages: null });
     setDialog({ mode: "create" });
   };
 
@@ -58,24 +63,27 @@ export default function KnowledgeAdmin() {
       title: doc.title,
       content: doc.content,
       category: doc.category || "כללי",
+      pages: doc.pages || null,
     });
     setDialog({ mode: "edit", id: doc.id });
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
     try {
       upsertKnowledgeDocument({
         id: dialog.mode === "edit" ? dialog.id : undefined,
         title: form.title,
-        content: form.content,
+        content: sanitizeMarkdownIngestText(form.content),
         category: form.category,
         sourceType: dialog.sourceType || "text",
         fileName: dialog.fileName,
+        pages: form.pages,
       });
       setDialog(null);
       refresh();
-      toast({ title: "נשמר בהצלחה" });
+      await rebuildKnowledgeChunkIndex();
+      toast({ title: "נשמר בהצלחה", description: "אינדקס החיפוש עודכן" });
     } catch (err) {
       toast({
         title: "שגיאה",
@@ -85,11 +93,12 @@ export default function KnowledgeAdmin() {
     }
   };
 
-  const handleDelete = (doc) => {
+  const handleDelete = async (doc) => {
     if (!window.confirm(`למחוק את «${doc.title}»?`)) return;
     try {
       deleteKnowledgeDocument(doc.id);
       refresh();
+      await rebuildKnowledgeChunkIndex();
       toast({ title: "המסמך נמחק" });
     } catch {
       toast({ title: "שגיאה", description: "לא ניתן למחוק", variant: "destructive" });
@@ -103,7 +112,7 @@ export default function KnowledgeAdmin() {
 
     setUploading(true);
     try {
-      const { text, title, error } = await extractTextFromFile(file);
+      const { text, title, error, pages } = await extractTextFromFile(file);
       if (error) {
         toast({ title: "שגיאה בהעלאה", description: error, variant: "destructive" });
         return;
@@ -112,6 +121,7 @@ export default function KnowledgeAdmin() {
         title: title || "מסמך מועלה",
         content: text,
         category: form.category || "כללי",
+        pages: pages || null,
       });
       setDialog({ mode: "create", sourceType: "upload", fileName: file.name });
       toast({ title: "הקובץ נקרא בהצלחה", description: "בדקו את התוכן ולחצו שמירה" });
@@ -120,10 +130,11 @@ export default function KnowledgeAdmin() {
     }
   };
 
-  const handleResetSeed = () => {
+  const handleResetSeed = async () => {
     if (!window.confirm("לאפס את בסיס הידע לנתוני הדמו? פעולה זו תמחק את כל המסמכים הנוכחיים.")) return;
     resetKnowledgeToSeed();
     refresh();
+    await rebuildKnowledgeChunkIndex();
     toast({ title: "בסיס הידע אופס לדמו" });
   };
 
@@ -268,7 +279,8 @@ export default function KnowledgeAdmin() {
                   value={form.content}
                   onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
                   rows={10}
-                  className="w-full rounded-xl border border-outline/30 bg-surface-container-lowest px-3 py-2 text-sm outline-none focus:border-primary resize-y min-h-[160px]"
+                  dir="auto"
+                  className="w-full rounded-xl border border-outline/30 bg-surface-container-lowest px-3 py-2 text-sm outline-none focus:border-primary resize-y min-h-[160px] whitespace-pre-wrap"
                   required
                 />
               </div>

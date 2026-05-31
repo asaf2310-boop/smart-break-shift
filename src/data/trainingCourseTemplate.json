@@ -1,0 +1,33 @@
+{
+  "source": "לוז קורס דיגיטל 12-19.4.xlsx",
+  "sessions": [
+    { "dayOffset": 0, "startTime": "10:00", "endTime": "11:00", "title": "תהליך קליטה בחברה" },
+    { "dayOffset": 0, "startTime": "11:00", "endTime": "13:00", "title": "הדרכה על עולם הסליקה וCRM יעד" },
+    { "dayOffset": 0, "startTime": "13:00", "endTime": "13:30", "title": "הפסקה", "isBreak": true },
+    { "dayOffset": 0, "startTime": "13:30", "endTime": "14:00", "title": "הכרות ראשונית עם המוקד" },
+
+    { "dayOffset": 1, "startTime": "09:00", "endTime": "13:00", "title": "המשך הדרכה CRM יעד + הדרכה על פורטל לקוחות" },
+    { "dayOffset": 1, "startTime": "13:00", "endTime": "13:30", "title": "הפסקה", "isBreak": true },
+    { "dayOffset": 1, "startTime": "13:30", "endTime": "15:00", "title": "האזנות במוקד" },
+
+    { "dayOffset": 2, "startTime": "09:00", "endTime": "10:00", "title": "חזרה על פורטל יעד וCRM" },
+    { "dayOffset": 2, "startTime": "10:00", "endTime": "11:00", "title": "הדרכה על מערכת איזיקאונט — מסך הנה\"ח ודוח הכנסות" },
+    { "dayOffset": 2, "startTime": "11:00", "endTime": "12:30", "title": "הדרכה על מערכת איזיקאונט — דוחות והגדרות" },
+    { "dayOffset": 2, "startTime": "13:00", "endTime": "13:30", "title": "הפסקה", "isBreak": true },
+    { "dayOffset": 2, "startTime": "13:30", "endTime": "15:00", "title": "הדרכה על CRM דיינמיקס" },
+    { "dayOffset": 2, "startTime": "15:00", "endTime": "17:00", "title": "האזנות + טיפול בטיקטים" },
+
+    { "dayOffset": 3, "startTime": "09:00", "endTime": "10:00", "title": "הדרכה על מערכת איזיקאונט — חזרה על החומר והמשך דוחות והגדרות" },
+    { "dayOffset": 3, "startTime": "10:00", "endTime": "12:00", "title": "הדרכה על מערכת איזיקאונט — המשך הגדרות ורשות המיסים" },
+    { "dayOffset": 3, "startTime": "12:00", "endTime": "13:00", "title": "הדרכה על מערכת איזיקאונט — ניהול ומפיצים" },
+    { "dayOffset": 3, "startTime": "13:00", "endTime": "13:30", "title": "הפסקה", "isBreak": true },
+    { "dayOffset": 3, "startTime": "14:00", "endTime": "17:00", "title": "מענה לשיחות במוקד טלפון ווואטסאפ" },
+
+    { "dayOffset": 4, "startTime": "10:00", "endTime": "12:00", "title": "חזרה על כל החומר הנלמד" },
+    { "dayOffset": 4, "startTime": "12:00", "endTime": "12:30", "title": "הפסקה", "isBreak": true },
+    { "dayOffset": 4, "startTime": "12:30", "endTime": "17:00", "title": "מענה לשיחות במוקד" },
+
+    { "dayOffset": 7, "startTime": "10:00", "endTime": "12:00", "title": "מבחן וסיום קורס" },
+    { "dayOffset": 7, "startTime": "12:00", "endTime": "16:00", "title": "חניכות במוקד" }
+  ]
+}

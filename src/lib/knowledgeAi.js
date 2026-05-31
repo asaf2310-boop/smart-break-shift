@@ -1,15 +1,34 @@
-import { listKnowledgeDocuments } from "@/lib/knowledgeStore";
+import {
+  getKnowledgeDocumentsFingerprint,
+  listKnowledgeDocuments,
+  patchKnowledgeDocumentsContent,
+  readKnowledgeChunkIndex,
+  writeKnowledgeChunkIndex,
+} from "@/lib/knowledgeStore";
+import {
+  KNOWLEDGE_ANSWER_FORMAT_HINT,
+  KNOWLEDGE_LOW_RELEVANCE_ANSWER,
+  KNOWLEDGE_NO_CONTEXT_ANSWER,
+  KNOWLEDGE_SYSTEM_PROMPT,
+} from "@/lib/knowledgePrompt";
 
-const CHUNK_SIZE = 480;
-const CHUNK_OVERLAP = 60;
-const MAX_CHUNKS_RETURNED = 2;
-const MIN_CHUNK_SCORE = 3;
-const MIN_RELATIVE_SCORE_RATIO = 0.55;
-const MAX_CONTEXT_CHARS = 2200;
-const MAX_SNIPPET_CHARS = 380;
-const MAX_TEMPLATE_SENTENCES = 3;
+/** ~500–800 tokens at ~4 chars/token (Hebrew) */
+const CHUNK_TARGET_CHARS = 2600;
+const CHUNK_MIN_CHARS = 2000;
+const CHUNK_MAX_CHARS = 3200;
+/** ~100–150 tokens overlap */
+const CHUNK_OVERLAP_CHARS = 500;
 
-const NO_MATCH_ANSWER = "לא נמצא מידע רלוונטי בבסיס הידע. נסה לנסח את השאלה אחרת, או פנה למנהל להוסיף מסמכים ב«ניהול ידע».";
+const RETRIEVAL_TOP_K_MIN = 5;
+const RETRIEVAL_TOP_K_MAX = 8;
+const RETRIEVAL_TOP_K = 6;
+
+const MIN_EMBEDDING_SCORE = 0.58;
+const MIN_KEYWORD_SCORE = 3.5;
+const MIN_KEYWORD_RELATIVE_RATIO = 0.5;
+
+const MAX_CONTEXT_CHARS = 2400;
+const MAX_SNIPPET_CHARS = 420;
 
 const STOP_WORDS = new Set([
   "מה",
@@ -47,43 +66,118 @@ const STOP_WORDS = new Set([
   "for",
 ]);
 
+const KNOWLEDGE_SANITIZE_STORAGE_KEY = "knowledge-content-sanitize-v4";
+
 function normalizeText(text) {
   return String(text || "")
     .replace(/\s+/g, " ")
     .trim();
 }
 
+function stripBrokenMarkdownLinks(s) {
+  let out = String(s || "");
+  out = out.replace(/\[([^\]\n]{1,160})\]\([^)\n]{0,240}\)/g, "$1");
+  out = out.replace(/\[[^\]\n]{1,160}\]\([^)\n]*$/g, "$1");
+  out = out.replace(/\)\s*[-–—]\s*\[[^\]\n]{0,160}(?:\]|$)/g, "");
+  out = out.replace(/\(\s*#?[^\s)\]]{1,100}(?:[.,;:]|\s*\))?/g, "");
+  out = out.replace(/\(#[^\s)\]]{1,80}/g, "");
+  out = out.replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1");
+  return out;
+}
+
+function stripAggressiveMarkdownFormatting(s) {
+  let out = String(s || "");
+  out = out.replace(/#{1,6}(?=\s|[\u0590-\u05FF])/g, " ");
+  out = out.replace(/^#{1,6}\s*/gm, "");
+  out = out.replace(/^\s*[-*+]\s+/gm, "");
+  out = out.replace(/\*\*([^*\n]+)\*\*/g, "$1");
+  out = out.replace(/__([^_\n]+)__/g, "$1");
+  out = out.replace(/\*{2,}/g, "");
+  out = out.replace(/_{2,}/g, "");
+  out = out.replace(/`([^`\n]+)`/g, "$1");
+  out = out.replace(/`+/g, "");
+  out = out.replace(/<\/?[a-z][^>]*>/gi, " ");
+  out = out.replace(/(?:^|\s)[-*•]\s+/gm, " ");
+  return out;
+}
+
+function separateHebrewLatinGlue(s) {
+  return String(s || "")
+    .replace(/([\u0590-\u05FF])([A-Za-z0-9])/g, "$1 $2")
+    .replace(/([A-Za-z0-9])([\u0590-\u05FF])/g, "$1 $2");
+}
+
+/**
+ * @param {string} text
+ * @param {{ preserveLines?: boolean, keepMarkdown?: boolean }} [options]
+ */
+export function sanitizeChunkText(text, options = {}) {
+  const preserveLines = options.preserveLines === true;
+  const keepMarkdown = options.keepMarkdown === true;
+  let s = String(text || "");
+
+  s = stripBrokenMarkdownLinks(s);
+  if (!keepMarkdown) {
+    s = stripAggressiveMarkdownFormatting(s);
+  }
+  s = separateHebrewLatinGlue(s);
+
+  return normalizeHebrewText(s, { preserveLines });
+}
+
+/** Light sanitize for uploaded markdown — keeps headings, lists, and paragraph breaks. */
+export function sanitizeMarkdownIngestText(text) {
+  return sanitizeChunkText(text, { preserveLines: true, keepMarkdown: true });
+}
+
 const HEBREW_CHAR = /[\u0590-\u05FF]/u;
 
-/** Fix OCR/PDF spacing: rejoin broken letters inside words; keep real word gaps. */
-export function normalizeHebrewText(text) {
-  let s = normalizeText(text);
+/** Rejoin OCR single-letter spacing only for isolated letter runs, not cross-word boundaries. */
+function rejoinShortSingleLetterRuns(text) {
+  const full = String(text || "");
+  return full.replace(/(?:[\u0590-\u05FF](?:\s+[\u0590-\u05FF]){1,5})/gu, (run, offset) => {
+    const parts = run.split(/\s+/).filter(Boolean);
+    if (parts.length < 2 || parts.length > 6 || !parts.every((p) => p.length === 1)) {
+      return run;
+    }
+    const before = full[offset - 1];
+    const after = full[offset + run.length];
+    if (before && HEBREW_CHAR.test(before)) return run;
+    if (after && HEBREW_CHAR.test(after)) return run;
+    return parts.join("");
+  });
+}
+
+function normalizeHebrewTextSingleLine(text) {
+  let s = String(text || "")
+    .replace(/[ \t]+/g, " ")
+    .trim();
   if (!s) return "";
 
-  s = s.replace(/\s+([,.;:!?…])/g, "$1");
+  s = s.replace(/[ \t]+([,.;:!?…])/g, "$1");
   s = s.replace(/([,.;:!?…])(?=[\u0590-\u05FF])/g, "$1 ");
+  s = rejoinShortSingleLetterRuns(s);
 
-  s = s.replace(/(?:[\u0590-\u05FF](?:\s+[\u0590-\u05FF]){2,})/gu, (run) => {
-    const parts = run.split(/\s+/).filter(Boolean);
-    if (parts.length >= 3 && parts.every((p) => p.length === 1)) {
-      return parts.join("");
-    }
-    return run;
-  });
+  return s.replace(/[ \t]+/g, " ").trim();
+}
 
-  let prev;
-  do {
-    prev = s;
-    // "מ דיניות" — orphaned letter before a longer Hebrew word
-    s = s.replace(/([\u0590-\u05FF])\s+(?=[\u0590-\u05FF]{3,})/gu, "$1");
-    // "מדיניותהחזרות" — missing space between two Hebrew words (4+ chars each)
-    s = s.replace(
-      /([\u0590-\u05FF]{4,})([\u0590-\u05FF]{4,})/gu,
-      (m, a, b) => (HEBREW_CHAR.test(a) && HEBREW_CHAR.test(b) ? `${a} ${b}` : m),
-    );
-  } while (s !== prev);
+/**
+ * Fix OCR/PDF spacing without splitting real Hebrew words.
+ * Preserves existing spaces; only rejoins letter-by-letter OCR artifacts.
+ * @param {string} text
+ * @param {{ preserveLines?: boolean }} [options]
+ */
+export function normalizeHebrewText(text, options = {}) {
+  if (options.preserveLines === true) {
+    return String(text || "")
+      .split("\n")
+      .map((line) => normalizeHebrewTextSingleLine(line))
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
 
-  return s.replace(/\s+/g, " ").trim();
+  return normalizeHebrewTextSingleLine(normalizeText(text));
 }
 
 function ensureSentenceTerminal(sentence) {
@@ -92,7 +186,6 @@ function ensureSentenceTerminal(sentence) {
   return /[.!?…]$/.test(s) ? s : `${s}.`;
 }
 
-/** Join full sentences with a visible gap; never glue fragments. */
 export function joinSentences(sentences) {
   const parts = (Array.isArray(sentences) ? sentences : [])
     .map((s) => normalizeHebrewText(s))
@@ -101,106 +194,381 @@ export function joinSentences(sentences) {
   return normalizeHebrewText(parts.join(" "));
 }
 
-function isLikelyFullSentence(sentence) {
-  const s = normalizeHebrewText(sentence);
-  if (s.length < 12) return false;
-  const words = s.split(/\s+/).filter(Boolean);
-  if (words.length < 2) return s.length >= 24;
-  const shortWords = words.filter((w) => w.length <= 2).length;
-  if (words.length >= 3 && shortWords / words.length > 0.45) return false;
-  return true;
+function isHowToQuestion(query) {
+  const q = normalizeText(query);
+  return /^(איך|כיצד|מהן?\s+השלבים|מה\s+התהליך|תהליך|הסבר\s+איך)/u.test(q);
 }
 
-/** Split document body into overlapping chunks for RAG-lite retrieval. */
+function detectSectionTitle(line) {
+  const t = String(line || "").trim();
+  if (!t) return null;
+  if (/^#{1,4}\s+/.test(t)) return t.replace(/^#{1,4}\s+/, "").trim();
+  if (t.length >= 4 && t.length <= 72 && /^[\u0590-\u05FF]/.test(t) && !/[.!?…]$/.test(t)) {
+    return t;
+  }
+  return null;
+}
+
+function splitTextIntoSections(text) {
+  const lines = String(text || "").split(/\n+/);
+  const sections = [];
+  let currentTitle = null;
+  let buffer = [];
+
+  const flush = () => {
+    const body = buffer.join("\n").trim();
+    if (body) sections.push({ sectionTitle: currentTitle, text: body });
+    buffer = [];
+  };
+
+  for (const line of lines) {
+    const title = detectSectionTitle(line);
+    if (title && buffer.length === 0) {
+      currentTitle = title;
+      continue;
+    }
+    if (title && buffer.length > 0) {
+      flush();
+      currentTitle = title;
+      continue;
+    }
+    buffer.push(line);
+  }
+  flush();
+
+  if (!sections.length && text.trim()) {
+    return [{ sectionTitle: null, text: text.trim() }];
+  }
+  return sections;
+}
+
+function findChunkBreak(slice, maxLen) {
+  if (slice.length <= maxLen) return slice.length;
+  const window = slice.slice(0, maxLen);
+  const paragraph = window.lastIndexOf("\n\n");
+  if (paragraph > CHUNK_MIN_CHARS * 0.5) return paragraph;
+  const sentence = Math.max(
+    window.lastIndexOf(". "),
+    window.lastIndexOf("! "),
+    window.lastIndexOf("? "),
+    window.lastIndexOf("… "),
+  );
+  if (sentence > CHUNK_MIN_CHARS * 0.45) return sentence + 1;
+  const space = window.lastIndexOf(" ");
+  if (space > CHUNK_MIN_CHARS * 0.4) return space;
+  return maxLen;
+}
+
+/** Split document body into overlapping chunks with metadata for RAG retrieval. */
 export function chunkDocument(document) {
-  const text = normalizeHebrewText(document.content);
+  const keepMarkdown = contentLooksLikeMarkdown(document.content);
+  const text = sanitizeChunkText(document.content, { preserveLines: true, keepMarkdown });
   if (!text) return [];
 
+  const pageSections = Array.isArray(document.pages)
+    ? document.pages
+        .map((p) => ({
+          sectionTitle: p.sectionTitle || null,
+          pageNumber: p.pageNumber ?? null,
+          text: sanitizeChunkText(p.text),
+        }))
+        .filter((p) => p.text)
+    : null;
+
+  const sections = pageSections?.length
+    ? pageSections.map((p) => ({
+        sectionTitle: p.sectionTitle,
+        pageNumber: p.pageNumber,
+        text: p.text,
+      }))
+    : splitTextIntoSections(text).map((s) => ({ ...s, pageNumber: null }));
+
   const chunks = [];
-  let start = 0;
-  let index = 0;
+  let globalIndex = 0;
 
-  while (start < text.length) {
-    const end = Math.min(start + CHUNK_SIZE, text.length);
-    let slice = text.slice(start, end);
+  for (const section of sections) {
+    const sectionText = section.text;
+    let start = 0;
 
-    if (end < text.length) {
-      const lastSpace = slice.lastIndexOf(" ");
-      if (lastSpace > CHUNK_SIZE * 0.5) {
-        slice = slice.slice(0, lastSpace);
+    while (start < sectionText.length) {
+      const maxEnd = Math.min(start + CHUNK_MAX_CHARS, sectionText.length);
+      let end = findChunkBreak(sectionText.slice(start, maxEnd), CHUNK_MAX_CHARS);
+      if (end < CHUNK_MIN_CHARS && maxEnd < sectionText.length) {
+        end = Math.min(CHUNK_TARGET_CHARS, maxEnd - start);
       }
-    }
+      if (end <= 0) end = Math.min(CHUNK_TARGET_CHARS, sectionText.length - start);
 
-    const chunkText = normalizeHebrewText(slice);
-    if (chunkText) {
-      chunks.push({
-        id: `${document.id}_c${index}`,
-        documentId: document.id,
-        documentTitle: document.title,
-        category: document.category,
-        index,
-        text: chunkText,
-      });
-      index += 1;
-    }
+      const slice = sectionText.slice(start, start + end);
+      const chunkText = normalizeHebrewText(slice);
+      if (chunkText) {
+        chunks.push({
+          id: `${document.id}_c${globalIndex}`,
+          documentId: document.id,
+          documentName: document.title,
+          documentTitle: document.title,
+          category: document.category,
+          chunkIndex: globalIndex,
+          pageNumber: section.pageNumber ?? null,
+          sectionTitle: section.sectionTitle || null,
+          index: globalIndex,
+          text: chunkText,
+        });
+        globalIndex += 1;
+      }
 
-    if (end >= text.length) break;
-    start += Math.max(slice.length - CHUNK_OVERLAP, 1);
+      if (start + end >= sectionText.length) break;
+      start += Math.max(end - CHUNK_OVERLAP_CHARS, 1);
+    }
   }
 
   return chunks;
 }
 
+function contentLooksLikeMarkdown(content) {
+  const s = String(content || "");
+  return /^#{1,6}\s/m.test(s) || /\[[^\]\n]{1,160}\]\([^)\n]+\)/.test(s);
+}
+
+function sanitizeStoredKnowledgeContent(content) {
+  if (!String(content || "").trim()) return content;
+  if (contentLooksLikeMarkdown(content)) {
+    return sanitizeMarkdownIngestText(content);
+  }
+  return sanitizeChunkText(content, { preserveLines: true });
+}
+
+function ensureKnowledgeSanitizeMigration() {
+  try {
+    if (localStorage.getItem(KNOWLEDGE_SANITIZE_STORAGE_KEY) === "1") return;
+  } catch {
+    // ignore
+  }
+  patchKnowledgeDocumentsContent((content) => sanitizeStoredKnowledgeContent(content));
+  try {
+    localStorage.setItem(KNOWLEDGE_SANITIZE_STORAGE_KEY, "1");
+  } catch {
+    // ignore
+  }
+}
+
+let indexBuildPromise = null;
+
+async function fetchEmbeddingsBatch(texts) {
+  if (!texts.length) return [];
+  try {
+    const res = await fetch("/api/knowledge-embed", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ inputs: texts }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return Array.isArray(data.embeddings) ? data.embeddings : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Rebuild localStorage chunk index (with optional OpenAI embeddings). */
+export async function rebuildKnowledgeChunkIndex() {
+  ensureKnowledgeSanitizeMigration();
+  const documents = listKnowledgeDocuments();
+  const fingerprint = getKnowledgeDocumentsFingerprint(documents);
+  const existing = readKnowledgeChunkIndex();
+  if (existing?.fingerprint === fingerprint && existing.chunks?.length) {
+    return existing.chunks;
+  }
+
+  const rawChunks = documents.flatMap(chunkDocument);
+  const texts = rawChunks.map((c) => c.text);
+  const embeddings = await fetchEmbeddingsBatch(texts);
+
+  const chunks = rawChunks.map((chunk, i) => ({
+    ...chunk,
+    embedding: embeddings?.[i] ?? null,
+  }));
+
+  writeKnowledgeChunkIndex(chunks, fingerprint);
+  return chunks;
+}
+
+function ensureChunkIndexReady() {
+  const documents = listKnowledgeDocuments();
+  const fingerprint = getKnowledgeDocumentsFingerprint(documents);
+  const existing = readKnowledgeChunkIndex();
+  if (existing?.fingerprint === fingerprint && existing.chunks?.length) {
+    return Promise.resolve(existing.chunks);
+  }
+  if (!indexBuildPromise) {
+    indexBuildPromise = rebuildKnowledgeChunkIndex().finally(() => {
+      indexBuildPromise = null;
+    });
+  }
+  return indexBuildPromise;
+}
+
 export function getAllChunks() {
+  ensureKnowledgeSanitizeMigration();
+  const indexed = readKnowledgeChunkIndex();
+  const fingerprint = getKnowledgeDocumentsFingerprint();
+  if (indexed?.fingerprint === fingerprint && indexed.chunks?.length) {
+    return indexed.chunks;
+  }
   return listKnowledgeDocuments().flatMap(chunkDocument);
 }
 
 function tokenize(query) {
   const raw = normalizeText(query).toLowerCase();
-  const words = raw.match(/[\u0590-\u05ff\w]+/g) || [];
+  const expanded = raw
+    .replace(/([\u0590-\u05ff])([a-z0-9])/gi, "$1 $2")
+    .replace(/([a-z0-9])([\u0590-\u05ff])/gi, "$1 $2");
+  const words =
+    expanded.match(/[\u0590-\u05ff][\u0590-\u05ff'"-]*|[a-z0-9][a-z0-9_.-]*/gi) || [];
   const meaningful = [...new Set(words.filter((w) => w.length > 1 && !STOP_WORDS.has(w)))];
   if (meaningful.length) return meaningful;
   return [...new Set(words.filter((w) => w.length > 1))];
 }
 
-function scoreChunk(chunk, tokens) {
+function buildTfidfVector(tokens, vocabulary) {
+  const vec = new Float32Array(vocabulary.length);
+  for (let i = 0; i < vocabulary.length; i += 1) {
+    const term = vocabulary[i];
+    const count = tokens.filter((t) => t === term).length;
+    if (count) vec[i] = 1 + Math.log(count);
+  }
+  return vec;
+}
+
+function cosineSimilarity(a, b) {
+  if (!a?.length || !b?.length || a.length !== b.length) return 0;
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  if (!normA || !normB) return 0;
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+
+function cosineEmbedding(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return 0;
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  if (!normA || !normB) return 0;
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+
+function scoreChunkKeyword(chunk, tokens) {
   if (!tokens.length) return 0;
-  const hay = `${chunk.documentTitle} ${chunk.text} ${chunk.category || ""}`.toLowerCase();
+  const hay = sanitizeChunkText(
+    `${chunk.documentName || chunk.documentTitle} ${chunk.sectionTitle || ""} ${chunk.text} ${chunk.category || ""}`,
+  ).toLowerCase();
   let score = 0;
-  let matchedTokens = 0;
+  let matched = 0;
   for (const token of tokens) {
     if (hay.includes(token)) {
-      matchedTokens += 1;
+      matched += 1;
       score += token.length >= 4 ? 3 : 2;
-      const re = new RegExp(`\\b${token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "g");
+      const re = new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g");
       const matches = hay.match(re);
-      if (matches) score += matches.length * 0.5;
+      if (matches) score += matches.length * 0.35;
     }
   }
-  if (matchedTokens >= 2) score += 1;
+  if (matched >= 2) score += 1.2;
   return score;
 }
 
-/** Keyword overlap search — returns only chunks above relevance threshold. */
-export function searchKnowledgeChunks(query, limit = MAX_CHUNKS_RETURNED) {
+async function embedQuery(text) {
+  const result = await fetchEmbeddingsBatch([text]);
+  return result?.[0] ?? null;
+}
+
+/**
+ * Retrieve top-k chunks with scores (embedding-first, keyword fallback).
+ * @returns {Promise<{ chunks: Array, hits: Array<{ chunk, score, method }>, method: string }>}
+ */
+export async function searchKnowledgeChunksWithScores(query, limit = RETRIEVAL_TOP_K) {
   const tokens = tokenize(query);
+  const trimmed = normalizeText(query);
+  if (!trimmed) return { chunks: [], hits: [], method: "empty" };
+
+  await ensureChunkIndexReady();
   const all = getAllChunks();
-  if (!all.length || !tokens.length) return [];
+  if (!all.length) return { chunks: [], hits: [], method: "no_index" };
+
+  const topK = Math.min(RETRIEVAL_TOP_K_MAX, Math.max(RETRIEVAL_TOP_K_MIN, limit));
+  const withEmbeddings = all.filter((c) => Array.isArray(c.embedding) && c.embedding.length);
+
+  if (withEmbeddings.length) {
+    const queryEmbedding = await embedQuery(trimmed);
+    if (queryEmbedding) {
+      const ranked = withEmbeddings
+        .map((chunk) => ({
+          chunk,
+          score: cosineEmbedding(queryEmbedding, chunk.embedding),
+          method: "embedding",
+        }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, topK);
+
+      return {
+        chunks: ranked.map((r) => r.chunk),
+        hits: ranked,
+        method: "embedding",
+      };
+    }
+  }
+
+  if (!tokens.length) return { chunks: [], hits: [], method: "no_tokens" };
+
+  const vocabulary = [...new Set(tokens)];
+  const queryVec = buildTfidfVector(tokens, vocabulary);
 
   const ranked = all
-    .map((chunk) => ({ chunk, score: scoreChunk(chunk, tokens) }))
-    .filter((row) => row.score >= MIN_CHUNK_SCORE)
+    .map((chunk) => {
+      const chunkTokens = tokenize(chunk.text);
+      const chunkVec = buildTfidfVector(chunkTokens, vocabulary);
+      const tfidfScore = cosineSimilarity(queryVec, chunkVec);
+      const keywordScore = scoreChunkKeyword(chunk, tokens);
+      const score = tfidfScore * 4 + keywordScore;
+      return { chunk, score, method: "keyword_tfidf" };
+    })
+    .filter((row) => row.score >= MIN_KEYWORD_SCORE)
     .sort((a, b) => b.score - a.score);
 
-  if (!ranked.length) return [];
+  if (!ranked.length) return { chunks: [], hits: [], method: "keyword_tfidf" };
 
   const topScore = ranked[0].score;
-  const minRelative = topScore * MIN_RELATIVE_SCORE_RATIO;
+  const minRelative = topScore * MIN_KEYWORD_RELATIVE_RATIO;
+  const filtered = ranked.filter((row) => row.score >= minRelative).slice(0, topK);
 
-  return ranked
-    .filter((row) => row.score >= minRelative)
-    .slice(0, limit)
-    .map((row) => row.chunk);
+  return {
+    chunks: filtered.map((r) => r.chunk),
+    hits: filtered,
+    method: "keyword_tfidf",
+  };
+}
+
+/** @deprecated use searchKnowledgeChunksWithScores */
+export async function searchKnowledgeChunks(query, limit = RETRIEVAL_TOP_K) {
+  const { chunks } = await searchKnowledgeChunksWithScores(query, limit);
+  return chunks;
+}
+
+function passesRelevanceThreshold(hits, method) {
+  if (!hits.length) return false;
+  const best = hits[0].score;
+  if (method === "embedding") return best >= MIN_EMBEDDING_SCORE;
+  return best >= MIN_KEYWORD_SCORE;
 }
 
 function uniqueCitations(chunks) {
@@ -213,95 +581,19 @@ function uniqueCitations(chunks) {
     })
     .map((c) => ({
       documentId: c.documentId,
-      title: c.documentTitle,
+      title: c.documentName || c.documentTitle,
       category: c.category,
+      pageNumber: c.pageNumber,
+      sectionTitle: c.sectionTitle,
     }));
 }
 
-function splitSentences(text) {
-  const normalized = normalizeHebrewText(text);
-  return normalized
-    .split(/(?<=[.!?…])\s+|[\n\r]+|(?<=[\u0590-\u05FF])\s*[-–—]\s*/)
-    .map((s) => normalizeHebrewText(s))
-    .filter(isLikelyFullSentence);
-}
-
-function sentenceMatchesTokens(sentence, tokens) {
-  const hay = sentence.toLowerCase();
-  return tokens.some((t) => hay.includes(t));
-}
-
 function truncateSnippet(text, max = MAX_SNIPPET_CHARS) {
-  const normalized = normalizeHebrewText(text);
+  const normalized = sanitizeChunkText(text);
   if (normalized.length <= max) return normalized;
   const cut = normalized.slice(0, max);
   const lastSpace = cut.lastIndexOf(" ");
   return `${(lastSpace > max * 0.55 ? cut.slice(0, lastSpace) : cut).trim()}…`;
-}
-
-function countTokenHits(sentence, tokens) {
-  const hay = sentence.toLowerCase();
-  return tokens.reduce((n, t) => (hay.includes(t) ? n + 1 : n), 0);
-}
-
-/** Pick 2–3 full sentences from chunks (never word/token concatenation). */
-function synthesizeTemplateSentences(query, chunks) {
-  const tokens = tokenize(query);
-  const ranked = [];
-  const seen = new Set();
-
-  for (const chunk of chunks) {
-    const candidates = splitSentences(chunk.text).filter(
-      (s) => isLikelyFullSentence(s) && sentenceMatchesTokens(s, tokens),
-    );
-    for (const sentence of candidates) {
-      const key = sentence.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      ranked.push({ sentence, hits: countTokenHits(sentence, tokens) });
-    }
-  }
-
-  ranked.sort((a, b) => b.hits - a.hits || b.sentence.length - a.sentence.length);
-
-  if (ranked.length) {
-    return ranked.slice(0, MAX_TEMPLATE_SENTENCES).map((r) => r.sentence);
-  }
-
-  return splitSentences(chunks[0]?.text || "")
-    .filter(isLikelyFullSentence)
-    .slice(0, MAX_TEMPLATE_SENTENCES);
-}
-
-function buildTemplateAnswerHebrew(query, chunks) {
-  if (!chunks.length) {
-    return {
-      answer: NO_MATCH_ANSWER,
-      citations: [],
-      mode: "template",
-    };
-  }
-
-  const sentences = synthesizeTemplateSentences(query, chunks);
-  if (!sentences.length) {
-    return {
-      answer: NO_MATCH_ANSWER,
-      citations: [],
-      mode: "template",
-    };
-  }
-
-  const citations = uniqueCitations(chunks);
-  const body = joinSentences(sentences.slice(0, MAX_TEMPLATE_SENTENCES));
-  const footer =
-    "\n\n(סיכום אוטומטי מקטעים רלוונטיים בלבד · מצב דמו. להפעלת GPT, הגדר VITE_OPENAI_API_KEY.)";
-
-  const intro = "לפי המידע בבסיס הידע:";
-  return {
-    answer: `${intro} ${body}${footer}`,
-    citations,
-    mode: "template",
-  };
 }
 
 function buildContextBlocks(chunks) {
@@ -311,7 +603,15 @@ function buildContextBlocks(chunks) {
   for (let i = 0; i < chunks.length; i += 1) {
     const c = chunks[i];
     const snippet = truncateSnippet(c.text);
-    const block = `[${i + 1}] מסמך: ${c.documentTitle}\n${snippet}`;
+    const meta = [
+      c.documentName || c.documentTitle || "מסמך",
+      c.chunkIndex != null ? `קטע ${c.chunkIndex}` : null,
+      c.pageNumber != null ? `עמוד ${c.pageNumber}` : null,
+      c.sectionTitle ? `סעיף: ${c.sectionTitle}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    const block = `[${i + 1}] ${meta}\n${snippet}`;
     if (totalChars + block.length > MAX_CONTEXT_CHARS) break;
     blocks.push(block);
     totalChars += block.length + 2;
@@ -320,28 +620,105 @@ function buildContextBlocks(chunks) {
   return blocks;
 }
 
-export function isOpenAiConfigured() {
+function logRetrievalDebug(payload) {
+  if (import.meta.env.DEV) {
+    console.log("[knowledge RAG]", payload);
+  }
+}
+
+function hasClientOpenAiKey() {
   return Boolean(String(import.meta.env.VITE_OPENAI_API_KEY ?? "").trim());
 }
 
-async function callOpenAi(query, chunks) {
+export function isOpenAiConfigured() {
+  return hasClientOpenAiKey() || import.meta.env.PROD;
+}
+
+let openAiProbeCache = null;
+
+export async function probeOpenAiAvailability() {
+  if (openAiProbeCache) return openAiProbeCache;
+
+  try {
+    const res = await fetch("/api/knowledge-chat?health=1");
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (data.ok) {
+        openAiProbeCache = { available: true, source: "server" };
+        return openAiProbeCache;
+      }
+    }
+  } catch {
+    // local dev without vercel dev
+  }
+
+  if (hasClientOpenAiKey()) {
+    openAiProbeCache = { available: true, source: "client" };
+    return openAiProbeCache;
+  }
+
+  openAiProbeCache = { available: false, source: null };
+  return openAiProbeCache;
+}
+
+export function formatOpenAiError(err) {
+  const msg = String(err?.message || err || "");
+  if (msg.includes("openai_not_configured") || msg.includes("openai_error:503")) {
+    return "שירות GPT לא מוגדר בשרת. הוסף OPENAI_API_KEY ב-Vercel → Environment Variables ופרוס מחדש.";
+  }
+  if (msg.includes("openai_error:401") || msg.includes("openai_error:403")) {
+    return "מפתח OpenAI לא תקין או חסר הרשאה. בדוק את OPENAI_API_KEY ב-Vercel ופרוס מחדש.";
+  }
+  if (msg.includes("openai_error:429")) {
+    return "מגבלת קצב ב-OpenAI — נסה שוב בעוד רגע.";
+  }
+  if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
+    return "בעיית רשת בחיבור ל-GPT — בדוק חיבור או הרץ vercel dev עם OPENAI_API_KEY.";
+  }
+  if (msg.startsWith("openai_error:")) {
+    return "שגיאה ב-OpenAI — נסה שוב מאוחר יותר.";
+  }
+  return "לא ניתן להפעיל GPT כרגע.";
+}
+
+async function callOpenAiViaServer(query, chunks, context) {
+  const res = await fetch("/api/knowledge-chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      query,
+      context,
+      chunkMeta: chunks.map((c, i) => ({
+        ref: i + 1,
+        documentName: c.documentName || c.documentTitle,
+        chunkIndex: c.chunkIndex,
+        pageNumber: c.pageNumber,
+        sectionTitle: c.sectionTitle,
+      })),
+    }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const code = data.error || data.code || `openai_error:${res.status}`;
+    throw new Error(String(code));
+  }
+
+  const raw = data.answer?.trim() || KNOWLEDGE_NO_CONTEXT_ANSWER;
+  return {
+    answer: polishModelAnswer(raw),
+    citations: uniqueCitations(chunks),
+    mode: "openai",
+  };
+}
+
+async function callOpenAiViaClient(query, chunks, context) {
   const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
   const model = import.meta.env.VITE_OPENAI_MODEL || "gpt-4o-mini";
 
-  const contextBlocks = buildContextBlocks(chunks);
-  const context = contextBlocks.join("\n\n");
-
-  const system = `אתה עוזר ידע לנציגי שירות. ענה בעברית בלבד, במשפטים מלאים וברורים.
-כללים:
-- 2–4 משפטים שלמים בלבד; כל משפט מסתיים בנקודה. רווח בין מילים — לעולם אל תדביק מילים עבריות.
-- משפט ראשון: תשובה ישירה לשאלה (כן/לא, מספר, או העובדה המרכזית).
-- אל תעתיק טקסט גולמי מ-OCR; תקן רווחים שבורים בתוך מילים ושמור רווח בין מילים נפרדות.
-- בלי רשימות, בלי bullets, בלי ציטוטים ארוכים — ניסוח מחדש קצר וברור.
-- רק מידע מקטעי ההקשר; בלי ידע חיצוני.
-- אם אין תשובה בקטעים, ענה במדויק: "לא נמצא מידע רלוונטי בבסיס הידע."
-- בסוף ציין [1], [2] רק למקורות שבאמת השתמשת בהם.`;
-
-  const user = `קטעי הקשר (היחידים המותרים לשימוש):\n${context || "(ריק)"}\n\nשאלת הנציג: ${query}`;
+  const user = `קטעי הקשר (היחידים המותרים לשימוש):\n${context || "(ריק)"}\n\nשאלת הנציג: ${query}\n\n${KNOWLEDGE_ANSWER_FORMAT_HINT}${
+    isHowToQuestion(query) ? "\n\nסוג שאלה: הדרכה / תהליך — השתמש בפירוט לפי סעיפים." : ""
+  }`;
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -352,9 +729,9 @@ async function callOpenAi(query, chunks) {
     body: JSON.stringify({
       model,
       temperature: 0.2,
-      max_tokens: 280,
+      max_tokens: isHowToQuestion(query) ? 480 : 380,
       messages: [
-        { role: "system", content: system },
+        { role: "system", content: `${KNOWLEDGE_SYSTEM_PROMPT}\n\n${KNOWLEDGE_ANSWER_FORMAT_HINT}` },
         { role: "user", content: user },
       ],
     }),
@@ -366,51 +743,134 @@ async function callOpenAi(query, chunks) {
   }
 
   const data = await res.json();
-  const raw = data.choices?.[0]?.message?.content?.trim() || "לא התקבלה תשובה מהמודל.";
-  const answer = joinSentences(
-    raw
-      .split(/(?<=[.!?…])\s+/)
-      .map((s) => normalizeHebrewText(s))
-      .filter(isLikelyFullSentence),
-  ) || normalizeHebrewText(raw);
-
+  const raw = data.choices?.[0]?.message?.content?.trim() || KNOWLEDGE_NO_CONTEXT_ANSWER;
   return {
-    answer,
+    answer: polishModelAnswer(raw),
     citations: uniqueCitations(chunks),
     mode: "openai",
   };
 }
 
+async function callOpenAi(query, chunks, context) {
+  const tryServerFirst = import.meta.env.PROD || !hasClientOpenAiKey();
+
+  if (tryServerFirst) {
+    try {
+      return await callOpenAiViaServer(query, chunks, context);
+    } catch (serverErr) {
+      if (hasClientOpenAiKey()) {
+        return callOpenAiViaClient(query, chunks, context);
+      }
+      throw serverErr;
+    }
+  }
+
+  return callOpenAiViaClient(query, chunks, context);
+}
+
+function polishModelAnswer(raw) {
+  let text = sanitizeChunkText(raw);
+  text = text.replace(/^(#{1,6}\s+|\*\s+|-\s+)/gm, "");
+  return text.replace(/\r\n/g, "\n").trim();
+}
+
+function formatSourceLine(chunk) {
+  const parts = [
+    chunk.documentName || chunk.documentTitle,
+    chunk.pageNumber != null ? `עמוד ${chunk.pageNumber}` : null,
+    chunk.sectionTitle || null,
+  ].filter(Boolean);
+  return parts.join(" / ");
+}
+
+/** Structured Hebrew answer without GPT (demo / missing API key). */
+function buildLocalStructuredAnswer(chunks) {
+  const lead = truncateSnippet(chunks[0]?.text || "", 320);
+  const detail =
+    chunks.length > 1
+      ? chunks
+          .slice(1, 3)
+          .map((c, i) => `${i + 1}. ${truncateSnippet(c.text, 200)}`)
+          .join("\n")
+      : "";
+
+  const source = formatSourceLine(chunks[0]);
+  const parts = [`תשובה קצרה וברורה\n${lead}`];
+  if (detail) parts.push(`פירוט:\n${detail}`);
+  if (source) parts.push(`מקור: ${source}`);
+  return parts.join("\n\n");
+}
+
+function buildDebugPayload(query, retrieval, context) {
+  return {
+    question: query,
+    retrievalMethod: retrieval.method,
+    retrievedChunks: retrieval.hits.map((h) => ({
+      documentName: h.chunk.documentName || h.chunk.documentTitle,
+      chunkIndex: h.chunk.chunkIndex,
+      pageNumber: h.chunk.pageNumber,
+      sectionTitle: h.chunk.sectionTitle,
+      score: Number(h.score.toFixed(4)),
+      snippet: truncateSnippet(h.chunk.text, 160),
+    })),
+    contextSent: context,
+  };
+}
+
 /**
- * Retrieve relevant chunks and produce an answer (template or OpenAI).
- * @returns {Promise<{ answer: string, citations: Array, chunks: Array, mode: string }>}
+ * Retrieve relevant chunks and produce an answer (OpenAI or low-relevance message).
  */
 export async function askKnowledgeBase(query) {
   const trimmed = normalizeText(query);
   if (!trimmed) {
-    return { answer: "נא להקליד שאלה.", citations: [], chunks: [], mode: "empty" };
+    return { answer: "נא להקליד שאלה.", citations: [], chunks: [], mode: "empty", debug: null };
   }
 
-  const chunks = searchKnowledgeChunks(trimmed);
+  const retrieval = await searchKnowledgeChunksWithScores(trimmed);
+  const { chunks, hits, method } = retrieval;
 
-  if (!chunks.length) {
+  const contextBlocks = buildContextBlocks(chunks);
+  const context = contextBlocks.join("\n\n");
+
+  const debug = buildDebugPayload(trimmed, retrieval, context);
+
+  logRetrievalDebug(debug);
+
+  if (!chunks.length || !passesRelevanceThreshold(hits, method)) {
     return {
-      answer: NO_MATCH_ANSWER,
+      answer: KNOWLEDGE_LOW_RELEVANCE_ANSWER,
       citations: [],
       chunks: [],
-      mode: "no_match",
+      mode: "low_relevance",
+      debug,
     };
   }
 
-  if (isOpenAiConfigured()) {
+  const probe = await probeOpenAiAvailability();
+  if (probe.available) {
     try {
-      const result = await callOpenAi(trimmed, chunks);
-      return { ...result, chunks };
-    } catch {
-      // fall through to template on API errors
+      const result = await callOpenAi(trimmed, chunks, context);
+      return { ...result, chunks, debug };
+    } catch (err) {
+      return {
+        answer: buildLocalStructuredAnswer(chunks),
+        citations: uniqueCitations(chunks),
+        chunks,
+        mode: "local_fallback",
+        openAiFailed: true,
+        openAiError: formatOpenAiError(err),
+        debug,
+      };
     }
   }
 
-  const template = buildTemplateAnswerHebrew(trimmed, chunks);
-  return { ...template, chunks };
+  return {
+    answer: buildLocalStructuredAnswer(chunks),
+    citations: uniqueCitations(chunks),
+    chunks,
+    mode: "local_fallback",
+    debug,
+  };
 }
+
+export { KNOWLEDGE_SYSTEM_PROMPT, KNOWLEDGE_LOW_RELEVANCE_ANSWER };
