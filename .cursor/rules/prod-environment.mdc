@@ -1,0 +1,26 @@
+---
+description: סביבת פרודקשן בלבד — Agent זה לא לדמו
+alwaysApply: true
+---
+
+# פרודקשן בלבד (Smart Break Shift)
+
+Workspace זה מיועד ל**לייב/פרודקשן** — לא לניסויי דמו UI.
+
+## עשה כאן
+- פרויקט Vercel: **`smart-break-shift`** (Vercel prod)
+- `.\upload-to-github.ps1 -Target Production` → `main`
+- בדיקה: `preview-live.ps1`, `scripts/verify-prod-build.ps1`
+- Supabase: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
+- **אין** `VITE_DEMO_MODE=true` ב-Vercel Production
+
+## אל תעשה כאן
+- `upload-demo-only.ps1`, ענף `demo`, `preview-shell.ps1`
+- CRM/מיתוג/לוגו דמו, שינויים ל-`smart-break-shift-demo`
+- `-Target Demo` אלא אם המשתמש מפנה במפורש ל-Agent דמו
+
+## דמו
+הפנה למסמכים: `docs/DEMO_AGENT_PROMPT.md` (Agent חדש), `docs/PROD_AGENT.md`, `docs/DEMO_VS_PRODUCTION.md`.
+
+## קוד
+השתמש ב-`demoModeEnabled` מ-`src/api/demoClient.js`. תכונות דמו ב-`DemoGate` / `if (demoModeEnabled)`.

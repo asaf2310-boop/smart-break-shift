@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AllInCenter — תצוגת מיתוג (SVG)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Noto Sans Hebrew", Poppins, system-ui, sans-serif;
+      background: #f8fafc;
+      color: #1e1b4b;
+      padding: 2rem 1.5rem;
+    }
+    h1 { font-size: 1.25rem; font-weight: 600; margin: 0 0 0.5rem; }
+    p { margin: 0 0 1.5rem; font-size: 0.9rem; opacity: 0.85; }
+    .grid { display: grid; gap: 1.5rem; max-width: 56rem; }
+    .panel {
+      border-radius: 1rem;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.25rem;
+    }
+    .panel.dark {
+      background: linear-gradient(135deg, #1e1b4b, #4c1d95 45%, #0f172a);
+    }
+    .panel.light {
+      background: linear-gradient(160deg, #faf5ff, #ecfeff);
+      border: 1px solid #e9d5ff;
+    }
+    .label { font-size: 0.85rem; margin: 0; }
+    .panel.dark .label { color: #e9d5ff; }
+    .panel.light .label { color: #5b21b6; }
+    .lockup {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-direction: row;
+      direction: ltr;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .mark { width: 96px; height: 96px; flex-shrink: 0; }
+    .wordmark { width: min(100%, 420px); height: auto; }
+    code { font-size: 0.8rem; background: #00000012; padding: 0.15rem 0.4rem; border-radius: 0.25rem; }
+  </style>
+</head>
+<body>
+  <h1>AllInCenter — וקטורי SVG (דמו)</h1>
+  <p>Split mark + editable wordmark ל-Figma. לא מחובר ל-<code>BrandLogo.jsx</code>. ראו <code>docs/FIGMA_BRAND_GUIDE.md</code>.</p>
+
+  <div class="grid">
+    <section class="panel dark">
+      <p class="label"><code>data-theme="on-dark"</code> — lockup (mark-split + wordmark-editable)</p>
+      <div class="lockup" id="lockup-dark"></div>
+    </section>
+    <section class="panel light">
+      <p class="label"><code>data-theme="on-light"</code> — lockup split</p>
+      <div class="lockup" id="lockup-light"></div>
+    </section>
+    <section class="panel light">
+      <p class="label">קבצים נפרדים — סמל (רסטר) / שם (טקסט SVG)</p>
+      <div class="lockup" style="gap: 2rem;">
+        <img class="mark" src="../public/brand/allincenter-mark-split.svg" alt="" style="width: 120px; height: auto;" />
+        <img class="wordmark" src="../public/brand/allincenter-wordmark-editable.svg" alt="AllInCenter" data-theme="on-light" id="wordmark-only" />
+      </div>
+    </section>
+  </div>
+
+  <script>
+    async function svgWithTheme(url, theme) {
+      const res = await fetch(url);
+      const svg = await res.text();
+      const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
+      doc.documentElement.setAttribute("data-theme", theme);
+      return "data:image/svg+xml," + encodeURIComponent(new XMLSerializer().serializeToString(doc.documentElement));
+    }
+
+    const MARK_URL = "../public/brand/allincenter-mark-split.svg";
+    const WORDMARK_URL = "../public/brand/allincenter-wordmark-editable.svg";
+
+    async function loadLockup(containerId, theme) {
+      const [mark, wordmark] = await Promise.all([
+        svgWithTheme(MARK_URL, theme),
+        svgWithTheme(WORDMARK_URL, theme),
+      ]);
+      const root = document.getElementById(containerId);
+      root.innerHTML = `
+        <img class="mark" src="${mark}" alt="" style="width: 96px; height: auto;" />
+        <img class="wordmark" src="${wordmark}" alt="AllInCenter" />
+      `;
+    }
+
+    loadLockup("lockup-dark", "on-dark");
+    loadLockup("lockup-light", "on-light");
+
+    (async () => {
+      const el = document.getElementById("wordmark-only");
+      if (el) el.src = await svgWithTheme(WORDMARK_URL, "on-light");
+    })();
+  </script>
+</body>
+</html>

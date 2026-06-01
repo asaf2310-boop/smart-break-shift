@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  allincenter-wordmark-editable.svg  "AllInCenter" as live SVG text (Figma: edit characters / outline).
+  No hub image. Gradients match BrandWordmark.jsx tokens.
+
+  Font: Poppins Bold (Google Fonts import below). For offline preview, install Poppins locally.
+  Themes: set data-theme on root <svg>  on-dark | on-light
+-->
+<svg xmlns="http://www.w3.org/2000/svg"
+  xmlns:xlink="http://www.w3.org/1999/xlink"
+  viewBox="0 0 520 72"
+  fill="none"
+  role="img"
+  aria-label="AllInCenter"
+  data-theme="on-dark">
+  <defs>
+    <style type="text/css"><![CDATA[
+      @import url("https://fonts.googleapis.com/css2?family=Poppins:wght@700&display=swap");
+    ]]></style>
+    <linearGradient id="wm-body-on-dark" x1="0" y1="36" x2="520" y2="36" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#8B5CF6"/>
+      <stop offset="100%" stop-color="#2DD4BF"/>
+    </linearGradient>
+    <linearGradient id="wm-accent-on-dark" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#22D3EE"/>
+      <stop offset="50%" stop-color="#A78BFA"/>
+      <stop offset="100%" stop-color="#E879F9"/>
+    </linearGradient>
+    <linearGradient id="wm-body-on-light" x1="0" y1="36" x2="520" y2="36" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#8B5CF6"/>
+      <stop offset="100%" stop-color="#2DD4BF"/>
+    </linearGradient>
+    <linearGradient id="wm-accent-on-light" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#22D3EE"/>
+      <stop offset="50%" stop-color="#A78BFA"/>
+      <stop offset="100%" stop-color="#E879F9"/>
+    </linearGradient>
+  </defs>
+  <style>
+    .wm-text {
+      font-family: Poppins, "Segoe UI", system-ui, -apple-system, sans-serif;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .wm-body { font-size: 48px; }
+    .wm-accent { font-size: 63px; dominant-baseline: alphabetic; }
+    svg[data-theme="on-dark"] .wm-theme-light { display: none; }
+    svg[data-theme="on-light"] .wm-theme-dark { display: none; }
+  </style>
+
+  <g class="wm-theme-dark wm-text">
+    <text x="0" y="54" direction="ltr" unicode-bidi="isolate" xml:space="preserve">
+      <tspan class="wm-accent" fill="url(#wm-accent-on-dark)">A</tspan>
+      <tspan class="wm-body" fill="url(#wm-body-on-dark)" dx="2">ll</tspan>
+      <tspan class="wm-accent" fill="url(#wm-accent-on-dark)" dx="1">I</tspan>
+      <tspan class="wm-body" fill="url(#wm-body-on-dark)" dx="2">n</tspan>
+      <tspan class="wm-accent" fill="url(#wm-accent-on-dark)" dx="1">C</tspan>
+      <tspan class="wm-body" fill="url(#wm-body-on-dark)" dx="2">enter</tspan>
+    </text>
+  </g>
+
+  <g class="wm-theme-light wm-text">
+    <text x="0" y="54" direction="ltr" unicode-bidi="isolate" xml:space="preserve">
+      <tspan class="wm-accent" fill="url(#wm-accent-on-light)">A</tspan>
+      <tspan class="wm-body" fill="url(#wm-body-on-light)" dx="2">ll</tspan>
+      <tspan class="wm-accent" fill="url(#wm-accent-on-light)" dx="1">I</tspan>
+      <tspan class="wm-body" fill="url(#wm-body-on-light)" dx="2">n</tspan>
+      <tspan class="wm-accent" fill="url(#wm-accent-on-light)" dx="1">C</tspan>
+      <tspan class="wm-body" fill="url(#wm-body-on-light)" dx="2">enter</tspan>
+    </text>
+  </g>
+</svg>
