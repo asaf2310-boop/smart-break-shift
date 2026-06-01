@@ -19,6 +19,8 @@ import {
   getBreakLimits,
 } from "@/lib/breakCapacity";
 import { getLiveQueryOptions } from "@/lib/liveQuery";
+import HypPageLayout from "@/components/hyp/HypPageLayout";
+import { hypHeaderIconClass } from "@/lib/hypPage";
 
 export default function AdminDashboard() {
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -139,13 +141,7 @@ export default function AdminDashboard() {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50" dir="rtl">
-      <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-indigo-300/20 rounded-full blur-3xl" />
-        <div className="absolute bottom-[-10%] left-[-5%] w-[500px] h-[500px] bg-purple-300/20 rounded-full blur-3xl" />
-      </div>
-
-      <div className="relative z-10 max-w-5xl mx-auto px-4 py-8">
+    <HypPageLayout variant="scheduling" withNav={false} contentClassName="max-w-5xl px-4 py-8">
         <BackendConfigBanner />
         <div className="mb-6">
           <AdminLocalhostLinksPanel />
@@ -165,10 +161,16 @@ export default function AdminDashboard() {
           )}
           <div className="text-center">
             <div className="flex items-center gap-3 justify-center mb-1">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/30">
+              <div
+                className={hypHeaderIconClass(
+                  "bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg shadow-amber-500/30"
+                )}
+              >
                 <ShieldCheck className="w-5 h-5 text-white" />
               </div>
-              <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">דשבורד מנהל</h1>
+              <h1 className="hyp-scheduling-title text-2xl font-extrabold text-slate-800 tracking-tight">
+                דשבורד מנהל
+              </h1>
             </div>
           </div>
           <div className="w-24" />
@@ -205,7 +207,6 @@ export default function AdminDashboard() {
             {renderSection("הפסקת צהריים", LUNCH_BREAK_SLOTS, "lunch", "bg-indigo-50/50")}
           </div>
         )}
-      </div>
-    </div>
+    </HypPageLayout>
   );
 }

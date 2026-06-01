@@ -3,14 +3,19 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowRight, BookMarked } from "lucide-react";
 import KnowledgeAdmin from "@/components/knowledge/KnowledgeAdmin";
+import HypPageLayout from "@/components/hyp/HypPageLayout";
+import { hypHeaderIconClass } from "@/lib/hypPage";
 
 export default function AdminKnowledge() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-violet-50/40 to-indigo-50/50" dir="rtl">
-      <div className="max-w-3xl mx-auto px-4 py-8">
+    <HypPageLayout variant="scheduling" withNav={false} contentClassName="max-w-3xl px-4 py-8">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-elevation-2">
+            <div
+              className={hypHeaderIconClass(
+                "w-12 h-12 bg-gradient-to-br from-violet-500 to-indigo-600 shadow-elevation-2"
+              )}
+            >
               <BookMarked className="w-6 h-6 text-white" />
             </div>
             <div>
@@ -34,7 +39,6 @@ export default function AdminKnowledge() {
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
           <KnowledgeAdmin />
         </motion.div>
-      </div>
-    </div>
+    </HypPageLayout>
   );
 }

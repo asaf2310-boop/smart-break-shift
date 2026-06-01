@@ -18,6 +18,8 @@ import {
   validateBreakRegistration,
 } from "@/lib/breakCapacity";
 import { getLiveQueryOptions } from "@/lib/liveQuery";
+import HypPageLayout from "@/components/hyp/HypPageLayout";
+import { hypHeaderIconClass } from "@/lib/hypPage";
 
 const getBreakDayCacheKey = (dateStr) => `break-day-cache:${dateStr}`;
 
@@ -159,13 +161,7 @@ export default function BreakScheduler() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50" dir="rtl">
-      {/* Background decorations */}
-      <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-indigo-300/20 rounded-full blur-3xl" />
-        <div className="absolute bottom-[-10%] left-[-5%] w-[500px] h-[500px] bg-purple-300/20 rounded-full blur-3xl" />
-      </div>
-
+    <HypPageLayout variant="scheduling" contentClassName="max-w-5xl px-3 sm:px-4 pb-5 sm:pb-8">
       <AnimatePresence>
         {showNotice && (
           <motion.div
@@ -203,7 +199,6 @@ export default function BreakScheduler() {
         )}
       </AnimatePresence>
 
-      <div className="relative z-10 max-w-5xl mx-auto px-3 sm:px-4 pt-app-nav pb-5 sm:pb-8">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -220,10 +215,16 @@ export default function BreakScheduler() {
 
           <div className="order-1 sm:order-2 text-center">
             <div className="flex items-center gap-3 justify-center mb-1">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+              <div
+                className={hypHeaderIconClass(
+                  "bg-gradient-to-br from-indigo-400 to-purple-500 shadow-lg shadow-indigo-500/30"
+                )}
+              >
                 <CalendarClock className="w-5 h-5 text-white" />
               </div>
-              <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800 tracking-tight">ניהול הפסקות</h1>
+              <h1 className="hyp-scheduling-title text-xl sm:text-2xl font-extrabold text-slate-800 tracking-tight">
+                ניהול הפסקות
+              </h1>
             </div>
             <p className="text-slate-500 text-sm">
               שלום <span className="text-indigo-600 font-semibold">{agentName}</span>
@@ -279,7 +280,6 @@ export default function BreakScheduler() {
             registrationDisabled={isInitialBreakLoad || isFetching || createMutation.isPending}
           />
         </div>
-      </div>
-    </div>
+    </HypPageLayout>
   );
 }

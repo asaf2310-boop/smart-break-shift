@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { demoModeEnabled } from "@/api/demoClient";
 import { getRecordingBlob } from "@/lib/demoRecordingStorage";
+import { m3PageClass } from "@/lib/hypPage";
 import { findRecordingByPlayId } from "@/lib/screenShareStore";
 
 function formatWhen(iso) {
@@ -107,7 +108,7 @@ export default function DemoRecordingPlayPage() {
   if (!demoModeEnabled) return null;
 
   return (
-    <div className="m3-page min-h-screen p-4 sm:p-6" dir="rtl">
+    <div className={m3PageClass("min-h-screen p-4 sm:p-6")} dir="rtl">
       <div className="max-w-3xl mx-auto space-y-4">
         <Link
           to="/remote-support"

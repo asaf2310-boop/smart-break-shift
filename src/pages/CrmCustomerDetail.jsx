@@ -64,6 +64,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/components/ui/use-toast";
+import HypPageLayout from "@/components/hyp/HypPageLayout";
+import { m3PageClass } from "@/lib/hypPage";
 import { useTelephony } from "@/context/TelephonyContext";
 import { telephonyDemoAvailable } from "@/lib/telephonyStore";
 import RemoteSupportPanel from "@/components/remote/RemoteSupportPanel";
@@ -112,7 +114,7 @@ export default function CrmCustomerDetail() {
 
   if (!customer) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6" dir="rtl">
+      <div className={m3PageClass("flex items-center justify-center p-6")} dir="rtl">
         <div className="text-center">
           <p className="text-slate-600 mb-4">לקוח לא נמצא</p>
           <Link to="/crm" className="text-indigo-600 font-semibold text-sm">
@@ -223,12 +225,7 @@ export default function CrmCustomerDetail() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50 pb-24" dir="rtl">
-      <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-indigo-300/20 rounded-full blur-3xl" />
-      </div>
-
-      <div className="relative z-10 max-w-3xl mx-auto px-4 py-6 sm:py-10">
+    <HypPageLayout variant="scheduling" withNav={false} contentClassName="max-w-3xl px-4 py-6 sm:py-10 pb-24">
         <Link to="/crm" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-indigo-600 mb-4">
           <ArrowRight className="w-4 h-4" />
           כל הלקוחות
@@ -593,6 +590,6 @@ export default function CrmCustomerDetail() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </HypPageLayout>
   );
 }

@@ -12,6 +12,8 @@ import VacationApprovalPanel from "../components/admin/VacationApprovalPanel";
 import BackendConfigBanner from "@/components/BackendConfigBanner";
 import { getLiveQueryOptions } from "@/lib/liveQuery";
 import ScheduleSmsLog from "@/components/admin/ScheduleSmsLog";
+import HypPageLayout from "@/components/hyp/HypPageLayout";
+import { hypHeaderIconClass } from "@/lib/hypPage";
 
 const SHIFTS = [
   { type: "morning", label: "משמרת בוקר", time: "08:00 – 16:00", icon: Sun, gradient: "from-amber-400 to-orange-500", bg: "bg-amber-50/50" },
@@ -33,20 +35,18 @@ export default function AdminShifts() {
   const weekDays = useMemo(() => getWeekDays(weekStart), [weekStart]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50" dir="rtl">
-      <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-indigo-300/20 rounded-full blur-3xl" />
-        <div className="absolute bottom-[-10%] left-[-5%] w-[500px] h-[500px] bg-purple-300/20 rounded-full blur-3xl" />
-      </div>
-
-      <div className="relative z-10 max-w-5xl mx-auto px-4 py-8">
+    <HypPageLayout variant="scheduling" withNav={false} contentClassName="max-w-5xl px-4 py-8">
         <BackendConfigBanner />
         {/* Header */}
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between mb-8">
           <Link to="/admin" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">← הפסקות</Link>
           <div className="text-center">
             <div className="flex items-center gap-3 justify-center mb-1">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/30">
+              <div
+                className={hypHeaderIconClass(
+                  "bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg shadow-amber-500/30"
+                )}
+              >
                 <ShieldCheck className="w-5 h-5 text-white" />
               </div>
               <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">ניהול משמרות</h1>
@@ -121,8 +121,7 @@ export default function AdminShifts() {
         )}
 
         <ScheduleSmsLog />
-      </div>
-    </div>
+    </HypPageLayout>
   );
 }
 

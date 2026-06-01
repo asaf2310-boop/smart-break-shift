@@ -34,6 +34,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
+import { hypHeaderIconClass, m3PageClass } from "@/lib/hypPage";
+import { cn } from "@/lib/utils";
 
 function ReferralCard({ referral, variant = "personal" }) {
   const topicClass =
@@ -106,7 +108,7 @@ export default function CrmDashboard() {
 
   if (!crmDemoAvailable()) {
     return (
-      <div className="m3-page flex items-center justify-center p-6" dir="rtl">
+      <div className={m3PageClass("flex items-center justify-center p-6")} dir="rtl">
         <div className="max-w-md text-center m3-card p-8">
           <Users className="w-12 h-12 mx-auto text-primary mb-4" />
           <h1 className="m3-title-large text-xl font-medium mb-2">CRM — סביבת דמו</h1>
@@ -131,7 +133,7 @@ export default function CrmDashboard() {
   const hasQuery = query.trim().length > 0;
 
   return (
-    <div className="m3-page pb-24" dir="rtl">
+    <div className={m3PageClass("pb-24")} dir="rtl">
       <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
         <div className="absolute top-[-10%] right-[-5%] w-[480px] h-[480px] bg-primary/8 rounded-full blur-3xl" />
         <div className="absolute bottom-[-10%] left-[-5%] w-[400px] h-[400px] bg-primary-container/35 rounded-full blur-3xl" />
@@ -145,8 +147,8 @@ export default function CrmDashboard() {
           </Link>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center shadow-elevation-1 mb-3">
-                <FolderOpen className="w-6 h-6 text-primary-foreground" />
+              <div className={cn(hypHeaderIconClass("shadow-elevation-1 mb-3"), !demoModeEnabled && "bg-primary")}>
+                <FolderOpen className={cn("w-6 h-6", demoModeEnabled ? "text-white" : "text-primary-foreground")} />
               </div>
               <h1 className="m3-headline-small font-medium">CRM — פניות</h1>
               <p className="m3-label-medium mt-1">

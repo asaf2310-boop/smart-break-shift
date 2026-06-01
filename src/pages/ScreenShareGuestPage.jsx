@@ -19,6 +19,7 @@ import {
   screenShareDemoAvailable,
   subscribeScreenShare,
 } from "@/lib/screenShareStore";
+import { m3PageClass } from "@/lib/hypPage";
 
 const DEMO_BANNER =
   "דמו — שיתוף מסך בדפדפן (צפייה בלבד). מומלץ Chrome או Edge. לפרודקשן: PeerServer עצמי.";
@@ -175,7 +176,7 @@ export default function ScreenShareGuestPage() {
 
   if (!screenShareDemoAvailable()) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50" dir="rtl">
+      <div className={m3PageClass("flex items-center justify-center p-6")} dir="rtl">
         <p className="text-slate-600 text-center">שיתוף מסך זמין במצב דמו בלבד.</p>
       </div>
     );
@@ -185,10 +186,7 @@ export default function ScreenShareGuestPage() {
     shared && Boolean(session?.recordingConsentAt && session?.recordingActiveAt);
 
   return (
-    <div
-      className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50 to-cyan-50 flex items-center justify-center p-4 relative"
-      dir="rtl"
-    >
+    <div className={m3PageClass("flex items-center justify-center p-4 relative")} dir="rtl">
       {showRecordingWatermark && (
         <div
           className="fixed bottom-4 left-4 z-50 pointer-events-none select-none text-sm font-semibold text-slate-800/45 tracking-wide"
