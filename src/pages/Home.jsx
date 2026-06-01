@@ -3,6 +3,7 @@ import { BookOpen, CalendarClock, CalendarDays, Contact, GraduationCap, Monitor 
 import { getAgentNamesList } from "@/constants/scheduling";
 import AgentLogin from "@/components/auth/AgentLogin";
 import HypHomeShell from "@/components/hyp/HypHomeShell";
+import RouteErrorBoundary from "@/components/RouteErrorBoundary";
 import { demoModeEnabled } from "@/api/demoClient";
 import { isAdminPinConfigured } from "@/hooks/useIsAdmin";
 import { connectAgentAsAvailable } from "@/lib/agentChatPresence";
@@ -64,7 +65,7 @@ const homeCards = demoModeEnabled
 const showAdminDemoHint =
   (import.meta.env.DEV || demoModeEnabled) && isAdminPinConfigured();
 
-export default function Home() {
+function HomeContent() {
   const { displayName, isLoggedIn, refresh } = useAgentSession();
   const agentCount = getAgentNamesList().length;
   const adminPin = String(import.meta.env.VITE_ADMIN_PIN ?? "").trim();
@@ -93,5 +94,13 @@ export default function Home() {
       onLogout={handleLogout}
       showDemoBadge={demoModeEnabled}
     />
+  );
+}
+
+export default function Home() {
+  return (
+    <RouteErrorBoundary>
+      <HomeContent />
+    </RouteErrorBoundary>
   );
 }

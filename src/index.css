@@ -1375,9 +1375,9 @@ body,
       --login-demo-lockup-width: min(var(--login-demo-card-width), 90vw);
     }
 
-    .login-shell--demo, .login-shell--brand .login-shell__card--demo,
+    .login-shell--demo .login-shell__card--demo,
     .login-shell--brand .login-shell__card--demo,
-    .login-shell--demo, .login-shell--brand .login-card,
+    .login-shell--demo .login-card,
     .login-shell--brand .login-card {
       max-width: 90vw;
       padding: 28px 24px;
@@ -1391,21 +1391,23 @@ body,
       --login-demo-logo-gap: 12px;
     }
 
-    .login-shell--demo, .login-shell--brand .login-shell__card--demo,
-    .login-shell--demo, .login-shell--brand .login-card {
+    .login-shell--demo .login-shell__card--demo, .login-shell--brand .login-shell__card--demo,
+    .login-shell--demo .login-card, .login-shell--brand .login-card {
       padding: 24px 28px;
       border-radius: 28px;
     }
 
-    .login-shell--demo, .login-shell--brand .login-shell__card-header {
+    .login-shell--demo .login-shell__card-header, .login-shell--brand .login-shell__card-header {
       @apply gap-1.5 mb-3;
     }
 
-    .login-shell--demo, .login-shell--brand .login-shell__card form {
+    .login-shell--demo .login-shell__card form,
+    .login-shell--brand .login-shell__card form {
       @apply space-y-3;
     }
 
-    .login-shell--demo, .login-shell--brand .login-shell__title {
+    .login-shell--demo .login-shell__title,
+    .login-shell--brand .login-shell__title {
       font-size: clamp(1.0625rem, 2.8vw, 1.25rem);
     }
 
@@ -1418,8 +1420,8 @@ body,
     @apply rounded-2xl text-foreground;
   }
 
-  .login-shell--demo, .login-shell--brand .login-shell__card--demo,
-  .login-shell--demo, .login-shell--brand .login-card {
+  .login-shell--demo .login-shell__card--demo, .login-shell--brand .login-shell__card--demo,
+  .login-shell--demo .login-card, .login-shell--brand .login-card {
     position: relative;
     isolation: isolate;
     width: var(--login-demo-card-width);
@@ -1454,12 +1456,12 @@ body,
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .login-shell--demo, .login-shell--brand .login-shell__card--demo {
+    .login-shell--demo .login-shell__card--demo, .login-shell--brand .login-shell__card--demo {
       animation: none;
     }
   }
 
-  .login-shell--demo, .login-shell--brand .login-shell__card--demo:hover {
+  .login-shell--demo .login-shell__card--demo:hover, .login-shell--brand .login-shell__card--demo:hover {
     animation: none;
     box-shadow:
       0 24px 68px rgb(138 43 226 / 0.22),
@@ -1467,13 +1469,13 @@ body,
       inset 0 1px 0 rgb(255 255 255 / 0.9);
   }
 
-  .login-shell--demo, .login-shell--brand .login-shell__card--demo > * {
+  .login-shell--demo .login-shell__card--demo, .login-shell--brand .login-shell__card--demo > * {
     position: relative;
     z-index: 3;
   }
 
   /** Soft purple + cyan ambient glow inside card */
-  .login-shell--demo, .login-shell--brand .login-shell__card--demo::after {
+  .login-shell--demo .login-shell__card--demo::after, .login-shell--brand .login-shell__card--demo::after {
     content: "";
     position: absolute;
     inset: 0;
@@ -1488,7 +1490,7 @@ body,
   }
 
   /** Purple → cyan gradient border ring (below form — mask can fail in some engines) */
-  .login-shell--demo, .login-shell--brand .login-shell__card--demo::before {
+  .login-shell--demo .login-shell__card--demo::before, .login-shell--brand .login-shell__card--demo::before {
     content: "";
     position: absolute;
     inset: 0;
@@ -1514,7 +1516,7 @@ body,
     transition: opacity 0.35s ease;
   }
 
-  .login-shell--demo, .login-shell--brand .login-shell__card--demo:hover::before {
+  .login-shell--demo .login-shell__card--demo:hover::before, .login-shell--brand .login-shell__card--demo:hover::before {
     opacity: 1;
   }
 
@@ -1522,7 +1524,7 @@ body,
     @apply flex flex-col items-center gap-2.5 mb-5 text-center;
   }
 
-  .login-shell--demo, .login-shell--brand .login-shell__card-header {
+  .login-shell--demo .login-shell__card-header, .login-shell--brand .login-shell__card-header {
     @apply gap-2 mb-4;
   }
 
@@ -1531,7 +1533,7 @@ body,
     max-width: 20rem;
   }
 
-  .login-shell--demo, .login-shell--brand .login-shell__title {
+  .login-shell--demo .login-shell__title, .login-shell--brand .login-shell__title {
     margin: 0;
     font-family: var(--font-heebo);
     font-size: clamp(1.125rem, 3vw, 1.4375rem);
@@ -1542,7 +1544,7 @@ body,
     max-width: 24rem;
   }
 
-  .login-shell--demo, .login-shell--brand .login-shell__subtitle {
+  .login-shell--demo .login-shell__subtitle, .login-shell--brand .login-shell__subtitle {
     font-family: var(--font-heebo);
     font-size: clamp(1rem, 2.6vw, 1.125rem);
     font-weight: 600;
@@ -1552,12 +1554,14 @@ body,
     max-width: 22rem;
   }
 
-  .login-shell--demo, .login-shell--brand .login-shell__card form {
+  .login-shell--demo .login-shell__card form,
+  .login-shell--brand .login-shell__card form {
     @apply space-y-3;
     font-family: var(--font-heebo);
   }
 
-  .login-shell--demo, .login-shell--brand .login-shell__card form > p.text-sm {
+  .login-shell--demo .login-shell__card form > p.text-sm,
+  .login-shell--brand .login-shell__card form > p.text-sm {
     color: var(--login-demo-text-secondary);
     @apply leading-relaxed;
   }
@@ -1574,7 +1578,7 @@ body,
     color: rgb(138 43 226 / 0.5);
   }
 
-  .login-shell--demo, .login-shell--brand .login-demo-input {
+  .login-shell--demo .login-demo-input, .login-shell--brand .login-demo-input {
     @apply rounded-2xl border outline-none;
     height: var(--login-demo-input-height);
     min-height: var(--login-demo-input-height);
@@ -1594,17 +1598,17 @@ body,
       background-color 0.25s ease;
   }
 
-  .login-shell--demo, .login-shell--brand .login-demo-input::placeholder {
+  .login-shell--demo .login-demo-input::placeholder, .login-shell--brand .login-demo-input::placeholder {
     color: var(--login-demo-text-secondary);
     opacity: 0.75;
   }
 
-  .login-shell--demo, .login-shell--brand .login-demo-input:hover:not(:disabled):not([readonly]) {
+  .login-shell--demo .login-demo-input:hover:not(:disabled):not([readonly]), .login-shell--brand .login-demo-input:hover:not(:disabled):not([readonly]) {
     border-color: rgb(138 43 226 / 0.38);
     background: rgb(255 255 255 / 0.82);
   }
 
-  .login-shell--demo, .login-shell--brand .login-demo-input:focus-visible {
+  .login-shell--demo .login-demo-input:focus-visible, .login-shell--brand .login-demo-input:focus-visible {
     border-color: var(--brand-purple);
     box-shadow:
       inset 0 1px 2px rgb(255 255 255 / 0.95),
@@ -1614,7 +1618,7 @@ body,
       0 0 32px rgb(25 211 243 / 0.12);
   }
 
-  .login-shell--demo, .login-shell--brand .login-demo-input[readonly] {
+  .login-shell--demo .login-demo-input[readonly], .login-shell--brand .login-demo-input[readonly] {
     @apply border-input/80 bg-muted/35 text-muted-foreground cursor-default;
   }
 
@@ -1629,15 +1633,17 @@ body,
     text-decoration-color: rgb(138 43 226 / 0.45);
   }
 
-  .login-shell--demo, .login-shell--brand .login-shell__card .text-red-300 {
+  .login-shell--demo .login-shell__card .text-red-300,
+  .login-shell--brand .login-shell__card .text-red-300 {
     @apply text-destructive;
   }
 
-  .login-shell--demo, .login-shell--brand .login-shell__card .text-emerald-200 {
+  .login-shell--demo .login-shell__card .text-emerald-200,
+  .login-shell--brand .login-shell__card .text-emerald-200 {
     @apply text-emerald-700;
   }
 
-  .login-shell--demo, .login-shell--brand .login-demo-submit {
+  .login-shell--demo .login-demo-submit, .login-shell--brand .login-demo-submit {
     @apply flex items-center justify-center;
     height: var(--login-demo-submit-height);
     min-height: var(--login-demo-submit-height);
@@ -1654,7 +1660,7 @@ body,
       transform 0.25s ease;
   }
 
-  .login-shell--demo, .login-shell--brand .login-demo-submit:not(:disabled):hover {
+  .login-shell--demo .login-demo-submit:not(:disabled):hover, .login-shell--brand .login-demo-submit:not(:disabled):hover {
     background: var(--login-demo-btn-gradient-hover);
     transform: translateY(-2px);
     box-shadow:
@@ -1664,14 +1670,14 @@ body,
       inset 0 1px 0 rgb(255 255 255 / 0.32);
   }
 
-  .login-shell--demo, .login-shell--brand .login-demo-submit:not(:disabled):active {
+  .login-shell--demo .login-demo-submit:not(:disabled):active, .login-shell--brand .login-demo-submit:not(:disabled):active {
     transform: translateY(0);
     box-shadow:
       0 4px 16px rgb(138 43 226 / 0.3),
       inset 0 1px 0 rgb(255 255 255 / 0.22);
   }
 
-  .login-shell--demo, .login-shell--brand .login-demo-badge {
+  .login-shell--demo .login-demo-badge, .login-shell--brand .login-demo-badge {
     @apply inline-flex items-center text-[0.6875rem] font-semibold tracking-[0.08em] px-3 py-1 rounded-full;
     font-family: var(--font-heebo);
     color: var(--login-demo-text);

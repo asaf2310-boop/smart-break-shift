@@ -11,6 +11,7 @@ import {
 } from "@/lib/appUsersStore";
 import { ensureAgentsSeeded } from "@/lib/agentSeed";
 import { PASSWORD_MIN_LENGTH } from "@/lib/agentAuth";
+import { REAL_AGENT_NAMES } from "@/constants/scheduling";
 
 const PENDING_EMAIL_SUFFIX = "@pending.local";
 
@@ -45,18 +46,52 @@ function mapDemoRow(u) {
 }
 
 export async function listManagedAgents() {
-  if (!demoModeEnabled) {
-    await ensureAgentsSeeded();
-  }
+  try {
+    if (!demoModeEnabled) {
+      await ensureAgentsSeeded();
+    }
 
-  if (demoModeEnabled) {
-    return listAllDemoAppUsers().map(mapDemoRow);
-  }
+    if (demoModeEnabled) {
+      return listAllDemoAppUsers().map(mapDemoRow);
+    }
 
-  const rows = await dataClient.entities.Agent.list("-created_at", 500);
-  return (rows || [])
-    .filter((r) => r.active !== false && !r.deleted_at)
-    .map(mapSupabaseRow);
+    if (!dataClient.entities.Agent?.list) {
+      return [];
+    }
+
+    const rows = await dataClient.entities.Agent.list("-created_at", 500);
+    return (rows || [])
+      .filter((r) => r.active !== false && !r.deleted_at)
+      .map(mapSupabaseRow);
+  } catch (err) {
+    console.warn("[agentsApi] listManagedAgents failed", err);
+    if (demoModeEnabled) {
+      try {
+        return listAllDemoAppUsers().map(mapDemoRow);
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  }
+}
+
+/** שמות נציגים לכניסה בשם — מהטבלה עם נפילה לרשימה סטטית */
+export async function listAgentDisplayNames() {
+  try {
+    const agents = await listManagedAgents();
+    const names = [
+      ...new Set(
+        agents.map((a) => String(a?.name || "").trim()).filter(Boolean)
+      ),
+    ];
+    if (names.length) {
+      return names.sort((a, b) => a.localeCompare(b, "he"));
+    }
+  } catch (err) {
+    console.warn("[agentsApi] listAgentDisplayNames failed", err);
+  }
+  return [...REAL_AGENT_NAMES];
 }
 
 export async function createManagedAgent({ email, name }) {

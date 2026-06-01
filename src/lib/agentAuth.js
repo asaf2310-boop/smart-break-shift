@@ -102,13 +102,18 @@ export const clearLogout = clearAgentSession;
 
 async function resolveSupabaseAgentByEmail(email) {
   const normalized = String(email || "").trim().toLowerCase();
-  if (!supabaseConfigured || !dataClient.entities.Agent) return null;
+  if (!supabaseConfigured || !dataClient.entities.Agent?.list) return null;
 
-  const all = await dataClient.entities.Agent.list("-created_at", 500);
-  const match = (all || []).find(
-    (r) => String(r.email || "").trim().toLowerCase() === normalized
-  );
-  return mapSupabaseAgent(match);
+  try {
+    const all = await dataClient.entities.Agent.list("-created_at", 500);
+    const match = (all || []).find(
+      (r) => String(r.email || "").trim().toLowerCase() === normalized
+    );
+    return mapSupabaseAgent(match);
+  } catch (err) {
+    console.warn("[agentAuth] resolveSupabaseAgentByEmail failed", err);
+    return null;
+  }
 }
 
 /** נציג עם אימייל אמיתי (לא placeholder) — לכניסה בהיברידי */
