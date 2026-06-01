@@ -18,6 +18,8 @@ import {
   screenShareFeaturesAvailable,
   subscribeScreenShare,
 } from "@/lib/screenShareStore";
+import { m3PageClass } from "@/lib/hypPage";
+import { cn } from "@/lib/utils";
 
 function formatWhen(iso) {
   if (!iso) return "—";
@@ -51,7 +53,7 @@ export default function RemoteSupportPage() {
   const activeScreen = screenSessions.filter((s) => s.status === "active").length;
 
   return (
-    <div className="m3-page pt-app-nav" dir="rtl">
+    <div className={m3PageClass("pt-app-nav")} dir="rtl">
       <div className="max-w-2xl mx-auto px-4 py-6 sm:py-10">
         <motion.div
           initial={{ opacity: 0, y: -12 }}
@@ -59,7 +61,14 @@ export default function RemoteSupportPage() {
           className="flex items-center justify-between mb-6"
         >
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-l from-violet-600 to-indigo-600 flex items-center justify-center shadow-elevation-2">
+            <div
+              className={cn(
+                "w-12 h-12 rounded-2xl flex items-center justify-center shadow-elevation-2",
+                demoModeEnabled
+                  ? "hyp-page-icon"
+                  : "bg-gradient-to-l from-violet-600 to-indigo-600"
+              )}
+            >
               <Monitor className="w-6 h-6 text-white" />
             </div>
             <div>

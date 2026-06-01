@@ -1,5 +1,6 @@
 {
   "version": 1,
   "presentations": {},
-  "_comment": "Optional static paths: \"sessionId\": \"/training/slides/sessionId.pdf\". Admin uploads override via Supabase or browser storage."
+  "links": {},
+  "_comment": "Optional static paths: \"sessionId\": \"/training/slides/sessionId.pdf\". Optional links: \"sessionId\": \"https://...\". Admin uploads/URLs override via Supabase, localStorage meta, or browser storage."
 }

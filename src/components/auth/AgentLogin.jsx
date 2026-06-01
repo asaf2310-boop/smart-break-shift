@@ -24,6 +24,7 @@ import { demoModeEnabled } from "@/api/demoClient";
 import { getAgentNamesList } from "@/constants/scheduling";
 import { cn } from "@/lib/utils";
 import {
+  BRAND_SUBMIT_CLASS,
   DEMO_FIELD_CLASS,
   DEMO_SUBMIT_CLASS,
   Field,
@@ -66,15 +67,20 @@ function ProdNameLogin({ onSuccess }) {
   };
 
   return (
-    <LoginShell subtitle="בחר/י את שמך להמשך" production>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="relative">
-          <User className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10" />
-          <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10" />
+    <LoginShell subtitle="בחר/י את שמך להמשך" brandHero>
+      <form onSubmit={handleSubmit} className="space-y-4 font-heebo">
+        <div className="relative login-demo-field">
+          <label className="login-demo-field__label">שם נציג</label>
+          <User className="login-demo-field__icon pointer-events-none z-10" aria-hidden />
+          <ChevronDown
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none z-10"
+            style={{ color: "rgb(138 43 226 / 0.5)" }}
+            aria-hidden
+          />
           <Select value={selected || undefined} onValueChange={setSelected}>
             <SelectTrigger
               autoFocus
-              className="w-full rounded-2xl border border-input bg-white py-3 px-4 pr-10 pl-10 h-auto shadow-none text-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 text-right cursor-pointer [&>svg]:hidden"
+              className="login-demo-input w-full py-3 px-4 pr-10 pl-10 h-auto shadow-none text-right cursor-pointer [&>svg]:hidden"
             >
               <SelectValue placeholder="בחר/י שם..." />
             </SelectTrigger>
@@ -94,7 +100,7 @@ function ProdNameLogin({ onSuccess }) {
           </Select>
         </div>
         {error && <p className="text-sm text-destructive text-center">{error}</p>}
-        <button type="submit" disabled={loading || !selected} className="m3-btn-primary w-full py-3">
+        <button type="submit" disabled={loading || !selected} className={BRAND_SUBMIT_CLASS}>
           {loading ? "נכנס..." : "כניסה למערכת"}
         </button>
       </form>

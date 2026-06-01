@@ -14,6 +14,8 @@ import {
 } from "@/lib/agentsApi";
 import { demoModeEnabled } from "@/api/demoClient";
 import ChatBrandingPanel from "@/components/admin/ChatBrandingPanel";
+import HypPageLayout from "@/components/hyp/HypPageLayout";
+import { hypHeaderIconClass } from "@/lib/hypPage";
 
 export default function AdminUsers() {
   const { toast } = useToast();
@@ -100,11 +102,14 @@ export default function AdminUsers() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-amber-50/30 to-orange-50/40" dir="rtl">
-      <div className="max-w-3xl mx-auto px-4 py-8">
+    <HypPageLayout variant="scheduling" withNav={false} contentClassName="max-w-3xl px-4 py-8">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
+            <div
+              className={hypHeaderIconClass(
+                "w-12 h-12 bg-gradient-to-br from-amber-400 to-orange-500"
+              )}
+            >
               <Users className="w-6 h-6 text-white" />
             </div>
             <div>
@@ -204,7 +209,6 @@ export default function AdminUsers() {
             <li>בניסיון התחברות: תמיד מוצגת הודעה כללית — אימייל או סיסמה שגויים</li>
           </ul>
         </div>
-      </div>
 
       {dialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -251,6 +255,6 @@ export default function AdminUsers() {
           </motion.form>
         </div>
       )}
-    </div>
+    </HypPageLayout>
   );
 }

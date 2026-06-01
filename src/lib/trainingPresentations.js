@@ -37,7 +37,7 @@ export function getPresentationMeta(sessionId) {
 
 export function setPresentationMeta(sessionId, meta) {
   const map = readMetaMap();
-  map[sessionId] = { ...meta, updatedAt: new Date().toISOString() };
+  map[sessionId] = { ...(map[sessionId] ?? {}), ...meta, updatedAt: new Date().toISOString() };
   writeMetaMap(map);
 }
 
@@ -47,11 +47,76 @@ export function clearPresentationMeta(sessionId) {
   writeMetaMap(map);
 }
 
+const HTTP_URL_PATTERN = /^https?:\/\/.+/i;
+
+export function isValidTrainingUrl(url) {
+  if (!url || typeof url !== "string") return false;
+  const trimmed = url.trim();
+  if (!HTTP_URL_PATTERN.test(trimmed)) return false;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+export function getExternalLink(sessionId) {
+  if (!sessionId) return null;
+  const meta = getPresentationMeta(sessionId);
+  if (meta?.externalUrl && isValidTrainingUrl(meta.externalUrl)) {
+    return meta.externalUrl.trim();
+  }
+  const fromSeed = presentationsSeed.links?.[sessionId];
+  if (fromSeed && isValidTrainingUrl(fromSeed)) {
+    return String(fromSeed).trim();
+  }
+  return null;
+}
+
+export function setExternalLink(sessionId, url) {
+  if (!sessionId) {
+    return { ok: false, message: "חסר מזהה מפגש" };
+  }
+  const trimmed = String(url || "").trim();
+  if (!trimmed) {
+    return { ok: false, message: "הזינו כתובת קישור" };
+  }
+  if (!isValidTrainingUrl(trimmed)) {
+    return {
+      ok: false,
+      message: "כתובת לא תקינה",
+      description: "רק קישורי http או https נתמכים (לדוגמה: https://example.com)",
+    };
+  }
+  setPresentationMeta(sessionId, { externalUrl: trimmed });
+  return { ok: true, message: "הקישור נשמר" };
+}
+
+export function removeExternalLink(sessionId) {
+  if (!sessionId) return { ok: false };
+  const meta = getPresentationMeta(sessionId);
+  if (!meta) return { ok: true };
+  const { externalUrl: _removed, ...rest } = meta;
+  const map = readMetaMap();
+  if (Object.keys(rest).filter((k) => k !== "updatedAt").length === 0) {
+    delete map[sessionId];
+  } else {
+    map[sessionId] = { ...rest, updatedAt: new Date().toISOString() };
+  }
+  writeMetaMap(map);
+  return { ok: true, message: "הקישור הוסר" };
+}
+
 export async function listPresentationAvailability(sessionIds) {
   const result = {};
   await Promise.all(
     sessionIds.map(async (sessionId) => {
-      result[sessionId] = await hasPresentationSource(sessionId);
+      const [hasPdf, hasUrl] = await Promise.all([
+        hasPresentationSource(sessionId),
+        Promise.resolve(Boolean(getExternalLink(sessionId))),
+      ]);
+      result[sessionId] = { hasPdf, hasUrl };
     })
   );
   return result;
@@ -174,12 +239,24 @@ export async function uploadTrainingPresentation(sessionId, file) {
 
 export async function removeTrainingPresentation(sessionId) {
   await deleteTrainingPdfBlob(sessionId);
-  clearPresentationMeta(sessionId);
+
+  const meta = getPresentationMeta(sessionId);
+  if (meta) {
+    const { source: _s, storagePath: _p, fileName: _f, ...rest } = meta;
+    const map = readMetaMap();
+    const kept = Object.keys(rest).filter((k) => k !== "updatedAt");
+    if (kept.length === 0) {
+      delete map[sessionId];
+    } else {
+      map[sessionId] = { ...rest, updatedAt: new Date().toISOString() };
+    }
+    writeMetaMap(map);
+  }
 
   if (supabaseConfigured && supabase) {
     const storagePath = `${sessionId}.pdf`;
     await supabase.storage.from(TRAINING_DOCS_BUCKET).remove([storagePath]);
   }
 
-  return { ok: true, message: "הקישור המקומי הוסר (קובץ סטטי ב-public לא נמחק)" };
+  return { ok: true, message: "המצגת הוסרה (קובץ סטטי ב-public לא נמחק)" };
 }

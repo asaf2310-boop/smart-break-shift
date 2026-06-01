@@ -26,6 +26,8 @@ import {
 } from "@/lib/shiftScheduleQuery";
 import WeeklySchedulePanel from "@/components/shifts/WeeklySchedulePanel";
 import BackendConfigBanner from "@/components/BackendConfigBanner";
+import HypPageLayout from "@/components/hyp/HypPageLayout";
+import { hypHeaderIconClass } from "@/lib/hypPage";
 
 import { dataClient } from "@/api/client";
 
@@ -242,13 +244,7 @@ export default function ShiftScheduler() {
   const deadlineLabel = format(deadline, "dd/MM בשעה HH:mm");
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50" dir="rtl">
-      <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-indigo-300/20 rounded-full blur-3xl" />
-        <div className="absolute bottom-[-10%] left-[-5%] w-[500px] h-[500px] bg-purple-300/20 rounded-full blur-3xl" />
-      </div>
-
-      <div className="relative z-10 max-w-4xl mx-auto px-3 sm:px-4 pt-app-nav pb-5 sm:pb-8">
+    <HypPageLayout variant="scheduling" contentClassName="max-w-4xl px-3 sm:px-4 pb-5 sm:pb-8">
          {/* Header */}
          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 sm:mb-8">
            <button onClick={handleLogout} className="order-2 sm:order-1 text-sm text-slate-400 hover:text-slate-700 transition-colors flex items-center gap-2">
@@ -257,11 +253,17 @@ export default function ShiftScheduler() {
            </button>
            <div className="order-1 sm:order-2 text-center flex-1">
              <div className="flex items-center gap-3 justify-center mb-2">
-               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+               <div
+                 className={hypHeaderIconClass(
+                   "bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/30"
+                 )}
+               >
                  <CalendarDays className="w-5 h-5 text-white" />
                </div>
                <div>
-                 <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800">העדפות משמרות</h1>
+                 <h1 className="hyp-scheduling-title text-xl sm:text-2xl font-extrabold text-slate-800">
+                   העדפות משמרות
+                 </h1>
                  <p className="text-slate-500 text-xs">אתה רואה את: <span className="text-indigo-600 font-semibold">{agentName}</span></p>
                </div>
              </div>
@@ -509,7 +511,6 @@ export default function ShiftScheduler() {
             />
           </div>
         )}
-      </div>
 
       {noteDialog && (
         <NoteDialog
@@ -518,7 +519,7 @@ export default function ShiftScheduler() {
           onCancel={() => setNoteDialog(null)}
         />
       )}
-    </div>
+    </HypPageLayout>
   );
 }
 

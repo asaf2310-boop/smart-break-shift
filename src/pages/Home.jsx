@@ -4,6 +4,8 @@ import { motion } from "framer-motion";
 import { BookOpen, CalendarClock, CalendarDays, Contact, GraduationCap, LogOut, Monitor } from "lucide-react";
 import { getAgentNamesList } from "@/constants/scheduling";
 import AgentLogin from "@/components/auth/AgentLogin";
+import BrandHomeHero from "@/components/brand/BrandHomeHero";
+import HypHomeShell from "@/components/hyp/HypHomeShell";
 import { demoModeEnabled } from "@/api/demoClient";
 import { isAdminPinConfigured } from "@/hooks/useIsAdmin";
 import { connectAgentAsAvailable } from "@/lib/agentChatPresence";
@@ -84,13 +86,27 @@ export default function Home() {
     return <AgentLogin onSuccess={handleLoginSuccess} />;
   }
 
+  if (demoModeEnabled) {
+    return (
+      <HypHomeShell
+        displayName={displayName}
+        agentCount={agentCount}
+        homeCards={homeCards}
+        showAdminDemoHint={showAdminDemoHint}
+        adminPin={adminPin}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
   return (
-    <div className="m3-page" dir="rtl">
-      <motion.div className="relative z-10 max-w-3xl mx-auto px-4 pt-14 sm:pt-16 pb-8 sm:pb-16">
+    <div className="m3-page font-heebo" dir="rtl">
+      <motion.div className="relative z-10 max-w-3xl mx-auto px-4 pt-10 sm:pt-14 pb-8 sm:pb-16">
+        <BrandHomeHero className="max-w-[min(340px,80vw)]" />
         <motion.div
           initial={{ opacity: 0, y: -16 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-8 sm:mb-12"
+          className="text-center mb-8 sm:mb-10"
         >
           <h1 className="m3-headline-small mb-2 text-brand-gradient">מרכז השליטה</h1>
           <p className="m3-label-medium">

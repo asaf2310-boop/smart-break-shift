@@ -1,6 +1,10 @@
 import { addDays, differenceInCalendarDays, format, parseISO } from "date-fns";
 import courseConfig from "@/data/trainingCourseConfig.json";
 import courseTemplate from "@/data/trainingCourseTemplate.json";
+import {
+  applyScheduleCustomizations,
+  getEffectiveCourseConfig,
+} from "@/lib/trainingScheduleStore";
 
 const HEBREW_WEEKDAY = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
 
@@ -8,8 +12,8 @@ function parseDateOnly(isoDate) {
   return parseISO(`${isoDate}T12:00:00`);
 }
 
-/** Shift template day offsets to actual dates for the current course. */
-export function resolveTrainingSchedule(config = courseConfig, template = courseTemplate) {
+/** Shift template day offsets to actual dates for the current course (before localStorage overrides). */
+export function resolveTrainingScheduleBase(config = courseConfig, template = courseTemplate) {
   const templateStart = parseDateOnly(config.templateStartDate);
   const courseStart = parseDateOnly(config.courseStartDate);
 
@@ -66,6 +70,13 @@ export function resolveTrainingSchedule(config = courseConfig, template = course
   };
 }
 
+/** Full schedule: JSON seed + effective config + localStorage customizations. */
+export function resolveTrainingSchedule(config, template = courseTemplate) {
+  const effectiveConfig = config ?? getEffectiveCourseConfig();
+  const base = resolveTrainingScheduleBase(effectiveConfig, template);
+  return applyScheduleCustomizations(base);
+}
+
 export function getTrainingCourseConfig() {
-  return { ...courseConfig };
+  return getEffectiveCourseConfig();
 }
