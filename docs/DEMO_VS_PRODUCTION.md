@@ -179,7 +179,7 @@ exit 0
 3. נתונים: דמו → `localStorage` / `demoClient`; לייב → Supabase (`src/api/client.js`).
 4. לפני merge ל-main: בדיקה ב-`preview-live.ps1`.
 
-דוגמאות קיימות: `AgentLogin.jsx` (דמו=אימייל, לייב=בחירת שם + `brandHero`), `brandShell.js` (`app-brand-background` תמיד; `app-hyp-demo` רק בדמו), `Home.jsx` (`HypHomeShell` + `showDemoBadge` רק בדמו), `scheduling.js` (שמות נציגים).
+דוגמאות קיימות: `AgentLogin.jsx` (דמו ולייב = אימייל/סיסמה; לייב + `brandHero`), `brandShell.js` (`app-brand-background` תמיד; `app-hyp-demo` רק בדמו), `Home.jsx` (`HypHomeShell` + `showDemoBadge` רק בדמו), `scheduling.js` (שמות נציגים).
 
 ---
 
@@ -197,7 +197,7 @@ exit 0
 
 פתח את URL הפרודקשן (לא את דמו), במצב פרטי / אחרי **Hard refresh** (Ctrl+Shift+R):
 
-1. **מסך כניסה:** רקע סגול/מיתוג AllInCenter, תמונת hero (`/brand/allincenter-login-hero-dark.png`), כרטיס זכוכית — **בחירת שם נציג** (לא אימייל/סיסמת דמו). **לא** מסך לבן ישן `login-shell--prod` בלבד.
+1. **מסך כניסה:** רקע סגול/מיתוג AllInCenter, תמונת hero (`/brand/allincenter-login-hero-dark.png`), כרטיס זכוכית — **אימייל וסיסמה** (לא סיסמת דמו קבועה). **לא** מסך לבן ישן `login-shell--prod` בלבד. **אין** טאב "שם נציג".
 2. **דף הבית אחרי כניסה:** מעטפת `HypHomeShell` (פאנל ויזואלי + כרטיסי זכוכית) — **2–3 כרטיסים** לפי מודולים (הפסקות, משמרות, הדרכה; בלי CRM / בסיס ידע / השתלטות).
 3. **לוגו בפינה:** מופיע בנתיבים עם ניווט עליון (`/breaks`, `/shifts`, `/training`) — `BrandHeader`.
 4. **אין** תג "סביבת דמו · נתונים פיקטיביים בלבד" / "דמו פעיל".

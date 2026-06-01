@@ -1,27 +1,10 @@
 ﻿import React, { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 
-import { ChevronDown, Lock, Mail, User } from "lucide-react";
+import { Lock, Mail } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 
 import {
-
-  Select,
-
-  SelectContent,
-
-  SelectItem,
-
-  SelectTrigger,
-
-  SelectValue,
-
-} from "@/components/ui/select";
-
-import {
-
-  agentLoginByDisplayName,
 
   agentLoginWithPassword,
 
@@ -44,9 +27,6 @@ import {
 } from "@/lib/agentAuth";
 
 import { demoModeEnabled } from "@/api/demoClient";
-
-import { getAgentNamesList } from "@/constants/scheduling";
-import { listAgentDisplayNames } from "@/lib/agentsApi";
 
 import { cn } from "@/lib/utils";
 
@@ -86,241 +66,19 @@ export default function AgentLogin({ onSuccess }) {
 
   }
 
-  return <ProdHybridLogin onSuccess={onSuccess} />;
+  return <ProdEmailLogin onSuccess={onSuccess} />;
 
 }
 
 
 
-function ProdHybridLogin({ onSuccess }) {
-
-  const [tab, setTab] = useState("name");
-
-
+function ProdEmailLogin({ onSuccess }) {
 
   return (
 
-    <LoginShell
+    <LoginShell subtitle="התחברות עם אימייל וסיסמה" hypCard>
 
-      subtitle={tab === "name" ? "בחר/י את שמך להמשך" : "התחברות עם אימייל וסיסמה"}
-
-      hypCard
-
-    >
-
-      <div className="flex rounded-xl border border-violet-200/80 bg-violet-50/50 p-1 mb-4 font-heebo">
-
-        <button
-
-          type="button"
-
-          onClick={() => setTab("name")}
-
-          className={cn(
-
-            "flex-1 py-2 text-sm font-semibold rounded-lg transition-colors",
-
-            tab === "name" ? "bg-white text-violet-900 shadow-sm" : "text-violet-700/80"
-
-          )}
-
-        >
-
-          שם נציג
-
-        </button>
-
-        <button
-
-          type="button"
-
-          onClick={() => setTab("email")}
-
-          className={cn(
-
-            "flex-1 py-2 text-sm font-semibold rounded-lg transition-colors",
-
-            tab === "email" ? "bg-white text-violet-900 shadow-sm" : "text-violet-700/80"
-
-          )}
-
-        >
-
-          אימייל וסיסמה
-
-        </button>
-
-      </div>
-
-      {tab === "name" ? (
-
-        <ProdNameLogin onSuccess={onSuccess} embedded />
-
-      ) : (
-
-        <EmailPasswordLogin onSuccess={onSuccess} variant="prod" />
-
-      )}
-
-    </LoginShell>
-
-  );
-
-}
-
-
-
-function ProdNameLogin({ onSuccess, embedded = false }) {
-
-  const [selected, setSelected] = useState("");
-
-  const [loading, setLoading] = useState(false);
-
-  const [error, setError] = useState("");
-
-  const { data: agentNames = getAgentNamesList(), isLoading: namesLoading } = useQuery({
-
-    queryKey: ["agent-display-names"],
-
-    queryFn: listAgentDisplayNames,
-
-    staleTime: 60_000,
-
-    retry: 1,
-
-  });
-
-
-
-  const handleSubmit = (e) => {
-
-    e.preventDefault();
-
-    setError("");
-
-    setLoading(true);
-
-    try {
-
-      const result = agentLoginByDisplayName(selected);
-
-      if (!result.ok) {
-
-        setError(result.message || "יש לבחור שם מהרשימה");
-
-        return;
-
-      }
-
-      onSuccess?.(result.session);
-
-    } finally {
-
-      setLoading(false);
-
-    }
-
-  };
-
-
-
-  const form = (
-
-    <form onSubmit={handleSubmit} className="space-y-4 font-heebo">
-
-      <div className="relative login-demo-field">
-
-        <label className="login-demo-field__label">שם נציג</label>
-
-        <User className="login-demo-field__icon pointer-events-none z-10" aria-hidden />
-
-        <ChevronDown
-
-          className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none z-10"
-
-          style={{ color: "rgb(138 43 226 / 0.5)" }}
-
-          aria-hidden
-
-        />
-
-        <Select value={selected || undefined} onValueChange={setSelected} disabled={namesLoading || !agentNames.length}>
-
-          <SelectTrigger
-
-            autoFocus
-
-            className="login-demo-input w-full py-3 px-4 pr-10 pl-10 h-auto shadow-none text-right cursor-pointer [&>svg]:hidden"
-
-          >
-
-            <SelectValue placeholder={namesLoading ? "טוען שמות..." : "בחר/י שם..."} />
-
-          </SelectTrigger>
-
-          <SelectContent
-
-            side="bottom"
-
-            align="end"
-
-            avoidCollisions={false}
-
-            position="popper"
-
-            className="z-[60] max-h-72 text-right"
-
-          >
-
-            {agentNames.map((name) => (
-
-              <SelectItem key={name} value={name} className="text-right pr-8 pl-2">
-
-                {name}
-
-              </SelectItem>
-
-            ))}
-
-          </SelectContent>
-
-        </Select>
-
-      </div>
-
-      {!namesLoading && !agentNames.length && (
-
-        <p className="text-sm text-destructive text-center">
-
-          לא ניתן לטעון רשימת נציגים. נסו שוב או התחברו עם אימייל.
-
-        </p>
-
-      )}
-
-      {error && <p className="text-sm text-destructive text-center">{error}</p>}
-
-      <button type="submit" disabled={loading || namesLoading || !selected || !agentNames.length} className={BRAND_SUBMIT_CLASS}>
-
-        {loading ? "נכנס..." : "כניסה למערכת"}
-
-      </button>
-
-    </form>
-
-  );
-
-
-
-  if (embedded) return form;
-
-
-
-  return (
-
-    <LoginShell subtitle="בחר/י את שמך להמשך" hypCard>
-
-      {form}
+      <EmailPasswordLogin onSuccess={onSuccess} variant="prod" />
 
     </LoginShell>
 
