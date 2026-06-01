@@ -35,6 +35,8 @@ import RemoteSupportConsentPage from './pages/RemoteSupportConsentPage';
 import RemoteSupportPage from './pages/RemoteSupportPage';
 import ScreenShareGuestPage from './pages/ScreenShareGuestPage';
 import DemoRecordingPlayPage from './pages/DemoRecordingPlayPage';
+import TrainingPage from './pages/TrainingPage';
+import AdminTraining from './pages/AdminTraining';
 import RouteErrorBoundary from '@/components/RouteErrorBoundary';
 import { hasTopAppNav } from '@/lib/appNavPaths';
 
@@ -76,6 +78,7 @@ const AuthenticatedApp = () => {
         <Route path="/" element={<Home />} />
         <Route path="/breaks" element={<BreakScheduler />} />
         <Route path="/shifts" element={<RouteErrorBoundary><ShiftScheduler /></RouteErrorBoundary>} />
+        <Route path="/training" element={<TrainingPage />} />
         <Route path="/chat" element={<ChatDeepLink />} />
         <Route path="/crm" element={<DemoGate><CrmDashboard /></DemoGate>} />
         <Route path="/crm/:id" element={<DemoGate><CrmCustomerDetail /></DemoGate>} />
@@ -91,6 +94,7 @@ const AuthenticatedApp = () => {
         <Route path="/admin/knowledge" element={<DemoGate><AdminGate><AdminKnowledge /></AdminGate></DemoGate>} />
         <Route path="/admin/shifts" element={<AdminGate><AdminShifts /></AdminGate>} />
         <Route path="/admin/users" element={<AdminGate><AdminUsers /></AdminGate>} />
+        <Route path="/admin/training" element={<AdminGate><AdminTraining /></AdminGate>} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="*" element={<PageNotFound />} />
       </Routes>

@@ -7,7 +7,7 @@ module.exports = {
   		fontFamily: {
   			noto: ['var(--font-noto)'],
   			sans: ['var(--font-sans)'],
-  			heebo: ['var(--font-noto)']
+  			heebo: ['var(--font-heebo)']
   		},
   		backgroundImage: {
   			'brand-gradient': 'var(--brand-gradient)',
@@ -33,6 +33,15 @@ module.exports = {
   				purple: 'var(--brand-purple)',
   				'purple-light': 'var(--brand-purple-light)',
   				cyan: 'var(--brand-cyan)'
+  			},
+  			hyp: {
+  				blue: 'var(--hyp-brand-blue)',
+  				'blue-light': 'var(--hyp-brand-blue-light)',
+  				teal: 'var(--hyp-brand-teal)',
+  				'text-primary': 'var(--hyp-text-primary)',
+  				'text-secondary': 'var(--hyp-text-secondary)',
+  				bg: 'var(--hyp-bg)',
+  				'bg-alt': 'var(--hyp-bg-alt)'
   			},
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',

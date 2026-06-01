@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { BookOpen, CalendarClock, CalendarDays, Contact, Home, Monitor, ShieldCheck } from "lucide-react";
+import { BookOpen, CalendarClock, CalendarDays, Contact, GraduationCap, Home, Monitor, ShieldCheck } from "lucide-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { demoModeEnabled } from "@/api/demoClient";
 
@@ -12,6 +12,7 @@ export default function AppNav() {
   const isAdmin = useIsAdmin();
   const isBreaks = location.pathname === "/breaks";
   const isShifts = location.pathname === "/shifts";
+  const isTraining = location.pathname === "/training";
   const isCrm = location.pathname.startsWith("/crm");
   const isKnowledge = location.pathname.startsWith("/knowledge");
   const isRemoteSupport = location.pathname.startsWith("/remote-support");
@@ -41,6 +42,10 @@ export default function AppNav() {
           <Link to="/shifts" className={tabClass(isShifts)}>
             <CalendarDays className="w-4 h-4" />
             משמרות
+          </Link>
+          <Link to="/training" className={tabClass(isTraining)}>
+            <GraduationCap className="w-4 h-4" />
+            הדרכה
           </Link>
           {demoModeEnabled && (
             <>

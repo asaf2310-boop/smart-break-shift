@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AllInCenter logomark  hub + headset (starter vector for Figma refinement).
+  Default: light strokes for dark purple backgrounds (~#4c1d95 / login hero).
+
+  Themes (set on root <svg>):
+    data-theme="on-dark"   violet/teal/cyan strokes (login, purple-950 hero)
+    data-theme="on-light"  brand gradient strokes (m3-page, white cards)
+
+  Figma: duplicate frame � flatten strokes � tweak hub radius & headphone arc.
+  Export dark ink: duplicate "on-light" group only � @2x PNG transparent.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" fill="none" role="img" aria-label="AllInCenter mark" data-theme="on-dark">
+  <defs>
+    <linearGradient id="mark-grad-on-dark" x1="12" y1="12" x2="84" y2="84" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#22D3EE"/>
+      <stop offset="45%" stop-color="#A78BFA"/>
+      <stop offset="100%" stop-color="#E879F9"/>
+    </linearGradient>
+    <linearGradient id="mark-grad-on-light" x1="8" y1="48" x2="88" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#8B5CF6"/>
+      <stop offset="100%" stop-color="#2DD4BF"/>
+    </linearGradient>
+    <filter id="mark-glow-on-dark" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="0.6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <style>
+    .mark-stroke { fill: none; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+    .mark-on-dark { stroke-width: 2.25; stroke: url(#mark-grad-on-dark); filter: url(#mark-glow-on-dark); }
+    .mark-on-light { stroke-width: 2.5; stroke: url(#mark-grad-on-light); }
+    svg[data-theme="on-dark"] .mark-on-light { display: none; }
+    svg[data-theme="on-light"] .mark-on-dark { display: none; }
+    /* Flat export on #4c1d95: use mark-on-dark with stroke #F8FAFC, no filter */
+    svg[data-theme="flat-on-dark"] .mark-on-light { display: none; }
+    svg[data-theme="flat-on-dark"] .mark-on-dark { filter: none; stroke: #F8FAFC; opacity: 0.95; }
+  </style>
+
+  <!-- Shared geometry  hub node + radial spokes + headset band & cups -->
+  <g class="mark-stroke mark-on-dark" aria-hidden="true">
+    <circle cx="48" cy="48" r="5.5"/>
+    <path d="M48 48V22M48 48l24 13.9M48 48L24 61.9M48 48v26M48 48L24 34.1M48 48l24-13.9"/>
+    <path d="M26 40c0-12 9.8-20 22-20s22 8 22 20"/>
+    <path d="M28 44v14a6 6 0 0 0 12 0V44M56 44v14a6 6 0 0 0 12 0V44"/>
+    <path d="M34 58h6M56 58h6"/>
+  </g>
+  <g class="mark-stroke mark-on-light" aria-hidden="true">
+    <circle cx="48" cy="48" r="5.5"/>
+    <path d="M48 48V22M48 48l24 13.9M48 48L24 61.9M48 48v26M48 48L24 34.1M48 48l24-13.9"/>
+    <path d="M26 40c0-12 9.8-20 22-20s22 8 22 20"/>
+    <path d="M28 44v14a6 6 0 0 0 12 0V44M56 44v14a6 6 0 0 0 12 0V44"/>
+    <path d="M34 58h6M56 58h6"/>
+  </g>
+</svg>

@@ -1,6 +1,6 @@
 import { demoModeEnabled } from "@/api/demoClient";
 
-const PRODUCTION_TOP_NAV_PATHS = ["/breaks", "/shifts"];
+const PRODUCTION_TOP_NAV_PATHS = ["/breaks", "/shifts", "/training"];
 
 const DEMO_TOP_NAV_PATHS = ["/crm", "/knowledge", "/remote-support"];
 

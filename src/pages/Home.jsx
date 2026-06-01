@@ -1,9 +1,10 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { BookOpen, CalendarClock, CalendarDays, Contact, LogOut, Monitor } from "lucide-react";
+import { BookOpen, CalendarClock, CalendarDays, Contact, GraduationCap, LogOut, Monitor } from "lucide-react";
 import { getAgentNamesList } from "@/constants/scheduling";
 import AgentLogin from "@/components/auth/AgentLogin";
+import HypHomeShell from "@/components/hyp/HypHomeShell";
 import { demoModeEnabled } from "@/api/demoClient";
 import { isAdminPinConfigured } from "@/hooks/useIsAdmin";
 import { connectAgentAsAvailable } from "@/lib/agentChatPresence";
@@ -23,6 +24,13 @@ const productionCards = [
     title: "משמרות",
     desc: "אילוצים, חופש ושיבוץ שבועי",
     icon: CalendarDays,
+    iconTile: "m3-icon-tile",
+  },
+  {
+    to: "/training",
+    title: "הדרכה",
+    desc: "לוח זמנים לקורס דיגיטל לנציגים חדשים",
+    icon: GraduationCap,
     iconTile: "m3-icon-tile",
   },
 ];
@@ -75,6 +83,19 @@ export default function Home() {
 
   if (!isLoggedIn) {
     return <AgentLogin onSuccess={handleLoginSuccess} />;
+  }
+
+  if (demoModeEnabled) {
+    return (
+      <HypHomeShell
+        displayName={displayName}
+        agentCount={agentCount}
+        homeCards={homeCards}
+        showAdminDemoHint={showAdminDemoHint}
+        adminPin={adminPin}
+        onLogout={handleLogout}
+      />
+    );
   }
 
   return (
