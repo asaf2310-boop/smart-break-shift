@@ -1,11 +1,14 @@
-import React, { useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowRight, Coffee, GraduationCap } from "lucide-react";
+import { ArrowRight, Coffee, GraduationCap, Presentation } from "lucide-react";
 import { resolveTrainingSchedule } from "@/lib/trainingSchedule";
+import { listPresentationAvailability } from "@/lib/trainingPresentations";
+import TrainingPresentationShell from "@/components/training/TrainingPresentationShell";
 
-function SessionRow({ session, index }) {
+function SessionRow({ session, index, displayDate, hasPresentation, onOpen }) {
   const isBreak = session.isBreak;
+  const canPresent = !isBreak;
 
   return (
     <motion.li
@@ -25,34 +28,63 @@ function SessionRow({ session, index }) {
         <div className="w-px flex-1 min-h-[1rem] bg-outline-variant/40 mt-1" aria-hidden />
       </div>
 
-      <div
-        className={`flex-1 pb-5 min-w-0 ${
-          isBreak ? "m3-surface-container bg-amber-50/80 border border-amber-100" : "m3-surface-container"
-        } p-3 sm:p-4 rounded-2xl`}
-      >
-        <div className="flex flex-wrap items-center gap-2 mb-1.5">
-          <span className="m3-label-medium font-mono tabular-nums text-primary">
-            {session.timeLabel}
-          </span>
-          {isBreak && (
-            <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
-              <Coffee className="w-3 h-3" />
-              הפסקה
-            </span>
-          )}
+      {canPresent ? (
+        <button
+          type="button"
+          onClick={() => onOpen({ ...session, displayDate })}
+          className={`flex-1 pb-5 min-w-0 text-right m3-surface-container p-3 sm:p-4 rounded-2xl transition-shadow hover:shadow-elevation-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
+            hasPresentation ? "ring-1 ring-primary/20" : ""
+          }`}
+        >
+          <SessionContent session={session} isBreak={isBreak} hasPresentation={hasPresentation} />
+        </button>
+      ) : (
+        <div
+          className={`flex-1 pb-5 min-w-0 ${
+            isBreak ? "m3-surface-container bg-amber-50/80 border border-amber-100" : "m3-surface-container"
+          } p-3 sm:p-4 rounded-2xl`}
+        >
+          <SessionContent session={session} isBreak={isBreak} hasPresentation={false} />
         </div>
-        <p className={`text-sm sm:text-base leading-relaxed ${isBreak ? "text-on-surface-variant" : "font-medium"}`}>
-          {session.title}
-        </p>
-        {session.description ? (
-          <p className="m3-label-medium mt-1.5">{session.description}</p>
-        ) : null}
-      </div>
+      )}
     </motion.li>
   );
 }
 
-function DayBlock({ day, dayIndex }) {
+function SessionContent({ session, isBreak, hasPresentation }) {
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-2 mb-1.5">
+        <span className="m3-label-medium font-mono tabular-nums text-primary">
+          {session.timeLabel}
+        </span>
+        {isBreak && (
+          <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+            <Coffee className="w-3 h-3" />
+            הפסקה
+          </span>
+        )}
+        {!isBreak && hasPresentation && (
+          <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+            <Presentation className="w-3 h-3" />
+            מצגת
+          </span>
+        )}
+      </div>
+      <p className={`text-sm sm:text-base leading-relaxed ${isBreak ? "text-on-surface-variant" : "font-medium"}`}>
+        {session.title}
+      </p>
+      {session.description ? (
+        <p className="m3-label-medium mt-1.5">{session.description}</p>
+      ) : null}
+      {!isBreak && (
+        <p className="text-xs text-primary/80 mt-2">לחצו לפתיחת מצגת</p>
+      )}
+    </>
+  );
+}
+
+function DayBlock({ day, dayIndex, availability, onOpenSession }) {
   return (
     <motion.section
       initial={{ opacity: 0, y: 12 }}
@@ -72,7 +104,14 @@ function DayBlock({ day, dayIndex }) {
 
       <ol className="list-none m-0 p-0">
         {day.sessions.map((session, index) => (
-          <SessionRow key={session.id} session={session} index={index} />
+          <SessionRow
+            key={session.id}
+            session={session}
+            index={index}
+            displayDate={day.displayDate}
+            hasPresentation={Boolean(availability[session.id])}
+            onOpen={onOpenSession}
+          />
         ))}
       </ol>
     </motion.section>
@@ -81,6 +120,21 @@ function DayBlock({ day, dayIndex }) {
 
 export default function TrainingPage() {
   const schedule = useMemo(() => resolveTrainingSchedule(), []);
+  const sessionIds = useMemo(
+    () => schedule.sessions.filter((s) => !s.isBreak).map((s) => s.id),
+    [schedule.sessions]
+  );
+  const [availability, setAvailability] = useState({});
+  const [activeSession, setActiveSession] = useState(null);
+
+  const refreshAvailability = useCallback(async () => {
+    const map = await listPresentationAvailability(sessionIds);
+    setAvailability(map);
+  }, [sessionIds]);
+
+  useEffect(() => {
+    refreshAvailability();
+  }, [refreshAvailability]);
 
   return (
     <div className="m3-page pt-app-nav" dir="rtl">
@@ -112,15 +166,27 @@ export default function TrainingPage() {
           transition={{ delay: 0.05 }}
           className="m3-label-medium text-center mb-6 px-2"
         >
-          לוח זמנים להדרכת נציגים חדשים · מתחיל {schedule.courseStartDate.split("-").reverse().join(".")}
+          לחצו על מפגש לצפייה במצגת · מתחיל {schedule.courseStartDate.split("-").reverse().join(".")}
         </motion.p>
 
         <div className="space-y-5">
           {schedule.days.map((day, index) => (
-            <DayBlock key={day.date} day={day} dayIndex={index} />
+            <DayBlock
+              key={day.date}
+              day={day}
+              dayIndex={index}
+              availability={availability}
+              onOpenSession={setActiveSession}
+            />
           ))}
         </div>
       </div>
+
+      <TrainingPresentationShell
+        session={activeSession}
+        open={Boolean(activeSession)}
+        onClose={() => setActiveSession(null)}
+      />
     </div>
   );
 }

@@ -47,6 +47,15 @@ VITE_SUPABASE_ANON_KEY=...
 VITE_DEMO_MODE=true
 ```
 
+## מצגות הדרכה (PDF → מצגת אוטומטית)
+
+- **נציגים:** `/training` — לחיצה על מפגש פותחת מצגת מעוצבת (כל עמוד PDF = שקף).
+- **מנהל:** `/admin/training` — העלאת PDF לכל מפגש (מזהה יציב ב-`trainingCourseTemplate.json`).
+- **אחסון:** Supabase bucket `training-docs` (מומלץ בפרודקשן) או `public/training/slides/{sessionId}.pdf` או IndexedDB מקומי לבדיקות.
+- **PowerPoint:** יש לייצא ל-PDF לפני העלאה — אין המרה בדפדפן.
+
+ב-Supabase צרו bucket ציבורי לקריאה `training-docs` והרשאות Storage ל-anon/authenticated לפי מדיניות הארגון.
+
 ## פריסה
 
 **שני פרויקטי Vercel מומלצים** (דמו + פרודקשן) על אותו repo `asaf2310-boop/smart-break-shift` — ההפרדה היא במשתני סביבה בזמן build, לא בשני repos. פירוט מלא: [`docs/DEMO_VS_PRODUCTION.md`](docs/DEMO_VS_PRODUCTION.md).

@@ -20,7 +20,7 @@ export function resolveTrainingSchedule(config = courseConfig, template = course
     const dateStr = format(date, "yyyy-MM-dd");
 
     return {
-      id: `${dateStr}-${session.startTime}-${index}`,
+      id: session.id ?? `${dateStr}-${session.startTime}-${index}`,
       date: dateStr,
       dayOffset: session.dayOffset,
       startTime: session.startTime,

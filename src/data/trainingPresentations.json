@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "presentations": {},
+  "_comment": "Optional static paths: \"sessionId\": \"/training/slides/sessionId.pdf\". Admin uploads override via Supabase or browser storage."
+}
