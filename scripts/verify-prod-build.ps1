@@ -1,24 +1,28 @@
-# Production build: no demo data strings; must include AllInCenter brand shell (login hero + ambient).
+# Production build: no demo data strings; must include HYP blue shell (app-hyp-demo).
 $ErrorActionPreference = "Stop"
 $root = Split-Path $PSScriptRoot -Parent
 Set-Location $root
 
 $demoPatterns = @(
-    "דמו פעיל",
-    "סביבת דמו פעילה",
     "smart-break-shift-demo-store-v1",
-    "נציג 01",
-    "agent01@demo.local"
+    "agent01@demo.local",
+    "allincenter-login-hero"
 )
 
 $requiredJsPatterns = @(
-    "allincenter-login-hero",
     "app-brand-background",
-    "login-shell--brand"
+    "app-hyp-demo",
+    "hyp-nav-bar",
+    "hyp-page"
 )
 
 $requiredCssPatterns = @(
     "app-brand-background",
+    "app-hyp-demo",
+    "hyp-nav-bar"
+)
+
+$forbiddenJsPatterns = @(
     "login-shell--brand"
 )
 
@@ -51,9 +55,15 @@ foreach ($file in $jsFiles) {
             $failed = $true
         }
     }
+    foreach ($pat in $forbiddenJsPatterns) {
+        if ($text -match [regex]::Escape($pat)) {
+            Write-Host "FAIL (legacy brand login): '$pat' in $($file.Name)" -ForegroundColor Red
+            $failed = $true
+        }
+    }
     foreach ($pat in $requiredJsPatterns) {
         if ($text -notmatch [regex]::Escape($pat)) {
-            Write-Host "FAIL (missing brand): '$pat' not in $($file.Name)" -ForegroundColor Red
+            Write-Host "FAIL (missing HYP shell): '$pat' not in $($file.Name)" -ForegroundColor Red
             $failed = $true
         }
     }
@@ -63,7 +73,7 @@ foreach ($file in $cssFiles) {
     $text = Get-Content $file.FullName -Raw -Encoding utf8
     foreach ($pat in $requiredCssPatterns) {
         if ($text -notmatch [regex]::Escape($pat)) {
-            Write-Host "FAIL (missing brand CSS): '$pat' not in $($file.Name)" -ForegroundColor Red
+            Write-Host "FAIL (missing HYP CSS): '$pat' not in $($file.Name)" -ForegroundColor Red
             $failed = $true
         }
     }
@@ -75,5 +85,5 @@ if ($failed) {
     exit 1
 }
 
-Write-Host "OK: brand shell present; no demo markers in dist JS." -ForegroundColor Green
+Write-Host "OK: HYP shell present; no demo markers in dist JS." -ForegroundColor Green
 exit 0

@@ -1253,6 +1253,19 @@ body,
     pointer-events: none;
   }
 
+  .login-hero-shell .login-shell__brand-zone:has(.login-shell__hero-title) {
+    width: auto;
+    max-width: min(90vw, 28rem);
+    align-items: center;
+    margin-bottom: 1.25rem;
+  }
+
+  .login-hero-shell .login-shell__hero-title {
+    text-shadow:
+      0 2px 24px rgb(138 43 226 / 0.35),
+      0 0 40px rgb(181 124 255 / 0.2);
+  }
+
   @keyframes login-demo-curves-drift {
     0%,
     100% {

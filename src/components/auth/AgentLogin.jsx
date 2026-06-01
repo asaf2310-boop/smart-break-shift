@@ -67,7 +67,7 @@ function ProdNameLogin({ onSuccess }) {
   };
 
   return (
-    <LoginShell subtitle="בחר/י את שמך להמשך" brandHero>
+    <LoginShell subtitle="בחר/י את שמך להמשך" hypCard>
       <form onSubmit={handleSubmit} className="space-y-4 font-heebo">
         <div className="relative login-demo-field">
           <label className="login-demo-field__label">שם נציג</label>
@@ -215,7 +215,7 @@ function DemoEmailLogin({ onSuccess }) {
         : "התחברות עם אימייל וסיסמה (דמו)";
 
   return (
-    <LoginShell subtitle={subtitle} showDemoBadge demoHero>
+    <LoginShell subtitle={subtitle} showDemoBadge hypCard>
       {mode === MODES.FORGOT ? (
         <form onSubmit={handleForgot}>
           <Field icon={Mail} label="אימייל">
