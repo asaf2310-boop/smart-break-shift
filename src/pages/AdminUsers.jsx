@@ -209,7 +209,6 @@ export default function AdminUsers() {
             <li>בניסיון התחברות: תמיד מוצגת הודעה כללית — אימייל או סיסמה שגויים</li>
           </ul>
         </div>
-      </div>
 
       {dialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

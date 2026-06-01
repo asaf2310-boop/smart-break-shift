@@ -633,7 +633,12 @@ body,
   }
 
   html.app-hyp-demo .hyp-nav-shell {
-    @apply bg-gradient-to-b from-hyp-bg/95 via-hyp-bg/70 to-transparent;
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--hyp-bg) 95%, transparent),
+      color-mix(in srgb, var(--hyp-bg) 70%, transparent),
+      transparent
+    );
   }
 
   html.app-hyp-demo .hyp-nav-bar {
@@ -973,9 +978,9 @@ body,
     box-shadow: 0 0 20px rgb(29 78 216 / 0.15);
   }
 
-  html.app-hyp-demo .m3-page .bg-primary.rounded-2xl,
-  html.app-hyp-demo .hyp-page .bg-primary.rounded-2xl,
-  html.app-hyp-demo .hyp-page .bg-primary.rounded-xl,
+  html.app-hyp-demo .m3-page .bg-primary[class~="rounded-2xl"],
+  html.app-hyp-demo .hyp-page .bg-primary[class~="rounded-2xl"],
+  html.app-hyp-demo .hyp-page .bg-primary[class~="rounded-xl"],
   html.app-hyp-demo .m3-page.hyp-page .bg-primary {
     background-color: var(--hyp-brand-blue);
   }

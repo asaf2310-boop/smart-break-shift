@@ -511,7 +511,6 @@ export default function ShiftScheduler() {
             />
           </div>
         )}
-      </div>
 
       {noteDialog && (
         <NoteDialog

@@ -556,7 +556,6 @@ export default function CrmCustomerDetail() {
             </section>
           </>
         )}
-      </div>
 
       <ReferralTransferDialog
         referral={transferRef}
