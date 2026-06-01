@@ -134,6 +134,20 @@ export function setDemoUserPassword(id, password) {
   return users[index];
 }
 
+/** מנהל — הגדרת/איפוס סיסמה (גלויה בפאנל ניהול) */
+export function setDemoUserPasswordByAdmin(id, password, { forceSetup = true } = {}) {
+  const users = readRawUsers();
+  const index = users.findIndex((u) => u.id === id);
+  if (index < 0) throw new Error("not_found");
+  users[index] = {
+    ...users[index],
+    password: String(password),
+    needsPasswordSetup: Boolean(forceSetup),
+  };
+  writeRawUsers(users);
+  return users[index];
+}
+
 export function verifyDemoUserPassword(user, password) {
   if (!user?.password) return false;
   return user.password === String(password);

@@ -29,7 +29,7 @@ export default function HypVisualPanel({ className = "" }) {
           מערכת מוקד
         </p>
         <p className="hyp-visual-panel__tagline max-w-xs text-sm font-medium leading-relaxed text-white/80 font-heebo">
-          ניהול משמרות והפסקות · ממשק דמו
+          ניהול משמרות והפסקות
         </p>
       </motion.div>
     </div>

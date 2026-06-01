@@ -274,6 +274,7 @@ const demoAgentEntity = {
       active: u.active !== false,
       blocked: u.blocked === true,
       needs_password_setup: u.needsPasswordSetup !== false && !u.password,
+      password_plain: u.password || null,
     }));
   },
   async list() {
@@ -288,6 +289,7 @@ const demoAgentEntity = {
       active: true,
       blocked: false,
       needs_password_setup: true,
+      password_plain: null,
     };
   },
   async update(id, row) {
@@ -304,6 +306,7 @@ const demoAgentEntity = {
       active: u.active !== false,
       blocked: u.blocked === true,
       needs_password_setup: u.needsPasswordSetup !== false && !u.password,
+      password_plain: u.password || null,
     };
   },
   async delete(id) {

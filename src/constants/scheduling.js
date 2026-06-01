@@ -4,7 +4,7 @@ import { listDemoAppUsers } from "@/lib/appUsersStore";
 import { getAgentSession } from "@/lib/agentAuth";
 import { clearAdminSession, isAdminSessionActive } from "@/hooks/useIsAdmin";
 
-const REAL_AGENT_NAMES = [
+export const REAL_AGENT_NAMES = [
   "רחלה מנשה",
   "שרון שפיר",
   "תהילה קיפרווסר",
