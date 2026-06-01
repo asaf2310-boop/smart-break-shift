@@ -1,7 +1,6 @@
 import React from "react";
 import { useLocation } from "react-router-dom";
 import BrandLogo from "@/components/brand/BrandLogo";
-import { demoModeEnabled } from "@/api/demoClient";
 import { hasTopAppNav, isAgentEntryPath, isDarkBrandHeaderPath } from "@/lib/appNavPaths";
 
 /** Fixed brand mark at top-start (top-right in RTL). Hidden on login/entry paths. */
@@ -9,7 +8,7 @@ export default function BrandHeader() {
   const { pathname } = useLocation();
 
   if (isAgentEntryPath(pathname)) return null;
-  if (!demoModeEnabled && !hasTopAppNav(pathname)) return null;
+  if (!hasTopAppNav(pathname)) return null;
 
   const onDark = isDarkBrandHeaderPath(pathname);
 

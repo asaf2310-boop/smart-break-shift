@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import BrandWordmark, { BRAND_DISPLAY_NAME } from "@/components/brand/BrandWordmark";
 
-/** Demo agent login hero (full lockup + tagline) — img in AgentLogin demoHero only. */
+/** Login/home hero lockup — AgentLogin brandHero (prod) and demoHero. */
 export const BRAND_LOGIN_HERO_SRC = "/brand/allincenter-login-hero-dark.png";
 
 /** Legacy snapshot PNG (login-hero-full-v1 source — restore / scripts only). */

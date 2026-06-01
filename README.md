@@ -66,3 +66,5 @@ VITE_DEMO_MODE=true
 | **smart-break-shift-demo** (הדגמה) | `true` | אופציונלי |
 
 אחרי שינוי משתני `VITE_*` ב-Vercel — חובה **Redeploy** (הערכים נכנסים רק ב-build חדש).
+
+צ'קליסט מיתוג בפרודקשן (בלי דמו): [`docs/DEPLOY_BRAND_CHECKLIST.md`](docs/DEPLOY_BRAND_CHECKLIST.md).

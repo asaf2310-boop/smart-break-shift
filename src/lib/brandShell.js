@@ -1,5 +1,8 @@
 import { demoModeEnabled } from "@/api/demoClient";
 
+/** Purple AllInCenter shell (login hero, ambient, home) — always on; not tied to VITE_DEMO_MODE. */
+export const brandVisualEnabled = true;
+
 /**
  * AllInCenter purple ambient + login/home branding.
  * Enabled for production and demo; HYP blue shell is demo-only (.app-hyp-demo).
