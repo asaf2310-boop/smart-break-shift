@@ -100,3 +100,34 @@ export function getConstraintsDeadline(weekStart) {
 export function formatDateStr(date) {
   return format(date, "yyyy-MM-dd");
 }
+
+/** מקסימום ימים לסימון "לא זמין" במשמרת בוקר (08:00–16:00) בשבוע אילוצים */
+export const MAX_MORNING_UNAVAILABLE_DAYS_PER_WEEK = 2;
+
+export const MORNING_UNAVAILABLE_LIMIT_MESSAGE =
+  "ניתן לסמן משמרת בוקר (08:00–16:00) כלא זמינה לכל היותר ב-2 ימים בשבוע.";
+
+export function countMorningUnavailableDays(records, dateFrom, dateTo) {
+  return records.filter(
+    (r) =>
+      r.shift_type === "morning" &&
+      r.reason === "unavailable" &&
+      r.date >= dateFrom &&
+      r.date <= dateTo
+  ).length;
+}
+
+/** @returns {boolean} true if agent may mark this morning slot unavailable */
+export function canMarkMorningUnavailable(records, dateFrom, dateTo, dateStr) {
+  const alreadyOnDay = records.some(
+    (r) =>
+      r.date === dateStr &&
+      r.shift_type === "morning" &&
+      r.reason === "unavailable"
+  );
+  if (alreadyOnDay) return true;
+  return (
+    countMorningUnavailableDays(records, dateFrom, dateTo) <
+    MAX_MORNING_UNAVAILABLE_DAYS_PER_WEEK
+  );
+}

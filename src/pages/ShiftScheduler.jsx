@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, addDays, isAfter } from "date-fns";
 import { useToast } from "@/components/ui/use-toast";
@@ -7,6 +7,7 @@ import {
   CalendarDays, LogOut, Sun, Moon, Palmtree, X, Check,
   MessageSquare, Lock, Pencil, SendHorizonal, CalendarClock
 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   HOLIDAY_EVE_DATES,
   WEEKDAY_LABELS,
@@ -14,11 +15,15 @@ import {
   getWeekStart,
   getWeekDays,
   getConstraintsDeadline,
+  canMarkMorningUnavailable,
+  countMorningUnavailableDays,
+  MAX_MORNING_UNAVAILABLE_DAYS_PER_WEEK,
+  MORNING_UNAVAILABLE_LIMIT_MESSAGE,
 } from "@/constants/scheduling";
 import AgentLogin from "@/components/auth/AgentLogin";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { connectAgentAsAvailable } from "@/lib/agentChatPresence";
-import { getLiveQueryOptions } from "@/lib/liveQuery";
+import { getLiveQueryOptions, LIVE_REFETCH_INTERVAL_MS } from "@/lib/liveQuery";
 import {
   fetchWeekShiftRegistrations,
   readCachedSchedule,
@@ -97,13 +102,37 @@ export default function ShiftScheduler() {
   const constraintsDateFrom = format(constraintsDays[0], "yyyy-MM-dd");
   const constraintsDateTo = format(constraintsDays[4], "yyyy-MM-dd");
 
-  // Fetch unavailabilities for constraints week (single query)
-  const { data: unavailabilities = [], isLoading: loadingUnavail } = useQuery({
-    queryKey: ["shift-unavailabilities", constraintsDateFrom, constraintsDateTo, agentName],
-    queryFn: () => dataClient.entities.ShiftUnavailability.filter({ agent_name: agentName }),
-    enabled: !!agentName,
-    ...getLiveQueryOptions(),
-  });
+  const unavailQueryKey = useMemo(
+    () => ["shift-unavailabilities", constraintsDateFrom, constraintsDateTo, agentName],
+    [constraintsDateFrom, constraintsDateTo, agentName]
+  );
+
+  const patchUnavailabilities = (updater) => {
+    queryClient.setQueryData(unavailQueryKey, (old = []) => updater(old));
+  };
+
+  const revertedDuringCreateRef = useRef(new Set());
+  const unavailSlotKey = (date, shiftType) => `${date}|${shiftType}`;
+  const optimisticUnavailId = (date, shiftType) => `optimistic:${date}:${shiftType}`;
+  const isOptimisticUnavailId = (id) => String(id).startsWith("optimistic:");
+
+  const unavailMutationOpts = {
+    onMutate: async (variables) => {
+      await queryClient.cancelQueries({ queryKey: unavailQueryKey });
+      const previous = queryClient.getQueryData(unavailQueryKey);
+      return { previous, variables };
+    },
+    onError: (_err, _variables, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(unavailQueryKey, context.previous);
+      }
+      toast({
+        title: "שגיאה בשמירה",
+        description: "לא ניתן לעדכן את האילוץ — נסה שוב",
+        variant: "destructive",
+      });
+    },
+  };
 
   // Fetch vacation requests for constraints week (single query)
   const { data: vacationRequests = [] } = useQuery({
@@ -169,17 +198,89 @@ export default function ShiftScheduler() {
 
   const createMutation = useMutation({
     mutationFn: (data) => dataClient.entities.ShiftUnavailability.create(data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["shift-unavailabilities", constraintsDateFrom, constraintsDateTo, agentName] }),
+    ...unavailMutationOpts,
+    onMutate: async (data) => {
+      const ctx = await unavailMutationOpts.onMutate(data);
+      const slot = unavailSlotKey(data.date, data.shift_type);
+      revertedDuringCreateRef.current.delete(slot);
+      patchUnavailabilities((old) => {
+        const withoutSlot = old.filter(
+          (r) => !(r.date === data.date && r.shift_type === data.shift_type)
+        );
+        return [
+          ...withoutSlot,
+          { ...data, id: optimisticUnavailId(data.date, data.shift_type), note: data.note ?? "" },
+        ];
+      });
+      return ctx;
+    },
+    onSuccess: (created) => {
+      if (!created?.id) return;
+      const slot = unavailSlotKey(created.date, created.shift_type);
+      if (revertedDuringCreateRef.current.has(slot)) {
+        revertedDuringCreateRef.current.delete(slot);
+        dataClient.entities.ShiftUnavailability.delete(created.id).catch(() => {});
+        return;
+      }
+      patchUnavailabilities((old) =>
+        old.map((r) =>
+          r.date === created.date &&
+          r.shift_type === created.shift_type &&
+          isOptimisticUnavailId(r.id)
+            ? created
+            : r
+        )
+      );
+    },
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => dataClient.entities.ShiftUnavailability.update(id, data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["shift-unavailabilities", constraintsDateFrom, constraintsDateTo, agentName] }),
+    ...unavailMutationOpts,
+    onMutate: async ({ id, data }) => {
+      const ctx = await unavailMutationOpts.onMutate({ id, data });
+      patchUnavailabilities((old) =>
+        old.map((r) => (r.id === id ? { ...r, ...data } : r))
+      );
+      return ctx;
+    },
+    onSuccess: (updated) => {
+      if (!updated?.id) return;
+      patchUnavailabilities((old) =>
+        old.map((r) => (r.id === updated.id ? updated : r))
+      );
+    },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => dataClient.entities.ShiftUnavailability.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["shift-unavailabilities", constraintsDateFrom, constraintsDateTo, agentName] }),
+    mutationFn: (id) => {
+      if (isOptimisticUnavailId(id)) return Promise.resolve();
+      return dataClient.entities.ShiftUnavailability.delete(id);
+    },
+    ...unavailMutationOpts,
+    onMutate: async (id) => {
+      const ctx = await unavailMutationOpts.onMutate(id);
+      if (isOptimisticUnavailId(id)) {
+        const [, date, shiftType] = String(id).split(":");
+        if (date && shiftType) {
+          revertedDuringCreateRef.current.add(unavailSlotKey(date, shiftType));
+        }
+      }
+      patchUnavailabilities((old) => old.filter((r) => r.id !== id));
+      return ctx;
+    },
+  });
+
+  const isUnavailMutating =
+    createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+
+  const { data: unavailabilities = [], isLoading: loadingUnavail } = useQuery({
+    queryKey: unavailQueryKey,
+    queryFn: () => dataClient.entities.ShiftUnavailability.filter({ agent_name: agentName }),
+    enabled: !!agentName,
+    ...getLiveQueryOptions({
+      refetchInterval: isUnavailMutating ? false : LIVE_REFETCH_INTERVAL_MS,
+    }),
   });
 
   const handleLogout = async () => {
@@ -193,6 +294,30 @@ export default function ShiftScheduler() {
   const getDayRecord = (date, shiftType) =>
     unavailabilities.find(r => r.date === format(date, "yyyy-MM-dd") && r.shift_type === shiftType);
 
+  const morningUnavailableCount = useMemo(
+    () => countMorningUnavailableDays(unavailabilities, constraintsDateFrom, constraintsDateTo),
+    [unavailabilities, constraintsDateFrom, constraintsDateTo]
+  );
+
+  const rejectMorningUnavailableLimit = (dateStr) => {
+    if (
+      canMarkMorningUnavailable(
+        unavailabilities,
+        constraintsDateFrom,
+        constraintsDateTo,
+        dateStr
+      )
+    ) {
+      return false;
+    }
+    toast({
+      title: "מגבלת אי-זמינות בוקר",
+      description: MORNING_UNAVAILABLE_LIMIT_MESSAGE,
+      variant: "destructive",
+    });
+    return true;
+  };
+
   const handleDayClick = (date, newReason, shiftType) => {
     const dateStr = format(date, "yyyy-MM-dd");
     // Find ALL records for this date+shiftType (to handle any existing duplicates)
@@ -202,6 +327,15 @@ export default function ShiftScheduler() {
     // Delete any duplicates silently
     if (allRecords.length > 1) {
       allRecords.slice(1).forEach(r => deleteMutation.mutate(r.id));
+    }
+
+    const markingMorningUnavailable =
+      shiftType === "morning" &&
+      newReason === "unavailable" &&
+      (!existing || existing.reason !== "unavailable");
+
+    if (markingMorningUnavailable && rejectMorningUnavailableLimit(dateStr)) {
+      return;
     }
 
     if (!existing) {
@@ -217,10 +351,38 @@ export default function ShiftScheduler() {
     const dateStr = format(noteDialog.date, "yyyy-MM-dd");
     if (noteDialog.type === "vacation_request") {
       createVacationMutation.mutate({ agent_name: agentName, date: dateStr, note, status: "pending" });
-    } else {
-      createMutation.mutate({ agent_name: agentName, date: dateStr, shift_type: noteDialog.shiftType, reason: "unavailable", note });
     }
     setNoteDialog(null);
+  };
+
+  const handleConstraintNoteSave = (date, shiftType, note) => {
+    const dateStr = format(date, "yyyy-MM-dd");
+    const trimmed = String(note ?? "").trim();
+    const existing = unavailabilities.find(
+      (r) => r.date === dateStr && r.shift_type === shiftType
+    );
+    if (existing) {
+      updateMutation.mutate({
+        id: existing.id,
+        data: { reason: existing.reason, note: trimmed },
+      });
+      return;
+    }
+    if (trimmed) {
+      if (
+        shiftType === "morning" &&
+        rejectMorningUnavailableLimit(dateStr)
+      ) {
+        return;
+      }
+      createMutation.mutate({
+        agent_name: agentName,
+        date: dateStr,
+        shift_type: shiftType,
+        reason: "unavailable",
+        note: trimmed,
+      });
+    }
   };
 
   if (!agentName) {
@@ -362,6 +524,19 @@ export default function ShiftScheduler() {
                 <span className="w-4 h-4 rounded border-2 border-orange-300 bg-white inline-block" />
                 חופש (לחץ לבקשה)
               </div>
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <MessageSquare className="w-3.5 h-3.5 text-indigo-500 fill-indigo-200" />
+                הערה לתא (בועה)
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <Sun className="w-3.5 h-3.5 text-amber-500" />
+                בוקר: עד {MAX_MORNING_UNAVAILABLE_DAYS_PER_WEEK} ימים לא זמין
+                {!isPastDeadline && !loadingUnavail && (
+                  <span className="text-amber-600 font-semibold">
+                    ({morningUnavailableCount}/{MAX_MORNING_UNAVAILABLE_DAYS_PER_WEEK})
+                  </span>
+                )}
+              </div>
             </div>
           )}
 
@@ -377,7 +552,9 @@ export default function ShiftScheduler() {
                     weekDays={constraintsDays}
                     getDayRecord={getDayRecord}
                     onMark={handleDayClick}
-                    locked={isPastDeadline}
+                    onNoteSave={handleConstraintNoteSave}
+                    noteSaving={updateMutation.isPending || createMutation.isPending}
+                    locked={isPastDeadline || (isConfirmed && !isEditing)}
                     holidayEveDates={HOLIDAY_EVE_DATES}
                   />
                 </div>
@@ -576,7 +753,82 @@ function NoteDialog({ onSubmit, onCancel, type }) {
   );
 }
 
-function ShiftCell({ date, shiftType, getDayRecord, onMark, locked }) {
+function ConstraintNotePopover({ record, date, shiftType, locked, onSave, saving }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState("");
+  const hasNote = Boolean(record?.note?.trim());
+
+  useEffect(() => {
+    if (open) setDraft(record?.note || "");
+  }, [open, record?.note]);
+
+  const handleSave = () => {
+    onSave(date, shiftType, draft);
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={(next) => !locked && setOpen(next)}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          onClick={(e) => e.stopPropagation()}
+          disabled={locked}
+          title={hasNote ? record.note : "הוסף הערה לתא"}
+          aria-label={hasNote ? "עריכת הערה" : "הוספת הערה"}
+          className={`absolute top-1 left-1 z-10 w-6 h-6 rounded-lg flex items-center justify-center transition-all ${
+            locked
+              ? "opacity-40 cursor-default"
+              : "hover:bg-indigo-50 hover:scale-105 active:scale-95"
+          }`}
+        >
+          <MessageSquare
+            className={`w-3.5 h-3.5 ${
+              hasNote ? "text-indigo-600 fill-indigo-200" : "text-slate-400"
+            }`}
+          />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        dir="rtl"
+        align="start"
+        side="top"
+        className="rounded-2xl border border-slate-200 bg-white shadow-lg w-72 p-4"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        <p className="text-sm font-bold text-slate-800 mb-2">הערה לאילוץ</p>
+        <textarea
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="הערה קצרה למנהל (אופציונלי)..."
+          rows={3}
+          maxLength={280}
+          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-400 resize-none text-right"
+        />
+        <div className="flex gap-2 mt-3">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-1 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-600 text-white text-xs font-semibold shadow-md shadow-indigo-500/25 hover:shadow-indigo-500/40 disabled:opacity-50 transition-all"
+          >
+            {saving ? "שומר..." : "שמירה"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="px-3 py-2 rounded-xl border border-slate-200 text-slate-500 text-xs font-semibold hover:bg-slate-50"
+          >
+            ביטול
+          </button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function ShiftCell({ date, shiftType, getDayRecord, onMark, onNoteSave, noteSaving, locked }) {
   const record = getDayRecord(date, shiftType);
   const isUnavailable = record?.reason === "unavailable";
   const isVacation = record?.reason === "vacation";
@@ -606,7 +858,17 @@ function ShiftCell({ date, shiftType, getDayRecord, onMark, locked }) {
   }
 
   return (
-    <div className="px-1 py-2 flex flex-col items-center justify-center gap-1">
+    <div className="relative px-1 py-2 flex flex-col items-center justify-center gap-1">
+      {onNoteSave && (
+        <ConstraintNotePopover
+          record={record}
+          date={date}
+          shiftType={shiftType}
+          locked={locked}
+          onSave={onNoteSave}
+          saving={noteSaving}
+        />
+      )}
       <button
         onClick={() => !locked && btnAction()}
         disabled={locked}
@@ -618,12 +880,17 @@ function ShiftCell({ date, shiftType, getDayRecord, onMark, locked }) {
         {btnIcon}
         <span className={`text-xs font-bold leading-none ${btnTextColor}`}>{btnLabel}</span>
         {!locked && <span className="text-xs text-slate-400 leading-none">לחץ לשינוי</span>}
+        {record?.note?.trim() && (
+          <span className="text-[10px] text-indigo-600 font-medium leading-tight max-w-full truncate px-1" title={record.note}>
+            {record.note}
+          </span>
+        )}
       </button>
     </div>
   );
 }
 
-function CombinedShiftGrid({ weekDays, getDayRecord, onMark, locked, holidayEveDates = [] }) {
+function CombinedShiftGrid({ weekDays, getDayRecord, onMark, onNoteSave, noteSaving, locked, holidayEveDates = [] }) {
   return (
     <table className="w-full border-collapse" style={{ tableLayout: "fixed" }}>
       <colgroup>
@@ -670,7 +937,7 @@ function CombinedShiftGrid({ weekDays, getDayRecord, onMark, locked, holidayEveD
             }
             return (
               <td key={dateStr} className="px-1 py-0 align-middle">
-                <ShiftCell date={date} shiftType="morning" getDayRecord={getDayRecord} onMark={onMark} locked={locked} />
+                <ShiftCell date={date} shiftType="morning" getDayRecord={getDayRecord} onMark={onMark} onNoteSave={onNoteSave} noteSaving={noteSaving} locked={locked} />
               </td>
             );
           })}
@@ -691,7 +958,7 @@ function CombinedShiftGrid({ weekDays, getDayRecord, onMark, locked, holidayEveD
             if (isHolidayEve) return null;
             return (
               <td key={dateStr} className="px-1 py-0 align-middle">
-                <ShiftCell date={date} shiftType="evening" getDayRecord={getDayRecord} onMark={onMark} locked={locked} />
+                <ShiftCell date={date} shiftType="evening" getDayRecord={getDayRecord} onMark={onMark} onNoteSave={onNoteSave} noteSaving={noteSaving} locked={locked} />
               </td>
             );
           })}

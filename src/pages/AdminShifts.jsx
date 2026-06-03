@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { format, addDays, subDays } from "date-fns";
 import { motion } from "framer-motion";
-import { ShieldCheck, ChevronRight, ChevronLeft, Check, Palmtree, X, Sun, Moon } from "lucide-react";
+import { ShieldCheck, ChevronRight, ChevronLeft, Check, Palmtree, X, Sun, Moon, MessageSquare } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { dataClient } from "@/api/client";
 import { Link } from "react-router-dom";
@@ -255,7 +255,7 @@ function ConstraintsView({ weekStart }) {
                   .map(v => ({ name: v.agent_name, type: "vac_approved", note: v.note })),
                 ...vacAgents.filter(v => v.status !== "approved")
                   .filter(v => !unavailAgents.find(u => u.agent_name === v.agent_name) && !approvedVacAgents.find(a => a.agent_name === v.agent_name))
-                  .map(v => ({ name: v.agent_name, type: "vac_" + v.status })),
+                  .map(v => ({ name: v.agent_name, type: "vac_" + v.status, note: v.note })),
               ].filter(item => {
                 if (seenNames.has(item.name)) return false;
                 seenNames.add(item.name);
@@ -307,13 +307,22 @@ function ConstraintsView({ weekStart }) {
                           icon = <Palmtree className="w-2.5 h-2.5 flex-shrink-0" />;
                         }
                         return (
-                          <div key={item.name} className={`flex flex-col px-1.5 py-1 rounded-lg border text-xs font-medium ${bg} ${textColor}`}>
-                            <div className="flex items-center gap-1">
+                          <div
+                            key={item.name}
+                            title={item.note ? `${item.name}: ${item.note}` : item.name}
+                            className={`flex flex-col px-1.5 py-1 rounded-lg border text-xs font-medium ${bg} ${textColor}`}
+                          >
+                            <div className="flex items-center gap-1 min-w-0">
                               {icon}
-                              <span className="truncate">{item.name}</span>
+                              <span className="truncate flex-1">{item.name}</span>
+                              {item.note?.trim() && (
+                                <MessageSquare className="w-3 h-3 flex-shrink-0 text-indigo-500 fill-indigo-100" aria-hidden />
+                              )}
                             </div>
-                            {item.note && (
-                              <span className="text-xs opacity-70 mt-0.5 leading-tight">{item.note}</span>
+                            {item.note?.trim() && (
+                              <span className="text-[11px] text-indigo-700/90 bg-indigo-50/80 rounded-md px-1 py-0.5 mt-0.5 leading-snug line-clamp-2">
+                                {item.note}
+                              </span>
                             )}
                           </div>
                         );
