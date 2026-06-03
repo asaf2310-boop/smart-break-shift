@@ -5,7 +5,17 @@ import TimeSlotCard from "./TimeSlotCard";
 import { normalizeAgentName } from "@/lib/breakCapacity";
 
 export default function BreakSection({
-  type, title, subtitle, slots, registrations, onRegister, userRegistration, agentName, maxPerSlot, registrationDisabled = false
+  type,
+  title,
+  subtitle,
+  slots,
+  registrations,
+  onRegister,
+  userRegistration,
+  agentName,
+  maxPerSlot,
+  registrationDisabled = false,
+  registrationClosed = false,
 }) {
   const isLunch = type === "lunch";
   const normalizedAgent = normalizeAgentName(agentName);
@@ -70,6 +80,7 @@ export default function BreakSection({
               isRegistered={isRegistered}
               isDisabled={hasRegistered && !isRegistered}
               registrationDisabled={registrationDisabled}
+              registrationClosed={registrationClosed}
               maxPerSlot={maxPerSlot}
             />
           );

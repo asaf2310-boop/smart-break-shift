@@ -2,12 +2,28 @@ import React from "react";
 import { motion } from "framer-motion";
 import { Clock, User, Check, Lock } from "lucide-react";
 
-export default function TimeSlotCard({ slot, breakType, registrations, onRegister, isRegistered, isDisabled, registrationDisabled = false, index, maxPerSlot = 1 }) {
+export default function TimeSlotCard({
+  slot,
+  breakType,
+  registrations,
+  onRegister,
+  isRegistered,
+  isDisabled,
+  registrationDisabled = false,
+  registrationClosed = false,
+  index,
+  maxPerSlot = 1,
+}) {
   const isLunch = breakType === "lunch";
   const capacity = Math.max(1, Number(maxPerSlot) || 1);
   const count = registrations.length;
   const isFull = count >= capacity;
-  const canRegister = !isFull && !isRegistered && !isDisabled && !registrationDisabled;
+  const canRegister =
+    !isFull &&
+    !isRegistered &&
+    !isDisabled &&
+    !registrationDisabled &&
+    !registrationClosed;
 
   const accentFrom = isLunch ? "from-indigo-500" : "from-purple-500";
   const accentTo = isLunch ? "to-blue-500" : "to-pink-500";
@@ -74,17 +90,24 @@ export default function TimeSlotCard({ slot, breakType, registrations, onRegiste
         </div>
       ) : (
         <button
+          type="button"
           disabled={!canRegister}
           onClick={() => onRegister(slot)}
           className={`
             w-full py-1.5 rounded-xl text-xs font-semibold transition-all duration-200
             ${canRegister
               ? `bg-gradient-to-r ${accentFrom} ${accentTo} text-white shadow-md hover:shadow-lg hover:scale-[1.03] active:scale-[0.97]`
-              : "bg-white/5 text-white/20 cursor-not-allowed"
+              : "bg-slate-100 text-slate-400 cursor-not-allowed"
             }
           `}
         >
-          {registrationDisabled ? "מעדכן..." : isDisabled ? "כבר נרשמת" : "הרשמה"}
+          {registrationDisabled
+            ? "מעדכן..."
+            : registrationClosed
+              ? "נסגר"
+              : isDisabled
+                ? "כבר נרשמת"
+                : "הרשמה"}
         </button>
       )}
     </motion.div>

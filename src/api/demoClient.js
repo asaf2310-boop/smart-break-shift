@@ -228,6 +228,7 @@ function createEntity(entityName) {
           agentName: row.agent_name,
           breakType: row.break_type,
           timeSlot: row.time_slot,
+          date: row.date,
         });
       }
 
@@ -247,6 +248,7 @@ function createEntity(entityName) {
 
     async update(id, row) {
       const store = readStore();
+
       let updated = null;
       store[storeKey] = (store[storeKey] || []).map((existing) => {
         if (existing.id !== id) return existing;

@@ -101,6 +101,81 @@ export function formatDateStr(date) {
   return format(date, "yyyy-MM-dd");
 }
 
+/** מועד אחרון לרישום/ביטול הפסקות — כל יום עד 10:00 שעון ישראל */
+export const BREAK_REGISTRATION_TIMEZONE = "Asia/Jerusalem";
+export const BREAK_REGISTRATION_DEADLINE_HOUR = 10;
+
+export const BREAK_REGISTRATION_DEADLINE_MESSAGE =
+  "רישום וביטול הפסקות ליום זה נסגרים בשעה 10:00 בבוקר (שעון ישראל). לא ניתן לפעול לאחר המועד.";
+
+export function parseDateStrLocal(dateStr) {
+  const [y, m, d] = String(dateStr || "").split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function getZonedDateTimeParts(date, timeZone = BREAK_REGISTRATION_TIMEZONE) {
+  const formatter = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const parts = {};
+  for (const part of formatter.formatToParts(date)) {
+    if (part.type !== "literal") parts[part.type] = part.value;
+  }
+  return {
+    year: Number(parts.year),
+    month: Number(parts.month),
+    day: Number(parts.day),
+    hour: Number(parts.hour),
+    minute: Number(parts.minute),
+    second: Number(parts.second),
+  };
+}
+
+/** UTC Date for wall-clock time on `dateStr` in Israel (DST-safe). */
+export function zonedDateTimeToUtc(
+  dateStr,
+  hour,
+  minute = 0,
+  second = 0,
+  timeZone = BREAK_REGISTRATION_TIMEZONE
+) {
+  const [y, m, d] = String(dateStr || "").split("-").map(Number);
+  if (!y || !m || !d) return new Date(NaN);
+
+  let utcMs = Date.UTC(y, m - 1, d, hour, minute, second);
+  for (let i = 0; i < 6; i++) {
+    const p = getZonedDateTimeParts(new Date(utcMs), timeZone);
+    const asUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+    const want = Date.UTC(y, m - 1, d, hour, minute, second);
+    utcMs += want - asUtc;
+  }
+  return new Date(utcMs);
+}
+
+export function getBreakRegistrationDeadline(dateStr) {
+  return zonedDateTimeToUtc(
+    dateStr,
+    BREAK_REGISTRATION_DEADLINE_HOUR,
+    0,
+    0
+  );
+}
+
+/** true אחרי 10:00:00 באותו יום (שעון ישראל) — ב-10:00 בדיוק עדיין מותר */
+export function isBreakRegistrationClosed(dateStr, now = new Date()) {
+  if (!dateStr) return false;
+  const deadline = getBreakRegistrationDeadline(dateStr);
+  if (Number.isNaN(deadline.getTime())) return false;
+  return now.getTime() > deadline.getTime();
+}
+
 /** מקסימום ימים לסימון "לא זמין" במשמרת בוקר (08:00–16:00) בשבוע אילוצים */
 export const MAX_MORNING_UNAVAILABLE_DAYS_PER_WEEK = 2;
 

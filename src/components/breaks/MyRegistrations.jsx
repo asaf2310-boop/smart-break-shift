@@ -1,9 +1,31 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Coffee, UtensilsCrossed, X } from "lucide-react";
+import { Coffee, UtensilsCrossed } from "lucide-react";
 
-export default function MyRegistrations({ lunchReg, shortReg, onCancel }) {
+export default function MyRegistrations({
+  lunchReg,
+  shortReg,
+  onCancel,
+  canCancel = true,
+}) {
   if (!lunchReg && !shortReg) return null;
+
+  const cancelButton = (reg, variant) => {
+    if (!canCancel || !onCancel) return null;
+    const styles =
+      variant === "short"
+        ? "bg-white border border-purple-200 text-purple-700 hover:bg-red-50 hover:border-red-200 hover:text-red-600"
+        : "bg-white border border-indigo-200 text-indigo-700 hover:bg-red-50 hover:border-red-200 hover:text-red-600";
+    return (
+      <button
+        type="button"
+        onClick={() => onCancel(reg.id)}
+        className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition-all ${styles}`}
+      >
+        מחק
+      </button>
+    );
+  };
 
   return (
     <AnimatePresence>
@@ -33,12 +55,7 @@ export default function MyRegistrations({ lunchReg, shortReg, onCancel }) {
                     <p className="text-slate-800 font-bold text-sm">{shortReg.time_slot}</p>
                   </div>
                 </div>
-                <button
-                  onClick={() => onCancel(shortReg.id)}
-                  className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-red-100 hover:text-red-500 text-slate-400 flex items-center justify-center transition-all"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
+                {cancelButton(shortReg, "short")}
               </motion.div>
             )}
             {lunchReg && (
@@ -58,12 +75,7 @@ export default function MyRegistrations({ lunchReg, shortReg, onCancel }) {
                     <p className="text-slate-800 font-bold text-sm">{lunchReg.time_slot}</p>
                   </div>
                 </div>
-                <button
-                  onClick={() => onCancel(lunchReg.id)}
-                  className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-red-100 hover:text-red-500 text-slate-400 flex items-center justify-center transition-all"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
+                {cancelButton(lunchReg, "lunch")}
               </motion.div>
             )}
           </AnimatePresence>

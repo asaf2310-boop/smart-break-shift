@@ -1,3 +1,8 @@
+import {
+  BREAK_REGISTRATION_DEADLINE_MESSAGE,
+  isBreakRegistrationClosed,
+} from "@/constants/scheduling";
+
 /** מנקה רווחים כפולים — מונע "אופיר דוד" מול "אופיר  דוד" */
 export function normalizeAgentName(name) {
   return String(name || "").trim().replace(/\s+/g, " ");
@@ -34,7 +39,17 @@ export function validateBreakRegistration({
   agentName,
   breakType,
   timeSlot,
+  date,
+  now = new Date(),
+  skipDeadlineCheck = false,
 }) {
+  if (date && !skipDeadlineCheck && isBreakRegistrationClosed(date, now)) {
+    throw new BreakRegistrationError(
+      "REGISTRATION_CLOSED",
+      BREAK_REGISTRATION_DEADLINE_MESSAGE
+    );
+  }
+
   const limits = getBreakLimits(settings);
   const maxPerSlot = limits[breakType] ?? 1;
   const normalizedName = normalizeAgentName(agentName);
@@ -65,7 +80,7 @@ export function validateBreakRegistration({
 }
 
 /** בודק מול נתונים עדכניים מהשרת לפני יצירת הרשמה */
-export async function createBreakRegistration(dataClient, payload) {
+export async function createBreakRegistration(dataClient, payload, options = {}) {
   const normalizedPayload = {
     ...payload,
     agent_name: normalizeAgentName(payload.agent_name),
@@ -83,6 +98,8 @@ export async function createBreakRegistration(dataClient, payload) {
     agentName: agent_name,
     breakType: break_type,
     timeSlot: time_slot,
+    date,
+    skipDeadlineCheck: options.skipDeadlineCheck ?? false,
   });
 
   return dataClient.entities.BreakRegistration.create(normalizedPayload);

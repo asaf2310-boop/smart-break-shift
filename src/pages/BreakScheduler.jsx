@@ -10,11 +10,18 @@ import { Navigate } from "react-router-dom";
 import BreakSection from "../components/breaks/BreakSection";
 import MyRegistrations from "../components/breaks/MyRegistrations";
 import DateSelector from "../components/breaks/DateSelector";
-import { SHORT_BREAK_SLOTS, LUNCH_BREAK_SLOTS, getStoredAgentName } from "@/constants/scheduling";
+import {
+  SHORT_BREAK_SLOTS,
+  LUNCH_BREAK_SLOTS,
+  getStoredAgentName,
+  BREAK_REGISTRATION_DEADLINE_MESSAGE,
+  isBreakRegistrationClosed,
+} from "@/constants/scheduling";
 import {
   BreakRegistrationError,
   createBreakRegistration,
   getBreakLimits,
+  normalizeAgentName,
   validateBreakRegistration,
 } from "@/lib/breakCapacity";
 import { getLiveQueryOptions } from "@/lib/liveQuery";
@@ -76,6 +83,7 @@ export default function BreakScheduler() {
   }, [agentName, settings?.show_shortage_notice, settings?.id]);
 
   const breakLimits = useMemo(() => getBreakLimits(settings), [settings]);
+  const registrationClosed = isBreakRegistrationClosed(dateStr);
 
   const createMutation = useMutation({
     mutationFn: (data) => createBreakRegistration(dataClient, data),
@@ -110,6 +118,12 @@ export default function BreakScheduler() {
     },
   });
 
+  const slotsBusy =
+    isInitialBreakLoad ||
+    isFetching ||
+    createMutation.isPending ||
+    deleteMutation.isPending;
+
   const handleLogout = async () => {
     const { agentLogout } = await import("@/lib/agentAuth");
     await agentLogout();
@@ -125,6 +139,10 @@ export default function BreakScheduler() {
       toast({ title: "רגע קטן", description: "מעדכנים זמינות להפסקות" });
       return;
     }
+    if (registrationClosed) {
+      toast({ title: "לא ניתן להירשם", description: BREAK_REGISTRATION_DEADLINE_MESSAGE });
+      return;
+    }
 
     try {
       validateBreakRegistration({
@@ -133,6 +151,7 @@ export default function BreakScheduler() {
         agentName,
         breakType,
         timeSlot: slot,
+        date: dateStr,
       });
     } catch (error) {
       if (error instanceof BreakRegistrationError) {
@@ -149,12 +168,27 @@ export default function BreakScheduler() {
     });
   };
 
-  const handleCancel = (id) => deleteMutation.mutate(id);
+  const handleCancel = (id) => {
+    if (registrationClosed) {
+      toast({ title: "לא ניתן לבטל", description: BREAK_REGISTRATION_DEADLINE_MESSAGE });
+      return;
+    }
+    if (deleteMutation.isPending) return;
+    deleteMutation.mutate(id);
+  };
+
+  const normalizedAgent = useMemo(() => normalizeAgentName(agentName), [agentName]);
 
   const shortRegs = useMemo(() => registrations.filter(r => r.break_type === "short"), [registrations]);
   const lunchRegs = useMemo(() => registrations.filter(r => r.break_type === "lunch"), [registrations]);
-  const myShortReg = useMemo(() => shortRegs.find(r => r.agent_name === agentName), [shortRegs, agentName]);
-  const myLunchReg = useMemo(() => lunchRegs.find(r => r.agent_name === agentName), [lunchRegs, agentName]);
+  const myShortReg = useMemo(
+    () => shortRegs.find((r) => normalizeAgentName(r.agent_name) === normalizedAgent),
+    [shortRegs, normalizedAgent]
+  );
+  const myLunchReg = useMemo(
+    () => lunchRegs.find((r) => normalizeAgentName(r.agent_name) === normalizedAgent),
+    [lunchRegs, normalizedAgent]
+  );
 
   if (!agentName) {
     return <Navigate to="/" replace />;
@@ -243,7 +277,12 @@ export default function BreakScheduler() {
           transition={{ delay: 0.1 }}
           className="mb-6"
         >
-          <MyRegistrations shortReg={myShortReg} lunchReg={myLunchReg} onCancel={handleCancel} />
+          <MyRegistrations
+            shortReg={myShortReg}
+            lunchReg={myLunchReg}
+            onCancel={handleCancel}
+            canCancel={!registrationClosed}
+          />
         </motion.div>
 
         {isFetching && (
@@ -252,6 +291,16 @@ export default function BreakScheduler() {
               מעדכן זמינות...
             </div>
           </div>
+        )}
+
+        {registrationClosed && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 text-center leading-relaxed"
+          >
+            {BREAK_REGISTRATION_DEADLINE_MESSAGE}
+          </motion.div>
         )}
 
         <div className="space-y-6">
@@ -265,7 +314,8 @@ export default function BreakScheduler() {
             userRegistration={myShortReg}
             agentName={agentName}
             maxPerSlot={breakLimits.short}
-            registrationDisabled={isInitialBreakLoad || isFetching || createMutation.isPending}
+            registrationDisabled={registrationClosed || slotsBusy}
+            registrationClosed={registrationClosed}
           />
           <BreakSection
             type="lunch"
@@ -277,7 +327,8 @@ export default function BreakScheduler() {
             userRegistration={myLunchReg}
             agentName={agentName}
             maxPerSlot={breakLimits.lunch}
-            registrationDisabled={isInitialBreakLoad || isFetching || createMutation.isPending}
+            registrationDisabled={registrationClosed || slotsBusy}
+            registrationClosed={registrationClosed}
           />
         </div>
     </HypPageLayout>
