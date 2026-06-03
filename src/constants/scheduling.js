@@ -113,6 +113,20 @@ export function parseDateStrLocal(dateStr) {
   return new Date(y, m - 1, d);
 }
 
+/** yyyy-MM-dd for the calendar day in Israel (DST-safe). */
+export function getIsraelDateStr(now = new Date()) {
+  const { year, month, day } = getZonedDateTimeParts(now);
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/** Date at local midnight for Israel's calendar today — for labels only. */
+export function getTodayIsraelDate(now = new Date()) {
+  return parseDateStrLocal(getIsraelDateStr(now));
+}
+
+export const BREAK_AGENT_TODAY_ONLY_MESSAGE =
+  "ניתן להירשם להפסקות רק ליום הנוכחי (שעון ישראל).";
+
 function getZonedDateTimeParts(date, timeZone = BREAK_REGISTRATION_TIMEZONE) {
   const formatter = new Intl.DateTimeFormat("en-GB", {
     timeZone,

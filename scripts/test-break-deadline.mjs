@@ -71,4 +71,15 @@ assert(
 );
 assert(!isBreakRegistrationClosed("2026-12-25", at11), "future date open before its 10:00");
 
+const tomorrowStr = "2026-06-04";
+const todayLate = zonedDateTimeToUtc("2026-06-03", 15, 0, 0);
+assert(
+  !isBreakRegistrationClosed(tomorrowStr, todayLate),
+  "tomorrow still open before tomorrow 10:00 Israel"
+);
+assert(
+  isBreakRegistrationClosed(tomorrowStr, zonedDateTimeToUtc(tomorrowStr, 10, 0, 1)),
+  "tomorrow closed after its 10:00 Israel"
+);
+
 console.log("\nAll break deadline tests passed.");

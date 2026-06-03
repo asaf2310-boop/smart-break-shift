@@ -14,7 +14,7 @@ const productionCards = [
   {
     to: "/breaks",
     title: "הפסקות",
-    desc: "הזמנת הפסקת 10 דקות וצהריים",
+    desc: "הזמנת הפסקת 10 דקות וצהריים להיום",
     icon: CalendarClock,
     iconTile: "m3-icon-tile",
   },

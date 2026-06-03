@@ -5,8 +5,10 @@ import { Coffee, UtensilsCrossed } from "lucide-react";
 export default function MyRegistrations({
   lunchReg,
   shortReg,
+  selectedDateLabel,
   onCancel,
   canCancel = true,
+  isDeleting = false,
 }) {
   if (!lunchReg && !shortReg) return null;
 
@@ -19,10 +21,11 @@ export default function MyRegistrations({
     return (
       <button
         type="button"
+        disabled={isDeleting}
         onClick={() => onCancel(reg.id)}
-        className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition-all ${styles}`}
+        className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition-all disabled:opacity-50 ${styles}`}
       >
-        מחק
+        {isDeleting ? "מוחק..." : "מחק"}
       </button>
     );
   };
@@ -35,7 +38,9 @@ export default function MyRegistrations({
         exit={{ opacity: 0, y: -10, scale: 0.98 }}
         className="rounded-3xl border border-slate-200 bg-white shadow-sm p-5"
       >
-        <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-3 text-right">ההרשמות שלי היום</p>
+        <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-3 text-right">
+          ההרשמות שלי{selectedDateLabel ? ` · ${selectedDateLabel}` : ""}
+        </p>
         <div className="flex flex-col sm:flex-row gap-3">
           <AnimatePresence>
             {shortReg && (

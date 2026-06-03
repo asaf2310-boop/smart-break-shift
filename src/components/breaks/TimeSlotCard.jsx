@@ -9,21 +9,25 @@ export default function TimeSlotCard({
   onRegister,
   isRegistered,
   isDisabled,
-  registrationDisabled = false,
+  isRegistering = false,
   registrationClosed = false,
   index,
   maxPerSlot = 1,
+  canCancel = false,
+  onCancel,
+  isDeleting = false,
+  myRegistration = null,
 }) {
   const isLunch = breakType === "lunch";
   const capacity = Math.max(1, Number(maxPerSlot) || 1);
   const count = registrations.length;
   const isFull = count >= capacity;
+  const isSlotClosed = isFull || registrationClosed;
   const canRegister =
-    !isFull &&
+    !isSlotClosed &&
     !isRegistered &&
     !isDisabled &&
-    !registrationDisabled &&
-    !registrationClosed;
+    !isRegistering;
 
   const accentFrom = isLunch ? "from-indigo-500" : "from-purple-500";
   const accentTo = isLunch ? "to-blue-500" : "to-pink-500";
@@ -40,7 +44,7 @@ export default function TimeSlotCard({
         relative rounded-2xl border p-4 flex flex-col gap-3 transition-all duration-300 h-full
         ${isRegistered
           ? `border-indigo-200 bg-gradient-to-br from-indigo-50 to-purple-50 shadow-md`
-          : isFull
+          : isSlotClosed
             ? "border-slate-100 bg-slate-50 opacity-50"
             : "border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 hover:shadow-sm cursor-pointer"
         }
@@ -67,7 +71,7 @@ export default function TimeSlotCard({
             <span className="text-xs sm:text-sm text-slate-700 font-semibold break-words">{reg.agent_name}</span>
           </div>
         ))}
-        {!isFull && (
+        {!isSlotClosed && (
           <div className="flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-full bg-green-400" />
             <span className="text-xs text-green-600 font-medium">
@@ -79,14 +83,26 @@ export default function TimeSlotCard({
 
       {/* Action */}
       {isRegistered ? (
-        <div className={`flex items-center gap-1.5 text-xs font-semibold ${accentText} ${accentBg} ${accentBorder} border rounded-xl px-3 py-1.5 justify-center`}>
-          <Check className="w-3.5 h-3.5" />
-          <span>ההפסקה שלי</span>
+        <div className="flex flex-col gap-2">
+          <div className={`flex items-center gap-1.5 text-xs font-semibold ${accentText} ${accentBg} ${accentBorder} border rounded-xl px-3 py-1.5 justify-center`}>
+            <Check className="w-3.5 h-3.5" />
+            <span>ההפסקה שלי</span>
+          </div>
+          {canCancel && onCancel && myRegistration?.id && (
+            <button
+              type="button"
+              disabled={isDeleting}
+              onClick={() => onCancel(myRegistration.id)}
+              className="w-full py-1.5 rounded-xl text-xs font-semibold bg-white border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50 transition-all"
+            >
+              {isDeleting ? "מוחק..." : "מחק ובחר מחדש"}
+            </button>
+          )}
         </div>
-      ) : isFull ? (
+      ) : isSlotClosed ? (
         <div className="flex items-center gap-1.5 text-xs text-slate-400 justify-center">
           <Lock className="w-3.5 h-3.5" />
-          <span>מלא</span>
+          <span>{registrationClosed && !isFull ? "נסגר" : "מלא"}</span>
         </div>
       ) : (
         <button
@@ -101,13 +117,11 @@ export default function TimeSlotCard({
             }
           `}
         >
-          {registrationDisabled
+          {isRegistering
             ? "מעדכן..."
-            : registrationClosed
-              ? "נסגר"
-              : isDisabled
-                ? "כבר נרשמת"
-                : "הרשמה"}
+            : isDisabled
+              ? "כבר נרשמת"
+              : "הרשמה"}
         </button>
       )}
     </motion.div>
