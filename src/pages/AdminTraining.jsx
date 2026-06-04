@@ -102,8 +102,6 @@ export default function AdminTraining() {
     return teachableSessions.filter((s) => s.date === selectedKey);
   }, [filterPresentationsToDay, teachableSessions, selectedKey]);
 
-  const sessionIds = useMemo(() => presentationSessions.map((s) => s.id), [presentationSessions]);
-
   const [availability, setAvailability] = useState({});
   const [urlDrafts, setUrlDrafts] = useState({});
   const [uploadingId, setUploadingId] = useState(null);
@@ -181,7 +179,7 @@ export default function AdminTraining() {
       }
 
       refreshSchedule();
-      toast({ title: "המפגש נשמר" });
+      toast({ title: "המפגש נשמר", dedupeKey: "training-session-saved" });
       await refreshAvailability();
     } catch (err) {
       toast({
@@ -224,7 +222,11 @@ export default function AdminTraining() {
     try {
       const result = await uploadTrainingPresentation(sessionId, file);
       if (result.ok) {
-        toast({ title: "הועלה בהצלחה", description: result.message });
+        toast({
+          title: "הועלה בהצלחה",
+          description: result.message,
+          dedupeKey: `training-upload-${sessionId}`,
+        });
         await refreshAvailability();
       } else {
         toast({
@@ -312,7 +314,7 @@ export default function AdminTraining() {
           <ul className="list-disc list-inside space-y-1 m-0">
             <li>בלוח השנה: לחצו על יום לצפייה ועריכה במפגשים של אותו יום.</li>
             <li>הוסיפו מפגשים, ערכו תאריכים ושעות — נשמר בדפדפן (ללא שרת בדמו).</li>
-            <li>לכל מפגש: PDF ו/או קישור — בלחיצת נציג נפתח הקישור או המצגת.</li>
+            <li>לכל מפגש: העלאת PDF (אייקון ↑ ביום הנבחר או למטה) ו/או קישור — הנציג פותח מצגת או קישור.</li>
             <li>
               {supabaseConfigured
                 ? "Supabase מוגדר: קבצי PDF ב-bucket `training-docs`."
@@ -397,6 +399,33 @@ export default function AdminTraining() {
                       ) : null}
                     </div>
                     <div className="flex flex-col gap-1 shrink-0">
+                      {!session.isBreak ? (
+                        <>
+                          <input
+                            ref={(el) => {
+                              fileInputRefs.current[session.id] = el;
+                            }}
+                            type="file"
+                            accept=".pdf,application/pdf"
+                            className="hidden"
+                            onChange={(e) => handleFile(session.id, e.target.files?.[0])}
+                          />
+                          <button
+                            type="button"
+                            disabled={uploadingId === session.id}
+                            onClick={() => fileInputRefs.current[session.id]?.click()}
+                            className="m3-btn-outlined p-2"
+                            aria-label={`העלאת מסמך ל${session.title}`}
+                            title="העלאת PDF"
+                          >
+                            {uploadingId === session.id ? (
+                              <span className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin block" />
+                            ) : (
+                              <Upload className="w-4 h-4" />
+                            )}
+                          </button>
+                        </>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => openEditSession(session)}
@@ -533,7 +562,7 @@ export default function AdminTraining() {
                       ) : (
                         <Upload className="w-4 h-4" />
                       )}
-                      העלאת PDF
+                      העלאת מסמך (PDF)
                     </button>
                     {status.hasPdf ? (
                       <button
