@@ -9,7 +9,12 @@ export function readCachedSchedule(dateFrom, dateTo) {
   try {
     const raw = sessionStorage.getItem(getScheduleCacheKey(dateFrom, dateTo));
     const parsed = raw ? JSON.parse(raw) : undefined;
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : undefined;
+    if (!Array.isArray(parsed) || parsed.length === 0) return undefined;
+    // Ignore cache entries that do not match this week's date range.
+    const inRange = parsed.every(
+      (row) => row?.date >= dateFrom && row?.date <= dateTo
+    );
+    return inRange ? parsed : undefined;
   } catch {
     return undefined;
   }
@@ -17,11 +22,43 @@ export function readCachedSchedule(dateFrom, dateTo) {
 
 export function writeCachedSchedule(dateFrom, dateTo, data) {
   if (!Array.isArray(data) || data.length === 0) return;
+  const inRange = data.every((row) => row?.date >= dateFrom && row?.date <= dateTo);
+  if (!inRange) return;
   try {
     sessionStorage.setItem(getScheduleCacheKey(dateFrom, dateTo), JSON.stringify(data));
   } catch {
     // Cache is only a speed boost; ignore browsers that block storage.
   }
+}
+
+export function clearCachedSchedule(dateFrom, dateTo) {
+  try {
+    sessionStorage.removeItem(getScheduleCacheKey(dateFrom, dateTo));
+  } catch {
+    // ignore
+  }
+}
+
+/** Clears all agent schedule session caches (after admin publish / realtime). */
+export function clearAllScheduleCaches() {
+  try {
+    const keysToRemove = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      if (key?.startsWith("shift-schedule-cache:")) keysToRemove.push(key);
+    }
+    keysToRemove.forEach((key) => sessionStorage.removeItem(key));
+  } catch {
+    // ignore
+  }
+}
+
+/** Call after admin publish/save so agent views drop stale session cache and refetch. */
+export async function refreshScheduleQueriesAfterPublish(queryClient, { dateFrom, dateTo, records }) {
+  clearCachedSchedule(dateFrom, dateTo);
+  clearAllScheduleCaches();
+  queryClient.setQueryData(["shift-registrations", dateFrom, dateTo], records);
+  await queryClient.invalidateQueries({ queryKey: ["shift-registrations"] });
 }
 
 export async function fetchWeekShiftRegistrations(weekDays) {

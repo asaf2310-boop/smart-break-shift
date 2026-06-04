@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase, supabaseConfigured } from "@/api/supabase";
 import { demoModeEnabled, DEMO_STORE_KEY } from "@/api/demoClient";
 import { CHAT_BRANDING_STORAGE_KEY } from "@/lib/chatBranding";
+import { clearAllScheduleCaches } from "@/lib/shiftScheduleQuery";
 
 /** מפתחות react-query שמתעדכנים לפי טבלה ב-Supabase */
 const TABLE_QUERY_PREFIXES = {
@@ -36,6 +37,9 @@ const TABLE_QUERY_PREFIXES = {
 
 function invalidateByPrefixes(queryClient, prefixes) {
   if (!prefixes?.length) return;
+  if (prefixes.includes("shift-registrations")) {
+    clearAllScheduleCaches();
+  }
   queryClient.invalidateQueries({
     predicate: (query) => {
       const key = query.queryKey?.[0];
@@ -54,7 +58,10 @@ export function useLiveDataSync() {
 
   useEffect(() => {
     if (demoModeEnabled) {
-      const refresh = () => queryClient.invalidateQueries();
+      const refresh = () => {
+        clearAllScheduleCaches();
+        queryClient.invalidateQueries();
+      };
       const onStorage = (event) => {
         if (event.key === DEMO_STORE_KEY || event.key === CHAT_BRANDING_STORAGE_KEY) refresh();
       };

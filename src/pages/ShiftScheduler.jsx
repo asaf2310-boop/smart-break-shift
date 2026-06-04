@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, addDays, isAfter } from "date-fns";
 import { useToast } from "@/components/ui/use-toast";
 import { motion } from "framer-motion";
@@ -73,7 +73,6 @@ export default function ShiftScheduler() {
       return rows;
     },
     initialData: () => readCachedSchedule(dateFrom, dateTo),
-    placeholderData: keepPreviousData,
     refetchOnMount: "always",
     enabled: !!agentName,
     throwOnError: false,

@@ -8,6 +8,7 @@ import { Pencil, Sun, Moon, X, Plus, Check, RefreshCw } from "lucide-react";
 const DAYS = ["ראשון", "שני", "שלישי", "רביעי", "חמישי"];
 import { AGENT_NAMES } from "@/constants/scheduling";
 import { sendScheduleSmsNotifications } from "@/lib/scheduleSms";
+import { refreshScheduleQueriesAfterPublish } from "@/lib/shiftScheduleQuery";
 import { useToast } from "@/components/ui/use-toast";
 import { demoModeEnabled } from "@/api/demoClient";
 
@@ -190,12 +191,17 @@ export default function PublishedScheduleEditor({ weekStart }) {
     ).then(r => r.flat());
     await Promise.all(allWeekRegs.map(r => dataClient.entities.ShiftRegistration.delete(r.id)));
 
+    let savedRecords = [];
     if (records.length > 0) {
-      await dataClient.entities.ShiftRegistration.bulkCreate(records);
+      savedRecords = await dataClient.entities.ShiftRegistration.bulkCreate(records);
     }
 
     await queryClient.invalidateQueries({ queryKey: ["published-regs-editor", dateFrom, dateTo] });
-    await queryClient.invalidateQueries({ queryKey: ["shift-registrations"] });
+    await refreshScheduleQueriesAfterPublish(queryClient, {
+      dateFrom,
+      dateTo,
+      records: savedRecords.length ? savedRecords : records,
+    });
 
     const smsResult = await sendScheduleSmsNotifications({
       records,
