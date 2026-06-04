@@ -204,6 +204,33 @@ export async function resolvePresentationSource(sessionId) {
   return null;
 }
 
+/**
+ * Browser URL for opening the training PDF in a new tab (agents).
+ * Supports Supabase public URLs, static paths, and IndexedDB blob URLs (same session).
+ */
+export async function resolvePresentationOpenUrl(sessionId) {
+  const resolved = await resolvePresentationSource(sessionId);
+  if (!resolved) return null;
+
+  if (resolved.kind === "url" && resolved.url) {
+    const url = resolved.url;
+    if (/^https?:\/\//i.test(url) || url.startsWith("blob:")) {
+      return url;
+    }
+    try {
+      return new URL(url, typeof window !== "undefined" ? window.location.origin : undefined).href;
+    } catch {
+      return url;
+    }
+  }
+
+  if (resolved.kind === "blob" && resolved.blob?.size) {
+    return URL.createObjectURL(resolved.blob);
+  }
+
+  return null;
+}
+
 export async function uploadTrainingPresentation(sessionId, file) {
   if (!sessionId || !file) {
     return { ok: false, message: "חסר מזהה מפגש או קובץ" };

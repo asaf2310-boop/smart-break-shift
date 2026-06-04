@@ -9,9 +9,11 @@ import { ArrowRight, Coffee, GraduationCap, Link2, Presentation } from "lucide-r
 import { resolveTrainingSchedule } from "@/lib/trainingSchedule";
 import { subscribeTrainingScheduleStore } from "@/lib/trainingScheduleStore";
 
-import { getExternalLink, listPresentationAvailability } from "@/lib/trainingPresentations";
-
-import TrainingPresentationShell from "@/components/training/TrainingPresentationShell";
+import {
+  getExternalLink,
+  listPresentationAvailability,
+  resolvePresentationOpenUrl,
+} from "@/lib/trainingPresentations";
 import { hypHeaderIconClass, m3PageClass } from "@/lib/hypPage";
 import { demoModeEnabled } from "@/api/demoClient";
 import { cn } from "@/lib/utils";
@@ -132,7 +134,7 @@ function SessionContent({ session, isBreak, contentStatus }) {
 
     if (hasUrl) actionHint = "לחצו למעבר לקישור";
 
-    else if (hasPdf) actionHint = "לחצו לפתיחת מצגת";
+    else if (hasPdf) actionHint = "לחצו לפתיחת המסמך בטאב חדש";
 
   }
 
@@ -296,8 +298,6 @@ export default function TrainingPage() {
 
   const [availability, setAvailability] = useState({});
 
-  const [activeSession, setActiveSession] = useState(null);
-
 
 
   const refreshSchedule = useCallback(() => {
@@ -336,7 +336,7 @@ export default function TrainingPage() {
 
 
 
-  const handleOpenSession = useCallback((session) => {
+  const handleOpenSession = useCallback(async (session) => {
 
     const status = availability[session.id] || { hasPdf: false, hasUrl: false };
 
@@ -356,7 +356,13 @@ export default function TrainingPage() {
 
     if (status.hasPdf) {
 
-      setActiveSession(session);
+      const pdfUrl = await resolvePresentationOpenUrl(session.id);
+
+      if (pdfUrl) {
+
+        window.open(pdfUrl, "_blank", "noopener,noreferrer");
+
+      }
 
     }
 
@@ -455,18 +461,6 @@ export default function TrainingPage() {
         </div>
 
       </div>
-
-
-
-      <TrainingPresentationShell
-
-        session={activeSession}
-
-        open={Boolean(activeSession)}
-
-        onClose={() => setActiveSession(null)}
-
-      />
 
     </div>
 
