@@ -11,7 +11,7 @@ import { sendScheduleSmsNotifications } from "@/lib/scheduleSms";
 import { useToast } from "@/components/ui/use-toast";
 import { demoModeEnabled } from "@/api/demoClient";
 
-function AgentCell({ agents, allAgentsOnDay, onRemove, onAdd }) {
+function AgentCell({ agents, onRemove, onAdd }) {
   const [showDropdown, setShowDropdown] = useState(false);
   const ref = useRef(null);
 
@@ -21,18 +21,20 @@ function AgentCell({ agents, allAgentsOnDay, onRemove, onAdd }) {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const availableToAdd = AGENT_NAMES.filter(n => !allAgentsOnDay.includes(n));
+  const availableToAdd = AGENT_NAMES.filter(n => !agents.includes(n));
 
   return (
-    <div className="flex flex-col gap-1 p-1">
+    <div className="flex flex-col gap-1 p-1 min-h-[4.5rem] text-right" dir="rtl">
+      <div className="flex flex-col gap-1 max-h-36 overflow-y-auto overscroll-contain">
       {agents.map(agent => (
-        <div key={agent} className="flex items-center justify-between gap-1 px-2 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-xs font-semibold text-indigo-700">
-          <span className="truncate">{agent}</span>
+        <div key={agent} className="flex items-center justify-between gap-1 flex-row-reverse px-2 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-xs font-semibold text-indigo-700">
+          <span className="break-words min-w-0 flex-1 text-right" title={agent}>{agent}</span>
           <button onClick={() => onRemove(agent)} className="hover:text-red-500 transition-colors flex-shrink-0">
             <X className="w-3 h-3" />
           </button>
         </div>
       ))}
+      </div>
       <div className="relative" ref={ref}>
         <button
           onClick={() => setShowDropdown(v => !v)}
@@ -43,7 +45,7 @@ function AgentCell({ agents, allAgentsOnDay, onRemove, onAdd }) {
           הוסף
         </button>
         {showDropdown && availableToAdd.length > 0 && (
-          <div className="absolute z-50 top-full mt-1 right-0 w-36 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+          <div className="absolute z-50 top-full mt-1 right-0 w-36 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden max-h-48 overflow-y-auto" dir="rtl">
             {availableToAdd.map(agent => (
               <button
                 key={agent}
@@ -105,14 +107,6 @@ export default function PublishedScheduleEditor({ weekStart }) {
   const getAgents = (dateStr, shiftType) => {
     if (!localRegs) return [];
     return localRegs[`${dateStr}|${shiftType}`] || [];
-  };
-
-  const getAllOnDay = (dateStr) => {
-    if (!localRegs) return [];
-    return [
-      ...(localRegs[`${dateStr}|morning`] || []),
-      ...(localRegs[`${dateStr}|evening`] || []),
-    ];
   };
 
   const handleRemove = (dateStr, shiftType, agent) => {
@@ -233,7 +227,6 @@ export default function PublishedScheduleEditor({ weekStart }) {
                 <AgentCell
                   key={dateStr}
                   agents={getAgents(dateStr, shift.type)}
-                  allAgentsOnDay={getAllOnDay(dateStr)}
                   onRemove={(agent) => handleRemove(dateStr, shift.type, agent)}
                   onAdd={(agent) => handleAdd(dateStr, shift.type, agent)}
                 />

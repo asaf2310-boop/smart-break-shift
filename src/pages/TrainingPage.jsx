@@ -305,15 +305,19 @@ function DayGridView({ days, daySummaries, onSelectDay }) {
       >
         בחרו יום לצפייה בלוח המפגשים
       </motion.p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+      <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
         {days.map((day, index) => (
-          <DayCard
+          <div
             key={day.date}
-            day={day}
-            dayIndex={index}
-            summary={daySummaries[day.date]}
-            onSelect={onSelectDay}
-          />
+            className="w-[calc((100%-0.75rem)/2)] sm:w-[calc((100%-2rem)/3)] min-w-0 shrink-0"
+          >
+            <DayCard
+              day={day}
+              dayIndex={index}
+              summary={daySummaries[day.date]}
+              onSelect={onSelectDay}
+            />
+          </div>
         ))}
       </div>
     </>
