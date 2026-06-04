@@ -1,4 +1,4 @@
-import { demoModeEnabled } from "@/api/demoClient";
+import { demoModeEnabled } from "@/api/demoMode";
 
 export const APP_USERS_STORAGE_KEY = "app-users-v1";
 

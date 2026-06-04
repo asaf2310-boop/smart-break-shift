@@ -140,33 +140,52 @@ function DayCard({ day, dayIndex, summary, onSelect }) {
       type="button"
       initial={{ opacity: 0, scale: 0.96 }}
       animate={{ opacity: 1, scale: 1 }}
-      transition={{ delay: dayIndex * 0.04 }}
+      whileHover={{
+        y: -6,
+        scale: 1.02,
+        boxShadow: "0 20px 60px rgba(37, 99, 235, 0.15)",
+      }}
+      transition={{ delay: dayIndex * 0.04, duration: 0.25, ease: "easeOut" }}
       onClick={() => onSelect(day.date)}
+      style={{ boxShadow: "0 10px 40px rgba(37, 99, 235, 0.08)" }}
       className={cn(
-        "m3-card aspect-square w-full p-3 sm:p-4 flex flex-col items-center justify-center gap-1.5",
-        "text-center transition-all hover:shadow-elevation-2 hover:ring-2 hover:ring-primary/25",
-        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+        "training-day-card aspect-square w-full min-h-0 min-w-0 flex flex-col items-center justify-center",
+        "text-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#2563EB]"
       )}
       aria-label={`יום ${day.weekdayLabel}, ${day.displayDate}, ${summary.sessionCount} מפגשים`}
     >
-      <span className="text-2xl sm:text-3xl font-bold text-primary leading-none">{shortLabel}</span>
-      <span className="text-xs sm:text-sm font-medium text-on-surface-variant leading-tight">{day.displayDate}</span>
-      <span className="text-[11px] sm:text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary mt-0.5">
+      <span className="training-day-card__curve training-day-card__curve--tl" aria-hidden />
+      <span className="training-day-card__curve training-day-card__curve--br" aria-hidden />
+      <span className="training-day-card__dots" aria-hidden />
+
+      <span className="training-day-card__badge" aria-hidden="true">
+        <span className="training-day-card__badge-overlay" />
+        <span className="training-day-card__badge-letter">{shortLabel}</span>
+      </span>
+
+      <span className="training-day-card__divider" aria-hidden="true">
+        <span className="training-day-card__divider-dot" />
+      </span>
+
+      <span className="training-day-card__date">{day.displayDate}</span>
+
+      <span className="training-day-card__meetings">
         {summary.sessionCount} מפגשים
       </span>
+
       {(summary.hasPdf || summary.hasUrl) && (
-        <div className="flex items-center gap-1.5 mt-1" aria-hidden>
+        <span className="training-day-card__icons" aria-hidden>
           {summary.hasPdf && (
-            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary">
-              <Presentation className="w-3.5 h-3.5" />
+            <span className="training-day-card__icon-btn">
+              <Presentation className="training-day-card__icon-svg" />
             </span>
           )}
           {summary.hasUrl && (
-            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-sky-100 text-sky-800">
-              <Link2 className="w-3.5 h-3.5" />
+            <span className="training-day-card__icon-btn training-day-card__icon-btn--link">
+              <Link2 className="training-day-card__icon-svg" />
             </span>
           )}
-        </div>
+        </span>
       )}
     </motion.button>
   );

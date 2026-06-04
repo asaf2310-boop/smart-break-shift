@@ -1,5 +1,6 @@
 import { createSupabaseDataClient, isSupabaseBackend } from "./dataClient";
-import { createDemoDataClient, demoModeEnabled } from "./demoClient";
+import { createDemoDataClient } from "./demoClient";
+import { demoModeEnabled } from "./demoMode";
 
 function createMissingBackendClient() {
   const error = new Error("לא מוגדר חיבור נתונים. הגדר Supabase או VITE_DEMO_MODE=true.");

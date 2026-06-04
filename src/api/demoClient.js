@@ -1,15 +1,14 @@
-import { validateBreakRegistration } from "@/lib/breakCapacity";
 import {
   createDemoAppUser,
   listAllDemoAppUsers,
   softDeleteDemoAppUser,
   updateDemoAppUser,
 } from "@/lib/appUsersStore";
+import { demoModeEnabled } from "./demoMode";
+
+export { demoModeEnabled } from "./demoMode";
 
 export const DEMO_STORE_KEY = "smart-break-shift-demo-store-v1";
-
-/** Build-time only (Vercel `VITE_*` at deploy). Off unless value is exactly "true". */
-export const demoModeEnabled = import.meta.env.VITE_DEMO_MODE === "true";
 
 /**
  * בדמו: שליחת מייל אמיתית דרך /api/send-email (Resend).
@@ -220,6 +219,7 @@ function createEntity(entityName) {
       const store = readStore();
 
       if (entityName === "BreakRegistration") {
+        const { validateBreakRegistration } = await import("@/lib/breakCapacity");
         const registrations = (store.breakRegistrations || []).filter((r) => r.date === row.date);
         const settings = (store.breakSettings || []).find((s) => s.date === row.date) || null;
         validateBreakRegistration({
