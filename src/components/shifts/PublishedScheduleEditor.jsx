@@ -11,7 +11,18 @@ import { sendScheduleSmsNotifications } from "@/lib/scheduleSms";
 import { useToast } from "@/components/ui/use-toast";
 import { demoModeEnabled } from "@/api/demoClient";
 
-function AgentCell({ agents, onRemove, onAdd }) {
+function agentsAvailableForCell(cellAgents) {
+  return AGENT_NAMES.filter((name) => !cellAgents.includes(name));
+}
+
+function AgentCell({
+  agents,
+  onRemove,
+  onAdd,
+  selectedAgent = null,
+  onAgentClick,
+  cellHighlighted = false,
+}) {
   const [showDropdown, setShowDropdown] = useState(false);
   const ref = useRef(null);
 
@@ -21,19 +32,46 @@ function AgentCell({ agents, onRemove, onAdd }) {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const availableToAdd = AGENT_NAMES.filter(n => !agents.includes(n));
+  const availableToAdd = agentsAvailableForCell(agents);
+  const pillHighlightClass =
+    "ring-2 ring-amber-400 border-amber-400 bg-amber-100 shadow-sm text-amber-900";
 
   return (
-    <div className="flex flex-col gap-1 p-1 min-h-[4.5rem] text-right" dir="rtl">
-      <div className="flex flex-col gap-1 max-h-36 overflow-y-auto overscroll-contain">
-      {agents.map(agent => (
-        <div key={agent} className="flex items-center justify-between gap-1 flex-row-reverse px-2 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-xs font-semibold text-indigo-700">
-          <span className="break-words min-w-0 flex-1 text-right" title={agent}>{agent}</span>
+    <div
+      className={`flex flex-col gap-1 p-1 min-h-[3rem] text-right rounded-lg transition-colors ${
+        cellHighlighted ? "ring-2 ring-inset ring-amber-300 bg-amber-50/50" : ""
+      }`}
+      dir="rtl"
+    >
+      <div className="flex flex-col gap-1">
+      {agents.map(agent => {
+        const pillHighlighted = selectedAgent && agent === selectedAgent;
+        return (
+        <div
+          key={agent}
+          className={`flex items-center justify-between gap-1 flex-row-reverse px-2 py-1 rounded-lg border text-xs font-semibold bg-indigo-50 border-indigo-200 text-indigo-700 ${
+            pillHighlighted ? pillHighlightClass : ""
+          }`}
+        >
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onAgentClick?.(agent);
+            }}
+            className={`break-words min-w-0 flex-1 text-right hover:underline cursor-pointer ${
+              pillHighlighted ? "text-amber-900" : ""
+            }`}
+            title={agent}
+          >
+            {agent}
+          </button>
           <button onClick={() => onRemove(agent)} className="hover:text-red-500 transition-colors flex-shrink-0">
             <X className="w-3 h-3" />
           </button>
         </div>
-      ))}
+        );
+      })}
       </div>
       <div className="relative" ref={ref}>
         <button
@@ -64,11 +102,27 @@ function AgentCell({ agents, onRemove, onAdd }) {
 
 export default function PublishedScheduleEditor({ weekStart }) {
   const [localRegs, setLocalRegs] = useState(null); // null = not loaded yet
+  const [selectedAgent, setSelectedAgent] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [sendSmsOnSave, setSendSmsOnSave] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const scheduleGridRef = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (scheduleGridRef.current && !scheduleGridRef.current.contains(e.target)) {
+        setSelectedAgent(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const handleAgentClick = (agent) => {
+    setSelectedAgent((prev) => (prev === agent ? null : agent));
+  };
 
   const weekDays = useMemo(
     () => Array.from({ length: 5 }, (_, i) => addDays(weekStart, i)),
@@ -199,7 +253,7 @@ export default function PublishedScheduleEditor({ weekStart }) {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-100 overflow-hidden mb-4">
+      <div ref={scheduleGridRef} className="rounded-2xl border border-slate-100 overflow-x-auto mb-4">
         {/* Header */}
         <div className="grid grid-cols-6 bg-slate-50 border-b border-slate-100">
           <div className="py-2 px-3 text-xs font-semibold text-slate-400">משמרת</div>
@@ -215,7 +269,7 @@ export default function PublishedScheduleEditor({ weekStart }) {
           { type: "morning", label: "בוקר", time: "08:00–16:00", Icon: Sun, color: "text-amber-500" },
           { type: "evening", label: "ערב", time: "09:00–17:00", Icon: Moon, color: "text-indigo-500" },
         ].map(shift => (
-          <div key={shift.type} className="grid grid-cols-6 border-t border-slate-100">
+          <div key={shift.type} className="grid grid-cols-6 auto-rows-auto items-stretch border-t border-slate-100">
             <div className="flex flex-col items-center justify-center gap-0.5 py-3 px-2 border-l border-slate-100">
               <shift.Icon className={`w-4 h-4 ${shift.color}`} />
               <span className={`text-xs font-bold ${shift.color}`}>{shift.label}</span>
@@ -223,10 +277,15 @@ export default function PublishedScheduleEditor({ weekStart }) {
             </div>
             {weekDays.map(date => {
               const dateStr = format(date, "yyyy-MM-dd");
+              const agents = getAgents(dateStr, shift.type);
+              const cellHighlighted = selectedAgent && agents.includes(selectedAgent);
               return (
                 <AgentCell
                   key={dateStr}
-                  agents={getAgents(dateStr, shift.type)}
+                  agents={agents}
+                  selectedAgent={selectedAgent}
+                  onAgentClick={handleAgentClick}
+                  cellHighlighted={cellHighlighted}
                   onRemove={(agent) => handleRemove(dateStr, shift.type, agent)}
                   onAdd={(agent) => handleAdd(dateStr, shift.type, agent)}
                 />
