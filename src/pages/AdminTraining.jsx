@@ -223,8 +223,9 @@ export default function AdminTraining() {
       const result = await uploadTrainingPresentation(sessionId, file);
       if (result.ok) {
         toast({
-          title: "הועלה בהצלחה",
-          description: result.message,
+          title: result.storageWarning === "bucket_missing" ? result.message : "הועלה בהצלחה",
+          description: result.description || (result.storageWarning ? undefined : result.message),
+          variant: result.storageWarning ? "default" : undefined,
           dedupeKey: `training-upload-${sessionId}`,
         });
         await refreshAvailability();

@@ -8,8 +8,33 @@ import {
 } from "@/lib/trainingDocStore";
 
 export const TRAINING_DOCS_BUCKET = "training-docs";
+
+/** הוראות כשה-bucket חסר בפרויקט Supabase (פרודקשן) */
+export const TRAINING_BUCKET_SETUP_HINT =
+  "צרו bucket בשם training-docs: Supabase → Storage → New bucket (Public), או הריצו supabase/training_docs_storage.sql ב-SQL Editor. פירוט: docs/TRAINING_STORAGE_SETUP.md";
+
 const META_STORAGE_KEY = "training-presentation-meta-v1";
 const DEFAULT_PUBLIC_SLIDE_BASE = "/training/slides";
+
+/** @param {{ message?: string; statusCode?: number; status?: number }} | null | undefined error */
+export function isStorageBucketMissingError(error) {
+  if (!error) return false;
+  const msg = String(error.message || "").toLowerCase();
+  const status = error.statusCode ?? error.status;
+  return (
+    msg.includes("bucket not found") ||
+    msg.includes("bucket does not exist") ||
+    (status === 404 && msg.includes("bucket"))
+  );
+}
+
+async function savePresentationLocally(sessionId, file) {
+  await saveTrainingPdfBlob(sessionId, file);
+  setPresentationMeta(sessionId, {
+    source: "indexeddb",
+    fileName: file.name,
+  });
+}
 
 function readMetaMap() {
   try {
@@ -211,7 +236,21 @@ export async function uploadTrainingPresentation(sessionId, file) {
       .upload(storagePath, file, { upsert: true, contentType: "application/pdf" });
 
     if (error) {
-      return { ok: false, message: error.message || "שגיאה בהעלאה ל-Supabase" };
+      if (isStorageBucketMissingError(error)) {
+        await savePresentationLocally(sessionId, file);
+        return {
+          ok: true,
+          message: "נשמר בדפדפן זה בלבד — bucket לא קיים",
+          description: `ה-bucket «${TRAINING_DOCS_BUCKET}» לא נמצא ב-Supabase. הנציגים לא יראו את הקובץ עד שייווצר. ${TRAINING_BUCKET_SETUP_HINT}`,
+          source: "indexeddb",
+          storageWarning: "bucket_missing",
+        };
+      }
+      return {
+        ok: false,
+        message: "שגיאה בהעלאה ל-Supabase",
+        description: error.message || TRAINING_BUCKET_SETUP_HINT,
+      };
     }
 
     setPresentationMeta(sessionId, {
@@ -224,11 +263,7 @@ export async function uploadTrainingPresentation(sessionId, file) {
     return { ok: true, message: "המצגת נשמרה בענן (Supabase)", source: "supabase" };
   }
 
-  await saveTrainingPdfBlob(sessionId, file);
-  setPresentationMeta(sessionId, {
-    source: "indexeddb",
-    fileName: file.name,
-  });
+  await savePresentationLocally(sessionId, file);
 
   return {
     ok: true,

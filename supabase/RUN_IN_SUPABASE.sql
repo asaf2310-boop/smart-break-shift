@@ -17,6 +17,7 @@
 --   Authentication → Providers → Email (הפעלה)
 --   Authentication → SMTP (או Resend/SendGrid) — לאימייל איפוס סיסמה והזמנות
 --   Project Settings → API — VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY באפליקציה
+--   Storage — bucket מצגות הדרכה: supabase/training_docs_storage.sql (או docs/TRAINING_STORAGE_SETUP.md)
 -- =============================================================================
 
 -- ── 1. הרחבות ───────────────────────────────────────────────────────────────
