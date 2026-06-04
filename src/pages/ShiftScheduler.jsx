@@ -12,8 +12,9 @@ import {
   HOLIDAY_EVE_DATES,
   WEEKDAY_LABELS,
   getStoredAgentName,
-  getWeekStart,
+  getWeekStartIsrael,
   getWeekDays,
+  getIsraelDateStr,
   getConstraintsDeadline,
   canMarkMorningUnavailable,
   countMorningUnavailableDays,
@@ -28,6 +29,10 @@ import {
   fetchWeekShiftRegistrations,
   readCachedSchedule,
   writeCachedSchedule,
+  readLastPublishedScheduleWeek,
+  LAST_PUBLISHED_SCHEDULE_KEY,
+  clearAllScheduleCaches,
+  filterRegistrationsForWeek,
 } from "@/lib/shiftScheduleQuery";
 import WeeklySchedulePanel from "@/components/shifts/WeeklySchedulePanel";
 import BackendConfigBanner from "@/components/BackendConfigBanner";
@@ -42,6 +47,9 @@ export default function ShiftScheduler() {
   const [noteDialog, setNoteDialog] = useState(null); // { date, type: "unavailable"|"vacation_request" }
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState("schedule"); // "constraints" | "schedule"
+  const [lastPublishedFocus, setLastPublishedFocus] = useState(() =>
+    readLastPublishedScheduleWeek()
+  );
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -52,18 +60,38 @@ export default function ShiftScheduler() {
   }, []);
 
   const now = new Date();
-  const thisWeekStart = getWeekStart(now);
-  const nextWeekStart = addDays(thisWeekStart, 7);
+  const israelTodayKey = getIsraelDateStr(now);
+  const thisWeekStart = useMemo(() => getWeekStartIsrael(now), [israelTodayKey]);
+  const nextWeekStart = useMemo(() => addDays(thisWeekStart, 7), [thisWeekStart]);
 
   const constraintsWeekStart = nextWeekStart;
-  const currentWeekDays = useMemo(() => getWeekDays(thisWeekStart), [thisWeekStart]);
-  const scheduleDays = useMemo(() => getWeekDays(nextWeekStart), [nextWeekStart]);
-  const constraintsDays = useMemo(() => getWeekDays(constraintsWeekStart), [constraintsWeekStart]);
+  const currentWeekDays = useMemo(() => getWeekDays(thisWeekStart), [thisWeekStart.getTime()]);
+  const scheduleDays = useMemo(() => getWeekDays(nextWeekStart), [nextWeekStart.getTime()]);
+  const constraintsDays = useMemo(() => getWeekDays(constraintsWeekStart), [constraintsWeekStart.getTime()]);
 
   const currentDateFrom = format(currentWeekDays[0], "yyyy-MM-dd");
   const currentDateTo = format(currentWeekDays[4], "yyyy-MM-dd");
   const scheduleDateFrom = format(scheduleDays[0], "yyyy-MM-dd");
   const scheduleDateTo = format(scheduleDays[4], "yyyy-MM-dd");
+
+  useEffect(() => {
+    clearAllScheduleCaches();
+    setLastPublishedFocus(readLastPublishedScheduleWeek());
+  }, [currentDateFrom, scheduleDateFrom]);
+
+  useEffect(() => {
+    const syncPublishedFocus = () =>
+      setLastPublishedFocus(readLastPublishedScheduleWeek());
+    window.addEventListener("focus", syncPublishedFocus);
+    const onStorage = (event) => {
+      if (event.key === LAST_PUBLISHED_SCHEDULE_KEY) syncPublishedFocus();
+    };
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("focus", syncPublishedFocus);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
 
   const weekScheduleQueryOptions = (dateFrom, dateTo, weekDays) => ({
     queryKey: ["shift-registrations", dateFrom, dateTo],
@@ -72,7 +100,7 @@ export default function ShiftScheduler() {
       writeCachedSchedule(dateFrom, dateTo, rows);
       return rows;
     },
-    initialData: () => readCachedSchedule(dateFrom, dateTo),
+    placeholderData: () => readCachedSchedule(dateFrom, dateTo),
     refetchOnMount: "always",
     enabled: !!agentName,
     throwOnError: false,
@@ -87,6 +115,11 @@ export default function ShiftScheduler() {
     error: currentWeekErrorObj,
   } = useQuery(weekScheduleQueryOptions(currentDateFrom, currentDateTo, currentWeekDays));
 
+  const currentWeekRegistrationsFiltered = useMemo(
+    () => filterRegistrationsForWeek(currentWeekRegistrations, currentDateFrom, currentDateTo),
+    [currentWeekRegistrations, currentDateFrom, currentDateTo]
+  );
+
   const {
     data: scheduleRegistrations = [],
     isLoading: loadingSchedule,
@@ -94,6 +127,74 @@ export default function ShiftScheduler() {
     isError: scheduleError,
     error: scheduleErrorObj,
   } = useQuery(weekScheduleQueryOptions(scheduleDateFrom, scheduleDateTo, scheduleDays));
+
+  const scheduleRegistrationsFiltered = useMemo(
+    () => filterRegistrationsForWeek(scheduleRegistrations, scheduleDateFrom, scheduleDateTo),
+    [scheduleRegistrations, scheduleDateFrom, scheduleDateTo]
+  );
+
+  const schedulePanels = useMemo(() => {
+    const currentPanel = {
+      key: "current",
+      title: "שיבוץ השבוע",
+      weekLabel: `${format(currentWeekDays[0], "dd/MM")} – ${format(currentWeekDays[4], "dd/MM/yyyy")}`,
+      scheduleDays: currentWeekDays,
+      scheduleRegistrations: currentWeekRegistrationsFiltered,
+      isLoading: loadingCurrentWeek,
+      isFetching: fetchingCurrentWeek,
+      isError: currentWeekError,
+      error: currentWeekErrorObj,
+      emptyTitle: "השיבוץ לשבוע הנוכחי טרם פורסם",
+      emptyHint: "המנהל יפרסם בלוח «משמרות» → «שיבוץ נוכחי»",
+      accent: "emerald",
+      dateFrom: currentDateFrom,
+    };
+    const nextPanel = {
+      key: "next",
+      title: "שיבוץ שבוע הבא",
+      weekLabel: `${format(scheduleDays[0], "dd/MM")} – ${format(scheduleDays[4], "dd/MM/yyyy")}`,
+      scheduleDays,
+      scheduleRegistrations: scheduleRegistrationsFiltered,
+      isLoading: loadingSchedule,
+      isFetching: fetchingSchedule,
+      isError: scheduleError,
+      error: scheduleErrorObj,
+      emptyTitle: "השיבוץ לשבוע הבא טרם פורסם",
+      emptyHint: "המנהל יפרסם בלוח «משמרות» → «שיבוץ שבוע הבא»",
+      accent: "amber",
+      dateFrom: scheduleDateFrom,
+    };
+    const lastPublished = lastPublishedFocus;
+    if (lastPublished?.dateFrom === scheduleDateFrom) {
+      return [nextPanel, currentPanel];
+    }
+    if (lastPublished?.dateFrom === currentDateFrom) {
+      return [currentPanel, nextPanel];
+    }
+    if (
+      scheduleRegistrationsFiltered.length > 0 &&
+      currentWeekRegistrationsFiltered.length === 0
+    ) {
+      return [nextPanel, currentPanel];
+    }
+    return [currentPanel, nextPanel];
+  }, [
+    currentWeekDays,
+    scheduleDays,
+    currentWeekRegistrationsFiltered,
+    scheduleRegistrationsFiltered,
+    loadingCurrentWeek,
+    fetchingCurrentWeek,
+    currentWeekError,
+    currentWeekErrorObj,
+    loadingSchedule,
+    fetchingSchedule,
+    scheduleError,
+    scheduleErrorObj,
+    currentDateFrom,
+    scheduleDateFrom,
+    lastPublishedFocus,
+  ]);
 
   const deadline = getConstraintsDeadline(thisWeekStart);
   const isPastDeadline = isAfter(now, deadline);
@@ -400,8 +501,6 @@ export default function ShiftScheduler() {
   }
 
   const constraintsWeekLabel = `${format(constraintsDays[0], "dd/MM")} – ${format(constraintsDays[4], "dd/MM/yyyy")}`;
-  const currentWeekLabel = `${format(currentWeekDays[0], "dd/MM")} – ${format(currentWeekDays[4], "dd/MM/yyyy")}`;
-  const scheduleWeekLabel = `${format(scheduleDays[0], "dd/MM")} – ${format(scheduleDays[4], "dd/MM/yyyy")}`;
   const deadlineLabel = format(deadline, "dd/MM בשעה HH:mm");
 
   return (
@@ -657,34 +756,27 @@ export default function ShiftScheduler() {
         {activeTab === "schedule" && (
           <div className="space-y-6">
             <BackendConfigBanner />
-            <WeeklySchedulePanel
-              title="שיבוץ השבוע"
-              weekLabel={currentWeekLabel}
-              scheduleDays={currentWeekDays}
-              scheduleRegistrations={currentWeekRegistrations}
-              agentName={agentName}
-              isLoading={loadingCurrentWeek}
-              isFetching={fetchingCurrentWeek}
-              isError={currentWeekError}
-              error={currentWeekErrorObj}
-              emptyTitle="השיבוץ לשבוע הנוכחי טרם פורסם"
-              emptyHint="המנהל יפרסם בלוח «משמרות» → «שיבוץ נוכחי»"
-              accent="emerald"
-            />
-            <WeeklySchedulePanel
-              title="שיבוץ שבוע הבא"
-              weekLabel={scheduleWeekLabel}
-              scheduleDays={scheduleDays}
-              scheduleRegistrations={scheduleRegistrations}
-              agentName={agentName}
-              isLoading={loadingSchedule}
-              isFetching={fetchingSchedule}
-              isError={scheduleError}
-              error={scheduleErrorObj}
-              emptyTitle="השיבוץ לשבוע הבא טרם פורסם"
-              emptyHint="המנהל יפרסם בלוח «משמרות» → «שיבוץ שבוע הבא»"
-              accent="amber"
-            />
+            <p className="text-center text-xs text-slate-500 px-4">
+              התאריכים למטה הם לוח שבוע ראשון–חמישי (שעון ישראל). ודאו שאתם בוחנים את הכרטיס עם טווח התאריכים של השיבוץ שפורסם.
+            </p>
+            {schedulePanels.map((panel, index) => (
+              <WeeklySchedulePanel
+                key={panel.key}
+                title={panel.title}
+                weekLabel={panel.weekLabel}
+                scheduleDays={panel.scheduleDays}
+                scheduleRegistrations={panel.scheduleRegistrations}
+                agentName={agentName}
+                isLoading={panel.isLoading}
+                isFetching={panel.isFetching}
+                isError={panel.isError}
+                error={panel.error}
+                emptyTitle={panel.emptyTitle}
+                emptyHint={panel.emptyHint}
+                accent={panel.accent}
+                highlighted={index === 0}
+              />
+            ))}
           </div>
         )}
 

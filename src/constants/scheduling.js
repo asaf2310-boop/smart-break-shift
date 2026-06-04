@@ -86,6 +86,11 @@ export function getWeekStart(date) {
   return d;
 }
 
+/** Sunday week start for Israel's calendar day (DST-safe). */
+export function getWeekStartIsrael(now = new Date()) {
+  return getWeekStart(parseDateStrLocal(getIsraelDateStr(now)));
+}
+
 export function getWeekDays(weekStart) {
   return Array.from({ length: 5 }, (_, i) => addDays(weekStart, i));
 }

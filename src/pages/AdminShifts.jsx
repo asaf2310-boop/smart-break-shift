@@ -5,7 +5,14 @@ import { ShieldCheck, ChevronRight, ChevronLeft, Check, Palmtree, X, Sun, Moon, 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { dataClient } from "@/api/client";
 import { Link } from "react-router-dom";
-import { AGENT_NAMES, HOLIDAY_EVE_DATES, WEEKDAY_LABELS, getWeekDays } from "@/constants/scheduling";
+import {
+  AGENT_NAMES,
+  HOLIDAY_EVE_DATES,
+  WEEKDAY_LABELS,
+  getWeekDays,
+  getWeekStartIsrael,
+  getTodayIsraelDate,
+} from "@/constants/scheduling";
 import AutoScheduleBuilder from "../components/shifts/AutoScheduleBuilder";
 import PublishedScheduleEditor from "../components/shifts/PublishedScheduleEditor";
 import VacationApprovalPanel from "../components/admin/VacationApprovalPanel";
@@ -20,17 +27,13 @@ const SHIFTS = [
   { type: "evening", label: "משמרת ערב", time: "09:00 – 17:00", icon: Moon, gradient: "from-indigo-400 to-purple-500", bg: "bg-indigo-50/50" },
 ];
 
-function getWeekStart(date) {
-  const d = new Date(date);
-  d.setDate(d.getDate() - d.getDay());
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
 export default function AdminShifts() {
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(() => getTodayIsraelDate());
   const [activeTab, setActiveTab] = useState("current"); // "current" | "next"
-  const weekStart = getWeekStart(selectedDate);
+  const weekStart = getWeekStartIsrael(selectedDate);
+  const calendarWeekStart = getWeekStartIsrael();
+  const adminWeekOffset =
+    Math.round((weekStart.getTime() - calendarWeekStart.getTime()) / (7 * 24 * 60 * 60 * 1000));
 
   const weekDays = useMemo(() => getWeekDays(weekStart), [weekStart]);
 
@@ -71,6 +74,13 @@ export default function AdminShifts() {
           </button>
         </div>
 
+        {adminWeekOffset !== 0 && (
+          <p className="text-center text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2 mb-4">
+            צופים בשבוע {adminWeekOffset > 0 ? "עתידי" : "קודם"} ({format(weekDays[0], "dd/MM")}–{format(weekDays[4], "dd/MM/yyyy")}).
+            נציגים רואים אוטומטית את שבוע ישראל הנוכחי — לפרסום לשבוע הנוכחי/הבא השתמשו בלשוניות למטה בלי לשנות תאריך.
+          </p>
+        )}
+
         {/* Tabs */}
         <div className="flex justify-center gap-2 mb-6">
           <button
@@ -82,6 +92,9 @@ export default function AdminShifts() {
             }`}
           >
             שיבוץ נוכחי
+            <span className="block text-[10px] font-normal opacity-90 mt-0.5">
+              {format(weekDays[0], "dd/MM")}–{format(weekDays[4], "dd/MM")}
+            </span>
           </button>
           <button
             onClick={() => setActiveTab("next")}
@@ -92,6 +105,9 @@ export default function AdminShifts() {
             }`}
           >
             שיבוץ שבוע הבא
+            <span className="block text-[10px] font-normal opacity-90 mt-0.5">
+              {format(addDays(weekStart, 7), "dd/MM")}–{format(addDays(weekStart, 11), "dd/MM")}
+            </span>
           </button>
         </div>
 
