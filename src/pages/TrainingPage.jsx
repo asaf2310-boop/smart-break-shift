@@ -1,17 +1,23 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { parseISO } from "date-fns";
 import {
   ArrowRight,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   Coffee,
   GraduationCap,
   Link2,
   Presentation,
 } from "lucide-react";
 
-import { resolveTrainingSchedule } from "@/lib/trainingSchedule";
+import {
+  getDefaultTrainingWeekIndex,
+  groupTrainingDaysIntoWeeks,
+  resolveTrainingSchedule,
+} from "@/lib/trainingSchedule";
 import { subscribeTrainingScheduleStore } from "@/lib/trainingScheduleStore";
 import {
   getExternalLink,
@@ -191,6 +197,50 @@ function DayCard({ day, dayIndex, summary, onSelect }) {
   );
 }
 
+function WeekNavigator({ weeks, weekIndex, onWeekChange }) {
+  if (weeks.length <= 1) return null;
+
+  const week = weeks[weekIndex];
+  const canPrev = weekIndex > 0;
+  const canNext = weekIndex < weeks.length - 1;
+
+  return (
+    <motion.nav
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      aria-label="ניווט בין שבועות הקורס"
+      className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mb-5"
+    >
+      <button
+        type="button"
+        onClick={() => onWeekChange(weekIndex - 1)}
+        disabled={!canPrev}
+        className="m3-btn-outlined p-2 disabled:opacity-40 disabled:pointer-events-none"
+        aria-label="שבוע קודם"
+      >
+        <ChevronRight className="w-5 h-5" />
+      </button>
+
+      <div className="text-center min-w-[10rem] px-2">
+        <p className="text-sm font-semibold text-primary">
+          שבוע {weekIndex + 1} מתוך {weeks.length}
+        </p>
+        <p className="m3-label-medium mt-0.5">{week.rangeLabel}</p>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => onWeekChange(weekIndex + 1)}
+        disabled={!canNext}
+        className="m3-btn-outlined p-2 disabled:opacity-40 disabled:pointer-events-none"
+        aria-label="שבוע הבא"
+      >
+        <ChevronLeft className="w-5 h-5" />
+      </button>
+    </motion.nav>
+  );
+}
+
 function DayDetailView({ day, availability, onOpenSession, onBack }) {
   return (
     <motion.div
@@ -203,7 +253,7 @@ function DayDetailView({ day, availability, onOpenSession, onBack }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <button type="button" onClick={onBack} className="m3-btn-outlined text-xs py-2 gap-1.5 shrink-0">
           <ArrowRight className="w-4 h-4" />
-          חזרה לכל הימים
+          חזרה לימי השבוע
         </button>
         <p className="m3-label-medium text-center flex-1 min-w-[10rem]">
           לחצו על מפגש לקישור או מצגת
@@ -273,6 +323,8 @@ function DayGridView({ days, daySummaries, onSelectDay }) {
 export default function TrainingPage() {
   const [schedule, setSchedule] = useState(() => resolveTrainingSchedule());
   const [selectedDayKey, setSelectedDayKey] = useState(null);
+  const [weekIndex, setWeekIndex] = useState(0);
+  const weeksSignatureRef = useRef("");
 
   const sessionIds = useMemo(
     () => schedule.sessions.filter((s) => !s.isBreak).map((s) => s.id),
@@ -298,6 +350,23 @@ export default function TrainingPage() {
   useEffect(() => {
     refreshAvailability();
   }, [refreshAvailability]);
+
+  const weeks = useMemo(() => groupTrainingDaysIntoWeeks(schedule.days), [schedule.days]);
+
+  useEffect(() => {
+    const signature = weeks.map((w) => w.weekStart).join("|");
+    if (signature !== weeksSignatureRef.current) {
+      weeksSignatureRef.current = signature;
+      setWeekIndex(getDefaultTrainingWeekIndex(weeks));
+      return;
+    }
+    setWeekIndex((prev) => Math.min(prev, Math.max(0, weeks.length - 1)));
+  }, [weeks]);
+
+  const currentWeekDays = useMemo(
+    () => weeks[weekIndex]?.days ?? [],
+    [weeks, weekIndex]
+  );
 
   const daySummaries = useMemo(() => {
     const map = {};
@@ -382,8 +451,13 @@ export default function TrainingPage() {
             />
           ) : (
             <motion.div key="grid" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <WeekNavigator
+                weeks={weeks}
+                weekIndex={weekIndex}
+                onWeekChange={setWeekIndex}
+              />
               <DayGridView
-                days={schedule.days}
+                days={currentWeekDays}
                 daySummaries={daySummaries}
                 onSelectDay={setSelectedDayKey}
               />

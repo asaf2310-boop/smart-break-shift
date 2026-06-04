@@ -1,4 +1,4 @@
-import { addDays, differenceInCalendarDays, format, parseISO } from "date-fns";
+import { addDays, differenceInCalendarDays, format, parseISO, startOfWeek } from "date-fns";
 import courseConfig from "@/data/trainingCourseConfig.json";
 import courseTemplate from "@/data/trainingCourseTemplate.json";
 import {
@@ -79,4 +79,59 @@ export function resolveTrainingSchedule(config, template = courseTemplate) {
 
 export function getTrainingCourseConfig() {
   return getEffectiveCourseConfig();
+}
+
+/** Sunday (Israel) week key yyyy-MM-dd for grouping training days. */
+export function getTrainingWeekStartKey(dateStr) {
+  const date = parseDateOnly(dateStr);
+  return format(startOfWeek(date, { weekStartsOn: 0 }), "yyyy-MM-dd");
+}
+
+function formatTrainingWeekRangeLabel(days) {
+  if (!days.length) return "";
+  const first = days[0].date;
+  const last = days[days.length - 1].date;
+  return `${format(parseDateOnly(first), "d.M.yyyy")} – ${format(parseDateOnly(last), "d.M.yyyy")}`;
+}
+
+/**
+ * Group resolved training days by calendar week (week starts Sunday).
+ * Each week object contains only days that fall in that Sun–Sat span (typically Sun–Thu).
+ */
+export function groupTrainingDaysIntoWeeks(days) {
+  const byWeek = new Map();
+  for (const day of days) {
+    const key = getTrainingWeekStartKey(day.date);
+    if (!byWeek.has(key)) byWeek.set(key, []);
+    byWeek.get(key).push(day);
+  }
+
+  return [...byWeek.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([weekStart, weekDays]) => {
+      const sorted = [...weekDays].sort((a, b) => a.date.localeCompare(b.date));
+      return {
+        weekStart,
+        days: sorted,
+        rangeLabel: formatTrainingWeekRangeLabel(sorted),
+      };
+    });
+}
+
+/** First course week, or the week that contains today when within the course date span. */
+export function getDefaultTrainingWeekIndex(weeks, referenceDate = new Date()) {
+  if (!weeks.length) return 0;
+
+  const todayStr = format(referenceDate, "yyyy-MM-dd");
+  const firstDate = weeks[0].days[0]?.date;
+  const lastWeek = weeks[weeks.length - 1];
+  const lastDate = lastWeek.days[lastWeek.days.length - 1]?.date;
+
+  if (!firstDate || !lastDate) return 0;
+  if (todayStr < firstDate) return 0;
+  if (todayStr > lastDate) return weeks.length - 1;
+
+  const todayWeekKey = getTrainingWeekStartKey(todayStr);
+  const idx = weeks.findIndex((w) => w.weekStart === todayWeekKey);
+  return idx >= 0 ? idx : 0;
 }
