@@ -117,7 +117,7 @@ export default function WeeklySchedulePanel({
                   {scheduleDays.map((date, i) => (
                     <div key={i} className="text-center">
                       <div className="text-xs font-semibold text-slate-500">{WEEKDAY_LABELS[i]}</div>
-                      <div className="text-sm font-bold text-slate-700">{format(date, "dd/MM")}</div>
+                      <div className="text-sm font-bold text-slate-700">{format(date, "dd/MM/yyyy")}</div>
                     </div>
                   ))}
                 </div>
@@ -184,7 +184,7 @@ export default function WeeklySchedulePanel({
                         {scheduleDays.map((date, i) => (
                           <div key={i} className="text-center pb-2">
                             <div className="text-xs font-semibold text-slate-500">{WEEKDAY_LABELS[i]}</div>
-                            <div className="text-xs font-bold text-slate-700">{format(date, "dd/MM")}</div>
+                            <div className="text-xs font-bold text-slate-700">{format(date, "dd/MM/yyyy")}</div>
                           </div>
                         ))}
                       </div>

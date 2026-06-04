@@ -12,6 +12,8 @@ import {
   getWeekDays,
   getWeekStartIsrael,
   getTodayIsraelDate,
+  parseDateStrLocal,
+  formatDateStr,
 } from "@/constants/scheduling";
 import AutoScheduleBuilder from "../components/shifts/AutoScheduleBuilder";
 import PublishedScheduleEditor from "../components/shifts/PublishedScheduleEditor";
@@ -66,7 +68,7 @@ export default function AdminShifts() {
           <input
             type="date"
             value={format(selectedDate, "yyyy-MM-dd")}
-            onChange={e => setSelectedDate(new Date(e.target.value))}
+            onChange={(e) => setSelectedDate(parseDateStrLocal(e.target.value))}
             className="text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl px-4 py-2 shadow-sm outline-none focus:border-indigo-400"
           />
           <button onClick={() => setSelectedDate(d => addDays(d, 7))} className="w-9 h-9 rounded-xl bg-white border border-slate-200 hover:border-indigo-300 flex items-center justify-center transition-all shadow-sm">
@@ -74,10 +76,14 @@ export default function AdminShifts() {
           </button>
         </div>
 
+        <p className="text-center text-[11px] text-slate-500 mb-2 font-mono" dir="ltr">
+          weekStart={formatDateStr(weekStart)} · current {formatDateStr(weekDays[0])}–{formatDateStr(weekDays[4])} · next {formatDateStr(addDays(weekStart, 7))}–{formatDateStr(addDays(weekStart, 11))}
+        </p>
+
         {adminWeekOffset !== 0 && (
           <p className="text-center text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2 mb-4">
-            צופים בשבוע {adminWeekOffset > 0 ? "עתידי" : "קודם"} ({format(weekDays[0], "dd/MM")}–{format(weekDays[4], "dd/MM/yyyy")}).
-            נציגים רואים אוטומטית את שבוע ישראל הנוכחי — לפרסום לשבוע הנוכחי/הבא השתמשו בלשוניות למטה בלי לשנות תאריך.
+            צופים בשבוע {adminWeekOffset > 0 ? "עתידי" : "קודם"} ({format(weekDays[0], "dd/MM/yyyy")}–{format(weekDays[4], "dd/MM/yyyy")}).
+            לפרסום 7–11.6: השאירו תאריך היום ובחרו «שיבוץ שבוע הבא» — לא «שיבוץ נוכחי» (31/05–04/06).
           </p>
         )}
 

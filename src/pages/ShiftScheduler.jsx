@@ -33,6 +33,7 @@ import {
   LAST_PUBLISHED_SCHEDULE_KEY,
   clearAllScheduleCaches,
   filterRegistrationsForWeek,
+  resolveAgentSchedulePanels,
 } from "@/lib/shiftScheduleQuery";
 import WeeklySchedulePanel from "@/components/shifts/WeeklySchedulePanel";
 import BackendConfigBanner from "@/components/BackendConfigBanner";
@@ -136,8 +137,8 @@ export default function ShiftScheduler() {
   const schedulePanels = useMemo(() => {
     const currentPanel = {
       key: "current",
-      title: "שיבוץ השבוע",
-      weekLabel: `${format(currentWeekDays[0], "dd/MM")} – ${format(currentWeekDays[4], "dd/MM/yyyy")}`,
+      title: "שיבוץ השבוע (לוח)",
+      weekLabel: `${format(currentWeekDays[0], "dd/MM/yyyy")} – ${format(currentWeekDays[4], "dd/MM/yyyy")}`,
       scheduleDays: currentWeekDays,
       scheduleRegistrations: currentWeekRegistrationsFiltered,
       isLoading: loadingCurrentWeek,
@@ -151,33 +152,24 @@ export default function ShiftScheduler() {
     };
     const nextPanel = {
       key: "next",
-      title: "שיבוץ שבוע הבא",
-      weekLabel: `${format(scheduleDays[0], "dd/MM")} – ${format(scheduleDays[4], "dd/MM/yyyy")}`,
+      title: "שיבוץ משמרות",
+      weekLabel: `${format(scheduleDays[0], "dd/MM/yyyy")} – ${format(scheduleDays[4], "dd/MM/yyyy")}`,
       scheduleDays,
       scheduleRegistrations: scheduleRegistrationsFiltered,
       isLoading: loadingSchedule,
       isFetching: fetchingSchedule,
       isError: scheduleError,
       error: scheduleErrorObj,
-      emptyTitle: "השיבוץ לשבוע הבא טרם פורסם",
-      emptyHint: "המנהל יפרסם בלוח «משמרות» → «שיבוץ שבוע הבא»",
+      emptyTitle: "השיבוץ לשבוע העבודה טרם פורסם",
+      emptyHint: "המנהל יפרסם בלוח «משמרות» → «שיבוץ שבוע הבא» (7–11.6 וכו׳)",
       accent: "amber",
       dateFrom: scheduleDateFrom,
     };
-    const lastPublished = lastPublishedFocus;
-    if (lastPublished?.dateFrom === scheduleDateFrom) {
-      return [nextPanel, currentPanel];
-    }
-    if (lastPublished?.dateFrom === currentDateFrom) {
-      return [currentPanel, nextPanel];
-    }
-    if (
-      scheduleRegistrationsFiltered.length > 0 &&
-      currentWeekRegistrationsFiltered.length === 0
-    ) {
-      return [nextPanel, currentPanel];
-    }
-    return [currentPanel, nextPanel];
+    return resolveAgentSchedulePanels({
+      currentPanel,
+      nextPanel,
+      lastPublished: lastPublishedFocus,
+    });
   }, [
     currentWeekDays,
     scheduleDays,
@@ -757,7 +749,7 @@ export default function ShiftScheduler() {
           <div className="space-y-6">
             <BackendConfigBanner />
             <p className="text-center text-xs text-slate-500 px-4">
-              התאריכים למטה הם לוח שבוע ראשון–חמישי (שעון ישראל). ודאו שאתם בוחנים את הכרטיס עם טווח התאריכים של השיבוץ שפורסם.
+              מוצג שיבוץ שבוע העבודה ({scheduleDateFrom}–{scheduleDateTo}, א׳–ה׳ ישראל). לא לוח 31/05–04/06 — זה שבוע קלנדרי אחר.
             </p>
             {schedulePanels.map((panel, index) => (
               <WeeklySchedulePanel

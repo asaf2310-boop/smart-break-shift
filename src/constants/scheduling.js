@@ -95,6 +95,11 @@ export function getWeekDays(weekStart) {
   return Array.from({ length: 5 }, (_, i) => addDays(weekStart, i));
 }
 
+/** Sunday start of the work week where admins publish agent shifts (calendar week + 7). */
+export function getPublishedScheduleWeekStart(now = new Date()) {
+  return addDays(getWeekStartIsrael(now), 7);
+}
+
 /** דד-ליין אילוצים: רביעי 16:00 */
 export function getConstraintsDeadline(weekStart) {
   const wednesday = addDays(weekStart, 3);

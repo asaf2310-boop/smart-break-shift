@@ -253,7 +253,10 @@ export default function PublishedScheduleEditor({ weekStart }) {
           <div>
             <h3 className="font-bold text-slate-800">עריכת שיבוץ פורסם</h3>
             <p className="text-xs text-slate-400">
-              שבוע {format(weekDays[0], "dd/MM")} – {format(weekDays[4], "dd/MM/yyyy")}
+              שבוע {format(weekDays[0], "dd/MM/yyyy")} – {format(weekDays[4], "dd/MM/yyyy")}
+            </p>
+            <p className="text-[10px] text-slate-400 font-mono mt-0.5" dir="ltr">
+              {dateFrom} – {dateTo}
             </p>
           </div>
         </div>
