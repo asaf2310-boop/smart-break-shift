@@ -1,5 +1,4 @@
-import React, { useMemo } from "react";
-import { parseISO } from "date-fns";
+import React from "react";
 import {
   ArrowRight,
   BookOpen,
@@ -17,23 +16,6 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-
-const WEEKDAY_SHORT = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
-
-function weekdayShort(dateStr) {
-  return WEEKDAY_SHORT[parseISO(`${dateStr}T12:00:00`).getDay()];
-}
-
-function computeDayProgress(sessions, availability) {
-  const trainingSessions = sessions.filter((s) => !s.isBreak);
-  const total = trainingSessions.length;
-  const completed = trainingSessions.filter((s) => {
-    const status = availability[s.id];
-    return status?.hasPdf || status?.hasUrl;
-  }).length;
-  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
-  return { total, completed, percent };
-}
 
 function resolveSessionIcon(session) {
   if (session.isBreak) return Coffee;
@@ -145,12 +127,7 @@ function SessionTimelineCard({ session, displayDate, contentStatus, onOpen, isLa
 }
 
 export default function TrainingDayTimeline({ day, availability, onOpenSession, onBack }) {
-  const progress = useMemo(
-    () => computeDayProgress(day.sessions, availability),
-    [day.sessions, availability]
-  );
-
-  const shortLabel = weekdayShort(day.date);
+  const sessionCount = day.sessions.filter((session) => !session.isBreak).length;
 
   return (
     <div className="training-timeline-root space-y-5">
@@ -174,37 +151,12 @@ export default function TrainingDayTimeline({ day, availability, onOpenSession, 
           <div className="training-timeline-header__top">
             <div className="training-timeline-header__titles">
               <p className="training-timeline-header__welcome">ברוכים הבאים ליום ההדרכה</p>
-              <h2 className="training-timeline-header__day">
-                יום {day.weekdayLabel}
-                <span className="training-timeline-header__short">{shortLabel}</span>
-              </h2>
+              <h2 className="training-timeline-header__day">יום {day.weekdayLabel}</h2>
               <p className="training-timeline-header__date">{day.displayDate}</p>
             </div>
             <span className="training-timeline-header__count">
-              {progress.total} מפגשים
+              {sessionCount} מפגשים
             </span>
-          </div>
-
-          <div className="training-timeline-progress">
-            <div className="training-timeline-progress__labels">
-              <span className="training-timeline-progress__text">
-                {progress.completed} מתוך {progress.total} הדרכות הושלמו
-              </span>
-              <span className="training-timeline-progress__percent">{progress.percent}%</span>
-            </div>
-            <div
-              className="training-timeline-progress__track"
-              role="progressbar"
-              aria-valuenow={progress.completed}
-              aria-valuemin={0}
-              aria-valuemax={progress.total}
-              aria-label={`${progress.completed} מתוך ${progress.total} הדרכות עם חומר זמין`}
-            >
-              <div
-                className="training-timeline-progress__fill"
-                style={{ width: `${progress.percent}%` }}
-              />
-            </div>
           </div>
         </div>
       </header>

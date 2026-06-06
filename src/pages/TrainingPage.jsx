@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { parseISO } from "date-fns";
 import {
   ArrowRight,
   ChevronLeft,
@@ -28,12 +27,6 @@ import { hypHeaderIconClass, m3PageClass } from "@/lib/hypPage";
 import { demoModeEnabled } from "@/api/demoClient";
 import { cn } from "@/lib/utils";
 
-const WEEKDAY_SHORT = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
-
-function weekdayShort(dateStr) {
-  return WEEKDAY_SHORT[parseISO(`${dateStr}T12:00:00`).getDay()];
-}
-
 function summarizeDay(day, availability) {
   let sessionCount = 0;
   let hasPdf = false;
@@ -49,8 +42,6 @@ function summarizeDay(day, availability) {
 }
 
 function DayCard({ day, dayIndex, summary, onSelect }) {
-  const shortLabel = weekdayShort(day.date);
-
   return (
     <motion.button
       type="button"
@@ -73,11 +64,6 @@ function DayCard({ day, dayIndex, summary, onSelect }) {
       <span className="training-day-card__curve training-day-card__curve--tl" aria-hidden />
       <span className="training-day-card__curve training-day-card__curve--br" aria-hidden />
       <span className="training-day-card__dots" aria-hidden />
-
-      <span className="training-day-card__badge" aria-hidden="true">
-        <span className="training-day-card__badge-overlay" />
-        <span className="training-day-card__badge-letter">{shortLabel}</span>
-      </span>
 
       <span className="training-day-card__divider" aria-hidden="true">
         <span className="training-day-card__divider-dot" />
