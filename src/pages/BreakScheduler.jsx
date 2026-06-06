@@ -10,8 +10,17 @@ import { Navigate } from "react-router-dom";
 import BreakSection from "../components/breaks/BreakSection";
 import MyRegistrations from "../components/breaks/MyRegistrations";
 import DateSelector from "../components/breaks/DateSelector";
-import { SHORT_BREAK_SLOTS, LUNCH_BREAK_SLOTS, getStoredAgentName } from "@/constants/scheduling";
 import {
+  SHORT_BREAK_SLOTS,
+  LUNCH_BREAK_SLOTS,
+  getStoredAgentName,
+  getIsraelDateStr,
+  getTodayIsraelDate,
+  BREAK_REGISTRATION_DEADLINE_MESSAGE,
+  isBreakRegistrationClosed,
+} from "@/constants/scheduling";
+import {
+  agentOwnsBreakRegistration,
   BreakRegistrationError,
   createBreakRegistration,
   getBreakLimits,
@@ -41,13 +50,13 @@ const writeCachedBreakDay = (dateStr, data) => {
 };
 
 export default function BreakScheduler() {
-  const [selectedDate, setSelectedDate] = useState(new Date());
   const [agentName, setAgentName] = useState(() => getStoredAgentName());
   const [showNotice, setShowNotice] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const dateStr = format(selectedDate, "yyyy-MM-dd");
+  const dateStr = getIsraelDateStr();
+  const selectedDate = useMemo(() => getTodayIsraelDate(), [dateStr]);
 
   const { data: breakDayData, isLoading, isFetching } = useQuery({
     queryKey: ["break-day", dateStr],
@@ -72,10 +81,18 @@ export default function BreakScheduler() {
   const isInitialBreakLoad = isLoading && !breakDayData;
 
   useEffect(() => {
+    const syncAgentName = () => setAgentName(getStoredAgentName());
+    syncAgentName();
+    window.addEventListener("agent-session-changed", syncAgentName);
+    return () => window.removeEventListener("agent-session-changed", syncAgentName);
+  }, []);
+
+  useEffect(() => {
     if (agentName && settings?.show_shortage_notice) setShowNotice(true);
   }, [agentName, settings?.show_shortage_notice, settings?.id]);
 
   const breakLimits = useMemo(() => getBreakLimits(settings), [settings]);
+  const registrationClosed = isBreakRegistrationClosed(dateStr);
 
   const createMutation = useMutation({
     mutationFn: (data) => createBreakRegistration(dataClient, data),
@@ -110,6 +127,12 @@ export default function BreakScheduler() {
     },
   });
 
+  const pendingRegistration = createMutation.isPending ? createMutation.variables : null;
+  const registeringSlotFor = (breakType) =>
+    pendingRegistration?.break_type === breakType
+      ? pendingRegistration.time_slot
+      : null;
+
   const handleLogout = async () => {
     const { agentLogout } = await import("@/lib/agentAuth");
     await agentLogout();
@@ -125,6 +148,10 @@ export default function BreakScheduler() {
       toast({ title: "רגע קטן", description: "מעדכנים זמינות להפסקות" });
       return;
     }
+    if (registrationClosed) {
+      toast({ title: "לא ניתן להירשם", description: BREAK_REGISTRATION_DEADLINE_MESSAGE });
+      return;
+    }
 
     try {
       validateBreakRegistration({
@@ -133,6 +160,7 @@ export default function BreakScheduler() {
         agentName,
         breakType,
         timeSlot: slot,
+        date: dateStr,
       });
     } catch (error) {
       if (error instanceof BreakRegistrationError) {
@@ -149,12 +177,25 @@ export default function BreakScheduler() {
     });
   };
 
-  const handleCancel = (id) => deleteMutation.mutate(id);
+  const handleCancel = (id) => {
+    if (registrationClosed) {
+      toast({ title: "לא ניתן לבטל", description: BREAK_REGISTRATION_DEADLINE_MESSAGE });
+      return;
+    }
+    if (deleteMutation.isPending) return;
+    deleteMutation.mutate(id);
+  };
 
   const shortRegs = useMemo(() => registrations.filter(r => r.break_type === "short"), [registrations]);
   const lunchRegs = useMemo(() => registrations.filter(r => r.break_type === "lunch"), [registrations]);
-  const myShortReg = useMemo(() => shortRegs.find(r => r.agent_name === agentName), [shortRegs, agentName]);
-  const myLunchReg = useMemo(() => lunchRegs.find(r => r.agent_name === agentName), [lunchRegs, agentName]);
+  const myShortReg = useMemo(
+    () => shortRegs.find((r) => agentOwnsBreakRegistration(r, agentName)),
+    [shortRegs, agentName]
+  );
+  const myLunchReg = useMemo(
+    () => lunchRegs.find((r) => agentOwnsBreakRegistration(r, agentName)),
+    [lunchRegs, agentName]
+  );
 
   if (!agentName) {
     return <Navigate to="/" replace />;
@@ -228,11 +269,13 @@ export default function BreakScheduler() {
             </div>
             <p className="text-slate-500 text-sm">
               שלום <span className="text-indigo-600 font-semibold">{agentName}</span>
+              {" · "}
+              הרשמה להפסקות ליום הנוכחי בלבד
             </p>
           </div>
 
           <div className="order-3">
-            <DateSelector selectedDate={selectedDate} onDateChange={setSelectedDate} variant="light" />
+            <DateSelector selectedDate={selectedDate} variant="light" readOnly />
           </div>
         </motion.div>
 
@@ -243,15 +286,32 @@ export default function BreakScheduler() {
           transition={{ delay: 0.1 }}
           className="mb-6"
         >
-          <MyRegistrations shortReg={myShortReg} lunchReg={myLunchReg} onCancel={handleCancel} />
+          <MyRegistrations
+            shortReg={myShortReg}
+            lunchReg={myLunchReg}
+            selectedDateLabel={format(selectedDate, "dd/MM/yyyy")}
+            onCancel={handleCancel}
+            canCancel={!registrationClosed}
+            isDeleting={deleteMutation.isPending}
+          />
         </motion.div>
 
-        {isFetching && (
+        {isFetching && !registrationClosed && (
           <div className="mb-3 flex justify-center">
             <div className="px-3 py-1.5 rounded-full bg-white/80 border border-indigo-100 text-xs font-semibold text-indigo-600 shadow-sm">
               מעדכן זמינות...
             </div>
           </div>
+        )}
+
+        {registrationClosed && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 text-center leading-relaxed"
+          >
+            {BREAK_REGISTRATION_DEADLINE_MESSAGE}
+          </motion.div>
         )}
 
         <div className="space-y-6">
@@ -265,7 +325,11 @@ export default function BreakScheduler() {
             userRegistration={myShortReg}
             agentName={agentName}
             maxPerSlot={breakLimits.short}
-            registrationDisabled={isInitialBreakLoad || isFetching || createMutation.isPending}
+            registeringSlot={registeringSlotFor("short")}
+            registrationClosed={registrationClosed}
+            canCancel={!registrationClosed}
+            onCancel={handleCancel}
+            isDeleting={deleteMutation.isPending}
           />
           <BreakSection
             type="lunch"
@@ -277,7 +341,11 @@ export default function BreakScheduler() {
             userRegistration={myLunchReg}
             agentName={agentName}
             maxPerSlot={breakLimits.lunch}
-            registrationDisabled={isInitialBreakLoad || isFetching || createMutation.isPending}
+            registeringSlot={registeringSlotFor("lunch")}
+            registrationClosed={registrationClosed}
+            canCancel={!registrationClosed}
+            onCancel={handleCancel}
+            isDeleting={deleteMutation.isPending}
           />
         </div>
     </HypPageLayout>

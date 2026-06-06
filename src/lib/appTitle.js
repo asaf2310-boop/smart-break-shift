@@ -1,22 +1,17 @@
-import { demoModeEnabled } from "@/api/demoClient";
+const APP_TITLE = "מערכת ניהול מוקד";
 
-const DEMO_TITLE = "מערכת ניהול מוקד · דמו";
-const LIVE_TITLE = "מערכת ניהול מוקד";
-
-const DEMO_DESCRIPTION =
-  "מערכת דמו לניהול הפסקות, אילוצי משמרות ושיבוץ שבועי במוקד.";
-const LIVE_DESCRIPTION =
+const APP_DESCRIPTION =
   "מערכת לניהול הפסקות, אילוצי משמרות ושיבוץ שבועי במוקד.";
 
-/** Build-time override via VITE_APP_TITLE; otherwise demo vs live default. */
+/** Build-time override via VITE_APP_TITLE; otherwise production default. */
 export function getAppTitle() {
   const override = String(import.meta.env.VITE_APP_TITLE ?? "").trim();
   if (override) return override;
-  return demoModeEnabled ? DEMO_TITLE : LIVE_TITLE;
+  return APP_TITLE;
 }
 
 function getAppDescription() {
-  return demoModeEnabled ? DEMO_DESCRIPTION : LIVE_DESCRIPTION;
+  return APP_DESCRIPTION;
 }
 
 function setMetaContent(selector, content) {

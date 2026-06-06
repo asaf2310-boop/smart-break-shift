@@ -5,7 +5,12 @@ import { CalendarIcon, ChevronRight, ChevronLeft } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 
-export default function DateSelector({ selectedDate, onDateChange, variant = "dark" }) {
+export default function DateSelector({
+  selectedDate,
+  onDateChange,
+  variant = "dark",
+  readOnly = false,
+}) {
   const isLight = variant === "light";
   const navBtn = isLight
     ? "w-9 h-9 rounded-xl bg-white border border-slate-200 hover:border-indigo-300 text-slate-600 flex items-center justify-center transition-all shadow-sm"
@@ -21,6 +26,18 @@ export default function DateSelector({ selectedDate, onDateChange, variant = "da
   };
 
   const formattedDate = format(selectedDate, "EEEE, d בMMMM yyyy", { locale: he });
+
+  if (readOnly) {
+    const labelCls = isLight
+      ? "flex items-center gap-2.5 px-5 py-2.5 rounded-2xl bg-white border border-slate-200 text-slate-700 font-medium text-sm shadow-sm"
+      : "flex items-center gap-2.5 px-5 py-2.5 rounded-2xl bg-white/10 border border-white/10 text-white font-medium text-sm";
+    return (
+      <div className={labelCls} aria-label={`תאריך: ${formattedDate}`}>
+        <CalendarIcon className={iconCls} aria-hidden />
+        <span>{formattedDate}</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-2">

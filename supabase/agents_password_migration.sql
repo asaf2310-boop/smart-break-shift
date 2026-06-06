@@ -1,10 +1,12 @@
--- ניהול נציגים + Supabase Auth
--- מומלץ: supabase/agents_full_setup.sql (יצירה + שדרוג + סיסמה — idempotent)
--- אחרת: הרץ ב-Supabase → SQL Editor אחרי schema.sql / RUN_IN_SUPABASE.sql
+-- שדרוג agents: סיסמה גלויה למנהל (idempotent — כולל יצירת טבלה אם חסרה)
+-- זהה ל-agents_full_setup.sql (שם קובץ ישן לתאימות לאחור)
+-- Supabase SQL Editor: הדבק והרץ את כל הקובץ
+
+create extension if not exists "pgcrypto";
 
 create table if not exists agents (
   id uuid primary key default gen_random_uuid(),
-  email text not null,
+  email text,
   display_name text not null,
   auth_user_id uuid unique,
   active boolean not null default true,
@@ -16,11 +18,18 @@ create table if not exists agents (
   updated_at timestamptz not null default now()
 );
 
--- שדרוג טבלה קיימת
 alter table agents add column if not exists blocked boolean not null default false;
 alter table agents add column if not exists deleted_at timestamptz;
+alter table agents add column if not exists needs_password_setup boolean not null default true;
 alter table agents add column if not exists password_plain text;
+alter table agents add column if not exists auth_user_id uuid;
+alter table agents add column if not exists created_at timestamptz not null default now();
+alter table agents add column if not exists updated_at timestamptz not null default now();
+
 alter table agents alter column email drop not null;
+
+comment on column agents.password_plain is
+  'סיסמה בטקסט גלוי לתצוגת מנהל בלבד — החלף ב-hash + Auth לפני פרודקשן רגיש';
 
 drop index if exists idx_agents_email_lower;
 create unique index if not exists idx_agents_email_lower
@@ -32,12 +41,10 @@ alter table agents enable row level security;
 drop policy if exists "anon_read_active_agents" on agents;
 drop policy if exists "anon_manage_agents" on agents;
 
--- קריאה: נציגים שלא נמחקו (כולל חסומים — לבדיקת התחברות באפליקציה)
 create policy "anon_read_active_agents" on agents
   for select
   using (active = true and deleted_at is null);
 
--- ניהול מלא — לצוות פנימי; החמיר later עם Supabase Auth + תפקיד admin
 create policy "anon_manage_agents" on agents
   for all
   using (true)

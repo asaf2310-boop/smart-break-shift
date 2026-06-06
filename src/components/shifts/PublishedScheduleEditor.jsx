@@ -8,10 +8,22 @@ import { Pencil, Sun, Moon, X, Plus, Check, RefreshCw } from "lucide-react";
 const DAYS = ["ראשון", "שני", "שלישי", "רביעי", "חמישי"];
 import { AGENT_NAMES } from "@/constants/scheduling";
 import { sendScheduleSmsNotifications } from "@/lib/scheduleSms";
+import { refreshScheduleQueriesAfterPublish } from "@/lib/shiftScheduleQuery";
 import { useToast } from "@/components/ui/use-toast";
 import { demoModeEnabled } from "@/api/demoClient";
 
-function AgentCell({ agents, allAgentsOnDay, onRemove, onAdd }) {
+function agentsAvailableForCell(cellAgents) {
+  return AGENT_NAMES.filter((name) => !cellAgents.includes(name));
+}
+
+function AgentCell({
+  agents,
+  onRemove,
+  onAdd,
+  selectedAgent = null,
+  onAgentClick,
+  cellHighlighted = false,
+}) {
   const [showDropdown, setShowDropdown] = useState(false);
   const ref = useRef(null);
 
@@ -21,18 +33,47 @@ function AgentCell({ agents, allAgentsOnDay, onRemove, onAdd }) {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const availableToAdd = AGENT_NAMES.filter(n => !allAgentsOnDay.includes(n));
+  const availableToAdd = agentsAvailableForCell(agents);
+  const pillHighlightClass =
+    "ring-2 ring-amber-400 border-amber-400 bg-amber-100 shadow-sm text-amber-900";
 
   return (
-    <div className="flex flex-col gap-1 p-1">
-      {agents.map(agent => (
-        <div key={agent} className="flex items-center justify-between gap-1 px-2 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-xs font-semibold text-indigo-700">
-          <span className="truncate">{agent}</span>
+    <div
+      className={`flex flex-col gap-1 p-1 min-h-[3rem] text-right rounded-lg transition-colors ${
+        cellHighlighted ? "ring-2 ring-inset ring-amber-300 bg-amber-50/50" : ""
+      }`}
+      dir="rtl"
+    >
+      <div className="flex flex-col gap-1">
+      {agents.map(agent => {
+        const pillHighlighted = selectedAgent && agent === selectedAgent;
+        return (
+        <div
+          key={agent}
+          className={`flex items-center justify-between gap-1 flex-row-reverse px-2 py-1 rounded-lg border text-xs font-semibold bg-indigo-50 border-indigo-200 text-indigo-700 ${
+            pillHighlighted ? pillHighlightClass : ""
+          }`}
+        >
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onAgentClick?.(agent);
+            }}
+            className={`break-words min-w-0 flex-1 text-right hover:underline cursor-pointer ${
+              pillHighlighted ? "text-amber-900" : ""
+            }`}
+            title={agent}
+          >
+            {agent}
+          </button>
           <button onClick={() => onRemove(agent)} className="hover:text-red-500 transition-colors flex-shrink-0">
             <X className="w-3 h-3" />
           </button>
         </div>
-      ))}
+        );
+      })}
+      </div>
       <div className="relative" ref={ref}>
         <button
           onClick={() => setShowDropdown(v => !v)}
@@ -43,7 +84,7 @@ function AgentCell({ agents, allAgentsOnDay, onRemove, onAdd }) {
           הוסף
         </button>
         {showDropdown && availableToAdd.length > 0 && (
-          <div className="absolute z-50 top-full mt-1 right-0 w-36 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+          <div className="absolute z-50 top-full mt-1 right-0 w-36 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden max-h-48 overflow-y-auto" dir="rtl">
             {availableToAdd.map(agent => (
               <button
                 key={agent}
@@ -62,11 +103,27 @@ function AgentCell({ agents, allAgentsOnDay, onRemove, onAdd }) {
 
 export default function PublishedScheduleEditor({ weekStart }) {
   const [localRegs, setLocalRegs] = useState(null); // null = not loaded yet
+  const [selectedAgent, setSelectedAgent] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [sendSmsOnSave, setSendSmsOnSave] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const scheduleGridRef = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (scheduleGridRef.current && !scheduleGridRef.current.contains(e.target)) {
+        setSelectedAgent(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const handleAgentClick = (agent) => {
+    setSelectedAgent((prev) => (prev === agent ? null : agent));
+  };
 
   const weekDays = useMemo(
     () => Array.from({ length: 5 }, (_, i) => addDays(weekStart, i)),
@@ -107,14 +164,6 @@ export default function PublishedScheduleEditor({ weekStart }) {
     return localRegs[`${dateStr}|${shiftType}`] || [];
   };
 
-  const getAllOnDay = (dateStr) => {
-    if (!localRegs) return [];
-    return [
-      ...(localRegs[`${dateStr}|morning`] || []),
-      ...(localRegs[`${dateStr}|evening`] || []),
-    ];
-  };
-
   const handleRemove = (dateStr, shiftType, agent) => {
     const key = `${dateStr}|${shiftType}`;
     setLocalRegs(prev => ({ ...prev, [key]: (prev[key] || []).filter(a => a !== agent) }));
@@ -142,12 +191,17 @@ export default function PublishedScheduleEditor({ weekStart }) {
     ).then(r => r.flat());
     await Promise.all(allWeekRegs.map(r => dataClient.entities.ShiftRegistration.delete(r.id)));
 
+    let savedRecords = [];
     if (records.length > 0) {
-      await dataClient.entities.ShiftRegistration.bulkCreate(records);
+      savedRecords = await dataClient.entities.ShiftRegistration.bulkCreate(records);
     }
 
     await queryClient.invalidateQueries({ queryKey: ["published-regs-editor", dateFrom, dateTo] });
-    await queryClient.invalidateQueries({ queryKey: ["shift-registrations"] });
+    await refreshScheduleQueriesAfterPublish(queryClient, {
+      dateFrom,
+      dateTo,
+      records: savedRecords.length ? savedRecords : records,
+    });
 
     const smsResult = await sendScheduleSmsNotifications({
       records,
@@ -199,13 +253,16 @@ export default function PublishedScheduleEditor({ weekStart }) {
           <div>
             <h3 className="font-bold text-slate-800">עריכת שיבוץ פורסם</h3>
             <p className="text-xs text-slate-400">
-              שבוע {format(weekDays[0], "dd/MM")} – {format(weekDays[4], "dd/MM/yyyy")}
+              שבוע {format(weekDays[0], "dd/MM/yyyy")} – {format(weekDays[4], "dd/MM/yyyy")}
+            </p>
+            <p className="text-[10px] text-slate-400 font-mono mt-0.5" dir="ltr">
+              {dateFrom} – {dateTo}
             </p>
           </div>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-100 overflow-hidden mb-4">
+      <div ref={scheduleGridRef} className="rounded-2xl border border-slate-100 overflow-x-auto mb-4">
         {/* Header */}
         <div className="grid grid-cols-6 bg-slate-50 border-b border-slate-100">
           <div className="py-2 px-3 text-xs font-semibold text-slate-400">משמרת</div>
@@ -221,7 +278,7 @@ export default function PublishedScheduleEditor({ weekStart }) {
           { type: "morning", label: "בוקר", time: "08:00–16:00", Icon: Sun, color: "text-amber-500" },
           { type: "evening", label: "ערב", time: "09:00–17:00", Icon: Moon, color: "text-indigo-500" },
         ].map(shift => (
-          <div key={shift.type} className="grid grid-cols-6 border-t border-slate-100">
+          <div key={shift.type} className="grid grid-cols-6 auto-rows-auto items-stretch border-t border-slate-100">
             <div className="flex flex-col items-center justify-center gap-0.5 py-3 px-2 border-l border-slate-100">
               <shift.Icon className={`w-4 h-4 ${shift.color}`} />
               <span className={`text-xs font-bold ${shift.color}`}>{shift.label}</span>
@@ -229,11 +286,15 @@ export default function PublishedScheduleEditor({ weekStart }) {
             </div>
             {weekDays.map(date => {
               const dateStr = format(date, "yyyy-MM-dd");
+              const agents = getAgents(dateStr, shift.type);
+              const cellHighlighted = selectedAgent && agents.includes(selectedAgent);
               return (
                 <AgentCell
                   key={dateStr}
-                  agents={getAgents(dateStr, shift.type)}
-                  allAgentsOnDay={getAllOnDay(dateStr)}
+                  agents={agents}
+                  selectedAgent={selectedAgent}
+                  onAgentClick={handleAgentClick}
+                  cellHighlighted={cellHighlighted}
                   onRemove={(agent) => handleRemove(dateStr, shift.type, agent)}
                   onAdd={(agent) => handleAdd(dateStr, shift.type, agent)}
                 />

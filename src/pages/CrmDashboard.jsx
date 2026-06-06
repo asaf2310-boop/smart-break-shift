@@ -34,7 +34,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
-import { m3PageClass } from "@/lib/hypPage";
+import { hypHeaderIconClass, m3PageClass } from "@/lib/hypPage";
+import { cn } from "@/lib/utils";
 
 function ReferralCard({ referral, variant = "personal" }) {
   const topicClass =
@@ -146,8 +147,8 @@ export default function CrmDashboard() {
           </Link>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center shadow-elevation-1 mb-3">
-                <FolderOpen className="w-6 h-6 text-primary-foreground" />
+              <div className={cn(hypHeaderIconClass("shadow-elevation-1 mb-3"), !demoModeEnabled && "bg-primary")}>
+                <FolderOpen className={cn("w-6 h-6", demoModeEnabled ? "text-white" : "text-primary-foreground")} />
               </div>
               <h1 className="m3-headline-small font-medium">CRM — פניות</h1>
               <p className="m3-label-medium mt-1">

@@ -39,7 +39,9 @@ import TrainingPage from './pages/TrainingPage';
 import AdminTraining from './pages/AdminTraining';
 import RouteErrorBoundary from '@/components/RouteErrorBoundary';
 import { hasTopAppNav } from '@/lib/appNavPaths';
-import { demoModeEnabled } from '@/api/demoClient';
+import { brandVisualEnabled } from '@/lib/brandShell';
+import { applyHypDemoDocumentClasses, hypDemoAppShellClass } from '@/lib/hypPage';
+import { useEffect } from 'react';
 
 function TopAppNav() {
   const { pathname } = useLocation();
@@ -50,12 +52,16 @@ function TopAppNav() {
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
 
+  useEffect(() => {
+    applyHypDemoDocumentClasses();
+  }, []);
+
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
-      <div className={demoModeEnabled ? "fixed inset-0 flex items-center justify-center hyp-scheduling-root" : "fixed inset-0 flex items-center justify-center m3-page"}>
+      <div className={brandVisualEnabled ? "fixed inset-0 flex items-center justify-center hyp-scheduling-root" : "fixed inset-0 flex items-center justify-center m3-page"}>
         <div
-          className={demoModeEnabled ? "w-10 h-10 hyp-loader" : "w-10 h-10 rounded-full border-[3px] border-primary/20 border-t-primary animate-spin"}
-          style={demoModeEnabled ? undefined : { boxShadow: "var(--brand-glow-purple)" }}
+          className={brandVisualEnabled ? "w-10 h-10 hyp-loader" : "w-10 h-10 rounded-full border-[3px] border-primary/20 border-t-primary animate-spin"}
+          style={brandVisualEnabled ? undefined : { boxShadow: "var(--brand-glow-purple)" }}
           aria-hidden
         />
       </div>
@@ -73,7 +79,7 @@ const AuthenticatedApp = () => {
   }
 
   return (
-    <>
+    <div className={hypDemoAppShellClass()}>
       <TopAppNav />
       <Routes>
         <Route path="/" element={<Home />} />
@@ -103,7 +109,7 @@ const AuthenticatedApp = () => {
       <FloatingKnowledgeWidget />
       <SoftphoneWidget />
       <AdminLocalhostLinksFloating />
-    </>
+    </div>
   );
 };
 

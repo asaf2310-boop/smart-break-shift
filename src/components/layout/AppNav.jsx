@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { BookOpen, CalendarClock, CalendarDays, Contact, GraduationCap, Home, Monitor, ShieldCheck } from "lucide-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { demoModeEnabled } from "@/api/demoClient";
+import { brandVisualEnabled } from "@/lib/brandShell";
 
 /** גובה שורת הניווט העליונה — משמש גם ל-FloatingChatWidget */
 export const APP_NAV_HEIGHT = "var(--app-nav-height)";
@@ -17,13 +18,15 @@ export default function AppNav() {
   const isKnowledge = location.pathname.startsWith("/knowledge");
   const isRemoteSupport = location.pathname.startsWith("/remote-support");
 
+  const useBrandNav = brandVisualEnabled;
+
   const tabClass = (active) =>
     `flex flex-1 sm:flex-none items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 text-xs sm:text-sm whitespace-nowrap transition-all duration-200 ${
       active
-        ? demoModeEnabled
+        ? useBrandNav
           ? "hyp-nav-tab-active"
           : "m3-nav-tab-active"
-        : demoModeEnabled
+        : useBrandNav
           ? "hyp-nav-tab-inactive"
           : "m3-nav-tab-inactive"
     }`;
@@ -31,7 +34,7 @@ export default function AppNav() {
   return (
     <nav
       className={
-        demoModeEnabled
+        useBrandNav
           ? "hyp-nav-shell fixed inset-x-0 top-0 z-[80] flex justify-center px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top,0px))] pointer-events-none"
           : "fixed inset-x-0 top-0 z-[80] flex justify-center px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top,0px))] bg-gradient-to-b from-[#f7f3fb]/90 via-[#f7f3fb]/60 to-transparent pointer-events-none"
       }
@@ -42,7 +45,7 @@ export default function AppNav() {
         <div className="min-w-0 overflow-x-auto pt-1">
         <div
           className={`${
-            demoModeEnabled ? "hyp-nav-bar" : "m3-nav-bar"
+            useBrandNav ? "hyp-nav-bar" : "m3-nav-bar"
           } flex w-max min-w-full sm:min-w-0 p-1.5 gap-1 justify-center`}
         >
           <Link to="/" className={tabClass(location.pathname === "/")}>

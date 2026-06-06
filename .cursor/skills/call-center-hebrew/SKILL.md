@@ -33,7 +33,8 @@ description: >-
 `src/lib/breakCapacity.js` + `BreakSettings`:
 
 - `lunch_max_per_slot`, `short_max_per_slot` (ברירת מחדל 1)
-- `validateBreakRegistration` — קודים: `ALREADY_REGISTERED`, `SLOT_FULL`, `MAX_BREAKS`
+- `validateBreakRegistration` — קודים: `ALREADY_REGISTERED`, `SLOT_FULL`, `REGISTRATION_CLOSED` (אחרי 10:00 ביום הנבחר)
+- דד-ליין רישום נציגים: `isBreakRegistrationClosed` / `BREAK_REGISTRATION_DEADLINE_MESSAGE` ב-`scheduling.js` (מנהל: `skipDeadlineCheck`)
 - יצירה: `createBreakRegistration` (דמו: גם ב-`demoClient`)
 
 ממשק: `BreakScheduler.jsx`, `BreakSection.jsx`, `AgentNameDialog.jsx`.

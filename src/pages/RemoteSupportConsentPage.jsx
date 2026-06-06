@@ -9,6 +9,7 @@ import {
   remoteSupportDemoAvailable,
   subscribeRemoteSupport,
 } from "@/lib/remoteSupportStore";
+import { m3PageClass } from "@/lib/hypPage";
 
 const CUSTOMER_CONSENT_TEXT =
   "אני מאשר/ת לנציג התמיכה לגשת מרחוק למחשב שלי באמצעות RustDesk לצורך טיפול בתקלה שדווחה בשיחה זו.";
@@ -35,17 +36,14 @@ export default function RemoteSupportConsentPage() {
 
   if (!remoteSupportDemoAvailable()) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50" dir="rtl">
+      <div className={m3PageClass("flex items-center justify-center p-6")} dir="rtl">
         <p className="text-slate-600 text-center">דף אישור זמין במצב דמו בלבד.</p>
       </div>
     );
   }
 
   return (
-    <div
-      className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-violet-50 flex items-center justify-center p-4"
-      dir="rtl"
-    >
+    <div className={m3PageClass("flex items-center justify-center p-4")} dir="rtl">
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
