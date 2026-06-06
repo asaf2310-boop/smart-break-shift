@@ -1797,6 +1797,8 @@ body,
   --tdc-pad-inline: clamp(0.375rem, 4cqw, 0.75rem);
   --tdc-gap: clamp(0.125rem, 2cqb, 0.5rem);
   --tdc-radius: clamp(1rem, 10cqw, 2rem);
+  --tdc-badge: min(5.5rem, 58cqw, 30cqb);
+  --tdc-letter: clamp(1.125rem, 18cqw, 2.75rem);
   --tdc-divider-w: clamp(1.5rem, 14cqw, 2.5rem);
   --tdc-date-fs: clamp(0.75rem, 6.5cqw, 1.5rem);
   --tdc-date-pad-y: clamp(0.25rem, 2.5cqb, 0.625rem);
@@ -1887,6 +1889,43 @@ body,
   z-index: 1;
   min-width: 0;
   max-width: 100%;
+}
+
+.training-day-card__badge {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 1;
+  min-width: 0;
+  width: var(--tdc-badge);
+  height: var(--tdc-badge);
+  max-width: 92%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.75);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(37, 99, 235, 0.08);
+  box-shadow: 0 10px 30px rgba(37, 99, 235, 0.08);
+}
+
+.training-day-card__badge-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.02), rgba(37, 99, 235, 0.08));
+  pointer-events: none;
+}
+
+.training-day-card__badge-letter {
+  position: relative;
+  font-family: "Heebo", var(--font-heebo), sans-serif;
+  font-weight: 800;
+  font-size: var(--tdc-letter);
+  line-height: 1;
+  letter-spacing: clamp(-1px, -0.15cqw, -2px);
+  color: #2563eb;
 }
 
 .training-day-card__divider {
@@ -1992,6 +2031,8 @@ body,
 
 @container training-day (max-width: 11rem) {
   .training-day-card {
+    --tdc-badge: min(3.75rem, 54cqw, 28cqb);
+    --tdc-letter: clamp(1rem, 16cqw, 2rem);
     --tdc-icon: clamp(1.5rem, 12cqw, 2.25rem);
   }
 }
