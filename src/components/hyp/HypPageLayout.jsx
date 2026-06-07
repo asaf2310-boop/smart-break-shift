@@ -1,5 +1,5 @@
 import React from "react";
-import { demoModeEnabled } from "@/api/demoClient";
+import { brandVisualEnabled } from "@/lib/brandShell";
 import { cn } from "@/lib/utils";
 import { m3PageClass, schedulingPageRootClass } from "@/lib/hypPage";
 
@@ -13,7 +13,7 @@ function SchedulingAmbient() {
 }
 
 /**
- * Demo HYP page shell — transparent on html.app-hyp-demo ambient; production passes children through unchanged layout class.
+ * HYP page shell — transparent on html.app-hyp-demo ambient; legacy purple orbs only when brand shell is off.
  */
 export default function HypPageLayout({
   children,
@@ -25,7 +25,7 @@ export default function HypPageLayout({
   if (variant === "scheduling") {
     return (
       <div className={schedulingPageRootClass(className)} dir="rtl">
-        {!demoModeEnabled && <SchedulingAmbient />}
+        {!brandVisualEnabled && <SchedulingAmbient />}
         <div
           className={cn(
             "relative z-10 mx-auto w-full",

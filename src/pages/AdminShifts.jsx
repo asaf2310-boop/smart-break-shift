@@ -1,11 +1,20 @@
 import React, { useState, useMemo } from "react";
 import { format, addDays, subDays } from "date-fns";
 import { motion } from "framer-motion";
-import { ShieldCheck, ChevronRight, ChevronLeft, Check, Palmtree, X, Sun, Moon } from "lucide-react";
+import { ShieldCheck, ChevronRight, ChevronLeft, Check, Palmtree, X, Sun, Moon, MessageSquare } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { dataClient } from "@/api/client";
 import { Link } from "react-router-dom";
-import { AGENT_NAMES, HOLIDAY_EVE_DATES, WEEKDAY_LABELS, getWeekDays } from "@/constants/scheduling";
+import {
+  AGENT_NAMES,
+  HOLIDAY_EVE_DATES,
+  WEEKDAY_LABELS,
+  getWeekDays,
+  getWeekStartIsrael,
+  getTodayIsraelDate,
+  parseDateStrLocal,
+  formatDateStr,
+} from "@/constants/scheduling";
 import AutoScheduleBuilder from "../components/shifts/AutoScheduleBuilder";
 import PublishedScheduleEditor from "../components/shifts/PublishedScheduleEditor";
 import VacationApprovalPanel from "../components/admin/VacationApprovalPanel";
@@ -20,17 +29,13 @@ const SHIFTS = [
   { type: "evening", label: "משמרת ערב", time: "09:00 – 17:00", icon: Moon, gradient: "from-indigo-400 to-purple-500", bg: "bg-indigo-50/50" },
 ];
 
-function getWeekStart(date) {
-  const d = new Date(date);
-  d.setDate(d.getDate() - d.getDay());
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
 export default function AdminShifts() {
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(() => getTodayIsraelDate());
   const [activeTab, setActiveTab] = useState("current"); // "current" | "next"
-  const weekStart = getWeekStart(selectedDate);
+  const weekStart = getWeekStartIsrael(selectedDate);
+  const calendarWeekStart = getWeekStartIsrael();
+  const adminWeekOffset =
+    Math.round((weekStart.getTime() - calendarWeekStart.getTime()) / (7 * 24 * 60 * 60 * 1000));
 
   const weekDays = useMemo(() => getWeekDays(weekStart), [weekStart]);
 
@@ -63,13 +68,24 @@ export default function AdminShifts() {
           <input
             type="date"
             value={format(selectedDate, "yyyy-MM-dd")}
-            onChange={e => setSelectedDate(new Date(e.target.value))}
+            onChange={(e) => setSelectedDate(parseDateStrLocal(e.target.value))}
             className="text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl px-4 py-2 shadow-sm outline-none focus:border-indigo-400"
           />
           <button onClick={() => setSelectedDate(d => addDays(d, 7))} className="w-9 h-9 rounded-xl bg-white border border-slate-200 hover:border-indigo-300 flex items-center justify-center transition-all shadow-sm">
             <ChevronLeft className="w-4 h-4 text-slate-600" />
           </button>
         </div>
+
+        <p className="text-center text-[11px] text-slate-500 mb-2 font-mono" dir="ltr">
+          weekStart={formatDateStr(weekStart)} · current {formatDateStr(weekDays[0])}–{formatDateStr(weekDays[4])} · next {formatDateStr(addDays(weekStart, 7))}–{formatDateStr(addDays(weekStart, 11))}
+        </p>
+
+        {adminWeekOffset !== 0 && (
+          <p className="text-center text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2 mb-4">
+            צופים בשבוע {adminWeekOffset > 0 ? "עתידי" : "קודם"} ({format(weekDays[0], "dd/MM/yyyy")}–{format(weekDays[4], "dd/MM/yyyy")}).
+            לפרסום 7–11.6: השאירו תאריך היום ובחרו «שיבוץ שבוע הבא» — לא «שיבוץ נוכחי» (31/05–04/06).
+          </p>
+        )}
 
         {/* Tabs */}
         <div className="flex justify-center gap-2 mb-6">
@@ -82,6 +98,9 @@ export default function AdminShifts() {
             }`}
           >
             שיבוץ נוכחי
+            <span className="block text-[10px] font-normal opacity-90 mt-0.5">
+              {format(weekDays[0], "dd/MM")}–{format(weekDays[4], "dd/MM")}
+            </span>
           </button>
           <button
             onClick={() => setActiveTab("next")}
@@ -92,6 +111,9 @@ export default function AdminShifts() {
             }`}
           >
             שיבוץ שבוע הבא
+            <span className="block text-[10px] font-normal opacity-90 mt-0.5">
+              {format(addDays(weekStart, 7), "dd/MM")}–{format(addDays(weekStart, 11), "dd/MM")}
+            </span>
           </button>
         </div>
 
@@ -255,7 +277,7 @@ function ConstraintsView({ weekStart }) {
                   .map(v => ({ name: v.agent_name, type: "vac_approved", note: v.note })),
                 ...vacAgents.filter(v => v.status !== "approved")
                   .filter(v => !unavailAgents.find(u => u.agent_name === v.agent_name) && !approvedVacAgents.find(a => a.agent_name === v.agent_name))
-                  .map(v => ({ name: v.agent_name, type: "vac_" + v.status })),
+                  .map(v => ({ name: v.agent_name, type: "vac_" + v.status, note: v.note })),
               ].filter(item => {
                 if (seenNames.has(item.name)) return false;
                 seenNames.add(item.name);
@@ -307,13 +329,22 @@ function ConstraintsView({ weekStart }) {
                           icon = <Palmtree className="w-2.5 h-2.5 flex-shrink-0" />;
                         }
                         return (
-                          <div key={item.name} className={`flex flex-col px-1.5 py-1 rounded-lg border text-xs font-medium ${bg} ${textColor}`}>
-                            <div className="flex items-center gap-1">
+                          <div
+                            key={item.name}
+                            title={item.note ? `${item.name}: ${item.note}` : item.name}
+                            className={`flex flex-col px-1.5 py-1 rounded-lg border text-xs font-medium ${bg} ${textColor}`}
+                          >
+                            <div className="flex items-center gap-1 min-w-0">
                               {icon}
-                              <span className="truncate">{item.name}</span>
+                              <span className="truncate flex-1">{item.name}</span>
+                              {item.note?.trim() && (
+                                <MessageSquare className="w-3 h-3 flex-shrink-0 text-indigo-500 fill-indigo-100" aria-hidden />
+                              )}
                             </div>
-                            {item.note && (
-                              <span className="text-xs opacity-70 mt-0.5 leading-tight">{item.note}</span>
+                            {item.note?.trim() && (
+                              <span className="text-[11px] text-indigo-700/90 bg-indigo-50/80 rounded-md px-1 py-0.5 mt-0.5 leading-snug line-clamp-2">
+                                {item.note}
+                              </span>
                             )}
                           </div>
                         );

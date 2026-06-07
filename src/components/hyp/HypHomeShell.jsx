@@ -15,6 +15,7 @@ export default function HypHomeShell({
   showAdminDemoHint,
   adminPin,
   onLogout,
+  showDemoBadge = false,
 }) {
   return (
     <div className="hyp-home min-h-screen font-heebo" dir="rtl">
@@ -39,7 +40,9 @@ export default function HypHomeShell({
               )}
               בחרו מודול להמשך
             </p>
-            <div className="hyp-home__badge mt-4">סביבת דמו · נתונים פיקטיביים בלבד</div>
+            {showDemoBadge && (
+              <div className="hyp-home__badge mt-4">סביבת דמו · נתונים פיקטיביים בלבד</div>
+            )}
             {showAdminDemoHint && (
               <Link to="/admin" className="hyp-home__admin-link mt-3 inline-block">
                 כניסת מנהל: /admin (PIN: {adminPin})

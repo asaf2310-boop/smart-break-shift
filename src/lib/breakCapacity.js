@@ -1,6 +1,22 @@
+import {
+  BREAK_AGENT_TODAY_ONLY_MESSAGE,
+  BREAK_REGISTRATION_DEADLINE_MESSAGE,
+  getIsraelDateStr,
+  isBreakRegistrationClosed,
+} from "@/constants/scheduling";
+
 /** מנקה רווחים כפולים — מונע "אופיר דוד" מול "אופיר  דוד" */
 export function normalizeAgentName(name) {
   return String(name || "").trim().replace(/\s+/g, " ");
+}
+
+/** האם הרשמת ההפסקה שייכת לנציג המחובר (כולל שם מקוצר מול שם מלא) */
+export function agentOwnsBreakRegistration(registration, agentName) {
+  const regName = normalizeAgentName(registration?.agent_name);
+  const current = normalizeAgentName(agentName);
+  if (!regName || !current) return false;
+  if (regName === current) return true;
+  return regName.startsWith(`${current} `) || current.startsWith(`${regName} `);
 }
 
 export function getBreakLimits(settings) {
@@ -25,7 +41,7 @@ export class BreakRegistrationError extends Error {
 }
 
 function sameAgent(a, b) {
-  return normalizeAgentName(a) === normalizeAgentName(b);
+  return agentOwnsBreakRegistration({ agent_name: a }, b);
 }
 
 export function validateBreakRegistration({
@@ -34,7 +50,25 @@ export function validateBreakRegistration({
   agentName,
   breakType,
   timeSlot,
+  date,
+  now = new Date(),
+  skipDeadlineCheck = false,
+  allowNonTodayDate = false,
 }) {
+  if (date && !allowNonTodayDate && date !== getIsraelDateStr(now)) {
+    throw new BreakRegistrationError(
+      "NOT_TODAY",
+      BREAK_AGENT_TODAY_ONLY_MESSAGE
+    );
+  }
+
+  if (date && !skipDeadlineCheck && isBreakRegistrationClosed(date, now)) {
+    throw new BreakRegistrationError(
+      "REGISTRATION_CLOSED",
+      BREAK_REGISTRATION_DEADLINE_MESSAGE
+    );
+  }
+
   const limits = getBreakLimits(settings);
   const maxPerSlot = limits[breakType] ?? 1;
   const normalizedName = normalizeAgentName(agentName);
@@ -65,7 +99,7 @@ export function validateBreakRegistration({
 }
 
 /** בודק מול נתונים עדכניים מהשרת לפני יצירת הרשמה */
-export async function createBreakRegistration(dataClient, payload) {
+export async function createBreakRegistration(dataClient, payload, options = {}) {
   const normalizedPayload = {
     ...payload,
     agent_name: normalizeAgentName(payload.agent_name),
@@ -83,6 +117,9 @@ export async function createBreakRegistration(dataClient, payload) {
     agentName: agent_name,
     breakType: break_type,
     timeSlot: time_slot,
+    date,
+    skipDeadlineCheck: options.skipDeadlineCheck ?? false,
+    allowNonTodayDate: options.allowNonTodayDate ?? false,
   });
 
   return dataClient.entities.BreakRegistration.create(normalizedPayload);

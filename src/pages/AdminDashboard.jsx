@@ -46,7 +46,11 @@ export default function AdminDashboard() {
   const limits = getBreakLimits(settings);
 
   const createMutation = useMutation({
-    mutationFn: (data) => createBreakRegistration(dataClient, data),
+    mutationFn: (data) =>
+      createBreakRegistration(dataClient, data, {
+        skipDeadlineCheck: true,
+        allowNonTodayDate: true,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["break-registrations", dateStr] });
       setAddingTo(null);

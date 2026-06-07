@@ -19,6 +19,7 @@ export default function WeeklySchedulePanel({
   emptyTitle = "השיבוץ טרם פורסם",
   emptyHint = "המנהל יפרסם בקרוב",
   accent = "amber",
+  highlighted = false,
 }) {
   const registrations = Array.isArray(scheduleRegistrations) ? scheduleRegistrations : [];
   const published = registrations.length > 0;
@@ -34,7 +35,9 @@ export default function WeeklySchedulePanel({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: accent === "emerald" ? 0.05 : 0.1 }}
-      className="rounded-3xl overflow-hidden border border-slate-200 bg-white shadow-lg shadow-slate-200/60"
+      className={`rounded-3xl overflow-hidden border bg-white shadow-lg shadow-slate-200/60 ${
+        highlighted ? "border-2 border-indigo-300 ring-2 ring-indigo-100" : "border-slate-200"
+      }`}
     >
       <motion.div className={`px-6 py-4 bg-gradient-to-l ${headerGradient} to-transparent border-b border-slate-100 flex items-center gap-4`}>
         <motion.div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${iconGradient} flex items-center justify-center shadow`}>
@@ -42,8 +45,16 @@ export default function WeeklySchedulePanel({
         </motion.div>
         <div className="flex-1">
           <h2 className="font-bold text-slate-800">{title}</h2>
-          <p className={`text-sm font-semibold ${weekLabelClass}`}>{weekLabel}</p>
+          <p className="text-xs text-slate-500 mt-0.5">טווח תאריכים (א׳–ה׳)</p>
+          <p className={`text-base sm:text-lg font-extrabold tracking-tight ${weekLabelClass}`}>
+            {weekLabel}
+          </p>
         </div>
+        {highlighted && (
+          <div className="bg-indigo-100 border border-indigo-200 text-indigo-800 text-xs font-semibold px-3 py-1.5 rounded-xl">
+            שיבוץ עדכני
+          </div>
+        )}
         {published && (
           <div className="bg-green-100 border border-green-200 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-xl">
             ✓ פורסם
@@ -106,7 +117,7 @@ export default function WeeklySchedulePanel({
                   {scheduleDays.map((date, i) => (
                     <div key={i} className="text-center">
                       <div className="text-xs font-semibold text-slate-500">{WEEKDAY_LABELS[i]}</div>
-                      <div className="text-sm font-bold text-slate-700">{format(date, "dd/MM")}</div>
+                      <div className="text-sm font-bold text-slate-700">{format(date, "dd/MM/yyyy")}</div>
                     </div>
                   ))}
                 </div>
@@ -173,7 +184,7 @@ export default function WeeklySchedulePanel({
                         {scheduleDays.map((date, i) => (
                           <div key={i} className="text-center pb-2">
                             <div className="text-xs font-semibold text-slate-500">{WEEKDAY_LABELS[i]}</div>
-                            <div className="text-xs font-bold text-slate-700">{format(date, "dd/MM")}</div>
+                            <div className="text-xs font-bold text-slate-700">{format(date, "dd/MM/yyyy")}</div>
                           </div>
                         ))}
                       </div>

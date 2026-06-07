@@ -17,7 +17,8 @@ import { format, parseISO, startOfMonth } from "date-fns";
 import { he } from "date-fns/locale";
 
 import { useToast } from "@/components/ui/use-toast";
-import { m3PageClass } from "@/lib/hypPage";
+import { cn } from "@/lib/utils";
+import { hypHeaderIconClass, m3PageClass } from "@/lib/hypPage";
 import { demoModeEnabled } from "@/api/demoClient";
 import { supabaseConfigured } from "@/api/supabase";
 import { resolveTrainingSchedule } from "@/lib/trainingSchedule";
@@ -101,8 +102,6 @@ export default function AdminTraining() {
     return teachableSessions.filter((s) => s.date === selectedKey);
   }, [filterPresentationsToDay, teachableSessions, selectedKey]);
 
-  const sessionIds = useMemo(() => presentationSessions.map((s) => s.id), [presentationSessions]);
-
   const [availability, setAvailability] = useState({});
   const [urlDrafts, setUrlDrafts] = useState({});
   const [uploadingId, setUploadingId] = useState(null);
@@ -180,7 +179,7 @@ export default function AdminTraining() {
       }
 
       refreshSchedule();
-      toast({ title: "המפגש נשמר" });
+      toast({ title: "המפגש נשמר", dedupeKey: "training-session-saved" });
       await refreshAvailability();
     } catch (err) {
       toast({
@@ -223,7 +222,12 @@ export default function AdminTraining() {
     try {
       const result = await uploadTrainingPresentation(sessionId, file);
       if (result.ok) {
-        toast({ title: "הועלה בהצלחה", description: result.message });
+        toast({
+          title: result.storageWarning === "bucket_missing" ? result.message : "הועלה בהצלחה",
+          description: result.description || (result.storageWarning ? undefined : result.message),
+          variant: result.storageWarning ? "default" : undefined,
+          dedupeKey: `training-upload-${sessionId}`,
+        });
         await refreshAvailability();
       } else {
         toast({
@@ -278,8 +282,8 @@ export default function AdminTraining() {
       <div className="max-w-5xl mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6 gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center shadow-elevation-2 shrink-0">
-              <GraduationCap className="w-6 h-6 text-primary-foreground" />
+            <div className={hypHeaderIconClass("w-12 h-12 shadow-elevation-2")}>
+              <GraduationCap className={cn("w-6 h-6", demoModeEnabled ? "text-white" : "text-primary")} />
             </div>
             <div className="min-w-0">
               <h1 className="m3-headline-small text-xl font-semibold">ניהול מצגות הדרכה</h1>
@@ -311,7 +315,7 @@ export default function AdminTraining() {
           <ul className="list-disc list-inside space-y-1 m-0">
             <li>בלוח השנה: לחצו על יום לצפייה ועריכה במפגשים של אותו יום.</li>
             <li>הוסיפו מפגשים, ערכו תאריכים ושעות — נשמר בדפדפן (ללא שרת בדמו).</li>
-            <li>לכל מפגש: PDF ו/או קישור — בלחיצת נציג נפתח הקישור או המצגת.</li>
+            <li>לכל מפגש: העלאת PDF (אייקון ↑ ביום הנבחר או למטה) ו/או קישור — הנציג פותח מצגת או קישור.</li>
             <li>
               {supabaseConfigured
                 ? "Supabase מוגדר: קבצי PDF ב-bucket `training-docs`."
@@ -396,6 +400,33 @@ export default function AdminTraining() {
                       ) : null}
                     </div>
                     <div className="flex flex-col gap-1 shrink-0">
+                      {!session.isBreak ? (
+                        <>
+                          <input
+                            ref={(el) => {
+                              fileInputRefs.current[session.id] = el;
+                            }}
+                            type="file"
+                            accept=".pdf,application/pdf"
+                            className="hidden"
+                            onChange={(e) => handleFile(session.id, e.target.files?.[0])}
+                          />
+                          <button
+                            type="button"
+                            disabled={uploadingId === session.id}
+                            onClick={() => fileInputRefs.current[session.id]?.click()}
+                            className="m3-btn-outlined p-2"
+                            aria-label={`העלאת מסמך ל${session.title}`}
+                            title="העלאת PDF"
+                          >
+                            {uploadingId === session.id ? (
+                              <span className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin block" />
+                            ) : (
+                              <Upload className="w-4 h-4" />
+                            )}
+                          </button>
+                        </>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => openEditSession(session)}
@@ -532,7 +563,7 @@ export default function AdminTraining() {
                       ) : (
                         <Upload className="w-4 h-4" />
                       )}
-                      העלאת PDF
+                      העלאת מסמך (PDF)
                     </button>
                     {status.hasPdf ? (
                       <button

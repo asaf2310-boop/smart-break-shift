@@ -1,15 +1,14 @@
-import { validateBreakRegistration } from "@/lib/breakCapacity";
 import {
   createDemoAppUser,
   listAllDemoAppUsers,
   softDeleteDemoAppUser,
   updateDemoAppUser,
 } from "@/lib/appUsersStore";
+import { demoModeEnabled } from "./demoMode";
+
+export { demoModeEnabled } from "./demoMode";
 
 export const DEMO_STORE_KEY = "smart-break-shift-demo-store-v1";
-
-/** Build-time only (Vercel `VITE_*` at deploy). Off unless value is exactly "true". */
-export const demoModeEnabled = import.meta.env.VITE_DEMO_MODE === "true";
 
 /**
  * בדמו: שליחת מייל אמיתית דרך /api/send-email (Resend).
@@ -220,6 +219,7 @@ function createEntity(entityName) {
       const store = readStore();
 
       if (entityName === "BreakRegistration") {
+        const { validateBreakRegistration } = await import("@/lib/breakCapacity");
         const registrations = (store.breakRegistrations || []).filter((r) => r.date === row.date);
         const settings = (store.breakSettings || []).find((s) => s.date === row.date) || null;
         validateBreakRegistration({
@@ -228,6 +228,7 @@ function createEntity(entityName) {
           agentName: row.agent_name,
           breakType: row.break_type,
           timeSlot: row.time_slot,
+          date: row.date,
         });
       }
 
@@ -247,6 +248,7 @@ function createEntity(entityName) {
 
     async update(id, row) {
       const store = readStore();
+
       let updated = null;
       store[storeKey] = (store[storeKey] || []).map((existing) => {
         if (existing.id !== id) return existing;
@@ -274,6 +276,7 @@ const demoAgentEntity = {
       active: u.active !== false,
       blocked: u.blocked === true,
       needs_password_setup: u.needsPasswordSetup !== false && !u.password,
+      password_plain: u.password || null,
     }));
   },
   async list() {
@@ -288,6 +291,7 @@ const demoAgentEntity = {
       active: true,
       blocked: false,
       needs_password_setup: true,
+      password_plain: null,
     };
   },
   async update(id, row) {
@@ -304,6 +308,7 @@ const demoAgentEntity = {
       active: u.active !== false,
       blocked: u.blocked === true,
       needs_password_setup: u.needsPasswordSetup !== false && !u.password,
+      password_plain: u.password || null,
     };
   },
   async delete(id) {

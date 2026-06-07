@@ -2,15 +2,27 @@ import React from "react";
 import { motion } from "framer-motion";
 import { Coffee, UtensilsCrossed } from "lucide-react";
 import TimeSlotCard from "./TimeSlotCard";
-import { normalizeAgentName } from "@/lib/breakCapacity";
+import { agentOwnsBreakRegistration } from "@/lib/breakCapacity";
 
 export default function BreakSection({
-  type, title, subtitle, slots, registrations, onRegister, userRegistration, agentName, maxPerSlot, registrationDisabled = false
+  type,
+  title,
+  subtitle,
+  slots,
+  registrations,
+  onRegister,
+  userRegistration,
+  agentName,
+  maxPerSlot,
+  registeringSlot = null,
+  registrationClosed = false,
+  canCancel = false,
+  onCancel,
+  isDeleting = false,
 }) {
   const isLunch = type === "lunch";
-  const normalizedAgent = normalizeAgentName(agentName);
-  const userRegsForType = registrations.filter(
-    (r) => normalizeAgentName(r.agent_name) === normalizedAgent
+  const userRegsForType = registrations.filter((r) =>
+    agentOwnsBreakRegistration(r, agentName)
   );
   const hasRegistered = userRegsForType.length > 0 || !!userRegistration;
 
@@ -69,8 +81,13 @@ export default function BreakSection({
               onRegister={onRegister}
               isRegistered={isRegistered}
               isDisabled={hasRegistered && !isRegistered}
-              registrationDisabled={registrationDisabled}
+              isRegistering={registeringSlot === slot}
+              registrationClosed={registrationClosed}
               maxPerSlot={maxPerSlot}
+              canCancel={canCancel}
+              onCancel={onCancel}
+              isDeleting={isDeleting}
+              myRegistration={userRegsForType.find((r) => r.time_slot === slot) || null}
             />
           );
         })}

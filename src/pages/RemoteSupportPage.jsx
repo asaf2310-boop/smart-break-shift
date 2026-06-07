@@ -18,7 +18,7 @@ import {
   screenShareFeaturesAvailable,
   subscribeScreenShare,
 } from "@/lib/screenShareStore";
-import { m3PageClass } from "@/lib/hypPage";
+import { hypHeaderIconClass, m3PageClass } from "@/lib/hypPage";
 import { cn } from "@/lib/utils";
 
 function formatWhen(iso) {
@@ -61,14 +61,7 @@ export default function RemoteSupportPage() {
           className="flex items-center justify-between mb-6"
         >
           <div className="flex items-center gap-3">
-            <div
-              className={cn(
-                "w-12 h-12 rounded-2xl flex items-center justify-center shadow-elevation-2",
-                demoModeEnabled
-                  ? "hyp-page-icon"
-                  : "bg-gradient-to-l from-violet-600 to-indigo-600"
-              )}
-            >
+            <div className={hypHeaderIconClass("w-12 h-12 shadow-elevation-2")}>
               <Monitor className="w-6 h-6 text-white" />
             </div>
             <div>

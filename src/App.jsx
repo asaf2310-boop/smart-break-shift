@@ -27,6 +27,7 @@ import { ChatUnreadProvider } from '@/hooks/useChatUnread';
 import ChatDeepLink from './pages/ChatDeepLink';
 import CrmDashboard from './pages/CrmDashboard';
 import CrmCustomerDetail from './pages/CrmCustomerDetail';
+import CrmLookupDeepLink from './pages/CrmLookupDeepLink';
 import KnowledgePage from './pages/KnowledgePage';
 import AdminKnowledge from './pages/AdminKnowledge';
 import FloatingKnowledgeWidget from '@/components/knowledge/FloatingKnowledgeWidget';
@@ -39,7 +40,7 @@ import TrainingPage from './pages/TrainingPage';
 import AdminTraining from './pages/AdminTraining';
 import RouteErrorBoundary from '@/components/RouteErrorBoundary';
 import { hasTopAppNav } from '@/lib/appNavPaths';
-import { demoModeEnabled } from '@/api/demoClient';
+import { brandVisualEnabled } from '@/lib/brandShell';
 import { applyHypDemoDocumentClasses, hypDemoAppShellClass } from '@/lib/hypPage';
 import { useEffect } from 'react';
 
@@ -58,10 +59,10 @@ const AuthenticatedApp = () => {
 
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
-      <div className={demoModeEnabled ? "fixed inset-0 flex items-center justify-center hyp-scheduling-root" : "fixed inset-0 flex items-center justify-center m3-page"}>
+      <div className={brandVisualEnabled ? "fixed inset-0 flex items-center justify-center hyp-scheduling-root" : "fixed inset-0 flex items-center justify-center m3-page"}>
         <div
-          className={demoModeEnabled ? "w-10 h-10 hyp-loader" : "w-10 h-10 rounded-full border-[3px] border-primary/20 border-t-primary animate-spin"}
-          style={demoModeEnabled ? undefined : { boxShadow: "var(--brand-glow-purple)" }}
+          className={brandVisualEnabled ? "w-10 h-10 hyp-loader" : "w-10 h-10 rounded-full border-[3px] border-primary/20 border-t-primary animate-spin"}
+          style={brandVisualEnabled ? undefined : { boxShadow: "var(--brand-glow-purple)" }}
           aria-hidden
         />
       </div>
@@ -88,6 +89,7 @@ const AuthenticatedApp = () => {
         <Route path="/training" element={<TrainingPage />} />
         <Route path="/chat" element={<ChatDeepLink />} />
         <Route path="/crm" element={<DemoGate><CrmDashboard /></DemoGate>} />
+        <Route path="/crm/lookup" element={<DemoGate><CrmLookupDeepLink /></DemoGate>} />
         <Route path="/crm/:id" element={<DemoGate><CrmCustomerDetail /></DemoGate>} />
         <Route path="/remote-support" element={<DemoGate><RemoteSupportPage /></DemoGate>} />
         <Route

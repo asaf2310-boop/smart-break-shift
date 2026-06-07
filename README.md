@@ -54,7 +54,7 @@ VITE_DEMO_MODE=true
 - **אחסון:** Supabase bucket `training-docs` (מומלץ בפרודקשן) או `public/training/slides/{sessionId}.pdf` או IndexedDB מקומי לבדיקות.
 - **PowerPoint:** יש לייצא ל-PDF לפני העלאה — אין המרה בדפדפן.
 
-ב-Supabase צרו bucket ציבורי לקריאה `training-docs` והרשאות Storage ל-anon/authenticated לפי מדיניות הארגון.
+ב-Supabase צרו bucket ציבורי לקריאה `training-docs` — [`docs/TRAINING_STORAGE_SETUP.md`](docs/TRAINING_STORAGE_SETUP.md) או הריצו [`supabase/training_docs_storage.sql`](supabase/training_docs_storage.sql).
 
 ## פריסה
 
@@ -66,3 +66,5 @@ VITE_DEMO_MODE=true
 | **smart-break-shift-demo** (הדגמה) | `true` | אופציונלי |
 
 אחרי שינוי משתני `VITE_*` ב-Vercel — חובה **Redeploy** (הערכים נכנסים רק ב-build חדש).
+
+צ'קליסט מיתוג בפרודקשן (בלי דמו): [`docs/DEPLOY_BRAND_CHECKLIST.md`](docs/DEPLOY_BRAND_CHECKLIST.md).

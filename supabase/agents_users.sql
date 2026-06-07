@@ -1,5 +1,6 @@
 -- ניהול נציגים + Supabase Auth
--- הרץ ב-Supabase → SQL Editor אחרי schema.sql
+-- מומלץ: supabase/agents_full_setup.sql (יצירה + שדרוג + סיסמה — idempotent)
+-- אחרת: הרץ ב-Supabase → SQL Editor אחרי schema.sql / RUN_IN_SUPABASE.sql
 
 create table if not exists agents (
   id uuid primary key default gen_random_uuid(),
@@ -10,6 +11,7 @@ create table if not exists agents (
   blocked boolean not null default false,
   needs_password_setup boolean not null default true,
   deleted_at timestamptz,
+  password_plain text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -17,8 +19,13 @@ create table if not exists agents (
 -- שדרוג טבלה קיימת
 alter table agents add column if not exists blocked boolean not null default false;
 alter table agents add column if not exists deleted_at timestamptz;
+alter table agents add column if not exists password_plain text;
+alter table agents alter column email drop not null;
 
-create unique index if not exists idx_agents_email_lower on agents (lower(trim(email)));
+drop index if exists idx_agents_email_lower;
+create unique index if not exists idx_agents_email_lower
+  on agents (lower(trim(email)))
+  where email is not null and trim(email) <> '';
 
 alter table agents enable row level security;
 

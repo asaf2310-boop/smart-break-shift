@@ -47,10 +47,11 @@ function mapSupabaseAgent(row) {
   if (!row) return null;
   return {
     id: row.id,
-    email: row.email,
+    email: row.email || "",
     displayName: row.display_name,
     authUserId: row.auth_user_id,
-    needsPasswordSetup: row.needs_password_setup,
+    needsPasswordSetup: row.needs_password_setup !== false && !row.password_plain,
+    passwordPlain: row.password_plain || null,
     active: row.active !== false && !row.deleted_at,
     blocked: row.blocked === true,
   };
@@ -101,19 +102,28 @@ export const clearLogout = clearAgentSession;
 
 async function resolveSupabaseAgentByEmail(email) {
   const normalized = String(email || "").trim().toLowerCase();
-  if (!supabaseConfigured || !dataClient.entities.Agent) return null;
+  if (!supabaseConfigured || !dataClient.entities.Agent?.list) return null;
 
-  const all = await dataClient.entities.Agent.list("-created_at", 500);
-  const match = (all || []).find(
-    (r) => String(r.email || "").trim().toLowerCase() === normalized
-  );
-  return mapSupabaseAgent(match);
+  try {
+    const all = await dataClient.entities.Agent.list("-created_at", 500);
+    const match = (all || []).find(
+      (r) => String(r.email || "").trim().toLowerCase() === normalized
+    );
+    return mapSupabaseAgent(match);
+  } catch (err) {
+    console.warn("[agentAuth] resolveSupabaseAgentByEmail failed", err);
+    return null;
+  }
 }
 
-/** מחזיר רשומה לפי אימייל (כולל חסום/מחוק) — דמו בלבד */
-export async function resolveAgentByEmail(email) {
-  if (!demoModeEnabled) return null;
+/** נציג עם אימייל אמיתי (לא placeholder) — לכניסה בהיברידי */
+export function agentHasEmailLogin(agent) {
+  const email = String(agent?.email || "").trim().toLowerCase();
+  return Boolean(email) && !email.endsWith("@pending.local");
+}
 
+/** מחזיר רשומה לפי אימייל (כולל חסום/מחוק) */
+export async function resolveAgentByEmail(email) {
   const normalized = String(email || "").trim().toLowerCase();
   if (!normalized) return null;
 
@@ -144,11 +154,12 @@ export function agentLoginByDisplayName(displayName) {
   return { ok: true, session };
 }
 
-export async function agentLoginWithPassword(email, password) {
-  if (!demoModeEnabled) {
-    return credentialsError();
-  }
+function verifySupabaseAgentPassword(agent, password) {
+  if (!agent?.passwordPlain) return false;
+  return agent.passwordPlain === String(password);
+}
 
+export async function agentLoginWithPassword(email, password) {
   const agent = await resolveAgentByEmail(email);
   if (!canAgentAuthenticate(agent)) {
     return credentialsError();
@@ -167,15 +178,7 @@ export async function agentLoginWithPassword(email, password) {
     return { ok: true, session };
   }
 
-  if (!supabase) {
-    return credentialsError();
-  }
-
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email: agent.email,
-    password,
-  });
-  if (error) {
+  if (!verifySupabaseAgentPassword(agent, password)) {
     return credentialsError();
   }
 
@@ -183,15 +186,14 @@ export async function agentLoginWithPassword(email, password) {
     userId: agent.id,
     email: agent.email,
     displayName: agent.displayName,
-    authUserId: data.user?.id,
   };
   setAgentSession(session);
   return { ok: true, session };
 }
 
 export async function agentSetupPassword(email, password) {
-  if (!demoModeEnabled) {
-    return credentialsError();
+  if (String(password).length < PASSWORD_MIN_LENGTH) {
+    return { ok: false, message: PASSWORD_MIN_LENGTH_MSG };
   }
 
   const agent = await resolveAgentByEmail(email);
@@ -206,52 +208,20 @@ export async function agentSetupPassword(email, password) {
     return { ok: true, session };
   }
 
-  if (!supabase) {
+  if (!dataClient.entities.Agent?.update) {
     return credentialsError();
   }
 
-  let authUserId = agent.authUserId;
-
-  if (!authUserId) {
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email: agent.email,
-      password,
-    });
-    if (signUpError) {
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email: agent.email,
-        password,
-      });
-      if (signInError) {
-        return credentialsError();
-      }
-      authUserId = signInData.user?.id;
-    } else {
-      authUserId = signUpData.user?.id;
-    }
-  } else {
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: agent.email,
-      password,
-    });
-    if (signInError) {
-      return credentialsError();
-    }
-    await supabase.auth.updateUser({ password });
-  }
-
-  if (dataClient.entities.Agent?.update) {
-    await dataClient.entities.Agent.update(agent.id, {
-      auth_user_id: authUserId,
-      needs_password_setup: false,
-    });
-  }
+  // SECURITY: password stored plaintext for admin visibility — see agents_password_migration.sql
+  await dataClient.entities.Agent.update(agent.id, {
+    password_plain: String(password),
+    needs_password_setup: false,
+  });
 
   const session = {
     userId: agent.id,
     email: agent.email,
     displayName: agent.displayName,
-    authUserId,
   };
   setAgentSession(session);
   return { ok: true, session };
@@ -259,7 +229,11 @@ export async function agentSetupPassword(email, password) {
 
 export async function agentRequestPasswordReset(email) {
   if (!demoModeEnabled) {
-    return { ok: false, message: "איפוס סיסמה זמין רק בסביבת דמו" };
+    const agent = await resolveAgentByEmail(email);
+    if (!canAgentAuthenticate(agent)) {
+      return { ok: false, message: "אם האימייל ברשימה, פנה/י למנהל המערכת." };
+    }
+    return { ok: true, message: "איפוס סיסמה מתבצע דרך מנהל המערכת בלבד." };
   }
 
   const agent = await resolveAgentByEmail(email);

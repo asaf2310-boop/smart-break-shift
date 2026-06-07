@@ -352,6 +352,29 @@ export function getCustomerById(id) {
   return readStore().customers.find((c) => c.id === id) || null;
 }
 
+/** נרמול מספר ישראלי לחיפוש — מסיר מקפים/רווחים, ממיר +972/972 ל-0 */
+export function normalizePhoneForLookup(phone) {
+  if (!phone) return "";
+  let digits = String(phone).replace(/[\s\-().]/g, "");
+  if (digits.startsWith("+")) digits = digits.slice(1);
+  if (digits.startsWith("972")) digits = `0${digits.slice(3)}`;
+  return digits.replace(/\D/g, "");
+}
+
+/** חיפוש לקוח לפי טלפון (דמו בלבד) — null אם לא נמצא */
+export function getCustomerByPhone(phone) {
+  if (!demoModeEnabled) return null;
+  const needle = normalizePhoneForLookup(phone);
+  if (!needle || needle.length < 7) return null;
+  const { customers } = readStore();
+  return (
+    customers.find((c) => {
+      const hay = normalizePhoneForLookup(c.phone);
+      return hay && hay === needle;
+    }) || null
+  );
+}
+
 export function createCustomer({ name, phone, email, company, notes }) {
   const store = readStore();
   const now = new Date().toISOString();

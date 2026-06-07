@@ -10,6 +10,9 @@ import {
   Grid3x3,
   LayoutDashboard,
   User,
+  UserPlus,
+  ExternalLink,
+  Building2,
 } from "lucide-react";
 import TelephonyStatusPicker from "@/components/telephony/TelephonyStatusPicker";
 import TelephonyDashboardView from "@/components/telephony/TelephonyDashboardView";
@@ -37,11 +40,23 @@ function callStatusTone(status) {
   }
 }
 
+const SIP_REG_LABELS = {
+  idle: "לא מחובר",
+  connecting: "מתחבר…",
+  registered: "רשום ל-SIP",
+  unregistered: "לא רשום",
+  error: "שגיאת SIP",
+};
+
 export default function AgentTelephonySidebar({
   agentName,
   isDemo,
+  isSip = false,
   provider,
   isHttpsRequired,
+  sipRegistration = "idle",
+  sipError = null,
+  callError = null,
   telephonyConnected,
   statusKey,
   onStatusChange,
@@ -64,10 +79,14 @@ export default function AgentTelephonySidebar({
   onToggleDialPad,
   onCall,
   onSimulateInbound,
-  onProductionStub,
+  onProductionCheck,
   onClose,
   crmCustomerId = null,
   crmCustomerName = null,
+  screenPopCustomer = null,
+  outboundMatch = null,
+  onOpenCrm,
+  onCreateCustomer,
 }) {
   const [panelView, setPanelView] = useState("personal");
   const [waitingCount, setWaitingCount] = useState(() => getCenterStats().waiting);
@@ -87,6 +106,17 @@ export default function AgentTelephonySidebar({
     if (dialOpen) setPanelView("personal");
   }, [dialOpen]);
 
+  const inboundCustomer =
+    screenPopCustomer ||
+    (active?.customer_id
+      ? {
+          id: active.customer_id,
+          name: active.customer_name,
+          company: active.customer_company,
+        }
+      : null);
+  const inboundKnown = Boolean(inboundCustomer?.id);
+
   return (
     <div
       role="dialog"
@@ -100,7 +130,13 @@ export default function AgentTelephonySidebar({
           <div className="min-w-0">
             <p className="font-bold text-sm leading-tight">טלפוניה</p>
             <p className="text-[11px] text-white/85 truncate">
-              {isDemo ? "דמו" : provider === "twilio" ? "Twilio" : "SIP"}
+              {isDemo
+                ? "דמו"
+                : isSip
+                  ? SIP_REG_LABELS[sipRegistration] || "SIP"
+                  : provider === "twilio"
+                    ? "Twilio"
+                    : "SIP"}
             </p>
           </div>
         </div>
@@ -211,31 +247,62 @@ export default function AgentTelephonySidebar({
               <PhoneIncoming className="w-5 h-5 text-amber-700" />
               <span className="text-sm font-bold text-amber-900">שיחה נכנסת</span>
             </div>
-            {active.customer_name && (
-              <p className="text-lg font-bold text-slate-900 leading-tight">
-                {active.customer_name}
-              </p>
+            {inboundKnown ? (
+              <>
+                <p className="text-lg font-bold text-slate-900 leading-tight">
+                  {inboundCustomer.name}
+                </p>
+                {inboundCustomer.company && (
+                  <p className="text-sm text-slate-700 flex items-center gap-1 mt-0.5">
+                    <Building2 className="w-3.5 h-3.5 shrink-0" />
+                    {inboundCustomer.company}
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-sm font-semibold text-amber-900">לקוח לא מצויע</p>
             )}
             <p className="text-base font-mono font-semibold text-slate-800 mt-1" dir="ltr">
               {active.phone}
             </p>
-            <div className="flex gap-2 mt-4 justify-end">
-              <button
-                type="button"
-                onClick={onAnswer}
-                className="inline-flex flex-1 items-center justify-center gap-1.5 h-11 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700"
-              >
-                <PhoneCall className="w-4 h-4" />
-                מענה
-              </button>
-              <button
-                type="button"
-                onClick={onHangup}
-                className="inline-flex items-center justify-center gap-1.5 h-11 px-4 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700"
-                aria-label="דחייה"
-              >
-                <PhoneOff className="w-4 h-4" />
-              </button>
+            <div className="flex flex-col gap-2 mt-4">
+              {inboundKnown ? (
+                <button
+                  type="button"
+                  onClick={() => onOpenCrm?.(inboundCustomer.id)}
+                  className="inline-flex w-full items-center justify-center gap-1.5 h-10 rounded-xl border border-teal-200 bg-white text-teal-800 text-sm font-bold hover:bg-teal-50"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  פתח כרטיס CRM
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onCreateCustomer}
+                  className="inline-flex w-full items-center justify-center gap-1.5 h-10 rounded-xl border border-teal-200 bg-white text-teal-800 text-sm font-bold hover:bg-teal-50"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  צור לקוח חדש
+                </button>
+              )}
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={onAnswer}
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 h-11 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700"
+                >
+                  <PhoneCall className="w-4 h-4" />
+                  מענה
+                </button>
+                <button
+                  type="button"
+                  onClick={onHangup}
+                  className="inline-flex items-center justify-center gap-1.5 h-11 px-4 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700"
+                  aria-label="דחייה"
+                >
+                  <PhoneOff className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </section>
         )}
@@ -253,6 +320,22 @@ export default function AgentTelephonySidebar({
             </div>
             {active.customer_name && (
               <p className="text-base font-bold text-foreground">{active.customer_name}</p>
+            )}
+            {active.customer_company && (
+              <p className="text-sm text-on-surface-variant flex items-center gap-1">
+                <Building2 className="w-3.5 h-3.5 shrink-0" />
+                {active.customer_company}
+              </p>
+            )}
+            {active.customer_id && (
+              <button
+                type="button"
+                onClick={() => onOpenCrm?.(active.customer_id)}
+                className="mt-1 text-xs font-bold text-teal-700 hover:underline inline-flex items-center gap-1"
+              >
+                <ExternalLink className="w-3 h-3" />
+                פתח כרטיס CRM
+              </button>
             )}
             <p className="text-lg font-mono font-semibold text-foreground" dir="ltr">
               {active.phone}
@@ -290,11 +373,11 @@ export default function AgentTelephonySidebar({
           <section className="space-y-1.5" aria-label="חיוג יוצא">
             <p className="m3-label-medium text-on-surface-variant">חיוג יוצא</p>
             <div className="flex flex-row gap-2 items-stretch">
-              {isDemo && (
+              {(isDemo || (isSip && telephonyConnected)) && (
                 <button
                   type="button"
                   onClick={onCall}
-                  disabled={!String(number || "").trim()}
+                  disabled={!String(number || "").trim() || (isSip && sipRegistration !== "registered")}
                   aria-label="חיוג"
                   className="shrink-0 w-10 h-10 rounded-xl bg-gradient-to-l from-teal-600 to-emerald-600 text-white flex items-center justify-center hover:opacity-95 disabled:opacity-40 shadow-sm shadow-teal-500/20"
                 >
@@ -325,6 +408,15 @@ export default function AgentTelephonySidebar({
                 <Grid3x3 className="w-5 h-5" />
               </button>
             </div>
+            {outboundMatch && (
+              <p className="text-xs font-semibold text-teal-800 bg-teal-50 border border-teal-100 rounded-lg px-2.5 py-1.5 flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 shrink-0" />
+                <span>
+                  {outboundMatch.name}
+                  {outboundMatch.company ? ` · ${outboundMatch.company}` : ""}
+                </span>
+              </p>
+            )}
 
             {dialOpen && (
               <div
@@ -369,16 +461,28 @@ export default function AgentTelephonySidebar({
 
         {!isDemo && (
           <div className="text-sm text-amber-900 bg-amber-50 border border-amber-100 rounded-xl p-3 leading-relaxed">
-            חיוג אמיתי דורש SIP/Twilio, HTTPS ואישור IT.
+            {isSip ? (
+              <>
+                חיוג WebRTC בדפדפן — לחצו «התחבר» להרשמה ל-SIP.
+                {sipError && (
+                  <span className="block mt-1 font-semibold text-red-800">{sipError}</span>
+                )}
+                {callError && (
+                  <span className="block mt-1 text-teal-900">{callError}</span>
+                )}
+              </>
+            ) : (
+              <>חיוג אמיתי דורש SIP/Twilio, HTTPS ואישור IT.</>
+            )}
             {isHttpsRequired && (
               <span className="block mt-1 font-semibold">הדפדפן לא ב-HTTPS.</span>
             )}
             <button
               type="button"
-              onClick={onProductionStub}
+              onClick={onProductionCheck}
               className="mt-2 text-xs font-semibold text-teal-800 underline"
             >
-              בדיקת הגדרות (stub)
+              בדיקת הגדרות SIP
             </button>
           </div>
         )}
