@@ -129,44 +129,60 @@ export default function ScreenShareGuestPage() {
     ]
   );
 
-  const notifyAgentSessionEnded = useCallback(
-    (reason) => {
-      const peer = peerRef.current;
-      if (!peer || peer.destroyed || !sessionId) return;
-      try {
-        const conn = peer.connect(sessionId, { reliable: true });
-        const payload = { type: "guest_end", reason, at: Date.now() };
-        const sendAndClose = () => {
+  const sendPeerDataMessage = useCallback((payload) => {
+    const peer = peerRef.current;
+    if (!peer || peer.destroyed || !sessionId) return;
+    try {
+      const conn = peer.connect(sessionId, { reliable: true });
+      const sendAndClose = () => {
+        try {
+          conn.send(payload);
+        } catch {
+          /* ignore */
+        }
+        window.setTimeout(() => {
           try {
-            conn.send(payload);
+            conn.close();
           } catch {
             /* ignore */
           }
-          window.setTimeout(() => {
-            try {
-              conn.close();
-            } catch {
-              /* ignore */
-            }
-          }, 50);
-        };
-        if (conn.open) {
-          sendAndClose();
-        } else {
-          conn.on("open", sendAndClose);
-          window.setTimeout(() => {
-            try {
-              conn.close();
-            } catch {
-              /* ignore */
-            }
-          }, 300);
-        }
-      } catch {
-        /* ignore */
+        }, 50);
+      };
+      if (conn.open) {
+        sendAndClose();
+      } else {
+        conn.on("open", sendAndClose);
+        window.setTimeout(() => {
+          try {
+            conn.close();
+          } catch {
+            /* ignore */
+          }
+        }, 300);
       }
+    } catch {
+      /* ignore */
+    }
+  }, [sessionId]);
+
+  const notifyAgentSessionEnded = useCallback(
+    (reason) => {
+      sendPeerDataMessage({ type: "guest_end", reason, at: Date.now() });
     },
-    [sessionId]
+    [sendPeerDataMessage]
+  );
+
+  const notifyAgentGuestReady = useCallback(
+    (sessionSnapshot) => {
+      if (!sessionSnapshot) return;
+      sendPeerDataMessage({
+        type: "guest_ready",
+        consentAt: sessionSnapshot.consentAt || null,
+        recordingConsentAt: sessionSnapshot.recordingConsentAt || null,
+        at: Date.now(),
+      });
+    },
+    [sendPeerDataMessage]
   );
 
   const endGuestSessionWithNotify = useCallback(
@@ -254,8 +270,9 @@ export default function ScreenShareGuestPage() {
     }
 
     await placeCall(peer, streamRef.current);
+    notifyAgentGuestReady(resolveGuestSession(sessionId, bootstrapKey));
     setError("");
-  }, [sessionId, isStreamAlive, placeCall]);
+  }, [sessionId, bootstrapKey, isStreamAlive, placeCall, notifyAgentGuestReady]);
 
   useEffect(() => {
     const refresh = () => setSession(resolveGuestSession(sessionId, bootstrapKey));
@@ -375,6 +392,7 @@ export default function ScreenShareGuestPage() {
 
       sharingRef.current = true;
       await placeCall(peer, stream);
+      notifyAgentGuestReady(resolveGuestSession(sessionId, bootstrapKey));
       setShared(true);
       setError("");
     } catch (err) {

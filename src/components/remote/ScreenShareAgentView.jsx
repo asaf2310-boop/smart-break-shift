@@ -40,6 +40,7 @@ import {
 import { uploadRecordingToCloud } from "@/lib/recordingUpload";
 import {
   appendSessionRecording,
+  applyGuestPeerSync,
   endSession,
   getSession,
   listRecordingsForSession,
@@ -137,14 +138,17 @@ export default function ScreenShareAgentView({
   const recordingStartedAtRef = useRef(null);
   const maxDurationWarnedRef = useRef(false);
   const metadataPersistedRef = useRef(false);
+  const recordingElapsedRef = useRef(0);
   const autoStartAttemptedRef = useRef(false);
   const startRecordingRef = useRef(() => {});
   const sessionEndedRef = useRef(false);
 
   const DEMO_AUTO_START_KEY = "demo-auto-start-recording";
   const [autoStartRecording, setAutoStartRecording] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem(DEMO_AUTO_START_KEY) === "true";
+    if (typeof window === "undefined") return true;
+    const stored = window.localStorage.getItem(DEMO_AUTO_START_KEY);
+    if (stored === null) return true;
+    return stored === "true";
   });
 
   const [status, setStatus] = useState("idle");
@@ -194,41 +198,6 @@ export default function ScreenShareAgentView({
     }
   }, []);
 
-  const finalizeRecordingBlob = useCallback(() => {
-    const blob = new Blob(chunksRef.current, { type: "video/webm" });
-    chunksRef.current = [];
-    mediaRecorderRef.current = null;
-    setIsRecording(false);
-    if (blob.size > 0) {
-      setRecordedBlob(blob);
-    }
-  }, []);
-
-  const refreshSessionData = useCallback(async () => {
-    if (!sessionId) return;
-    setSessionRecord(getSession(sessionId));
-    const recs = listRecordingsForSession(sessionId);
-    setSessionRecordings(recs);
-    if (!recordingFeaturesEnabled) return;
-    const available = new Set();
-    await Promise.all(
-      recs.map(async (rec) => {
-        if (await hasRecordingBlob(sessionId, rec.id)) {
-          available.add(rec.id);
-        }
-      })
-    );
-    setBlobAvailableIds(available);
-  }, [sessionId]);
-
-  useEffect(() => {
-    if (!sessionId) return undefined;
-    refreshSessionData();
-    return subscribeScreenShare(() => {
-      refreshSessionData();
-    });
-  }, [sessionId, refreshSessionData]);
-
   const persistRecordingMetadata = useCallback(
     (durationSec) => {
       if (!sessionId || !recordingStartedAtRef.current) return null;
@@ -237,12 +206,13 @@ export default function ScreenShareAgentView({
       const timestamp = stoppedAt.replace(/[:.]/g, "-");
       const fileName = `screen-${sessionId}-${timestamp}.webm`;
       const hasAudio = (remoteStreamRef.current?.getAudioTracks?.() || []).length > 0;
+      const latestSession = getSession(sessionId);
       const entry = appendSessionRecording(sessionId, {
         startedAt,
         stoppedAt,
         durationSec,
         fileName,
-        consentAt: sessionRecord?.recordingConsentAt,
+        consentAt: latestSession?.recordingConsentAt || sessionRecord?.recordingConsentAt,
         hasAudio,
       });
       setSessionRecordings(listRecordingsForSession(sessionId));
@@ -268,6 +238,103 @@ export default function ScreenShareAgentView({
     },
     [sessionId, sessionRecord, agentName]
   );
+
+  const resolveRecordingDurationSec = useCallback(() => {
+    if (recordingStartedAtRef.current) {
+      const started = new Date(recordingStartedAtRef.current).getTime();
+      if (!Number.isNaN(started)) {
+        return Math.max(1, Math.round((Date.now() - started) / 1000));
+      }
+    }
+    return Math.max(1, recordingElapsedRef.current || 0);
+  }, []);
+
+  const flushRecordingSave = useCallback(
+    async (blob) => {
+      if (!blob?.size || metadataPersistedRef.current || !sessionId) return;
+      if (!recordingFeaturesEnabled) return;
+      metadataPersistedRef.current = true;
+      const durationSec = resolveRecordingDurationSec();
+      setRecordingElapsed(durationSec);
+      recordingElapsedRef.current = durationSec;
+      const entry = persistRecordingMetadata(durationSec);
+      if (!entry?.id) {
+        metadataPersistedRef.current = false;
+        return;
+      }
+
+      setSavingBlob(true);
+      try {
+        await saveRecordingBlob({
+          sessionId,
+          recordingId: entry.id,
+          blob,
+          meta: { fileName: entry.fileName, fileSizeBytes: blob.size },
+        });
+        updateRecordingMetadata(sessionId, entry.id, {
+          fileSizeBytes: blob.size,
+        });
+        setBlobAvailableIds((prev) => new Set(prev).add(entry.id));
+        const summary = {
+          recordingId: entry.id,
+          durationSec,
+          fileSizeBytes: blob.size,
+          crmCustomerId: sessionRecord?.crmCustomerId || entry.crmCustomerId,
+        };
+        setRecordingSummary(summary);
+        toast({
+          title: `הקלטה נשמרה — ${formatDurationLabel(durationSec)}, ${formatFileSizeMb(blob.size)}`,
+          description: "ניתן להוריד, לשמור לענן (דמו) או לפתוח את תיק הלקוח",
+        });
+      } catch {
+        metadataPersistedRef.current = false;
+        toast({
+          title: "שמירה מקומית",
+          description: "לא ניתן לשמור ב-IndexedDB — ההורדה המיידית עדיין זמינה",
+          variant: "destructive",
+        });
+      } finally {
+        setSavingBlob(false);
+      }
+    },
+    [sessionId, sessionRecord, persistRecordingMetadata, resolveRecordingDurationSec, toast]
+  );
+
+  const finalizeRecordingBlob = useCallback(() => {
+    const blob = new Blob(chunksRef.current, { type: "video/webm" });
+    chunksRef.current = [];
+    mediaRecorderRef.current = null;
+    setIsRecording(false);
+    if (blob.size > 0) {
+      setRecordedBlob(blob);
+      void flushRecordingSave(blob);
+    }
+  }, [flushRecordingSave]);
+
+  const refreshSessionData = useCallback(async () => {
+    if (!sessionId) return;
+    setSessionRecord(getSession(sessionId));
+    const recs = listRecordingsForSession(sessionId);
+    setSessionRecordings(recs);
+    if (!recordingFeaturesEnabled) return;
+    const available = new Set();
+    await Promise.all(
+      recs.map(async (rec) => {
+        if (await hasRecordingBlob(sessionId, rec.id)) {
+          available.add(rec.id);
+        }
+      })
+    );
+    setBlobAvailableIds(available);
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (!sessionId) return undefined;
+    refreshSessionData();
+    return subscribeScreenShare(() => {
+      refreshSessionData();
+    });
+  }, [sessionId, refreshSessionData]);
 
   const displayStatusLabel = (() => {
     if (tabHidden && status === "connected") return PEER_STATUS_LABELS.paused;
@@ -415,6 +482,14 @@ export default function ScreenShareAgentView({
             return;
           }
         }
+        if (data?.type === "guest_ready") {
+          applyGuestPeerSync(sessionId, {
+            consentAt: data.consentAt,
+            recordingConsentAt: data.recordingConsentAt,
+          });
+          setSessionRecord(getSession(sessionId));
+          return;
+        }
         if (data?.type !== "guest_end") return;
         const reason = data.reason || "client_stop";
         endSession(sessionId, { endedReason: reason });
@@ -462,7 +537,7 @@ export default function ScreenShareAgentView({
     });
 
     return () => {
-      stopRecordingInternal(true);
+      stopRecordingInternal(false);
       try {
         callRef.current?.close();
       } catch {
@@ -604,9 +679,11 @@ export default function ScreenShareAgentView({
     recorder.start(1000);
     setIsRecording(true);
     setRecordingElapsed(0);
+    recordingElapsedRef.current = 0;
     recordingTimerRef.current = setInterval(() => {
       setRecordingElapsed((s) => {
         const next = s + 1;
+        recordingElapsedRef.current = next;
         if (next >= MAX_RECORDING_SECONDS && !maxDurationWarnedRef.current) {
           maxDurationWarnedRef.current = true;
           setShowMaxDurationBanner(true);
@@ -659,65 +736,6 @@ export default function ScreenShareAgentView({
     setShowMaxDurationBanner(false);
     stopRecordingInternal();
   };
-
-  useEffect(() => {
-    if (isRecording || !recordedBlob || recordingElapsed <= 0) return;
-    if (metadataPersistedRef.current) return;
-    metadataPersistedRef.current = true;
-    const entry = persistRecordingMetadata(recordingElapsed);
-    if (!recordingFeaturesEnabled || !sessionId || !entry?.id) return;
-
-    let cancelled = false;
-    setSavingBlob(true);
-    saveRecordingBlob({
-      sessionId,
-      recordingId: entry.id,
-      blob: recordedBlob,
-      meta: { fileName: entry.fileName, fileSizeBytes: recordedBlob.size },
-    })
-      .then(() => {
-        if (cancelled) return;
-        updateRecordingMetadata(sessionId, entry.id, {
-          fileSizeBytes: recordedBlob.size,
-        });
-        setBlobAvailableIds((prev) => new Set(prev).add(entry.id));
-        const summary = {
-          recordingId: entry.id,
-          durationSec: recordingElapsed,
-          fileSizeBytes: recordedBlob.size,
-          crmCustomerId: sessionRecord?.crmCustomerId || entry.crmCustomerId,
-        };
-        setRecordingSummary(summary);
-        toast({
-          title: `הקלטה נשמרה — ${formatDurationLabel(recordingElapsed)}, ${formatFileSizeMb(recordedBlob.size)}`,
-          description: "ניתן להוריד, לשמור לענן (דמו) או לפתוח את תיק הלקוח",
-        });
-      })
-      .catch(() => {
-        if (!cancelled) {
-          toast({
-            title: "שמירה מקומית",
-            description: "לא ניתן לשמור ב-IndexedDB — ההורדה המיידית עדיין זמינה",
-            variant: "destructive",
-          });
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setSavingBlob(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    recordedBlob,
-    isRecording,
-    recordingElapsed,
-    persistRecordingMetadata,
-    sessionId,
-    sessionRecord,
-    toast,
-  ]);
 
   const handleCloudSaveSummary = async () => {
     if (!sessionId || !recordingSummary?.recordingId) return;
@@ -773,9 +791,12 @@ export default function ScreenShareAgentView({
     if (recordingId) {
       meta = sessionRecordings.find((r) => r.id === recordingId) || meta;
     }
-    if (!meta && recordedBlob && recordingElapsed > 0 && !metadataPersistedRef.current) {
-      metadataPersistedRef.current = true;
-      meta = persistRecordingMetadata(recordingElapsed);
+    if (!meta && recordedBlob && !metadataPersistedRef.current) {
+      await flushRecordingSave(recordedBlob);
+      meta =
+        listRecordingsForSession(sessionId).find((r) => r.id === lastRecordingMeta?.id) ||
+        listRecordingsForSession(sessionId).at(-1) ||
+        lastRecordingMeta;
     }
     const blob = await resolveBlobForDownload(recordingId || meta?.id);
     if (!blob?.size) {
@@ -991,9 +1012,19 @@ export default function ScreenShareAgentView({
           <p className="text-xs font-semibold text-slate-700">
             הקלטת מסך{demoModeEnabled ? " (דמו)" : ""}
           </p>
+          {isRecording && (
+            <p className="text-[11px] text-red-800 bg-red-50 border border-red-100 rounded-lg px-2 py-1.5 leading-relaxed">
+              מקליט כעת — הקובץ יישמר אוטומטית בסיום ההקלטה או הסשן
+            </p>
+          )}
           {recordDisabledReason && !isRecording && (
             <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5 leading-relaxed">
               {recordDisabledReason}
+            </p>
+          )}
+          {autoStartRecording && canRecord && !isRecording && !recordedBlob && (
+            <p className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-lg px-2 py-1.5 leading-relaxed">
+              הקלטה אוטומטית פעילה — תתחיל עם חיבור הזרם
             </p>
           )}
           <div className="flex flex-wrap gap-2">

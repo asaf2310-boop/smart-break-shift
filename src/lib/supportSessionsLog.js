@@ -68,6 +68,7 @@ export function listSupportSessionsFlat() {
     endedAt: session.endedAt || null,
     consentAt: session.consentAt || null,
     recordingConsentAt: session.recordingConsentAt || null,
+    recordingActiveAt: session.recordingActiveAt || null,
     recordings: mapRecordingsForSession(session.id, allRecordings),
   }));
 

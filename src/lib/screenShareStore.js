@@ -274,6 +274,23 @@ export function logRecordingConsent(id) {
   return updateSession(id, { recordingConsentAt: now });
 }
 
+/**
+ * סנכרון מצב מהאורח (PeerJS) ל-localStorage של הנציג — מכשירים נפרדים.
+ * מעדכן רק שדות שחסרים אצל הנציג (לא דורס ערכים קיימים).
+ */
+export function applyGuestPeerSync(id, { consentAt, recordingConsentAt } = {}) {
+  if (!id) return null;
+  const session = getSession(id);
+  if (!session) return null;
+  const patch = {};
+  if (consentAt && !session.consentAt) patch.consentAt = consentAt;
+  if (recordingConsentAt && !session.recordingConsentAt) {
+    patch.recordingConsentAt = recordingConsentAt;
+  }
+  if (Object.keys(patch).length === 0) return session;
+  return updateSession(id, patch);
+}
+
 /** נציג התחיל הקלטה — מוצג לאורח (דמו) */
 export function setRecordingActive(id) {
   const now = new Date().toISOString();
