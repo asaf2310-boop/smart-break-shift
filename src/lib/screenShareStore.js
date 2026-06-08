@@ -182,6 +182,7 @@ export function bootstrapGuestSessionFromUrl(sessionId, bootstrapParam) {
     recordings: [],
     emailSentAt: null,
     endedAt: null,
+    endedReason: null,
   };
 
   if (isGuestSessionExpired(session)) return null;
@@ -244,6 +245,7 @@ export function createScreenSession({
     recordings: [],
     emailSentAt: null,
     endedAt: null,
+    endedReason: null,
   };
   const sessions = [...readSessions(), session];
   writeSessions(sessions);
@@ -502,12 +504,13 @@ export function buildDemoRecordingAuditExport() {
   };
 }
 
-export function endSession(id) {
+export function endSession(id, { endedReason = "agent_ended" } = {}) {
   const now = new Date().toISOString();
   return updateSession(id, {
     status: "ended",
     endedAt: now,
     recordingActiveAt: null,
+    endedReason: endedReason || null,
   });
 }
 
@@ -809,5 +812,15 @@ export function subscribeScreenShare(callback) {
   if (typeof window === "undefined") return () => {};
   const handler = () => callback();
   window.addEventListener(SCREEN_SHARE_CHANGE_EVENT, handler);
-  return () => window.removeEventListener(SCREEN_SHARE_CHANGE_EVENT, handler);
+  // Cross-tab sync: localStorage write triggers `storage` events in other tabs.
+  const onStorage = (e) => {
+    if (!e) return;
+    if (e.key !== SCREEN_SHARE_STORAGE_KEY) return;
+    callback();
+  };
+  window.addEventListener("storage", onStorage);
+  return () => {
+    window.removeEventListener(SCREEN_SHARE_CHANGE_EVENT, handler);
+    window.removeEventListener("storage", onStorage);
+  };
 }

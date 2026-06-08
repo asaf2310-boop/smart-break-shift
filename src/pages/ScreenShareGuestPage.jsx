@@ -15,6 +15,7 @@ import {
   logRecordingConsent,
   logScreenConsent,
   GUEST_BOOTSTRAP_QUERY_KEY,
+  endSession,
   resolveGuestSession,
   screenShareFeaturesAvailable,
   subscribeScreenShare,
@@ -54,6 +55,7 @@ export default function ScreenShareGuestPage() {
   const streamRef = useRef(null);
   const reconnectTimerRef = useRef(null);
   const sharingRef = useRef(false);
+  const endNotifiedRef = useRef(false);
 
   useEffect(() => {
     sharingRef.current = sharing;
@@ -70,6 +72,110 @@ export default function ScreenShareGuestPage() {
       reconnectTimerRef.current = null;
     }
   }, []);
+
+  const endInStore = useCallback(
+    (reason) => {
+      if (!sessionId || endNotifiedRef.current) return;
+      endNotifiedRef.current = true;
+      try {
+        endSession(sessionId, { endedReason: reason });
+      } catch {
+        /* ignore */
+      }
+    },
+    [sessionId]
+  );
+
+  const stopPeerAndStream = useCallback(() => {
+    // Prevent placeCall's reconnection/err handlers from firing.
+    sharingRef.current = false;
+    clearReconnectTimer();
+    try {
+      callRef.current?.close();
+    } catch {
+      /* ignore */
+    }
+    try {
+      peerRef.current?.destroy();
+    } catch {
+      /* ignore */
+    }
+    callRef.current = null;
+    peerRef.current = null;
+    try {
+      streamRef.current?.getTracks?.().forEach((t) => t.stop());
+    } catch {
+      /* ignore */
+    }
+    streamRef.current = null;
+  }, [clearReconnectTimer]);
+
+  const endGuestSession = useCallback(
+    (reason, { updateUi = false } = {}) => {
+      endInStore(reason);
+      stopPeerAndStream();
+      if (!updateUi) return;
+      setError("");
+      setSharing(false);
+      setShared(false);
+      setSession(resolveGuestSession(sessionId, bootstrapKey));
+    },
+    [
+      endInStore,
+      stopPeerAndStream,
+      resolveGuestSession,
+      sessionId,
+      bootstrapKey,
+    ]
+  );
+
+  const notifyAgentSessionEnded = useCallback(
+    (reason) => {
+      const peer = peerRef.current;
+      if (!peer || peer.destroyed || !sessionId) return;
+      try {
+        const conn = peer.connect(sessionId, { reliable: true });
+        const payload = { type: "guest_end", reason, at: Date.now() };
+        const sendAndClose = () => {
+          try {
+            conn.send(payload);
+          } catch {
+            /* ignore */
+          }
+          window.setTimeout(() => {
+            try {
+              conn.close();
+            } catch {
+              /* ignore */
+            }
+          }, 50);
+        };
+        if (conn.open) {
+          sendAndClose();
+        } else {
+          conn.on("open", sendAndClose);
+          window.setTimeout(() => {
+            try {
+              conn.close();
+            } catch {
+              /* ignore */
+            }
+          }, 300);
+        }
+      } catch {
+        /* ignore */
+      }
+    },
+    [sessionId]
+  );
+
+  const endGuestSessionWithNotify = useCallback(
+    (reason, options = {}) => {
+      notifyAgentSessionEnded(reason);
+      endGuestSession(reason, options);
+    },
+    [notifyAgentSessionEnded, endGuestSession]
+  );
 
   const placeCall = useCallback(
     (peer, stream) => {
@@ -179,16 +285,12 @@ export default function ScreenShareGuestPage() {
 
   useEffect(() => {
     return () => {
-      clearReconnectTimer();
-      try {
-        callRef.current?.close();
-        peerRef.current?.destroy();
-      } catch {
-        /* ignore */
+      if (sessionId && !endNotifiedRef.current) {
+        endInStore("client_closed");
       }
-      streamRef.current?.getTracks().forEach((t) => t.stop());
+      stopPeerAndStream();
     };
-  }, [clearReconnectTimer]);
+  }, [sessionId, endInStore, stopPeerAndStream]);
 
   useEffect(() => {
     if (!shared) return undefined;
@@ -201,6 +303,23 @@ export default function ScreenShareGuestPage() {
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, [shared, isStreamAlive, reconnectToAgent]);
+
+  useEffect(() => {
+    if (!sessionId || !shared) return undefined;
+
+    const tryEndOnUnload = () => {
+      notifyAgentSessionEnded("client_closed");
+      endInStore("client_closed");
+    };
+
+    window.addEventListener("beforeunload", tryEndOnUnload);
+    window.addEventListener("pagehide", tryEndOnUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", tryEndOnUnload);
+      window.removeEventListener("pagehide", tryEndOnUnload);
+    };
+  }, [sessionId, shared, endInStore, notifyAgentSessionEnded]);
 
   const handleShareScreen = async () => {
     if (!session || session.status === "ended") return;
@@ -226,10 +345,8 @@ export default function ScreenShareGuestPage() {
       streamRef.current = stream;
 
       stream.getVideoTracks()[0]?.addEventListener("ended", () => {
-        sharingRef.current = false;
-        setShared(false);
+        endGuestSessionWithNotify("client_stop", { updateUi: true });
         setError("שיתוף המסך הופסק מהדפדפן");
-        clearReconnectTimer();
       });
 
       logScreenConsent(session.id);
@@ -349,7 +466,7 @@ export default function ScreenShareGuestPage() {
               )}
               <p className="text-xs text-slate-500 leading-relaxed">
                 השאירו דף זה פתוח. אם עברתם לחלון אחר — החיבור יתחדש אוטומטית כשתחזרו.
-                לעצירה — «הפסק שיתוף» בחלון הדפדפן.
+                לעצירה — השתמשו בכפתור «הפסק סשן צפייה» למטה.
               </p>
               {error && isStreamAlive() && (
                 <Button
@@ -361,6 +478,18 @@ export default function ScreenShareGuestPage() {
                   חזור לשיתוף עם הנציג
                 </Button>
               )}
+
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  endGuestSessionWithNotify("client_stop", { updateUi: true });
+                }}
+                className="w-full"
+              >
+                הפסק סשן צפייה
+              </Button>
             </div>
           ) : (
             <>

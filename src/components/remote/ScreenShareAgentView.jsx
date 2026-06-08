@@ -60,6 +60,13 @@ const PEER_STATUS_LABELS = {
   error: "שגיאת חיבור",
 };
 
+const GUEST_ENDED_LABEL = "לקוח סגר את הסשן";
+const CLIENT_ENDED_REASONS = new Set(["client_stop", "client_closed"]);
+
+function isGuestInitiatedEnd(reason) {
+  return CLIENT_ENDED_REASONS.has(reason);
+}
+
 function formatRecordingElapsed(seconds) {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
@@ -264,7 +271,11 @@ export default function ScreenShareAgentView({
     if (tabHidden && status === "connected") return PEER_STATUS_LABELS.paused;
     if (status === "connected") return PEER_STATUS_LABELS.connected;
     if (status === "disconnected") return PEER_STATUS_LABELS.disconnected;
-    if (status === "ended") return PEER_STATUS_LABELS.ended;
+    if (status === "ended") {
+      return isGuestInitiatedEnd(sessionRecord?.endedReason)
+        ? GUEST_ENDED_LABEL
+        : PEER_STATUS_LABELS.ended;
+    }
     if (status === "error") return PEER_STATUS_LABELS.error;
     if (!sessionRecord?.consentAt) return "ממתין לאישור הלקוח בקישור";
     return PEER_STATUS_LABELS[status] || status;
@@ -299,12 +310,55 @@ export default function ScreenShareAgentView({
     if (videoRef.current) videoRef.current.srcObject = null;
   }, []);
 
+  const handleSessionEndedByGuest = useCallback(() => {
+    sessionEndedRef.current = true;
+    if (sessionId && mediaRecorderRef.current) setRecordingStopped(sessionId);
+    stopRecordingInternal();
+    setReconnecting(false);
+    setErrorDetail("");
+    setTabHidden(false);
+    try {
+      callRef.current?.close();
+      peerRef.current?.destroy();
+    } catch {
+      /* ignore */
+    }
+    callRef.current = null;
+    peerRef.current = null;
+    setStatus("ended");
+    remoteStreamRef.current = null;
+    clearRemoteVideo();
+  }, [sessionId, stopRecordingInternal, clearRemoteVideo]);
+
   const handleStreamDisconnect = useCallback(() => {
+    if (sessionEndedRef.current) return;
+    const latest = sessionId ? getSession(sessionId) : null;
+    if (latest?.status === "ended" && isGuestInitiatedEnd(latest?.endedReason)) {
+      handleSessionEndedByGuest();
+      return;
+    }
     if (sessionId && mediaRecorderRef.current) setRecordingStopped(sessionId);
     stopRecordingInternal();
     setStatus("disconnected");
     clearRemoteVideo();
-  }, [sessionId, stopRecordingInternal, clearRemoteVideo]);
+  }, [
+    sessionId,
+    stopRecordingInternal,
+    clearRemoteVideo,
+    handleSessionEndedByGuest,
+  ]);
+
+  useEffect(() => {
+    if (!sessionId || sessionRecord?.status !== "ended") return;
+    if (sessionEndedRef.current) return;
+    if (!isGuestInitiatedEnd(sessionRecord?.endedReason)) return;
+    handleSessionEndedByGuest();
+  }, [
+    sessionId,
+    sessionRecord?.status,
+    sessionRecord?.endedReason,
+    handleSessionEndedByGuest,
+  ]);
 
   const canRecord =
     demoModeEnabled &&
@@ -348,6 +402,24 @@ export default function ScreenShareAgentView({
       setStatus((prev) => (prev === "ended" ? prev : "waiting"));
     });
 
+    peer.on("connection", (conn) => {
+      conn.on("data", (raw) => {
+        if (sessionEndedRef.current) return;
+        let data = raw;
+        if (typeof raw === "string") {
+          try {
+            data = JSON.parse(raw);
+          } catch {
+            return;
+          }
+        }
+        if (data?.type !== "guest_end") return;
+        const reason = data.reason || "client_stop";
+        endSession(sessionId, { endedReason: reason });
+        handleSessionEndedByGuest();
+      });
+    });
+
     peer.on("call", (call) => {
       callRef.current = call;
       call.answer();
@@ -363,13 +435,20 @@ export default function ScreenShareAgentView({
       });
 
       call.on("error", () => {
+        if (sessionEndedRef.current) return;
         handleStreamDisconnect();
+        if (sessionEndedRef.current) return;
         setErrorDetail("השיחה נותקה — לחצו «חזור לצפייה»");
       });
     });
 
     peer.on("error", (err) => {
       if (sessionEndedRef.current) return;
+      const latest = getSession(sessionId);
+      if (latest?.status === "ended" && isGuestInitiatedEnd(latest?.endedReason)) {
+        handleSessionEndedByGuest();
+        return;
+      }
       stopRecordingInternal();
       setStatus("error");
       setReconnecting(false);
@@ -398,7 +477,14 @@ export default function ScreenShareAgentView({
       setHasRemoteStream(false);
       if (videoRef.current) videoRef.current.srcObject = null;
     };
-  }, [sessionId, connectionEpoch, attachRemoteStream, handleStreamDisconnect, stopRecordingInternal]);
+  }, [
+    sessionId,
+    connectionEpoch,
+    attachRemoteStream,
+    handleStreamDisconnect,
+    handleSessionEndedByGuest,
+    stopRecordingInternal,
+  ]);
 
   useEffect(() => {
     const onVisibility = () => {
@@ -742,14 +828,15 @@ export default function ScreenShareAgentView({
     } catch {
       /* ignore */
     }
-    if (sessionId) endSession(sessionId);
+    if (sessionId) endSession(sessionId, { endedReason: "agent_ended" });
     setStatus("ended");
     remoteStreamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
     onEnded?.();
   };
 
-  const showReconnectOverlay = status === "disconnected" || status === "error";
+  const showReconnectOverlay =
+    (status === "disconnected" || status === "error") && status !== "ended";
   const canReconnect = status !== "ended";
 
   const statusIcon =
