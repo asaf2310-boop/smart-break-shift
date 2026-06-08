@@ -36,6 +36,7 @@ export default function ScreenSharePanel({
   customerName,
   customerEmail: customerEmailProp,
   hideEmailStatusBanner = false,
+  onSessionActiveChange,
 }) {
   const { toast } = useToast();
   const [emailTo, setEmailTo] = useState("");
@@ -54,6 +55,10 @@ export default function ScreenSharePanel({
   useEffect(() => {
     setEmailTo(defaultCustomerEmail);
   }, [defaultCustomerEmail]);
+
+  useEffect(() => {
+    onSessionActiveChange?.(Boolean(session?.id && session?.status !== "ended"));
+  }, [session?.id, session?.status, onSessionActiveChange]);
 
   useEffect(() => {
     if (!session?.id) return undefined;

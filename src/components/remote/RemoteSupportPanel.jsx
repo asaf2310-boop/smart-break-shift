@@ -72,6 +72,7 @@ export default function RemoteSupportPanel({
   const [emailTo, setEmailTo] = useState("");
   const [sendingRustDeskEmail, setSendingRustDeskEmail] = useState(false);
   const [startingRustDeskSession, setStartingRustDeskSession] = useState(false);
+  const [screenSessionActive, setScreenSessionActive] = useState(false);
 
   const defaultCustomerEmail = useMemo(() => {
     if (customerEmailProp) return String(customerEmailProp).trim();
@@ -95,6 +96,10 @@ export default function RemoteSupportPanel({
   useEffect(() => {
     if (open) setEmailTo(defaultCustomerEmail);
   }, [open, defaultCustomerEmail]);
+
+  useEffect(() => {
+    if (!open) setScreenSessionActive(false);
+  }, [open]);
 
   useEffect(() => {
     if (!session?.id) return undefined;
@@ -410,7 +415,20 @@ export default function RemoteSupportPanel({
       </Button>
 
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="sm:max-w-lg rounded-2xl gap-0 p-0 overflow-hidden" dir="rtl">
+        <DialogContent
+          className={`rounded-2xl gap-0 p-0 overflow-hidden ${
+            screenSessionActive && supportMode === "screen"
+              ? "sm:max-w-3xl max-h-[95vh] overflow-y-auto"
+              : "sm:max-w-lg"
+          }`}
+          dir="rtl"
+          onPointerDownOutside={(e) => {
+            if (screenSessionActive && supportMode === "screen") e.preventDefault();
+          }}
+          onInteractOutside={(e) => {
+            if (screenSessionActive && supportMode === "screen") e.preventDefault();
+          }}
+        >
           <div className="bg-violet-50 border-b border-violet-200 px-4 py-2 flex items-start gap-2 text-violet-950 text-xs leading-relaxed">
             <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-violet-700" />
             <span>{PANEL_DEMO_BANNER}</span>
@@ -469,6 +487,7 @@ export default function RemoteSupportPanel({
                   customerName={customerName}
                   customerEmail={customerEmailProp}
                   hideEmailStatusBanner={hideEmailStatusBanner}
+                  onSessionActiveChange={setScreenSessionActive}
                 />
               </TabsContent>
 

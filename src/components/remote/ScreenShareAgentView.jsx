@@ -8,7 +8,10 @@ import {
   Download,
   FolderOpen,
   Loader2,
+  Maximize2,
+  Minimize2,
   Monitor,
+  RefreshCw,
   Square,
   Wifi,
   WifiOff,
@@ -51,6 +54,8 @@ const PEER_STATUS_LABELS = {
   idle: "ממתין לפתיחת חיבור",
   waiting: "ממתין לשיתוף מסך",
   connected: "מחובר — צפייה במסך",
+  disconnected: "החיבור נותק — ניתן לחזור לצפייה",
+  paused: "מושהה — חזרו ללשונית",
   ended: "הסתיים",
   error: "שגיאת חיבור",
 };
@@ -113,6 +118,7 @@ export default function ScreenShareAgentView({
 }) {
   const { toast } = useToast();
   const videoRef = useRef(null);
+  const videoContainerRef = useRef(null);
   const peerRef = useRef(null);
   const callRef = useRef(null);
   const remoteStreamRef = useRef(null);
@@ -124,6 +130,7 @@ export default function ScreenShareAgentView({
   const metadataPersistedRef = useRef(false);
   const autoStartAttemptedRef = useRef(false);
   const startRecordingRef = useRef(() => {});
+  const sessionEndedRef = useRef(false);
 
   const DEMO_AUTO_START_KEY = "demo-auto-start-recording";
   const [autoStartRecording, setAutoStartRecording] = useState(() => {
@@ -134,6 +141,10 @@ export default function ScreenShareAgentView({
   const [status, setStatus] = useState("idle");
   const [hasRemoteStream, setHasRemoteStream] = useState(false);
   const [errorDetail, setErrorDetail] = useState("");
+  const [connectionEpoch, setConnectionEpoch] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [tabHidden, setTabHidden] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
   const [sessionRecord, setSessionRecord] = useState(() =>
     sessionId ? getSession(sessionId) : null
   );
@@ -250,12 +261,50 @@ export default function ScreenShareAgentView({
   );
 
   const displayStatusLabel = (() => {
+    if (tabHidden && status === "connected") return PEER_STATUS_LABELS.paused;
     if (status === "connected") return PEER_STATUS_LABELS.connected;
+    if (status === "disconnected") return PEER_STATUS_LABELS.disconnected;
     if (status === "ended") return PEER_STATUS_LABELS.ended;
     if (status === "error") return PEER_STATUS_LABELS.error;
     if (!sessionRecord?.consentAt) return "ממתין לאישור הלקוח בקישור";
     return PEER_STATUS_LABELS[status] || status;
   })();
+
+  const resumeVideoPlayback = useCallback(() => {
+    const video = videoRef.current;
+    const stream = remoteStreamRef.current;
+    if (!video || !stream) return;
+    if (video.srcObject !== stream) {
+      video.srcObject = stream;
+    }
+    video.play().catch(() => {});
+  }, []);
+
+  const attachRemoteStream = useCallback(
+    (remoteStream) => {
+      remoteStreamRef.current = remoteStream;
+      setHasRemoteStream(true);
+      setTabHidden(false);
+      setErrorDetail("");
+      if (videoRef.current) {
+        videoRef.current.srcObject = remoteStream;
+        videoRef.current.play().catch(() => {});
+      }
+    },
+    []
+  );
+
+  const clearRemoteVideo = useCallback(() => {
+    setHasRemoteStream(false);
+    if (videoRef.current) videoRef.current.srcObject = null;
+  }, []);
+
+  const handleStreamDisconnect = useCallback(() => {
+    if (sessionId && mediaRecorderRef.current) setRecordingStopped(sessionId);
+    stopRecordingInternal();
+    setStatus("disconnected");
+    clearRemoteVideo();
+  }, [sessionId, stopRecordingInternal, clearRemoteVideo]);
 
   const canRecord =
     demoModeEnabled &&
@@ -279,11 +328,13 @@ export default function ScreenShareAgentView({
 
   useEffect(() => {
     if (!sessionId) return undefined;
+    sessionEndedRef.current = false;
 
     setStatus("waiting");
     setHasRemoteStream(false);
     setErrorDetail("");
     setRecordedBlob(null);
+    setTabHidden(false);
     chunksRef.current = [];
     metadataPersistedRef.current = false;
 
@@ -293,47 +344,38 @@ export default function ScreenShareAgentView({
     peerRef.current = peer;
 
     peer.on("open", () => {
-      setStatus("waiting");
+      setReconnecting(false);
+      setStatus((prev) => (prev === "ended" ? prev : "waiting"));
     });
 
     peer.on("call", (call) => {
       callRef.current = call;
       call.answer();
       setStatus("connected");
+      setReconnecting(false);
 
       call.on("stream", (remoteStream) => {
-        remoteStreamRef.current = remoteStream;
-        setHasRemoteStream(true);
-        if (videoRef.current) {
-          videoRef.current.srcObject = remoteStream;
-        }
+        attachRemoteStream(remoteStream);
       });
 
       call.on("close", () => {
-        if (sessionId && mediaRecorderRef.current) setRecordingStopped(sessionId);
-        stopRecordingInternal();
-        setStatus("ended");
-        setHasRemoteStream(false);
-        remoteStreamRef.current = null;
-        if (videoRef.current) videoRef.current.srcObject = null;
+        handleStreamDisconnect();
       });
 
       call.on("error", () => {
-        if (sessionId && mediaRecorderRef.current) setRecordingStopped(sessionId);
-        stopRecordingInternal();
-        setStatus("error");
-        setErrorDetail("השיחה נותקה");
-        setHasRemoteStream(false);
-        remoteStreamRef.current = null;
+        handleStreamDisconnect();
+        setErrorDetail("השיחה נותקה — לחצו «חזור לצפייה»");
       });
     });
 
     peer.on("error", (err) => {
+      if (sessionEndedRef.current) return;
       stopRecordingInternal();
       setStatus("error");
+      setReconnecting(false);
       const msg =
         err?.type === "unavailable-id"
-          ? "מזהה הסשן תפוס — סגרו חלונות אחרים או צרו סשן חדש"
+          ? "מזהה הסשן תפוס — לחצו «חזור לצפייה» או סגרו חלונות אחרים"
           : err?.message || "שגיאת PeerJS";
       setErrorDetail(msg);
     });
@@ -356,7 +398,73 @@ export default function ScreenShareAgentView({
       setHasRemoteStream(false);
       if (videoRef.current) videoRef.current.srcObject = null;
     };
-  }, [sessionId, stopRecordingInternal]);
+  }, [sessionId, connectionEpoch, attachRemoteStream, handleStreamDisconnect, stopRecordingInternal]);
+
+  useEffect(() => {
+    const onVisibility = () => {
+      const hidden = document.hidden;
+      setTabHidden(hidden);
+      if (!hidden) {
+        if (status === "connected" && remoteStreamRef.current) {
+          resumeVideoPlayback();
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [status, resumeVideoPlayback]);
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
+
+  const handleToggleFullscreen = async () => {
+    const container = videoContainerRef.current;
+    if (!container) return;
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        await container.requestFullscreen();
+      }
+    } catch {
+      toast({
+        title: "מסך מלא",
+        description: "לא ניתן להיכנס למסך מלא בדפדפן זה",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleReconnect = () => {
+    if (reconnecting || status === "ended") return;
+    setReconnecting(true);
+    setErrorDetail("");
+    clearRemoteVideo();
+    remoteStreamRef.current = null;
+    try {
+      callRef.current?.close();
+    } catch {
+      /* ignore */
+    }
+    try {
+      peerRef.current?.destroy();
+    } catch {
+      /* ignore */
+    }
+    callRef.current = null;
+    peerRef.current = null;
+    setStatus("waiting");
+    setConnectionEpoch((n) => n + 1);
+    toast({
+      title: "מתחבר מחדש",
+      description: "ממתין לזרם מהלקוח — ודאו שהלקוח עדיין משתף מסך",
+    });
+  };
 
   const handleStartRecording = () => {
     if (!demoModeEnabled || isRecording) return;
@@ -622,8 +730,12 @@ export default function ScreenShareAgentView({
   };
 
   const handleEnd = () => {
+    sessionEndedRef.current = true;
     if (isRecording && sessionId) setRecordingStopped(sessionId);
     stopRecordingInternal();
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    }
     try {
       callRef.current?.close();
       peerRef.current?.destroy();
@@ -637,13 +749,18 @@ export default function ScreenShareAgentView({
     onEnded?.();
   };
 
+  const showReconnectOverlay = status === "disconnected" || status === "error";
+  const canReconnect = status !== "ended";
+
   const statusIcon =
-    status === "connected" ? (
+    status === "connected" && !tabHidden ? (
       <Wifi className="w-4 h-4 text-emerald-600" />
-    ) : status === "error" ? (
-      <WifiOff className="w-4 h-4 text-red-600" />
+    ) : status === "disconnected" || status === "error" ? (
+      <WifiOff className="w-4 h-4 text-amber-600" />
+    ) : status === "ended" ? (
+      <WifiOff className="w-4 h-4 text-slate-500" />
     ) : (
-      <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+      <Loader2 className="w-4 h-4 animate-spin text-teal-600" />
     );
 
   return (
@@ -673,29 +790,104 @@ export default function ScreenShareAgentView({
         </p>
       )}
 
-      <div className="relative rounded-xl overflow-hidden bg-slate-900 aspect-video border border-slate-700">
-        {status !== "connected" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-2 z-10">
+      <div
+        ref={videoContainerRef}
+        className={`relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-700 ${
+          isFullscreen ? "w-screen h-screen" : "aspect-video min-h-[220px] sm:min-h-[320px]"
+        }`}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {status !== "connected" && !hasRemoteStream && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-2 z-10 pointer-events-none">
             <Monitor className="w-10 h-10 opacity-50" />
             <p className="text-xs text-center px-4">
               {!sessionRecord?.consentAt
                 ? "ממתין שהלקוח יאשר בקישור וישתף מסך"
-                : "השאירו דף זה פתוח — הווידאו יופיע כשהלקוח ישתף מסך"}
+                : reconnecting
+                  ? "מתחבר מחדש ללקוח…"
+                  : "השאירו דף זה פתוח — הווידאו יופיע כשהלקוח ישתף מסך"}
             </p>
           </div>
         )}
+        {showReconnectOverlay && hasRemoteStream === false && status !== "waiting" && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-slate-950/85 px-4">
+            <p className="text-sm text-slate-200 text-center leading-relaxed">
+              החיבור נותק — הסשן עדיין פעיל
+            </p>
+            {canReconnect && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleReconnect();
+                }}
+                disabled={reconnecting}
+                className="gap-2 bg-teal-600 hover:bg-teal-700 pointer-events-auto"
+              >
+                {reconnecting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4" />
+                )}
+                חזור לצפייה
+              </Button>
+            )}
+          </div>
+        )}
+        {tabHidden && status === "connected" && hasRemoteStream && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-slate-950/75 px-4">
+            <p className="text-sm text-slate-200 text-center">חזרו ללשונית — לחצו לחידוש הצפייה</p>
+            <Button
+              type="button"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                resumeVideoPlayback();
+                setTabHidden(false);
+              }}
+              className="gap-2 bg-teal-600 hover:bg-teal-700 pointer-events-auto"
+            >
+              <RefreshCw className="w-4 h-4" />
+              חזור לצפייה
+            </Button>
+          </div>
+        )}
         {demoModeEnabled && isRecording && (
-          <div className="absolute top-2 left-2 z-20 flex items-center gap-1.5 rounded-full bg-black/70 px-2 py-1 text-xs text-white font-semibold">
+          <div className="absolute top-2 left-2 z-30 flex items-center gap-1.5 rounded-full bg-black/70 px-2 py-1 text-xs text-white font-semibold pointer-events-none">
             <Circle className="w-2 h-2 fill-red-500 text-red-500 animate-pulse" />
             <span dir="ltr">{formatRecordingElapsed(recordingElapsed)}</span>
           </div>
         )}
+        <div className="absolute top-2 right-2 z-30 flex gap-1.5">
+          {(status === "connected" || hasRemoteStream) && (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleToggleFullscreen();
+              }}
+              className="h-8 gap-1.5 bg-black/60 text-white border-0 hover:bg-black/80 pointer-events-auto"
+              aria-label={isFullscreen ? "יציאה ממסך מלא" : "מסך מלא"}
+            >
+              {isFullscreen ? (
+                <Minimize2 className="w-3.5 h-3.5" />
+              ) : (
+                <Maximize2 className="w-3.5 h-3.5" />
+              )}
+              {isFullscreen ? "יציאה" : "מסך מלא"}
+            </Button>
+          )}
+        </div>
         <video
           ref={videoRef}
           autoPlay
           playsInline
           muted
-          className="w-full h-full object-contain"
+          className="w-full h-full object-contain pointer-events-none select-none"
         />
       </div>
 
@@ -905,8 +1097,8 @@ export default function ScreenShareAgentView({
       )}
 
       <p className="text-[11px] text-slate-500 leading-relaxed">
-        צפייה בלבד — אין שליטה בעכבר. דמו: PeerServer ציבורי; לפרודקשן יש לארח PeerServer
-        עצמי או Supabase Realtime.
+        צפייה בלבד — לחיצה על הווידאו לא מסיימת את הסשן. השתמשו ב«מסך מלא» להגדלה; אם עברתם
+        לחלון אחר — «חזור לצפייה» מחדש את הזרם.
       </p>
 
       <Button

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import Peer from "peerjs";
 import { motion } from "framer-motion";
@@ -52,6 +52,104 @@ export default function ScreenShareGuestPage() {
   const peerRef = useRef(null);
   const callRef = useRef(null);
   const streamRef = useRef(null);
+  const reconnectTimerRef = useRef(null);
+  const sharingRef = useRef(false);
+
+  useEffect(() => {
+    sharingRef.current = sharing;
+  }, [sharing]);
+
+  const isStreamAlive = useCallback(() => {
+    const track = streamRef.current?.getVideoTracks?.()?.[0];
+    return Boolean(track && track.readyState === "live");
+  }, []);
+
+  const clearReconnectTimer = useCallback(() => {
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+  }, []);
+
+  const placeCall = useCallback(
+    (peer, stream) => {
+      if (!sessionId || !stream) return false;
+      const call = peer.call(sessionId, stream);
+      callRef.current = call;
+
+      call.on("close", () => {
+        if (!sharingRef.current) return;
+        if (!isStreamAlive()) {
+          setShared(false);
+          setError("שיתוף המסך הופסק מהדפדפן");
+          return;
+        }
+        setError("החיבור לנציג נותק — מנסה להתחבר מחדש…");
+        clearReconnectTimer();
+        reconnectTimerRef.current = setTimeout(() => {
+          reconnectTimerRef.current = null;
+          if (sharingRef.current && isStreamAlive()) {
+            placeCall(peer, stream);
+          }
+        }, 2000);
+      });
+
+      call.on("error", () => {
+        if (!sharingRef.current) return;
+        if (!isStreamAlive()) {
+          setShared(false);
+          setError("שיתוף המסך הופסק");
+          return;
+        }
+        setError("החיבור לנציג נותק — מנסה להתחבר מחדש…");
+        clearReconnectTimer();
+        reconnectTimerRef.current = setTimeout(() => {
+          reconnectTimerRef.current = null;
+          if (sharingRef.current && isStreamAlive()) {
+            placeCall(peer, stream);
+          }
+        }, 2000);
+      });
+
+      setError("");
+      return true;
+    },
+    [sessionId, isStreamAlive, clearReconnectTimer]
+  );
+
+  const reconnectToAgent = useCallback(async () => {
+    if (!sharingRef.current || !sessionId || !isStreamAlive()) return;
+    setError("מתחבר מחדש לנציג…");
+    try {
+      callRef.current?.close();
+    } catch {
+      /* ignore */
+    }
+    callRef.current = null;
+
+    let peer = peerRef.current;
+    if (!peer || peer.destroyed) {
+      peer = new Peer({ debug: 0 });
+      peerRef.current = peer;
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(
+          () => reject(new Error("תם הזמן להתחברות — ודאו שהנציג פתח את מסך הצפייה")),
+          45000
+        );
+        peer.on("open", () => {
+          clearTimeout(timeout);
+          resolve();
+        });
+        peer.on("error", (err) => {
+          clearTimeout(timeout);
+          reject(err);
+        });
+      });
+    }
+
+    await placeCall(peer, streamRef.current);
+    setError("");
+  }, [sessionId, isStreamAlive, placeCall]);
 
   useEffect(() => {
     const refresh = () => setSession(resolveGuestSession(sessionId, bootstrapKey));
@@ -81,6 +179,7 @@ export default function ScreenShareGuestPage() {
 
   useEffect(() => {
     return () => {
+      clearReconnectTimer();
       try {
         callRef.current?.close();
         peerRef.current?.destroy();
@@ -89,7 +188,19 @@ export default function ScreenShareGuestPage() {
       }
       streamRef.current?.getTracks().forEach((t) => t.stop());
     };
-  }, []);
+  }, [clearReconnectTimer]);
+
+  useEffect(() => {
+    if (!shared) return undefined;
+    const onVisibility = () => {
+      if (document.hidden) return;
+      if (sharingRef.current && isStreamAlive() && !callRef.current) {
+        reconnectToAgent();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [shared, isStreamAlive, reconnectToAgent]);
 
   const handleShareScreen = async () => {
     if (!session || session.status === "ended") return;
@@ -115,8 +226,10 @@ export default function ScreenShareGuestPage() {
       streamRef.current = stream;
 
       stream.getVideoTracks()[0]?.addEventListener("ended", () => {
+        sharingRef.current = false;
         setShared(false);
         setError("שיתוף המסך הופסק מהדפדפן");
+        clearReconnectTimer();
       });
 
       logScreenConsent(session.id);
@@ -143,19 +256,10 @@ export default function ScreenShareGuestPage() {
         });
       });
 
-      const call = peer.call(sessionId, stream);
-      callRef.current = call;
-
-      call.on("close", () => {
-        setShared(false);
-      });
-
-      call.on("error", () => {
-        setError("החיבור לנציג נותק");
-        setShared(false);
-      });
-
+      sharingRef.current = true;
+      await placeCall(peer, stream);
       setShared(true);
+      setError("");
     } catch (err) {
       const name = err?.name || "";
       let message = err?.message || "לא ניתן לשתף מסך";
@@ -238,10 +342,25 @@ export default function ScreenShareGuestPage() {
                   המסך מוקלט
                 </div>
               )}
+              {error && (
+                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed">
+                  {error}
+                </p>
+              )}
               <p className="text-xs text-slate-500 leading-relaxed">
-                השאירו דף זה פתוח. לעצירה — לחצו «הפסק שיתוף» בחלון הדפדפן או סגרו את
-                השיתוף.
+                השאירו דף זה פתוח. אם עברתם לחלון אחר — החיבור יתחדש אוטומטית כשתחזרו.
+                לעצירה — «הפסק שיתוף» בחלון הדפדפן.
               </p>
+              {error && isStreamAlive() && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={reconnectToAgent}
+                  className="w-full border-teal-300 text-teal-900 hover:bg-teal-50"
+                >
+                  חזור לשיתוף עם הנציג
+                </Button>
+              )}
             </div>
           ) : (
             <>
