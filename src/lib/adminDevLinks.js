@@ -4,6 +4,7 @@ const ADMIN_DEV_ROUTES_CORE = [
   { path: "/admin", label: "דשבורד מנהל" },
   { path: "/admin/shifts", label: "משמרות (מנהל)" },
   { path: "/admin/users", label: "נציגים" },
+  { path: "/admin/recordings", label: "הקלטות" },
 ];
 
 const ADMIN_DEV_ROUTES_DEMO = [{ path: "/admin/knowledge", label: "ניהול ידע" }];

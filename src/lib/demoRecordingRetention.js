@@ -1,4 +1,4 @@
-import { demoModeEnabled } from "@/api/demoClient";
+import { remoteSupportEnabled } from "@/api/demoClient";
 import { deleteRecordingBlob } from "@/lib/demoRecordingStorage";
 import { deleteRecordingMetadata, listAllRecordings } from "@/lib/screenShareStore";
 
@@ -46,7 +46,7 @@ export function findExpiredRecordings(recordings, retentionDays = getRecordingRe
  * @returns {Promise<number>} מספר הרשומות שנמחקו
  */
 export async function purgeExpiredRecordings(recordings, retentionDays = getRecordingRetentionDays()) {
-  if (!demoModeEnabled) return 0;
+  if (!remoteSupportEnabled) return 0;
   const expired = findExpiredRecordings(recordings, retentionDays);
   let removed = 0;
   for (const rec of expired) {

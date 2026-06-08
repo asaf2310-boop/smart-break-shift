@@ -38,6 +38,7 @@ import ScreenShareGuestPage from './pages/ScreenShareGuestPage';
 import DemoRecordingPlayPage from './pages/DemoRecordingPlayPage';
 import TrainingPage from './pages/TrainingPage';
 import AdminTraining from './pages/AdminTraining';
+import AdminRecordings from './pages/AdminRecordings';
 import RouteErrorBoundary from '@/components/RouteErrorBoundary';
 import { hasTopAppNav } from '@/lib/appNavPaths';
 import { brandVisualEnabled } from '@/lib/brandShell';
@@ -104,6 +105,15 @@ const AuthenticatedApp = () => {
         <Route path="/admin/shifts" element={<AdminGate><AdminShifts /></AdminGate>} />
         <Route path="/admin/users" element={<AdminGate><AdminUsers /></AdminGate>} />
         <Route path="/admin/training" element={<AdminGate><AdminTraining /></AdminGate>} />
+        <Route path="/admin/recordings" element={<AdminGate><AdminRecordings /></AdminGate>} />
+        <Route
+          path="/admin/recordings/play"
+          element={
+            <AdminGate>
+              <DemoRecordingPlayPage backTo="/admin/recordings" />
+            </AdminGate>
+          }
+        />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="*" element={<PageNotFound />} />
       </Routes>

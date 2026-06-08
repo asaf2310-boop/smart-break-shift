@@ -27,7 +27,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
-import { demoModeEnabled } from "@/api/demoClient";
+import { demoModeEnabled, remoteSupportEnabled } from "@/api/demoClient";
+
+const recordingFeaturesEnabled = remoteSupportEnabled;
 import { createCallLog } from "@/lib/crmStore";
 import {
   downloadRecordingBlob,
@@ -207,7 +209,7 @@ export default function ScreenShareAgentView({
     setSessionRecord(getSession(sessionId));
     const recs = listRecordingsForSession(sessionId);
     setSessionRecordings(recs);
-    if (!demoModeEnabled) return;
+    if (!recordingFeaturesEnabled) return;
     const available = new Set();
     await Promise.all(
       recs.map(async (rec) => {
@@ -361,13 +363,13 @@ export default function ScreenShareAgentView({
   ]);
 
   const canRecord =
-    demoModeEnabled &&
+    recordingFeaturesEnabled &&
     status === "connected" &&
     hasRemoteStream &&
     Boolean(sessionRecord?.recordingConsentAt);
 
   const recordDisabledReason = (() => {
-    if (!demoModeEnabled) return null;
+    if (!recordingFeaturesEnabled) return null;
     if (status !== "connected") {
       return "הקלטה זמינה רק לאחר חיבור ושיתוף מסך מהלקוח";
     }
@@ -553,7 +555,7 @@ export default function ScreenShareAgentView({
   };
 
   const handleStartRecording = () => {
-    if (!demoModeEnabled || isRecording) return;
+    if (!recordingFeaturesEnabled || isRecording) return;
     if (status !== "connected" || !remoteStreamRef.current) {
       toast({
         title: "לא ניתן להקליט",
@@ -631,13 +633,13 @@ export default function ScreenShareAgentView({
   }, [status]);
 
   useEffect(() => {
-    if (!demoModeEnabled || !autoStartRecording) return undefined;
+    if (!recordingFeaturesEnabled || !autoStartRecording) return undefined;
     if (!canRecord || isRecording) return undefined;
     if (autoStartAttemptedRef.current) return undefined;
     autoStartAttemptedRef.current = true;
     startRecordingRef.current();
     return undefined;
-  }, [demoModeEnabled, autoStartRecording, canRecord, isRecording]);
+  }, [recordingFeaturesEnabled, autoStartRecording, canRecord, isRecording]);
 
   const handleAutoStartToggle = (event) => {
     const checked = event.target.checked;
@@ -663,7 +665,7 @@ export default function ScreenShareAgentView({
     if (metadataPersistedRef.current) return;
     metadataPersistedRef.current = true;
     const entry = persistRecordingMetadata(recordingElapsed);
-    if (!demoModeEnabled || !sessionId || !entry?.id) return;
+    if (!recordingFeaturesEnabled || !sessionId || !entry?.id) return;
 
     let cancelled = false;
     setSavingBlob(true);
@@ -856,7 +858,7 @@ export default function ScreenShareAgentView({
         <div className="flex items-center gap-2">
           {statusIcon}
           <span className="font-medium text-slate-800">{displayStatusLabel}</span>
-          {demoModeEnabled && isRecording && (
+          {recordingFeaturesEnabled && isRecording && (
             <span
               className="inline-flex items-center gap-1.5 text-red-700 font-semibold text-xs"
               dir="ltr"
@@ -941,7 +943,7 @@ export default function ScreenShareAgentView({
             </Button>
           </div>
         )}
-        {demoModeEnabled && isRecording && (
+        {recordingFeaturesEnabled && isRecording && (
           <div className="absolute top-2 left-2 z-30 flex items-center gap-1.5 rounded-full bg-black/70 px-2 py-1 text-xs text-white font-semibold pointer-events-none">
             <Circle className="w-2 h-2 fill-red-500 text-red-500 animate-pulse" />
             <span dir="ltr">{formatRecordingElapsed(recordingElapsed)}</span>
@@ -978,15 +980,17 @@ export default function ScreenShareAgentView({
         />
       </div>
 
-      {demoModeEnabled && showMaxDurationBanner && isRecording && (
+      {recordingFeaturesEnabled && showMaxDurationBanner && isRecording && (
         <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed">
           עברתם 30 דקות הקלטה — מומלץ לעצור. ההקלטה תמשיך עד לחיצה על «עצור הקלטה».
         </p>
       )}
 
-      {demoModeEnabled && (
+      {recordingFeaturesEnabled && (
         <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
-          <p className="text-xs font-semibold text-slate-700">הקלטת מסך (דמו)</p>
+          <p className="text-xs font-semibold text-slate-700">
+            הקלטת מסך{demoModeEnabled ? " (דמו)" : ""}
+          </p>
           {recordDisabledReason && !isRecording && (
             <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5 leading-relaxed">
               {recordDisabledReason}
@@ -1041,7 +1045,7 @@ export default function ScreenShareAgentView({
             התחל הקלטה אוטומטית לאחר חיבור (כשהלקוח אישר הקלטה)
           </label>
           <p className="text-[10px] text-slate-500 leading-relaxed">
-            הקובץ נשמר ב-IndexedDB בדפדפן הנציג (WebM, דמו). «הורד שוב» זמין גם אחרי רענון.
+            הקובץ נשמר ב-IndexedDB בדפדפן הנציג (WebM). «הורד שוב» זמין גם אחרי רענון.
             {savingBlob ? " שומר…" : null}
           </p>
 
@@ -1134,13 +1138,13 @@ export default function ScreenShareAgentView({
         </div>
       )}
 
-      {demoModeEnabled && (
+      {recordingFeaturesEnabled && (
         <Dialog open={showPreflightDialog} onOpenChange={setShowPreflightDialog}>
           <DialogContent className="sm:max-w-md" dir="rtl">
             <DialogHeader>
               <DialogTitle>בדיקה לפני הקלטה</DialogTitle>
               <DialogDescription>
-                ודאו שכל התנאים מתקיימים לפני תחילת הקלטת המסך (דמו).
+                ודאו שכל התנאים מתקיימים לפני תחילת הקלטת המסך.
               </DialogDescription>
             </DialogHeader>
             <ul className="space-y-2 py-2">

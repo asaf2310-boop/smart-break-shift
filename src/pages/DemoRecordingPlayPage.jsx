@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArrowRight, Loader2 } from "lucide-react";
-import { demoModeEnabled } from "@/api/demoClient";
+import { demoModeEnabled, remoteSupportEnabled } from "@/api/demoClient";
 import { getRecordingBlob } from "@/lib/demoRecordingStorage";
 import { m3PageClass } from "@/lib/hypPage";
 import { findRecordingByPlayId } from "@/lib/screenShareStore";
@@ -30,8 +30,8 @@ function formatDuration(seconds) {
   return `${m} דקות ו-${s} שניות`;
 }
 
-/** נגן הקלטה מ-IndexedDB — דמו בלבד, אותו דפדפן */
-export default function DemoRecordingPlayPage() {
+/** נגן הקלטה מ-IndexedDB — אותו דפדפן שבו נשמר הקובץ */
+export default function DemoRecordingPlayPage({ backTo = "/remote-support", titleSuffix = "" }) {
   const [searchParams] = useSearchParams();
   const playId = searchParams.get("id") || "";
   const [loading, setLoading] = useState(true);
@@ -49,9 +49,9 @@ export default function DemoRecordingPlayPage() {
   }, []);
 
   useEffect(() => {
-    if (!demoModeEnabled) {
+    if (!remoteSupportEnabled) {
       setLoading(false);
-      setError("נגן הקלטות זמין רק במצב דמו");
+      setError("תמיכה מרחוק אינה פעילה ב-build זה");
       return undefined;
     }
     if (!playId) {
@@ -105,22 +105,24 @@ export default function DemoRecordingPlayPage() {
     };
   }, [playId, revokePlayUrl]);
 
-  if (!demoModeEnabled) return null;
+  if (!remoteSupportEnabled) return null;
 
   return (
     <div className={m3PageClass("min-h-screen p-4 sm:p-6")} dir="rtl">
       <div className="max-w-3xl mx-auto space-y-4">
         <Link
-          to="/remote-support"
+          to={backTo}
           className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
         >
           <ArrowRight className="w-4 h-4" />
-          חזרה לתמיכה מרחוק
+          חזרה
         </Link>
 
         <div className="m3-card p-4 sm:p-6 space-y-4">
           <div>
-            <h1 className="text-lg font-semibold text-slate-900">נגן הקלטה (דמו)</h1>
+            <h1 className="text-lg font-semibold text-slate-900">
+              נגן הקלטה{titleSuffix || (demoModeEnabled ? " (דמו)" : "")}
+            </h1>
             {title && (
               <p className="text-sm text-slate-600 mt-1">{title}</p>
             )}

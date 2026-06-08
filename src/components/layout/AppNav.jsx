@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { BookOpen, CalendarClock, CalendarDays, Contact, GraduationCap, Home, Monitor, ShieldCheck } from "lucide-react";
+import { BookOpen, CalendarClock, CalendarDays, Contact, Film, GraduationCap, Home, Monitor, ShieldCheck } from "lucide-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { demoModeEnabled } from "@/api/demoClient";
 import { brandVisualEnabled } from "@/lib/brandShell";
@@ -93,6 +93,13 @@ export default function AppNav() {
               <Link to="/admin/users" className={tabClass(location.pathname === "/admin/users")}>
                 <ShieldCheck className="w-4 h-4" />
                 נציגים
+              </Link>
+              <Link
+                to="/admin/recordings"
+                className={tabClass(location.pathname.startsWith("/admin/recordings"))}
+              >
+                <Film className="w-4 h-4" />
+                הקלטות
               </Link>
               {demoModeEnabled && (
                 <Link to="/admin/knowledge" className={tabClass(location.pathname === "/admin/knowledge")}>
