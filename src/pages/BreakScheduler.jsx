@@ -17,13 +17,14 @@ import {
   getIsraelDateStr,
   getTodayIsraelDate,
   BREAK_REGISTRATION_DEADLINE_MESSAGE,
-  isBreakRegistrationClosed,
+  BREAK_REGISTRATION_OVERRIDE_MESSAGE,
 } from "@/constants/scheduling";
 import {
   agentOwnsBreakRegistration,
   BreakRegistrationError,
   createBreakRegistration,
   getBreakLimits,
+  isBreakRegistrationBlocked,
   validateBreakRegistration,
 } from "@/lib/breakCapacity";
 import { getLiveQueryOptions } from "@/lib/liveQuery";
@@ -92,7 +93,8 @@ export default function BreakScheduler() {
   }, [agentName, settings?.show_shortage_notice, settings?.id]);
 
   const breakLimits = useMemo(() => getBreakLimits(settings), [settings]);
-  const registrationClosed = isBreakRegistrationClosed(dateStr);
+  const registrationOverrideOpen = Boolean(settings?.registration_override_open);
+  const registrationClosed = isBreakRegistrationBlocked(dateStr, settings);
 
   const createMutation = useMutation({
     mutationFn: (data) => createBreakRegistration(dataClient, data),
@@ -302,6 +304,16 @@ export default function BreakScheduler() {
               מעדכן זמינות...
             </div>
           </div>
+        )}
+
+        {registrationOverrideOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 text-center leading-relaxed"
+          >
+            {BREAK_REGISTRATION_OVERRIDE_MESSAGE}
+          </motion.div>
         )}
 
         {registrationClosed && (

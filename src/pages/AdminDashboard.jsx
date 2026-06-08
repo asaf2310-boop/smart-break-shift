@@ -9,7 +9,11 @@ import DateSelector from "../components/breaks/DateSelector";
 import { Link } from "react-router-dom";
 import BreakSettingsPanel from "../components/admin/BreakSettingsPanel";
 import ChatBrandingPanel from "../components/admin/ChatBrandingPanel";
-import { SHORT_BREAK_SLOTS, LUNCH_BREAK_SLOTS } from "@/constants/scheduling";
+import {
+  BREAK_REGISTRATION_OVERRIDE_MESSAGE,
+  SHORT_BREAK_SLOTS,
+  LUNCH_BREAK_SLOTS,
+} from "@/constants/scheduling";
 import BackendConfigBanner from "@/components/BackendConfigBanner";
 import { demoModeEnabled } from "@/api/demoClient";
 import AdminLocalhostLinksPanel from "@/components/admin/AdminLocalhostLinksPanel";
@@ -201,6 +205,16 @@ export default function AdminDashboard() {
         <div className="mb-6">
           <BreakSettingsPanel selectedDate={selectedDate} />
         </div>
+
+        {settings?.registration_override_open && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 text-center leading-relaxed"
+          >
+            {BREAK_REGISTRATION_OVERRIDE_MESSAGE}
+          </motion.div>
+        )}
 
         {isLoading ? (
           <div className="flex justify-center py-24">

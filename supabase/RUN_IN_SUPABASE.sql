@@ -40,6 +40,7 @@ create table if not exists break_settings (
   short_max_per_slot int default 1,
   show_shortage_notice boolean default false,
   shortage_notice_text text,
+  registration_override_open boolean default false,
   created_at timestamptz default now()
 );
 
