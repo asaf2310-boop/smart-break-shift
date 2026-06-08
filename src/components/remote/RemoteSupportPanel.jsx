@@ -33,10 +33,17 @@ import {
   endSession,
   formatConnectionDetails,
   getSession,
+  listSessions as listRustDeskSessions,
   remoteSupportFeaturesAvailable,
   sendRustDeskDownloadEmail,
   subscribeRemoteSupport,
 } from "@/lib/remoteSupportStore";
+import {
+  cloudSessionSyncEnabled,
+  syncRustDeskSessionToCloud,
+  syncScreenShareSessionToCloud,
+} from "@/lib/supportSessionsSync";
+import { listSessions as listScreenShareSessions } from "@/lib/screenShareStore";
 
 const PANEL_DEMO_BANNER =
   "דמו — בחרו למטה: שלב א צפייה בדפדפן (ללא התקנה) או שליטה מלאה ב-RustDesk.";
@@ -99,6 +106,16 @@ export default function RemoteSupportPanel({
 
   useEffect(() => {
     if (!open) setScreenSessionActive(false);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !cloudSessionSyncEnabled()) return;
+    for (const session of listScreenShareSessions()) {
+      syncScreenShareSessionToCloud(session);
+    }
+    for (const session of listRustDeskSessions()) {
+      syncRustDeskSessionToCloud(session);
+    }
   }, [open]);
 
   useEffect(() => {
@@ -206,6 +223,7 @@ export default function RemoteSupportPanel({
         agentName,
         rustDeskId: normalizedId,
         password,
+        customerEmail: emailTo,
       });
       setSession(created);
       setRustDeskId(normalizedId);

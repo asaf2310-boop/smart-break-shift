@@ -18,6 +18,11 @@ import {
   screenShareFeaturesAvailable,
   subscribeScreenShare,
 } from "@/lib/screenShareStore";
+import {
+  cloudSessionSyncEnabled,
+  syncRustDeskSessionToCloud,
+  syncScreenShareSessionToCloud,
+} from "@/lib/supportSessionsSync";
 import { hypHeaderIconClass, m3PageClass } from "@/lib/hypPage";
 import { cn } from "@/lib/utils";
 
@@ -47,6 +52,16 @@ export default function RemoteSupportPage() {
       unsubRust();
       unsubScreen();
     };
+  }, []);
+
+  useEffect(() => {
+    if (!cloudSessionSyncEnabled()) return;
+    for (const session of listScreenSessions()) {
+      syncScreenShareSessionToCloud(session);
+    }
+    for (const session of listRustDeskSessions()) {
+      syncRustDeskSessionToCloud(session);
+    }
   }, []);
 
   const activeRust = rustDeskSessions.filter((s) => s.status === "active").length;

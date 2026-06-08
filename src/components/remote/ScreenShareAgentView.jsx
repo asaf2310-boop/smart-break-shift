@@ -37,7 +37,11 @@ import {
   hasRecordingBlob,
   saveRecordingBlob,
 } from "@/lib/demoRecordingStorage";
-import { uploadRecordingToCloud } from "@/lib/recordingUpload";
+import {
+  cloudRecordingUploadEnabled,
+  recordingUploadStatusLabel,
+  uploadRecordingToCloud,
+} from "@/lib/recordingUpload";
 import {
   appendSessionRecording,
   applyGuestPeerSync,
@@ -64,6 +68,7 @@ const PEER_STATUS_LABELS = {
 };
 
 const GUEST_ENDED_LABEL = "לקוח סגר את הסשן";
+const AGENT_ENDED_PEER_MESSAGE = "הנציג סיים את הסשן";
 const CLIENT_ENDED_REASONS = new Set(["client_stop", "client_closed"]);
 
 function isGuestInitiatedEnd(reason) {
@@ -174,6 +179,7 @@ export default function ScreenShareAgentView({
   const [savingBlob, setSavingBlob] = useState(false);
   const [recordingSummary, setRecordingSummary] = useState(null);
   const [cloudSaving, setCloudSaving] = useState(false);
+  const [cloudUploadStatus, setCloudUploadStatus] = useState(null);
 
   const stopRecordingInternal = useCallback((discardBlob = false) => {
     if (recordingTimerRef.current) {
@@ -249,68 +255,6 @@ export default function ScreenShareAgentView({
     return Math.max(1, recordingElapsedRef.current || 0);
   }, []);
 
-  const flushRecordingSave = useCallback(
-    async (blob) => {
-      if (!blob?.size || metadataPersistedRef.current || !sessionId) return;
-      if (!recordingFeaturesEnabled) return;
-      metadataPersistedRef.current = true;
-      const durationSec = resolveRecordingDurationSec();
-      setRecordingElapsed(durationSec);
-      recordingElapsedRef.current = durationSec;
-      const entry = persistRecordingMetadata(durationSec);
-      if (!entry?.id) {
-        metadataPersistedRef.current = false;
-        return;
-      }
-
-      setSavingBlob(true);
-      try {
-        await saveRecordingBlob({
-          sessionId,
-          recordingId: entry.id,
-          blob,
-          meta: { fileName: entry.fileName, fileSizeBytes: blob.size },
-        });
-        updateRecordingMetadata(sessionId, entry.id, {
-          fileSizeBytes: blob.size,
-        });
-        setBlobAvailableIds((prev) => new Set(prev).add(entry.id));
-        const summary = {
-          recordingId: entry.id,
-          durationSec,
-          fileSizeBytes: blob.size,
-          crmCustomerId: sessionRecord?.crmCustomerId || entry.crmCustomerId,
-        };
-        setRecordingSummary(summary);
-        toast({
-          title: `הקלטה נשמרה — ${formatDurationLabel(durationSec)}, ${formatFileSizeMb(blob.size)}`,
-          description: "ניתן להוריד, לשמור לענן (דמו) או לפתוח את תיק הלקוח",
-        });
-      } catch {
-        metadataPersistedRef.current = false;
-        toast({
-          title: "שמירה מקומית",
-          description: "לא ניתן לשמור ב-IndexedDB — ההורדה המיידית עדיין זמינה",
-          variant: "destructive",
-        });
-      } finally {
-        setSavingBlob(false);
-      }
-    },
-    [sessionId, sessionRecord, persistRecordingMetadata, resolveRecordingDurationSec, toast]
-  );
-
-  const finalizeRecordingBlob = useCallback(() => {
-    const blob = new Blob(chunksRef.current, { type: "video/webm" });
-    chunksRef.current = [];
-    mediaRecorderRef.current = null;
-    setIsRecording(false);
-    if (blob.size > 0) {
-      setRecordedBlob(blob);
-      void flushRecordingSave(blob);
-    }
-  }, [flushRecordingSave]);
-
   const refreshSessionData = useCallback(async () => {
     if (!sessionId) return;
     setSessionRecord(getSession(sessionId));
@@ -327,6 +271,155 @@ export default function ScreenShareAgentView({
     );
     setBlobAvailableIds(available);
   }, [sessionId]);
+
+  const uploadRecordingBlobToCloud = useCallback(
+    async (blob, entry, { showToast = true } = {}) => {
+      if (!entry?.id || !sessionId || !blob?.size) return null;
+      setCloudSaving(true);
+      setCloudUploadStatus("uploading");
+      try {
+        const result = await uploadRecordingToCloud(
+          blob,
+          {
+            sessionId,
+            recordingId: entry.id,
+            fileName: entry.fileName,
+            startedAt: entry.startedAt,
+            stoppedAt: entry.stoppedAt,
+            durationSec: entry.durationSec,
+            hasAudio: entry.hasAudio,
+            agentName: sessionRecord?.agentName || agentName,
+            customerEmail: sessionRecord?.customerEmail || entry.customerEmail,
+            crmCustomerId: sessionRecord?.crmCustomerId || entry.crmCustomerId,
+          },
+          { onStatus: setCloudUploadStatus }
+        );
+        if (result.ok) {
+          if (showToast) {
+            toast({
+              title: demoModeEnabled ? "נשמר בדמו (ענן מדומה)" : "הקלטה הועלתה לשרת",
+              description: result.message,
+            });
+          }
+          refreshSessionData();
+        } else if (showToast && cloudRecordingUploadEnabled()) {
+          toast({
+            title: "העלאה לשרת",
+            description: result.message,
+            variant: "destructive",
+          });
+        }
+        return result;
+      } catch (err) {
+        setCloudUploadStatus("failed");
+        if (showToast) {
+          toast({
+            title: "שגיאה",
+            description: err?.message || "נסו שוב",
+            variant: "destructive",
+          });
+        }
+        return null;
+      } finally {
+        setCloudSaving(false);
+      }
+    },
+    [sessionId, sessionRecord, agentName, toast, refreshSessionData]
+  );
+
+  const flushRecordingSave = useCallback(
+    async (blob) => {
+      if (!blob?.size || metadataPersistedRef.current || !sessionId) return;
+      if (!recordingFeaturesEnabled) return;
+      metadataPersistedRef.current = true;
+      const durationSec = resolveRecordingDurationSec();
+      setRecordingElapsed(durationSec);
+      recordingElapsedRef.current = durationSec;
+      const entry = persistRecordingMetadata(durationSec);
+      if (!entry?.id) {
+        metadataPersistedRef.current = false;
+        return;
+      }
+
+      setSavingBlob(true);
+      try {
+        if (demoModeEnabled) {
+          await saveRecordingBlob({
+            sessionId,
+            recordingId: entry.id,
+            blob,
+            meta: { fileName: entry.fileName, fileSizeBytes: blob.size },
+          });
+          updateRecordingMetadata(sessionId, entry.id, {
+            fileSizeBytes: blob.size,
+          });
+          setBlobAvailableIds((prev) => new Set(prev).add(entry.id));
+        } else if (!cloudRecordingUploadEnabled()) {
+          await saveRecordingBlob({
+            sessionId,
+            recordingId: entry.id,
+            blob,
+            meta: { fileName: entry.fileName, fileSizeBytes: blob.size },
+          });
+          updateRecordingMetadata(sessionId, entry.id, {
+            fileSizeBytes: blob.size,
+          });
+          setBlobAvailableIds((prev) => new Set(prev).add(entry.id));
+        }
+
+        const summary = {
+          recordingId: entry.id,
+          durationSec,
+          fileSizeBytes: blob.size,
+          crmCustomerId: sessionRecord?.crmCustomerId || entry.crmCustomerId,
+        };
+        setRecordingSummary(summary);
+
+        if (cloudRecordingUploadEnabled()) {
+          setCloudUploadStatus("uploading");
+          void uploadRecordingBlobToCloud(blob, entry, { showToast: true });
+        } else if (demoModeEnabled) {
+          toast({
+            title: `הקלטה נשמרה — ${formatDurationLabel(durationSec)}, ${formatFileSizeMb(blob.size)}`,
+            description: "ניתן להוריד, לשמור לענן (דמו) או לפתוח את תיק הלקוח",
+          });
+        } else {
+          toast({
+            title: `הקלטה נשמרה — ${formatDurationLabel(durationSec)}, ${formatFileSizeMb(blob.size)}`,
+            description: "נשמרה מקומית — העלאה לשרת אינה מוגדרת",
+          });
+        }
+      } catch {
+        metadataPersistedRef.current = false;
+        toast({
+          title: "שמירה מקומית",
+          description: "לא ניתן לשמור ב-IndexedDB — ההורדה המיידית עדיין זמינה",
+          variant: "destructive",
+        });
+      } finally {
+        setSavingBlob(false);
+      }
+    },
+    [
+      sessionId,
+      sessionRecord,
+      persistRecordingMetadata,
+      resolveRecordingDurationSec,
+      toast,
+      uploadRecordingBlobToCloud,
+    ]
+  );
+
+  const finalizeRecordingBlob = useCallback(() => {
+    const blob = new Blob(chunksRef.current, { type: "video/webm" });
+    chunksRef.current = [];
+    mediaRecorderRef.current = null;
+    setIsRecording(false);
+    if (blob.size > 0) {
+      setRecordedBlob(blob);
+      void flushRecordingSave(blob);
+    }
+  }, [flushRecordingSave]);
 
   useEffect(() => {
     if (!sessionId) return undefined;
@@ -739,42 +832,20 @@ export default function ScreenShareAgentView({
 
   const handleCloudSaveSummary = async () => {
     if (!sessionId || !recordingSummary?.recordingId) return;
-    setCloudSaving(true);
-    try {
-      const blob = await resolveBlobForDownload(recordingSummary.recordingId);
-      if (!blob?.size) {
-        toast({
-          title: "אין קובץ",
-          description: "ההקלטה לא נשמרה ב-IndexedDB",
-          variant: "destructive",
-        });
-        return;
-      }
-      const meta = sessionRecordings.find((r) => r.id === recordingSummary.recordingId);
-      const result = await uploadRecordingToCloud(blob, {
-        sessionId,
-        recordingId: recordingSummary.recordingId,
-        fileName: meta?.fileName,
-      });
-      if (result.ok) {
-        toast({ title: "נשמר בדמו (ענן מדומה)", description: result.message });
-        refreshSessionData();
-      } else {
-        toast({
-          title: "העלאה לענן",
-          description: result.message,
-          variant: "destructive",
-        });
-      }
-    } catch (err) {
+    const blob = await resolveBlobForDownload(recordingSummary.recordingId);
+    if (!blob?.size) {
       toast({
-        title: "שגיאה",
-        description: err?.message || "נסו שוב",
+        title: "אין קובץ",
+        description: demoModeEnabled
+          ? "ההקלטה לא נשמרה ב-IndexedDB"
+          : "אין קובץ זמין להעלאה — הקליטו שוב",
         variant: "destructive",
       });
-    } finally {
-      setCloudSaving(false);
+      return;
     }
+    const meta =
+      sessionRecordings.find((r) => r.id === recordingSummary.recordingId) || lastRecordingMeta;
+    await uploadRecordingBlobToCloud(blob, meta, { showToast: true });
   };
 
   const resolveBlobForDownload = async (recordingId) => {
@@ -838,6 +909,42 @@ export default function ScreenShareAgentView({
     handleStartRecording();
   };
 
+  const notifyGuestSessionEnded = useCallback(() => {
+    const peer = peerRef.current;
+    const guestPeerId = callRef.current?.peer;
+    if (!peer || peer.destroyed || !guestPeerId) return;
+    const payload = {
+      type: "session_ended_by_agent",
+      reason: "agent_ended",
+      message: AGENT_ENDED_PEER_MESSAGE,
+      at: Date.now(),
+    };
+    try {
+      const conn = peer.connect(guestPeerId, { reliable: true });
+      const send = () => {
+        try {
+          conn.send(payload);
+        } catch {
+          /* ignore */
+        }
+      };
+      if (conn.open) {
+        send();
+      } else {
+        conn.on("open", send);
+      }
+      window.setTimeout(() => {
+        try {
+          conn.close();
+        } catch {
+          /* ignore */
+        }
+      }, 300);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   const handleEnd = () => {
     sessionEndedRef.current = true;
     if (isRecording && sessionId) setRecordingStopped(sessionId);
@@ -845,17 +952,21 @@ export default function ScreenShareAgentView({
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => {});
     }
-    try {
-      callRef.current?.close();
-      peerRef.current?.destroy();
-    } catch {
-      /* ignore */
-    }
-    if (sessionId) endSession(sessionId, { endedReason: "agent_ended" });
-    setStatus("ended");
-    remoteStreamRef.current = null;
-    if (videoRef.current) videoRef.current.srcObject = null;
-    onEnded?.();
+    notifyGuestSessionEnded();
+    const teardown = () => {
+      try {
+        callRef.current?.close();
+        peerRef.current?.destroy();
+      } catch {
+        /* ignore */
+      }
+      if (sessionId) endSession(sessionId, { endedReason: "agent_ended" });
+      setStatus("ended");
+      remoteStreamRef.current = null;
+      if (videoRef.current) videoRef.current.srcObject = null;
+      onEnded?.();
+    };
+    window.setTimeout(teardown, 200);
   };
 
   const showReconnectOverlay =
@@ -1076,8 +1187,13 @@ export default function ScreenShareAgentView({
             התחל הקלטה אוטומטית לאחר חיבור (כשהלקוח אישר הקלטה)
           </label>
           <p className="text-[10px] text-slate-500 leading-relaxed">
-            הקובץ נשמר ב-IndexedDB בדפדפן הנציג (WebM). «הורד שוב» זמין גם אחרי רענון.
+            {cloudRecordingUploadEnabled()
+              ? "בפרודקשן: הקובץ מועלה אוטומטית לשרת (Supabase Storage) בסיום ההקלטה."
+              : demoModeEnabled
+                ? "הקובץ נשמר ב-IndexedDB בדפדפן הנציג (WebM). «הורד שוב» זמין גם אחרי רענון."
+                : "הקובץ נשמר מקומית ב-IndexedDB (WebM)."}
             {savingBlob ? " שומר…" : null}
+            {cloudSaving ? ` ${recordingUploadStatusLabel("uploading")}` : null}
           </p>
 
           {recordingSummary && !isRecording && (
@@ -1086,6 +1202,19 @@ export default function ScreenShareAgentView({
                 הקלטה נשמרה — {formatDurationLabel(recordingSummary.durationSec)},{" "}
                 {formatFileSizeMb(recordingSummary.fileSizeBytes)}
               </p>
+              {cloudUploadStatus ? (
+                <p
+                  className={`text-[11px] rounded px-2 py-1 border ${
+                    cloudUploadStatus === "ready"
+                      ? "text-emerald-800 bg-emerald-100/80 border-emerald-200"
+                      : cloudUploadStatus === "failed"
+                        ? "text-red-800 bg-red-50 border-red-100"
+                        : "text-amber-800 bg-amber-50 border-amber-100"
+                  }`}
+                >
+                  {recordingUploadStatusLabel(cloudUploadStatus)}
+                </p>
+              ) : null}
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
@@ -1097,17 +1226,21 @@ export default function ScreenShareAgentView({
                   <Download className="w-3.5 h-3.5" />
                   הורד
                 </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  className="gap-1 text-xs h-8"
-                  disabled={cloudSaving || savingBlob}
-                  onClick={handleCloudSaveSummary}
-                >
-                  <CloudUpload className="w-3.5 h-3.5" />
-                  שמור לענן
-                </Button>
+                {(demoModeEnabled ||
+                  cloudUploadStatus === "failed" ||
+                  !cloudRecordingUploadEnabled()) && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="gap-1 text-xs h-8"
+                    disabled={cloudSaving || savingBlob}
+                    onClick={handleCloudSaveSummary}
+                  >
+                    <CloudUpload className="w-3.5 h-3.5" />
+                    {cloudUploadStatus === "failed" ? "נסה שוב להעלות" : "שמור לענן"}
+                  </Button>
+                )}
                 {recordingSummary.crmCustomerId && (
                   <Link
                     to={`/crm/${recordingSummary.crmCustomerId}`}
@@ -1144,6 +1277,19 @@ export default function ScreenShareAgentView({
                     </span>
                     <span className="text-slate-400 mx-1">·</span>
                     <span>{formatRecordingTimestamp(rec.stoppedAt || rec.startedAt)}</span>
+                    {rec.cloudUploadStatus ? (
+                      <p
+                        className={`text-[10px] mt-0.5 ${
+                          rec.cloudUploadStatus === "ready"
+                            ? "text-emerald-700"
+                            : rec.cloudUploadStatus === "failed"
+                              ? "text-red-700"
+                              : "text-amber-700"
+                        }`}
+                      >
+                        {recordingUploadStatusLabel(rec.cloudUploadStatus)}
+                      </p>
+                    ) : null}
                     {rec.downloadedAt ? (
                       <p className="text-[10px] text-emerald-700 mt-0.5">
                         הורדת הקובץ בוצעה ({formatRecordingTimestamp(rec.downloadedAt)})

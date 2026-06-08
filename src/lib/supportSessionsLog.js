@@ -10,6 +10,11 @@ import {
   listSessions as listScreenShareSessions,
   subscribeScreenShare,
 } from "@/lib/screenShareStore";
+import {
+  cloudSessionSyncEnabled,
+  fetchCloudSupportSessions,
+  mergeLocalAndCloudSessions,
+} from "@/lib/supportSessionsSync";
 
 export const SESSION_TYPES = {
   SCREEN_SHARE: "screen_share",
@@ -48,6 +53,10 @@ function mapRecordingsForSession(sessionId, allRecordings) {
       fileName: rec.fileName || "",
       fileSizeBytes: rec.fileSizeBytes ?? null,
       hasAudio: rec.hasAudio ?? null,
+      storagePath: rec.storagePath || null,
+      cloudUploadStatus: rec.cloudUploadStatus || null,
+      cloudReady: rec.cloudReady === true,
+      cloudPlaceholder: rec.cloudPlaceholder === true,
     }));
 }
 
@@ -95,6 +104,14 @@ export function listSupportSessionsFlat() {
   );
 }
 
+/** Local sessions merged with Supabase (when configured). */
+export async function listSupportSessionsFlatMerged() {
+  const local = listSupportSessionsFlat();
+  if (!cloudSessionSyncEnabled()) return local;
+  const cloud = await fetchCloudSupportSessions();
+  return mergeLocalAndCloudSessions(local, cloud);
+}
+
 /**
  * Sessions grouped by agent name (newest session first within each group).
  */
@@ -110,6 +127,11 @@ export function groupSupportSessionsByAgent(sessions = listSupportSessionsFlat()
   return [...groups.values()].sort((a, b) =>
     a.agentName.localeCompare(b.agentName, "he")
   );
+}
+
+export async function groupSupportSessionsByAgentMerged() {
+  const sessions = await listSupportSessionsFlatMerged();
+  return groupSupportSessionsByAgent(sessions);
 }
 
 export function subscribeSupportSessions(callback) {

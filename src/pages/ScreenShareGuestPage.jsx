@@ -12,6 +12,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   logRecordingConsent,
   logScreenConsent,
   GUEST_BOOTSTRAP_QUERY_KEY,
@@ -26,6 +35,20 @@ import { m3PageClass } from "@/lib/hypPage";
 const GUEST_INFO_BANNER = demoModeEnabled
   ? "דמו — שיתוף מסך בדפדפן (צפייה בלבד). מומלץ Chrome או Edge. לפרודקשן: PeerServer עצמי."
   : "שיתוף מסך בדפדפן (צפייה בלבד). מומלץ Chrome או Edge.";
+
+const AGENT_ENDED_MESSAGE = "הנציג סיים את הסשן";
+const AGENT_ENDED_REASON = "agent_ended";
+
+function parsePeerData(raw) {
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  return raw && typeof raw === "object" ? raw : null;
+}
 
 /** אודיו מערכת ב-getDisplayMedia — בדרך כלל Chrome/Edge בדסקטופ */
 function displayMediaSystemAudioSupported() {
@@ -56,6 +79,9 @@ export default function ScreenShareGuestPage() {
   const reconnectTimerRef = useRef(null);
   const sharingRef = useRef(false);
   const endNotifiedRef = useRef(false);
+  const agentEndedHandledRef = useRef(false);
+  const [showAgentEndedDialog, setShowAgentEndedDialog] = useState(false);
+  const [agentEndedMessage, setAgentEndedMessage] = useState(AGENT_ENDED_MESSAGE);
 
   useEffect(() => {
     sharingRef.current = sharing;
@@ -193,6 +219,39 @@ export default function ScreenShareGuestPage() {
     [notifyAgentSessionEnded, endGuestSession]
   );
 
+  const handleEndedByAgent = useCallback(
+    (message = AGENT_ENDED_MESSAGE) => {
+      if (agentEndedHandledRef.current) return;
+      agentEndedHandledRef.current = true;
+      endGuestSession(AGENT_ENDED_REASON, { updateUi: true });
+      setAgentEndedMessage(message || AGENT_ENDED_MESSAGE);
+      setShowAgentEndedDialog(true);
+    },
+    [endGuestSession]
+  );
+
+  const bindPeerAgentEndListener = useCallback(
+    (peer) => {
+      if (!peer) return;
+      peer.on("connection", (conn) => {
+        conn.on("data", (raw) => {
+          const data = parsePeerData(raw);
+          if (data?.type === "session_ended_by_agent") {
+            handleEndedByAgent(data.message);
+          }
+        });
+      });
+    },
+    [handleEndedByAgent]
+  );
+
+  const isAgentEndedSession = useCallback(
+    (sessionSnapshot) =>
+      sessionSnapshot?.status === "ended" &&
+      sessionSnapshot?.endedReason === AGENT_ENDED_REASON,
+    []
+  );
+
   const placeCall = useCallback(
     (peer, stream) => {
       if (!sessionId || !stream) return false;
@@ -201,6 +260,11 @@ export default function ScreenShareGuestPage() {
 
       call.on("close", () => {
         if (!sharingRef.current) return;
+        const latest = resolveGuestSession(sessionId, bootstrapKey);
+        if (isAgentEndedSession(latest)) {
+          handleEndedByAgent();
+          return;
+        }
         if (!isStreamAlive()) {
           setShared(false);
           setError("שיתוף המסך הופסק מהדפדפן");
@@ -218,6 +282,11 @@ export default function ScreenShareGuestPage() {
 
       call.on("error", () => {
         if (!sharingRef.current) return;
+        const latest = resolveGuestSession(sessionId, bootstrapKey);
+        if (isAgentEndedSession(latest)) {
+          handleEndedByAgent();
+          return;
+        }
         if (!isStreamAlive()) {
           setShared(false);
           setError("שיתוף המסך הופסק");
@@ -236,7 +305,14 @@ export default function ScreenShareGuestPage() {
       setError("");
       return true;
     },
-    [sessionId, isStreamAlive, clearReconnectTimer]
+    [
+      sessionId,
+      bootstrapKey,
+      isStreamAlive,
+      clearReconnectTimer,
+      isAgentEndedSession,
+      handleEndedByAgent,
+    ]
   );
 
   const reconnectToAgent = useCallback(async () => {
@@ -253,6 +329,7 @@ export default function ScreenShareGuestPage() {
     if (!peer || peer.destroyed) {
       peer = new Peer({ debug: 0 });
       peerRef.current = peer;
+      bindPeerAgentEndListener(peer);
       await new Promise((resolve, reject) => {
         const timeout = setTimeout(
           () => reject(new Error("תם הזמן להתחברות — ודאו שהנציג פתח את מסך הצפייה")),
@@ -272,7 +349,28 @@ export default function ScreenShareGuestPage() {
     await placeCall(peer, streamRef.current);
     notifyAgentGuestReady(resolveGuestSession(sessionId, bootstrapKey));
     setError("");
-  }, [sessionId, bootstrapKey, isStreamAlive, placeCall, notifyAgentGuestReady]);
+  }, [
+    sessionId,
+    bootstrapKey,
+    isStreamAlive,
+    placeCall,
+    notifyAgentGuestReady,
+    bindPeerAgentEndListener,
+  ]);
+
+  useEffect(() => {
+    if (!sessionId || agentEndedHandledRef.current) return;
+    if (!isAgentEndedSession(session)) return;
+    if (!(shared || sharingRef.current)) return;
+    handleEndedByAgent();
+  }, [
+    sessionId,
+    session?.status,
+    session?.endedReason,
+    shared,
+    isAgentEndedSession,
+    handleEndedByAgent,
+  ]);
 
   useEffect(() => {
     const refresh = () => setSession(resolveGuestSession(sessionId, bootstrapKey));
@@ -374,6 +472,7 @@ export default function ScreenShareGuestPage() {
 
       const peer = new Peer({ debug: 0 });
       peerRef.current = peer;
+      bindPeerAgentEndListener(peer);
 
       await new Promise((resolve, reject) => {
         const timeout = setTimeout(
@@ -462,7 +561,12 @@ export default function ScreenShareGuestPage() {
               <p>קישור לא תקין או שפג תוקפו. בקשו מהנציג קישור חדש.</p>
             </div>
           ) : session.status === "ended" ? (
-            <p className="text-sm text-center text-slate-600">סשן שיתוף המסך הסתיים.</p>
+            <div className="text-center space-y-2">
+              {session.endedReason === AGENT_ENDED_REASON && (
+                <p className="text-sm font-semibold text-slate-800">{AGENT_ENDED_MESSAGE}</p>
+              )}
+              <p className="text-sm text-slate-600">סשן שיתוף המסך הסתיים.</p>
+            </div>
           ) : shared ? (
             <div className="text-center space-y-3">
               <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" />
@@ -587,6 +691,20 @@ export default function ScreenShareGuestPage() {
           </p>
         </div>
       </motion.div>
+
+      <AlertDialog open={showAgentEndedDialog} onOpenChange={setShowAgentEndedDialog}>
+        <AlertDialogContent dir="rtl" className="text-right">
+          <AlertDialogHeader>
+            <AlertDialogTitle>סשן הצפייה הסתיים</AlertDialogTitle>
+            <AlertDialogDescription>{agentEndedMessage}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="sm:justify-start">
+            <AlertDialogAction onClick={() => setShowAgentEndedDialog(false)}>
+              הבנתי
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

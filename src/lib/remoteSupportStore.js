@@ -20,6 +20,8 @@ import {
   simulatedReasonForApiResult,
   simulatedReasonForDemoSendDisabled,
 } from "@/lib/emailSimulatedReason";
+import { getStoredAgentName } from "@/constants/scheduling";
+import { syncRustDeskSessionToCloud } from "@/lib/supportSessionsSync";
 
 export const REMOTE_SUPPORT_STORAGE_KEY = "smart-break-shift-remote-support-v1";
 export const REMOTE_SUPPORT_CHANGE_EVENT = "remote-support-changed";
@@ -76,6 +78,10 @@ function writeSessions(sessions) {
   writeStore({ sessions });
 }
 
+function cloudSyncSession(session) {
+  if (session) syncRustDeskSessionToCloud(session);
+}
+
 /** @deprecated use remoteSupportFeaturesAvailable */
 export function remoteSupportDemoAvailable() {
   return remoteSupportFeaturesAvailable();
@@ -103,14 +109,15 @@ export function listSessionsForCustomer(crmCustomerId) {
   return listSessions().filter((s) => s.crmCustomerId === crmCustomerId);
 }
 
-export function createSession({ crmCustomerId, agentName, rustDeskId, password }) {
+export function createSession({ crmCustomerId, agentName, rustDeskId, password, customerEmail = "" }) {
   const now = new Date().toISOString();
   const id = makeId("rs");
   const session = {
     id,
     consentToken: id,
     crmCustomerId: crmCustomerId || null,
-    agentName: String(agentName || "").trim(),
+    agentName: String(agentName || getStoredAgentName() || "").trim(),
+    customerEmail: String(customerEmail || "").trim(),
     rustDeskId: String(rustDeskId || "").replace(/\D/g, "").slice(0, 12),
     password: password ? String(password).trim() : null,
     consentAt: null,
@@ -123,6 +130,7 @@ export function createSession({ crmCustomerId, agentName, rustDeskId, password }
   };
   const sessions = [...readSessions(), session];
   writeSessions(sessions);
+  cloudSyncSession(session);
   return session;
 }
 
@@ -147,6 +155,7 @@ export function updateSession(id, patch) {
     return updated;
   });
   writeSessions(sessions);
+  if (updated) cloudSyncSession(updated);
   return updated;
 }
 
@@ -528,5 +537,14 @@ export function subscribeRemoteSupport(callback) {
   if (typeof window === "undefined") return () => {};
   const handler = () => callback();
   window.addEventListener(REMOTE_SUPPORT_CHANGE_EVENT, handler);
-  return () => window.removeEventListener(REMOTE_SUPPORT_CHANGE_EVENT, handler);
+  const onStorage = (e) => {
+    if (!e) return;
+    if (e.key !== REMOTE_SUPPORT_STORAGE_KEY) return;
+    callback();
+  };
+  window.addEventListener("storage", onStorage);
+  return () => {
+    window.removeEventListener(REMOTE_SUPPORT_CHANGE_EVENT, handler);
+    window.removeEventListener("storage", onStorage);
+  };
 }

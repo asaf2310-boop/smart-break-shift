@@ -3,8 +3,14 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { demoModeEnabled, remoteSupportEnabled } from "@/api/demoClient";
 import { getRecordingBlob } from "@/lib/demoRecordingStorage";
+import { recordingUploadStatusLabel } from "@/lib/recordingUpload";
 import { m3PageClass } from "@/lib/hypPage";
-import { findRecordingByPlayId } from "@/lib/screenShareStore";
+import {
+  cloudRecordingUploadEnabled,
+  fetchCloudRecordingById,
+  getSignedRecordingUrl,
+} from "@/lib/screenRecordingsSync";
+import { findRecordingByPlayId, parseRecordingPlayId } from "@/lib/screenShareStore";
 
 function formatWhen(iso) {
   if (!iso) return "—";
@@ -39,12 +45,14 @@ export default function DemoRecordingPlayPage({ backTo = "/remote-support", titl
   const [title, setTitle] = useState("");
   const [playUrl, setPlayUrl] = useState(null);
   const playUrlRef = useRef(null);
+  const playUrlIsBlobRef = useRef(false);
 
   const revokePlayUrl = useCallback(() => {
-    if (playUrlRef.current) {
+    if (playUrlRef.current && playUrlIsBlobRef.current) {
       URL.revokeObjectURL(playUrlRef.current);
-      playUrlRef.current = null;
     }
+    playUrlRef.current = null;
+    playUrlIsBlobRef.current = false;
     setPlayUrl(null);
   }, []);
 
@@ -66,7 +74,19 @@ export default function DemoRecordingPlayPage({ backTo = "/remote-support", titl
     setLoading(true);
 
     (async () => {
-      const rec = findRecordingByPlayId(playId);
+      let rec = findRecordingByPlayId(playId);
+      const parsed = parseRecordingPlayId(playId);
+
+      if (!rec && cloudRecordingUploadEnabled() && parsed?.recordingId) {
+        const cloudRec = await fetchCloudRecordingById(parsed.recordingId);
+        if (cloudRec) {
+          rec = {
+            ...cloudRec,
+            sessionId: cloudRec.sessionId || parsed.sessionId,
+          };
+        }
+      }
+
       if (!rec) {
         if (!cancelled) {
           setError("ההקלטה לא נמצאה — ייתכן שנמחקה או שהקישור שגוי");
@@ -74,14 +94,32 @@ export default function DemoRecordingPlayPage({ backTo = "/remote-support", titl
         }
         return;
       }
+
       setTitle(
         `${formatDuration(rec.durationSec)} · ${formatWhen(rec.stoppedAt || rec.startedAt)}`
       );
+
       try {
+        if (rec.cloudReady && rec.storagePath) {
+          const signedUrl = await getSignedRecordingUrl(rec.storagePath);
+          if (signedUrl) {
+            if (!cancelled) {
+              playUrlRef.current = signedUrl;
+              playUrlIsBlobRef.current = false;
+              setPlayUrl(signedUrl);
+            }
+            return;
+          }
+        }
+
         const blob = await getRecordingBlob(rec.sessionId, rec.id);
         if (!blob?.size) {
           if (!cancelled) {
-            setError("אין קובץ וידאו ב-IndexedDB — ההקלטה לא נשמרה בדפדפן זה");
+            setError(
+              cloudRecordingUploadEnabled()
+                ? recordingUploadStatusLabel(rec.cloudUploadStatus || "pending")
+                : "אין קובץ וידאו ב-IndexedDB — ההקלטה לא נשמרה בדפדפן זה"
+            );
             setLoading(false);
           }
           return;
@@ -89,6 +127,7 @@ export default function DemoRecordingPlayPage({ backTo = "/remote-support", titl
         if (cancelled) return;
         const url = URL.createObjectURL(blob);
         playUrlRef.current = url;
+        playUrlIsBlobRef.current = true;
         setPlayUrl(url);
       } catch (err) {
         if (!cancelled) {
@@ -129,8 +168,9 @@ export default function DemoRecordingPlayPage({ backTo = "/remote-support", titl
           </div>
 
           <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed">
-            עובד באותו דפדפן בלבד — הקובץ נטען מ-IndexedDB במכשיר זה. אין שיתוף בין מחשבים או
-            דפדפנים.
+            {cloudRecordingUploadEnabled()
+              ? "בפרודקשן: הקלטות זמינות בשרת נטענות בקישור חתום. בדמו — מ-IndexedDB באותו דפדפן."
+              : "עובד באותו דפדפן בלבד — הקובץ נטען מ-IndexedDB במכשיר זה."}
           </p>
 
           {loading && (

@@ -14,6 +14,8 @@ import {
   simulatedReasonForApiResult,
   simulatedReasonForDemoSendDisabled,
 } from "@/lib/emailSimulatedReason";
+import { getStoredAgentName } from "@/constants/scheduling";
+import { syncScreenShareSessionToCloud } from "@/lib/supportSessionsSync";
 
 export const SCREEN_SHARE_STORAGE_KEY = "smart-break-shift-screen-share-v1";
 export const SCREEN_SHARE_CHANGE_EVENT = "screen-share-changed";
@@ -69,6 +71,10 @@ function writeStore({ sessions, emailLogs, recordings }) {
 
 function writeSessions(sessions) {
   writeStore({ sessions });
+}
+
+function cloudSyncSession(session, options) {
+  if (session) syncScreenShareSessionToCloud(session, options);
 }
 
 /** @deprecated use screenShareFeaturesAvailable */
@@ -234,7 +240,7 @@ export function createScreenSession({
   const session = {
     id,
     crmCustomerId: crmCustomerId || null,
-    agentName: String(agentName || "").trim(),
+    agentName: String(agentName || getStoredAgentName() || "").trim(),
     customerEmail: String(customerEmail || "").trim(),
     status: "active",
     createdAt: now,
@@ -249,6 +255,7 @@ export function createScreenSession({
   };
   const sessions = [...readSessions(), session];
   writeSessions(sessions);
+  cloudSyncSession(session);
   return session;
 }
 
@@ -260,6 +267,7 @@ export function updateSession(id, patch) {
     return updated;
   });
   writeSessions(sessions);
+  if (updated) cloudSyncSession(updated);
   return updated;
 }
 
@@ -424,6 +432,9 @@ export function appendSessionRecording(sessionId, meta) {
       s.id === sessionId ? { ...s, recordings: sessionRecordings } : s
     ),
     recordings: [...store.recordings, entry],
+  });
+  cloudSyncSession(getSession(sessionId), {
+    recordingCount: sessionRecordings.length,
   });
   return entry;
 }

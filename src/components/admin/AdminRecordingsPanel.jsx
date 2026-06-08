@@ -58,7 +58,7 @@ import { getRecordingBlob, listStoredRecordingRefs } from "@/lib/demoRecordingSt
 
 import {
 
-  groupSupportSessionsByAgent,
+  groupSupportSessionsByAgentMerged,
 
   sessionTypeLabel,
 
@@ -68,7 +68,13 @@ import {
 
 } from "@/lib/supportSessionsLog";
 
+import { recordingUploadStatusLabel } from "@/lib/recordingUpload";
 import { buildRecordingPlayId } from "@/lib/screenShareStore";
+import { cloudSessionSyncEnabled } from "@/lib/supportSessionsSync";
+import {
+  cloudRecordingUploadEnabled,
+  getSignedRecordingUrl,
+} from "@/lib/screenRecordingsSync";
 
 
 
@@ -132,11 +138,25 @@ function sessionMatchesEmail(session, query) {
 
 
 
-function filterGroupsByEmail(groups, emailQuery) {
+function sessionMatchesAgent(session, query) {
 
-  const query = emailQuery.trim().toLowerCase();
+  if (!query) return true;
 
-  if (!query) return groups;
+  const name = String(session.agentName || "").toLowerCase();
+
+  return name.includes(query);
+
+}
+
+
+
+function filterGroupsByQuery(groups, emailQuery, agentQuery) {
+
+  const email = emailQuery.trim().toLowerCase();
+
+  const agent = agentQuery.trim().toLowerCase();
+
+  if (!email && !agent) return groups;
 
   return groups
 
@@ -144,11 +164,47 @@ function filterGroupsByEmail(groups, emailQuery) {
 
       ...group,
 
-      sessions: group.sessions.filter((s) => sessionMatchesEmail(s, query)),
+      sessions: group.sessions.filter(
+
+        (s) => sessionMatchesEmail(s, email) && sessionMatchesAgent(s, agent)
+
+      ),
 
     }))
 
     .filter((group) => group.sessions.length > 0);
+
+}
+
+
+
+function pickDefaultAgent(groups) {
+
+  if (!groups.length) return "";
+
+  if (groups.length === 1) return groups[0].agentName;
+
+  let bestName = groups[0].agentName;
+
+  let bestTime = 0;
+
+  for (const group of groups) {
+
+    const newest = group.sessions[0]?.createdAt;
+
+    const t = newest ? new Date(newest).getTime() : 0;
+
+    if (t > bestTime) {
+
+      bestTime = t;
+
+      bestName = group.agentName;
+
+    }
+
+  }
+
+  return bestName;
 
 }
 
@@ -186,105 +242,77 @@ function SessionTypeBadge({ sessionType }) {
 
 
 
-function RecordingRow({ recording, hasBlob, onPlay }) {
+function RecordingRow({ recording, hasBlob, hasCloud, onPlay }) {
+  const canPlay = hasCloud || hasBlob;
+  const status = recording.cloudUploadStatus;
+  const statusLabel = status ? recordingUploadStatusLabel(status) : null;
 
   return (
-
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2 text-xs">
-
       <div className="min-w-0">
-
         <p className="font-medium text-slate-800">
-
           {formatDuration(recording.durationSec)}
-
           <span className="text-slate-400 mx-1">·</span>
-
           {formatWhen(recording.stoppedAt || recording.startedAt)}
-
         </p>
-
         {recording.fileSizeBytes ? (
-
           <p className="text-[10px] text-slate-500 mt-0.5">
-
             {(recording.fileSizeBytes / (1024 * 1024)).toFixed(1)} MB
-
           </p>
-
         ) : null}
-
+        {statusLabel ? (
+          <p
+            className={`text-[10px] mt-0.5 ${
+              status === "ready"
+                ? "text-emerald-700"
+                : status === "failed"
+                  ? "text-red-700"
+                  : "text-amber-700"
+            }`}
+          >
+            {statusLabel}
+          </p>
+        ) : null}
       </div>
-
       <div className="flex items-center gap-2 shrink-0">
-
-        {hasBlob ? (
-
+        {canPlay ? (
           <>
-
             <Button
-
               type="button"
-
               size="sm"
-
               variant="outline"
-
               className="h-7 gap-1 text-[11px]"
-
               onClick={() => onPlay(recording)}
-
             >
-
               <Play className="w-3 h-3" />
-
               נגן
-
             </Button>
-
             <Link
-
               to={`/admin/recordings/play?id=${buildRecordingPlayId(
-
                 recording.sessionId || "",
-
                 recording.id
-
               )}`}
-
               className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-indigo-200 bg-white text-indigo-800 hover:bg-indigo-50 text-[11px] font-medium"
-
             >
-
               <Play className="w-3 h-3" />
-
               בדף נפרד
-
             </Link>
-
           </>
-
         ) : (
-
           <span className="text-[10px] text-amber-800 bg-amber-50 border border-amber-100 rounded px-2 py-1">
-
-            אין קובץ וידאו במכשיר זה
-
+            {recording.cloudPlaceholder || status === "pending" || status === "uploading"
+              ? recordingUploadStatusLabel(status || "pending")
+              : "אין קובץ וידאו זמין"}
           </span>
-
         )}
-
       </div>
-
     </div>
-
   );
-
 }
 
 
 
-function AgentSessionsList({ group, blobKeys, onPlayRecording }) {
+function AgentSessionsList({ group, blobKeys, cloudKeys, onPlayRecording }) {
 
   const sessionCount = group.sessions.length;
 
@@ -405,7 +433,10 @@ function AgentSessionsList({ group, blobKeys, onPlayRecording }) {
                       recording={{ ...rec, sessionId: session.id }}
 
                       hasBlob={blobKeys.has(`${session.id}::${rec.id}`)}
-
+                      hasCloud={
+                        rec.cloudReady === true ||
+                        cloudKeys.has(`${session.id}::${rec.id}`)
+                      }
                       onPlay={(r) => onPlayRecording(session.id, r)}
 
                     />
@@ -468,13 +499,17 @@ function AgentSessionsList({ group, blobKeys, onPlayRecording }) {
 
 export default function AdminRecordingsPanel() {
 
-  const [groups, setGroups] = useState(() => groupSupportSessionsByAgent());
+  const [groups, setGroups] = useState([]);
 
   const [blobKeys, setBlobKeys] = useState(() => new Set());
 
   const [loadingBlobs, setLoadingBlobs] = useState(true);
 
+  const [loadingSessions, setLoadingSessions] = useState(true);
+
   const [emailQuery, setEmailQuery] = useState("");
+
+  const [agentQuery, setAgentQuery] = useState("");
 
   const [selectedAgent, setSelectedAgent] = useState("");
 
@@ -489,14 +524,13 @@ export default function AdminRecordingsPanel() {
   const [playUrl, setPlayUrl] = useState(null);
 
   const playUrlRef = useRef(null);
-
-
+  const playUrlIsBlobRef = useRef(false);
 
   const filteredGroups = useMemo(
 
-    () => filterGroupsByEmail(groups, emailQuery),
+    () => filterGroupsByQuery(groups, emailQuery, agentQuery),
 
-    [groups, emailQuery]
+    [groups, emailQuery, agentQuery]
 
   );
 
@@ -513,24 +547,33 @@ export default function AdminRecordingsPanel() {
 
 
   const revokePlayUrl = useCallback(() => {
-
-    if (playUrlRef.current) {
-
+    if (playUrlRef.current && playUrlIsBlobRef.current) {
       URL.revokeObjectURL(playUrlRef.current);
-
-      playUrlRef.current = null;
-
     }
-
+    playUrlRef.current = null;
+    playUrlIsBlobRef.current = false;
     setPlayUrl(null);
-
   }, []);
 
 
 
   const refresh = useCallback(async () => {
 
-    setGroups(groupSupportSessionsByAgent());
+    setLoadingSessions(true);
+
+    try {
+
+      setGroups(await groupSupportSessionsByAgentMerged());
+
+    } catch {
+
+      setGroups([]);
+
+    } finally {
+
+      setLoadingSessions(false);
+
+    }
 
     setLoadingBlobs(true);
 
@@ -586,64 +629,51 @@ export default function AdminRecordingsPanel() {
 
     if (stillValid) return;
 
-    if (filteredGroups.length === 1) {
-
-      setSelectedAgent(filteredGroups[0].agentName);
-
-      return;
-
-    }
-
-    setSelectedAgent("");
+    setSelectedAgent(pickDefaultAgent(filteredGroups));
 
   }, [filteredGroups, selectedAgent]);
 
 
 
   const handlePlay = async (sessionId, rec) => {
-
     revokePlayUrl();
-
     setPlayError("");
-
     setPlayTitle(
-
       `${formatDuration(rec.durationSec)} · ${formatWhen(rec.stoppedAt || rec.startedAt)}`
-
     );
-
     setPlayOpen(true);
-
     setPlayLoading(true);
 
     try {
+      if (rec.cloudReady && rec.storagePath) {
+        const signedUrl = await getSignedRecordingUrl(rec.storagePath);
+        if (signedUrl) {
+          playUrlRef.current = signedUrl;
+          playUrlIsBlobRef.current = false;
+          setPlayUrl(signedUrl);
+          return;
+        }
+      }
 
       const blob = await getRecordingBlob(sessionId, rec.id);
-
       if (!blob?.size) {
-
-        setPlayError("אין קובץ וידאו במכשיר זה — ההקלטה נשמרה בדפדפן הנציג");
-
+        setPlayError(
+          cloudRecordingUploadEnabled()
+            ? recordingUploadStatusLabel(rec.cloudUploadStatus || "pending")
+            : "אין קובץ וידאו במכשיר זה — ההקלטה נשמרה בדפדפן הנציג"
+        );
         return;
-
       }
 
       const url = URL.createObjectURL(blob);
-
       playUrlRef.current = url;
-
+      playUrlIsBlobRef.current = true;
       setPlayUrl(url);
-
     } catch (err) {
-
       setPlayError(err?.message || "לא ניתן לטעון את ההקלטה");
-
     } finally {
-
       setPlayLoading(false);
-
     }
-
   };
 
 
@@ -670,7 +700,24 @@ export default function AdminRecordingsPanel() {
 
   const hasEmailFilter = emailQuery.trim().length > 0;
 
+  const hasAgentFilter = agentQuery.trim().length > 0;
 
+  const cloudSync = cloudSessionSyncEnabled();
+  const cloudUpload = cloudRecordingUploadEnabled();
+
+  const cloudKeys = useMemo(() => {
+    const keys = new Set();
+    for (const group of groups) {
+      for (const session of group.sessions) {
+        for (const rec of session.recordings || []) {
+          if (rec.cloudReady && rec.storagePath) {
+            keys.add(`${session.id}::${rec.id}`);
+          }
+        }
+      }
+    }
+    return keys;
+  }, [groups]);
 
   return (
 
@@ -678,11 +725,29 @@ export default function AdminRecordingsPanel() {
 
       <p className="text-xs text-slate-600 leading-relaxed rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
 
-        יומן הסשנים וההקלטות נשמר ב-localStorage ו-IndexedDB של <strong>דפדפן זה</strong>.
+        {cloudSync ? (
+          cloudUpload ? (
+            <>
+              יומן הסשנים והקלטות מסונכרנים ל-Supabase — מנהל רואה סשנים מכל הנציגים.
+              וידאו נשמר ב-bucket <strong>screen-recordings</strong> ונגן דרך קישור חתום מהשרת.
+            </>
+          ) : (
+            <>
+              יומן הסשנים מסונכרן ל-Supabase — מנהל רואה סשנים מכל הנציגים.
+              קבצי וידאו נשמרים ב-IndexedDB של <strong>דפדפן הנציג</strong> בלבד.
+            </>
+          )
+        ) : (
 
-        מנהל רואה סשנים שנרשמו במחשב שבו נפתחה לשונית זו — לצפייה בכל הנציגים נדרש סנכרון ענן
+          <>
 
-        (Supabase) בעתיד.
+            יומן הסשנים וההקלטות נשמר ב-localStorage ו-IndexedDB של{" "}
+
+            <strong>דפדפן זה</strong>. מנהל רואה סשנים שנרשמו במחשב שבו נפתחה לשונית זו.
+
+          </>
+
+        )}
 
         {demoModeEnabled ? " במצב דמו — כולל CRM." : ""}
 
@@ -692,7 +757,41 @@ export default function AdminRecordingsPanel() {
 
       {groups.length > 0 && (
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+
+          <div className="space-y-1.5">
+
+            <label htmlFor="recordings-agent-search" className="text-xs font-medium text-slate-700">
+
+              חיפוש לפי שם נציג
+
+            </label>
+
+            <div className="relative">
+
+              <User className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+
+              <Input
+
+                id="recordings-agent-search"
+
+                type="search"
+
+                placeholder="אוראל"
+
+                value={agentQuery}
+
+                onChange={(e) => setAgentQuery(e.target.value)}
+
+                className="pr-9"
+
+              />
+
+            </div>
+
+          </div>
+
+
 
           <div className="space-y-1.5">
 
@@ -782,11 +881,29 @@ export default function AdminRecordingsPanel() {
 
       <div className="flex flex-wrap gap-3 text-xs text-slate-600">
 
+        {loadingSessions ? (
+
+          <span className="inline-flex items-center gap-1">
+
+            <Loader2 className="w-3 h-3 animate-spin" />
+
+            טוען סשנים…
+
+          </span>
+
+        ) : null}
+
         <span>
 
           <strong className="text-slate-800">{filteredGroups.length}</strong> נציגים
 
           {hasEmailFilter && groups.length !== filteredGroups.length ? (
+
+            <span className="text-slate-400"> / {groups.length}</span>
+
+          ) : null}
+
+          {hasAgentFilter && !hasEmailFilter && groups.length !== filteredGroups.length ? (
 
             <span className="text-slate-400"> / {groups.length}</span>
 
@@ -825,10 +942,16 @@ export default function AdminRecordingsPanel() {
             <span className="text-slate-300">·</span>
 
             <span>
-
               <strong className="text-slate-800">{blobKeys.size}</strong> קבצים מקומיים
-
             </span>
+            {cloudUpload ? (
+              <>
+                <span className="text-slate-300">·</span>
+                <span>
+                  <strong className="text-slate-800">{cloudKeys.size}</strong> בשרת
+                </span>
+              </>
+            ) : null}
 
           </>
 
@@ -838,7 +961,17 @@ export default function AdminRecordingsPanel() {
 
 
 
-      {groups.length === 0 ? (
+      {loadingSessions ? (
+
+        <p className="text-sm text-slate-500 text-center py-12 rounded-2xl border border-dashed border-slate-200">
+
+          <Loader2 className="w-5 h-5 animate-spin inline-block ml-2" />
+
+          טוען יומן סשנים…
+
+        </p>
+
+      ) : groups.length === 0 ? (
 
         <p className="text-sm text-slate-500 text-center py-12 rounded-2xl border border-dashed border-slate-200">
 
@@ -850,7 +983,11 @@ export default function AdminRecordingsPanel() {
 
         <p className="text-sm text-slate-500 text-center py-12 rounded-2xl border border-dashed border-slate-200">
 
-          לא נמצאו סשנים התואמים לחיפוש «{emailQuery.trim()}».
+          לא נמצאו סשנים התואמים לחיפוש
+
+          {hasEmailFilter ? ` «${emailQuery.trim()}»` : ""}
+
+          {hasAgentFilter ? ` «${agentQuery.trim()}»` : ""}.
 
         </p>
 
@@ -869,7 +1006,7 @@ export default function AdminRecordingsPanel() {
           group={selectedGroup}
 
           blobKeys={blobKeys}
-
+          cloudKeys={cloudKeys}
           onPlayRecording={handlePlay}
 
         />
@@ -886,7 +1023,7 @@ export default function AdminRecordingsPanel() {
 
             <DialogTitle>נגן הקלטה</DialogTitle>
 
-            <DialogDescription>{playTitle || "הקלטת מסך שמורה מקומית"}</DialogDescription>
+            <DialogDescription>{playTitle || "הקלטת מסך"}</DialogDescription>
 
           </DialogHeader>
 
