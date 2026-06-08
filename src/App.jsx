@@ -27,6 +27,7 @@ import { ChatUnreadProvider } from '@/hooks/useChatUnread';
 import ChatDeepLink from './pages/ChatDeepLink';
 import CrmDashboard from './pages/CrmDashboard';
 import CrmCustomerDetail from './pages/CrmCustomerDetail';
+import CrmLookupDeepLink from './pages/CrmLookupDeepLink';
 import KnowledgePage from './pages/KnowledgePage';
 import AdminKnowledge from './pages/AdminKnowledge';
 import FloatingKnowledgeWidget from '@/components/knowledge/FloatingKnowledgeWidget';
@@ -88,14 +89,15 @@ const AuthenticatedApp = () => {
         <Route path="/training" element={<TrainingPage />} />
         <Route path="/chat" element={<ChatDeepLink />} />
         <Route path="/crm" element={<DemoGate><CrmDashboard /></DemoGate>} />
+        <Route path="/crm/lookup" element={<DemoGate><CrmLookupDeepLink /></DemoGate>} />
         <Route path="/crm/:id" element={<DemoGate><CrmCustomerDetail /></DemoGate>} />
-        <Route path="/remote-support" element={<DemoGate><RemoteSupportPage /></DemoGate>} />
+        <Route path="/remote-support" element={<RemoteSupportPage />} />
         <Route
           path="/remote-support/recordings/play"
           element={<DemoGate><DemoRecordingPlayPage /></DemoGate>}
         />
-        <Route path="/support/consent/:token" element={<DemoGate><RemoteSupportConsentPage /></DemoGate>} />
-        <Route path="/support/screen/:sessionId" element={<DemoGate><ScreenShareGuestPage /></DemoGate>} />
+        <Route path="/support/consent/:token" element={<RemoteSupportConsentPage />} />
+        <Route path="/support/screen/:sessionId" element={<ScreenShareGuestPage />} />
         <Route path="/knowledge" element={<DemoGate><KnowledgePage /></DemoGate>} />
         <Route path="/admin" element={<AdminGate><AdminDashboard /></AdminGate>} />
         <Route path="/admin/knowledge" element={<DemoGate><AdminGate><AdminKnowledge /></AdminGate></DemoGate>} />

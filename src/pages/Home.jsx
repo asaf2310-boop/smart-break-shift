@@ -32,6 +32,13 @@ const productionCards = [
     icon: GraduationCap,
     iconTile: "m3-icon-tile",
   },
+  {
+    to: "/remote-support",
+    title: "השתלטות מרחוק",
+    desc: "צפייה בדפדפן · RustDesk · אישור ותיעוד",
+    icon: Monitor,
+    iconTile: "m3-icon-tile",
+  },
 ];
 
 const demoOnlyCards = [
@@ -40,13 +47,6 @@ const demoOnlyCards = [
     title: "CRM",
     desc: "לקוחות ותיעוד שיחות",
     icon: Contact,
-    iconTile: "m3-icon-tile",
-  },
-  {
-    to: "/remote-support",
-    title: "השתלטות מרחוק",
-    desc: "שלב א: צפייה בדפדפן · RustDesk · סשנים",
-    icon: Monitor,
     iconTile: "m3-icon-tile",
   },
   {

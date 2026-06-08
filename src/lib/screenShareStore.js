@@ -1,4 +1,8 @@
-import { demoModeEnabled, demoSendRealEmailEnabled } from "@/api/demoClient";
+import {
+  demoModeEnabled,
+  demoSendRealEmailEnabled,
+  remoteSupportEnabled,
+} from "@/api/demoClient";
 import { cleanEnvValue } from "@/api/supabase";
 import {
   escapeHtml,
@@ -28,7 +32,7 @@ function makeId(prefix) {
 }
 
 function readStore() {
-  if (!demoModeEnabled || typeof window === "undefined") {
+  if (!remoteSupportEnabled || typeof window === "undefined") {
     return { sessions: [], emailLogs: [], recordings: [] };
   }
   try {
@@ -50,7 +54,7 @@ function readSessions() {
 }
 
 function writeStore({ sessions, emailLogs, recordings }) {
-  if (!demoModeEnabled || typeof window === "undefined") return;
+  if (!remoteSupportEnabled || typeof window === "undefined") return;
   const current = readStore();
   localStorage.setItem(
     SCREEN_SHARE_STORAGE_KEY,
@@ -67,13 +71,14 @@ function writeSessions(sessions) {
   writeStore({ sessions });
 }
 
+/** @deprecated use screenShareFeaturesAvailable */
 export function screenShareDemoAvailable() {
-  return demoModeEnabled;
+  return screenShareFeaturesAvailable();
 }
 
-/** alias — אותה דרישת דמו כמו remoteSupport */
+/** צפייה בדפדפן — זמין בפרודקשן (ברירת מחדל) ובדמו */
 export function screenShareFeaturesAvailable() {
-  return demoModeEnabled;
+  return remoteSupportEnabled;
 }
 
 export function getSession(id) {
@@ -113,7 +118,7 @@ function fromBase64Url(encoded) {
   }
 }
 
-function encodeGuestBootstrapPayload(session) {
+export function encodeGuestBootstrapPayload(session) {
   if (!session?.id || !session.createdAt) return "";
   const payload = {
     c: session.createdAt,
@@ -124,7 +129,7 @@ function encodeGuestBootstrapPayload(session) {
   return toBase64Url(JSON.stringify(payload));
 }
 
-function decodeGuestBootstrapPayload(encoded) {
+export function decodeGuestBootstrapPayload(encoded) {
   const json = fromBase64Url(encoded);
   if (!json) return null;
   try {
@@ -152,7 +157,7 @@ export function isGuestSessionExpired(session) {
  * דמו: יוצר סשן ב-localStorage של האורח מפרמטר bootstrap ב-URL (מכשיר/דפדפן אחר).
  */
 export function bootstrapGuestSessionFromUrl(sessionId, bootstrapParam) {
-  if (!demoModeEnabled || !sessionId || !bootstrapParam) return null;
+  if (!remoteSupportEnabled || !sessionId || !bootstrapParam) return null;
 
   const payload = decodeGuestBootstrapPayload(bootstrapParam);
   if (!payload) return null;
@@ -526,7 +531,7 @@ export function buildScreenShareGuestUrl(sessionOrId, origin) {
   if (!sessionId) return "";
 
   const path = `${base}/support/screen/${encodeURIComponent(sessionId)}`;
-  if (!demoModeEnabled || !session?.createdAt) return path;
+  if (!remoteSupportEnabled || !session?.createdAt) return path;
 
   const bootstrap = encodeGuestBootstrapPayload(session);
   if (!bootstrap) return path;

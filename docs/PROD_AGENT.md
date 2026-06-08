@@ -59,6 +59,7 @@
 
 - פרויקט: **smart-break-shift**
 - Production: `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY`
+- תמיכה מרחוק (אופציונלי): `VITE_APP_URL`, `RESEND_API_KEY`, `EMAIL_FROM` — ראו `docs/REMOTE_SUPPORT.md`
 - **אין** `VITE_DEMO_MODE=true` ב-Production
 - אחרי שינוי env — **Redeploy** (build חדש)
 - מומלץ: deploy ידני / לא auto-deploy מכל push (ראו `docs/DEMO_VS_PRODUCTION.md`)
@@ -78,7 +79,7 @@
    - `/admin` — כניסה ישירה ללא PIN (באנר צהוב זמני)
 
 2. **Build ו-Vercel:**
-   - [ ] `.\preview-live.ps1` — 2 כרטיסים בלבד (הפסקות + משמרות), בלי CRM/ידע/דמו
+   - [ ] `.\preview-live.ps1` — 4 כרטיסים (הפסקות, משמרות, הדרכה, השתלטות מרחוק), בלי CRM/ידע/דמו
    - [ ] `.\scripts\verify-prod-build.ps1` — עבר
 - [ ] Vercel פרודקשן: אין `VITE_DEMO_MODE=true`
 - [ ] Supabase מוגדר ב-Production
@@ -89,9 +90,10 @@
 ## אימות אחרי deploy
 
 1. כניסה: **אימייל וסיסמה** (לא סיסמת דמו קבועה; אין טאב "שם נציג")
-2. דף הבית: **2 כרטיסים** בלבד
+2. דף הבית: **4 כרטיסים** (הפסקות, משמרות, הדרכה, השתלטות מרחוק)
 3. אין לוגו קבוע / באנר "דמו פעיל"
-4. ניווט: בלי CRM / remote-support / knowledge
+4. ניווט: **השתלטות מרחוק** פעיל; בלי CRM / knowledge
+5. `/remote-support`, `/support/consent/:token`, `/support/screen/:sessionId` — נגישים (ללא DemoGate)
 
 ---
 

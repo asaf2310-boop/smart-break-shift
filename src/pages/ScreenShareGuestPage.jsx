@@ -16,13 +16,15 @@ import {
   logScreenConsent,
   GUEST_BOOTSTRAP_QUERY_KEY,
   resolveGuestSession,
-  screenShareDemoAvailable,
+  screenShareFeaturesAvailable,
   subscribeScreenShare,
 } from "@/lib/screenShareStore";
+import { demoModeEnabled } from "@/api/demoClient";
 import { m3PageClass } from "@/lib/hypPage";
 
-const DEMO_BANNER =
-  "דמו — שיתוף מסך בדפדפן (צפייה בלבד). מומלץ Chrome או Edge. לפרודקשן: PeerServer עצמי.";
+const GUEST_INFO_BANNER = demoModeEnabled
+  ? "דמו — שיתוף מסך בדפדפן (צפייה בלבד). מומלץ Chrome או Edge. לפרודקשן: PeerServer עצמי."
+  : "שיתוף מסך בדפדפן (צפייה בלבד). מומלץ Chrome או Edge.";
 
 /** אודיו מערכת ב-getDisplayMedia — בדרך כלל Chrome/Edge בדסקטופ */
 function displayMediaSystemAudioSupported() {
@@ -174,10 +176,10 @@ export default function ScreenShareGuestPage() {
     }
   };
 
-  if (!screenShareDemoAvailable()) {
+  if (!screenShareFeaturesAvailable()) {
     return (
       <div className={m3PageClass("flex items-center justify-center p-6")} dir="rtl">
-        <p className="text-slate-600 text-center">שיתוף מסך זמין במצב דמו בלבד.</p>
+        <p className="text-slate-600 text-center">שיתוף מסך אינו פעיל בסביבה זו.</p>
       </div>
     );
   }
@@ -203,7 +205,7 @@ export default function ScreenShareGuestPage() {
       >
         <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-start gap-2 text-amber-950 text-xs leading-relaxed">
           <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
-          <span>{DEMO_BANNER}</span>
+          <span>{GUEST_INFO_BANNER}</span>
         </div>
 
         <div className="p-6 space-y-5">

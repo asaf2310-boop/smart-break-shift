@@ -1,8 +1,8 @@
 import { demoModeEnabled } from "@/api/demoClient";
 
-const PRODUCTION_TOP_NAV_PATHS = ["/breaks", "/shifts", "/training"];
+const PRODUCTION_TOP_NAV_PATHS = ["/breaks", "/shifts", "/training", "/remote-support"];
 
-const DEMO_TOP_NAV_PATHS = ["/crm", "/knowledge", "/remote-support"];
+const DEMO_TOP_NAV_PATHS = ["/crm", "/knowledge"];
 
 /** Routes that show the main tab bar (logo is embedded in AppNav). */
 export const TOP_NAV_PATHS = new Set([

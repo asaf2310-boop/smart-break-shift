@@ -108,8 +108,8 @@ export default function RemoteSupportPanel({
 
   const consentUrl = useMemo(() => {
     if (!session?.id) return "";
-    return buildConsentUrl(session.id);
-  }, [session?.id]);
+    return buildConsentUrl(session);
+  }, [session]);
 
   const deepLink = useMemo(
     () => buildRustDeskDeepLink(rustDeskId, password),
@@ -216,7 +216,7 @@ export default function RemoteSupportPanel({
         });
       }
 
-      const consentUrlForEmail = buildConsentUrl(created.id);
+      const consentUrlForEmail = buildConsentUrl(created);
       await sendRustDeskLinkEmail(consentUrlForEmail, created.id);
       setStep(3);
     } catch (err) {

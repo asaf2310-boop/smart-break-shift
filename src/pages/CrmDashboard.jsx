@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
@@ -79,7 +79,9 @@ export default function CrmDashboard() {
   const [departmentQueues, setDepartmentQueues] = useState([]);
   const [handledToday, setHandledToday] = useState(0);
   const [addOpen, setAddOpen] = useState(false);
+  const [addInitial, setAddInitial] = useState(null);
   const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const refresh = useCallback(() => {
     setOpenReferrals(listOpenReferralsForAgent(agentName));
@@ -91,6 +93,28 @@ export default function CrmDashboard() {
     refresh();
     return subscribeCrmStore(refresh);
   }, [refresh]);
+
+  useEffect(() => {
+    const notfound = searchParams.get("notfound");
+    const addphone = searchParams.get("addphone");
+    if (!notfound && !addphone) return;
+
+    const next = new URLSearchParams(searchParams);
+    if (notfound) {
+      toast({
+        title: "לקוח לא נמצא",
+        description: `לא נמצא לקוח עבור המספר ${notfound}`,
+        variant: "destructive",
+      });
+      next.delete("notfound");
+    }
+    if (addphone) {
+      setAddInitial({ phone: addphone });
+      setAddOpen(true);
+      next.delete("addphone");
+    }
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, toast]);
 
   const searchResults = useMemo(
     () => searchCustomersByContact(query),
@@ -126,6 +150,7 @@ export default function CrmDashboard() {
   const handleAddCustomer = (data) => {
     const created = createCustomer(data);
     setAddOpen(false);
+    setAddInitial(null);
     toast({ title: "לקוח נוסף", description: created.name });
     refresh();
   };
@@ -276,12 +301,26 @@ export default function CrmDashboard() {
         )}
       </div>
 
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+      <Dialog
+        open={addOpen}
+        onOpenChange={(open) => {
+          setAddOpen(open);
+          if (!open) setAddInitial(null);
+        }}
+      >
         <DialogContent className="sm:max-w-md rounded-2xl shadow-elevation-3" dir="rtl">
           <DialogHeader>
             <DialogTitle>לקוח חדש</DialogTitle>
           </DialogHeader>
-          <CustomerForm onSubmit={handleAddCustomer} onCancel={() => setAddOpen(false)} submitLabel="הוספה" />
+          <CustomerForm
+            initial={addInitial}
+            onSubmit={handleAddCustomer}
+            onCancel={() => {
+              setAddOpen(false);
+              setAddInitial(null);
+            }}
+            submitLabel="הוספה"
+          />
         </DialogContent>
       </Dialog>
     </div>

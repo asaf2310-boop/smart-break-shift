@@ -1,14 +1,18 @@
 import React, { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { CheckCircle2, Monitor, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  getSessionByToken,
+  GUEST_BOOTSTRAP_QUERY_KEY,
+} from "@/lib/screenShareStore";
+import {
   logConsent,
-  remoteSupportDemoAvailable,
+  remoteSupportFeaturesAvailable,
+  resolveConsentSession,
   subscribeRemoteSupport,
 } from "@/lib/remoteSupportStore";
+import { demoModeEnabled } from "@/api/demoClient";
 import { m3PageClass } from "@/lib/hypPage";
 
 const CUSTOMER_CONSENT_TEXT =
@@ -16,14 +20,16 @@ const CUSTOMER_CONSENT_TEXT =
 
 export default function RemoteSupportConsentPage() {
   const { token } = useParams();
-  const [session, setSession] = useState(() => getSessionByToken(token));
+  const [searchParams] = useSearchParams();
+  const bootstrapKey = searchParams.get(GUEST_BOOTSTRAP_QUERY_KEY);
+  const [session, setSession] = useState(() => resolveConsentSession(token, bootstrapKey));
   const [done, setDone] = useState(false);
 
   useEffect(() => {
-    const refresh = () => setSession(getSessionByToken(token));
+    const refresh = () => setSession(resolveConsentSession(token, bootstrapKey));
     refresh();
     return subscribeRemoteSupport(refresh);
-  }, [token]);
+  }, [token, bootstrapKey]);
 
   const alreadyConsented = Boolean(session?.consentAt && session.consentSource === "customer");
 
@@ -31,13 +37,13 @@ export default function RemoteSupportConsentPage() {
     if (!session) return;
     logConsent(session.id, { consentText: CUSTOMER_CONSENT_TEXT, source: "customer" });
     setDone(true);
-    setSession(getSessionByToken(token));
+    setSession(resolveConsentSession(token, bootstrapKey));
   };
 
-  if (!remoteSupportDemoAvailable()) {
+  if (!remoteSupportFeaturesAvailable()) {
     return (
       <div className={m3PageClass("flex items-center justify-center p-6")} dir="rtl">
-        <p className="text-slate-600 text-center">דף אישור זמין במצב דמו בלבד.</p>
+        <p className="text-slate-600 text-center">מודול תמיכה מרחוק אינו פעיל בסביבה זו.</p>
       </div>
     );
   }
@@ -49,10 +55,12 @@ export default function RemoteSupportConsentPage() {
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md rounded-3xl border border-slate-200 bg-white shadow-xl overflow-hidden"
       >
-        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-start gap-2 text-amber-950 text-xs">
-          <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
-          <span>דמו — לפרודקשן: שרת RustDesk עצמי + מדיניות אבטחה</span>
-        </div>
+        {demoModeEnabled && (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-start gap-2 text-amber-950 text-xs">
+            <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>דמו — לפרודקשן: שרת RustDesk עצמי + מדיניות אבטחה</span>
+          </div>
+        )}
 
         <div className="p-6 space-y-5">
           <div className="text-center">

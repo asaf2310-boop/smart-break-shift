@@ -1,4 +1,15 @@
-import { demoModeEnabled, demoSendRealEmailEnabled } from "@/api/demoClient";
+import {
+  demoModeEnabled,
+  demoSendRealEmailEnabled,
+  remoteSupportEnabled,
+} from "@/api/demoClient";
+import {
+  GUEST_BOOTSTRAP_QUERY_KEY,
+  decodeGuestBootstrapPayload,
+  encodeGuestBootstrapPayload,
+  getPublicAppOrigin,
+  isGuestSessionExpired,
+} from "@/lib/screenShareStore";
 import {
   escapeHtml,
   logEmailDelivery,
@@ -28,7 +39,7 @@ function makeId(prefix) {
 }
 
 function readStore() {
-  if (!demoModeEnabled || typeof window === "undefined") {
+  if (!remoteSupportEnabled || typeof window === "undefined") {
     return { sessions: [], emailLogs: [] };
   }
   try {
@@ -49,7 +60,7 @@ function readSessions() {
 }
 
 function writeStore({ sessions, emailLogs }) {
-  if (!demoModeEnabled || typeof window === "undefined") return;
+  if (!remoteSupportEnabled || typeof window === "undefined") return;
   const current = readStore();
   localStorage.setItem(
     REMOTE_SUPPORT_STORAGE_KEY,
@@ -65,13 +76,14 @@ function writeSessions(sessions) {
   writeStore({ sessions });
 }
 
+/** @deprecated use remoteSupportFeaturesAvailable */
 export function remoteSupportDemoAvailable() {
-  return demoModeEnabled;
+  return remoteSupportFeaturesAvailable();
 }
 
-/** צפייה בדפדפן + RustDesk — זמין בדמו (VITE_DEMO_MODE=true) */
+/** צפייה בדפדפן + RustDesk — זמין בפרודקשן (ברירת מחדל) ובדמו */
 export function remoteSupportFeaturesAvailable() {
-  return demoModeEnabled;
+  return remoteSupportEnabled;
 }
 
 export function getSession(id) {
@@ -157,9 +169,89 @@ export function endSession(id) {
   });
 }
 
-export function buildConsentUrl(sessionId, origin) {
-  const base = origin || (typeof window !== "undefined" ? window.location.origin : "");
-  return `${base}/support/consent/${sessionId}`;
+/**
+ * יוצר סשן RustDesk ב-localStorage של הלקוח מפרמטר bootstrap (מכשיר אחר).
+ */
+export function bootstrapConsentSessionFromUrl(sessionId, bootstrapParam) {
+  if (!remoteSupportEnabled || !sessionId || !bootstrapParam) return null;
+
+  const payload = decodeGuestBootstrapPayload(bootstrapParam);
+  if (!payload) return null;
+
+  const existing = getSession(sessionId);
+  if (existing) {
+    if (existing.status === "ended") return existing;
+    return existing;
+  }
+
+  const session = {
+    id: sessionId,
+    consentToken: sessionId,
+    crmCustomerId: payload.crmCustomerId,
+    agentName: payload.agentName,
+    rustDeskId: "",
+    password: null,
+    consentAt: null,
+    consentText: null,
+    consentSource: null,
+    status: "active",
+    createdAt: payload.createdAt,
+    emailSentAt: null,
+    endedAt: null,
+  };
+
+  if (isGuestSessionExpired(session)) return null;
+
+  writeSessions([...readSessions(), session]);
+  return session;
+}
+
+/**
+ * מחזיר סשן לאישור לקוח: localStorage → bootstrap מ-URL.
+ */
+export function resolveConsentSession(sessionId, bootstrapParam = null) {
+  if (!sessionId) return null;
+
+  let session = getSessionByToken(sessionId);
+  if (!session && bootstrapParam) {
+    session = bootstrapConsentSessionFromUrl(sessionId, bootstrapParam);
+  }
+
+  if (!session) return null;
+  if (session.status !== "ended" && isGuestSessionExpired(session)) return null;
+  return session;
+}
+
+export function buildConsentUrl(sessionIdOrSession, origin) {
+  const base = (origin || getPublicAppOrigin()).replace(/\/$/, "");
+  let sessionId;
+  let session = null;
+
+  if (sessionIdOrSession && typeof sessionIdOrSession === "object" && sessionIdOrSession.id) {
+    session = sessionIdOrSession;
+    sessionId = session.id;
+  } else {
+    sessionId = String(sessionIdOrSession || "").trim();
+    session = sessionId ? getSession(sessionId) : null;
+  }
+
+  if (!sessionId) return "";
+
+  const path = `${base}/support/consent/${encodeURIComponent(sessionId)}`;
+  if (!remoteSupportEnabled || !session?.createdAt) return path;
+
+  const bootstrap = encodeGuestBootstrapPayload({
+    id: sessionId,
+    createdAt: session.createdAt,
+    agentName: session.agentName,
+    customerEmail: session.customerEmail || "",
+    crmCustomerId: session.crmCustomerId,
+  });
+  if (!bootstrap) return path;
+
+  const params = new URLSearchParams();
+  params.set(GUEST_BOOTSTRAP_QUERY_KEY, bootstrap);
+  return `${path}?${params.toString()}`;
 }
 
 export function buildRustDeskEmailBody({

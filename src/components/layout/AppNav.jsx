@@ -64,15 +64,15 @@ export default function AppNav() {
             <GraduationCap className="w-4 h-4" />
             הדרכה
           </Link>
+          <Link to="/remote-support" className={tabClass(isRemoteSupport)}>
+            <Monitor className="w-4 h-4" />
+            השתלטות מרחוק
+          </Link>
           {demoModeEnabled && (
             <>
               <Link to="/crm" className={tabClass(isCrm)}>
                 <Contact className="w-4 h-4" />
                 CRM
-              </Link>
-              <Link to="/remote-support" className={tabClass(isRemoteSupport)}>
-                <Monitor className="w-4 h-4" />
-                השתלטות מרחוק
               </Link>
               <Link to="/knowledge" className={tabClass(isKnowledge)}>
                 <BookOpen className="w-4 h-4" />
