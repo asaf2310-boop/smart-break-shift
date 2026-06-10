@@ -163,7 +163,7 @@ async function fetchSipCredentials() {
     return {
       wsUrl: local.wsUrl,
       user: local.user,
-      password: import.meta.env.VITE_SIP_PASSWORD.trim(),
+      password: import.meta.env.VITE_SIP_PASSWORD?.trim() || "",
       domain,
       aor: `sip:${local.user}@${domain}`,
       source: "client-env",

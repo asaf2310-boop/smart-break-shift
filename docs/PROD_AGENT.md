@@ -23,9 +23,22 @@
 ```powershell
 # .env.local לפי .env.live.example — Supabase URL + anon key
 .\preview-live.ps1
+
+# צ'אט לקוחות + בוט (בלי דמו):
+.\preview-live.ps1 -WithCustomerChat
 ```
 
 לא משתמשים ב-`preview-shell.ps1` לבדיקת פרודקשן (זה דמו).
+
+### בדיקת צ'אט לקוחות בלייב
+
+1. `.\preview-live.ps1 -WithCustomerChat` (או `VITE_CUSTOMER_CHAT_ENABLED=true` ב-`.env.local`)
+2. עצור והפעל מחדש את השרת אם שינית env ידנית
+3. **נציג:** התחברות רגילה → כרטיס **צ'אט לקוחות** או `/customer-chat`
+4. **מנהל:** `/admin/customer-chat` — עריכת הודעות הבוט
+5. **לקוח:** `/chat/guest` (קישור מהמסך נציג) — בדפדפן נפרד / מצב פרטי
+
+> נתוני הצ'אט נשמרים ב-localStorage של הדפדפן (שלב בדיקות). שני דפדפנים שונים = לקוח ונציג.
 
 ### בדיקת `/admin` בלי PIN (כמו פרודקשן)
 
