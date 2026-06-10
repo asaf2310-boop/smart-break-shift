@@ -77,6 +77,7 @@ to anon, authenticated
 using (bucket_id = 'screen-recordings');
 
 -- העלאה — נתיב: {session_id}/{recording_id}.webm
+-- recording_id = makeId("ss_rec") → ss_rec + 8 תווים (ללא קו תחתון אחרי ss_rec)
 drop policy if exists "screen_recordings_storage_insert" on storage.objects;
 create policy "screen_recordings_storage_insert"
 on storage.objects
@@ -85,7 +86,7 @@ to anon, authenticated
 with check (
   bucket_id = 'screen-recordings'
   and (storage.foldername(name))[1] is not null
-  and name ~ '^[^/]+/ss_rec_[^/]+\.webm$'
+  and name ~ '^[^/]+/ss_rec[^/]+\.webm$'
 );
 
 -- עדכון (upsert) — אותו נתיב
@@ -97,7 +98,7 @@ to anon, authenticated
 using (bucket_id = 'screen-recordings')
 with check (
   bucket_id = 'screen-recordings'
-  and name ~ '^[^/]+/ss_rec_[^/]+\.webm$'
+  and name ~ '^[^/]+/ss_rec[^/]+\.webm$'
 );
 
 -- מחיקה (אופציונלי — מנהל / ניקוי)

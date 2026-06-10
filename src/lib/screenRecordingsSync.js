@@ -78,6 +78,35 @@ export function isStorageBucketMissingError(error) {
   return msg.includes("bucket not found") || msg.includes("not found");
 }
 
+export function isStoragePolicyDeniedError(error) {
+  const msg = String(error?.message || error || "").toLowerCase();
+  return (
+    msg.includes("row-level security") ||
+    msg.includes("violates policy") ||
+    msg.includes("unauthorized") ||
+    msg.includes("permission denied") ||
+    msg.includes("not allowed")
+  );
+}
+
+/** הודעת שגיאה בעברית להעלאת Storage (bucket / RLS / גודל). */
+export function formatRecordingStorageError(error) {
+  if (isStorageBucketMissingError(error)) {
+    return `bucket «${SCREEN_RECORDINGS_BUCKET}» לא קיים — הריצו supabase/screen_recordings_storage.sql`;
+  }
+  if (isStoragePolicyDeniedError(error)) {
+    return `העלאה נחסמה ב-Supabase Storage (RLS) — הריצו supabase/screen_recordings_rls_fix.sql ב-SQL Editor`;
+  }
+  const msg = String(error?.message || error || "").trim();
+  if (/payload too large|file size|413|exceeded/i.test(msg)) {
+    return "הקובץ גדול מדי — מקסימום 200MB לקובץ (Supabase bucket screen-recordings)";
+  }
+  if (/mime|content type|invalid file type/i.test(msg)) {
+    return "סוג קובץ לא נתמך — נדרש video/webm";
+  }
+  return msg || "שגיאה בהעלאה ל-Storage";
+}
+
 /** רישום / עדכון מטא-דאטה בטבלת screen_recordings. */
 export async function upsertCloudRecordingMeta(meta = {}) {
   if (!cloudRecordingUploadEnabled() || !meta.sessionId || !meta.recordingId) {
