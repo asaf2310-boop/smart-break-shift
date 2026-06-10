@@ -576,6 +576,10 @@ export default function ScreenSharePanel({
               <p className="text-sm font-medium text-teal-900">
                 הלקוח מחובר ומשתף מסך
               </p>
+            ) : session.consentAt && session.agentPeerReadyAt ? (
+              <p className="text-sm text-teal-900 font-medium">
+                הלקוח משתף מסך — ממתין לווידאו
+              </p>
             ) : session.consentAt ? (
               <p className="text-sm text-slate-700">הלקוח אישר — ממתין לשיתוף מסך</p>
             ) : (
