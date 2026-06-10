@@ -19,6 +19,7 @@ import { agentOwnsBreakRegistration } from "@/lib/breakCapacity";
 import {
   cloudSessionSyncEnabled,
   fetchCloudSessionById,
+  fetchGuestScreenSessionForBootstrap,
   syncScreenShareSessionToCloud,
   syncScreenShareSessionToCloudAwait,
 } from "@/lib/supportSessionsSync";
@@ -292,6 +293,59 @@ export function bootstrapGuestSessionFromUrl(sessionId, bootstrapParam) {
   return session;
 }
 
+function guestSessionFromCloudRow(row, existing = null) {
+  if (!row?.id) return null;
+  const status = row.status === "ended" ? "ended" : "active";
+  return {
+    id: row.id,
+    crmCustomerId: row.crm_customer_id ?? existing?.crmCustomerId ?? null,
+    agentName: String(row.agent_name || existing?.agentName || "").trim(),
+    customerEmail: String(row.customer_email || existing?.customerEmail || "").trim(),
+    status,
+    createdAt: row.created_at || existing?.createdAt || new Date().toISOString(),
+    consentAt: row.consent_at || existing?.consentAt || null,
+    recordingConsentAt: row.recording_consent_at || existing?.recordingConsentAt || null,
+    recordingActiveAt: row.recording_active_at || existing?.recordingActiveAt || null,
+    recordingStoppedAt: existing?.recordingStoppedAt || null,
+    recordings: existing?.recordings || [],
+    emailSentAt: existing?.emailSentAt || null,
+    endedAt: row.ended_at || existing?.endedAt || null,
+    endedReason: row.ended_reason || existing?.endedReason || null,
+    shortCode: existing?.shortCode || null,
+    shortCodeCloudSynced: existing?.shortCodeCloudSynced || null,
+    agentPeerOpenedAt: existing?.agentPeerOpenedAt || null,
+    agentPeerReadyAt: existing?.agentPeerReadyAt || null,
+    agentPeerId: row.agent_peer_id || existing?.agentPeerId || null,
+    guestStreamConnectedAt: existing?.guestStreamConnectedAt || null,
+  };
+}
+
+/** יוצר/מעדכן סשן אורח מ-localStorage לפי שורה מ-Supabase. */
+export function upsertGuestSessionFromCloudRow(row) {
+  if (!remoteSupportEnabled || !row?.id) return null;
+  const existing = getSession(row.id);
+  const session = guestSessionFromCloudRow(row, existing);
+  if (!session) return null;
+  if (session.status !== "ended" && isGuestSessionExpired(session)) return null;
+
+  const sessions = readSessions().filter((s) => s.id !== session.id);
+  writeSessions([...sessions, session]);
+  return session;
+}
+
+/**
+ * טעינת סשן אורח: localStorage → bootstrap ב-URL → Supabase.
+ */
+export async function resolveGuestSessionAsync(sessionId, searchParamsOrBootstrap = null) {
+  const local = resolveGuestSession(sessionId, searchParamsOrBootstrap);
+  if (local) return local;
+  if (!sessionId || !cloudSessionSyncEnabled()) return null;
+
+  const row = await fetchGuestScreenSessionForBootstrap(sessionId);
+  if (!row) return null;
+  return upsertGuestSessionFromCloudRow(row);
+}
+
 /**
  * מחזיר סשן לאורח: localStorage → bootstrap מ-URL → בדיקת תוקף.
  * @param {string} sessionId
@@ -422,7 +476,7 @@ export async function pullSessionFieldsFromCloud(id) {
   const row = await fetchCloudSessionById(id);
   if (!row) return getSession(id);
   const session = getSession(id);
-  if (!session) return session;
+  if (!session) return null;
 
   if (row.status === "ended") {
     if (session.status === "ended") return session;

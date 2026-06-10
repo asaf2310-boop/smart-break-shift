@@ -162,24 +162,67 @@ export function mapCloudRowToFlatSession(row, cloudRecordingsBySession = null) {
   };
 }
 
+const CLOUD_SESSION_SYNC_FIELDS =
+  "id, status, ended_at, ended_reason, consent_at, recording_consent_at, recording_active_at, agent_peer_id, updated_at";
+
+const CLOUD_SESSION_SYNC_FIELDS_LEGACY =
+  "id, status, ended_at, consent_at, recording_consent_at, recording_active_at, agent_peer_id, updated_at";
+
+const GUEST_BOOTSTRAP_FIELDS =
+  "id, session_type, status, created_at, agent_name, customer_email, crm_customer_id, agent_peer_id, consent_at, recording_consent_at, recording_active_at, ended_at, ended_reason";
+
+const GUEST_BOOTSTRAP_FIELDS_LEGACY =
+  "id, session_type, status, created_at, agent_name, customer_email, crm_customer_id, agent_peer_id, consent_at, recording_consent_at, recording_active_at, ended_at";
+
+function isMissingColumnError(message) {
+  const m = String(message || "").toLowerCase();
+  return m.includes("column") && m.includes("does not exist");
+}
+
+async function fetchSupportSessionRow(sessionId, fields) {
+  const { data, error } = await supabase
+    .from("support_sessions")
+    .select(fields)
+    .eq("id", sessionId)
+    .maybeSingle();
+  return { data: data || null, error: error?.message || null };
+}
+
 /** Fetch one session row for cross-device guest→agent sync (consent, status). */
 export async function fetchCloudSessionById(sessionId) {
   if (!cloudSessionSyncEnabled() || !sessionId) return null;
   try {
-    const { data, error } = await supabase
-      .from("support_sessions")
-      .select(
-        "id, status, ended_at, ended_reason, consent_at, recording_consent_at, recording_active_at, agent_peer_id, updated_at"
-      )
-      .eq("id", sessionId)
-      .maybeSingle();
+    let { data, error } = await fetchSupportSessionRow(sessionId, CLOUD_SESSION_SYNC_FIELDS);
+    if (error && isMissingColumnError(error)) {
+      ({ data, error } = await fetchSupportSessionRow(sessionId, CLOUD_SESSION_SYNC_FIELDS_LEGACY));
+    }
     if (error) {
-      console.warn("[supportSessionsSync] fetch session failed", error.message);
+      console.warn("[supportSessionsSync] fetch session failed", error);
       return null;
     }
-    return data || null;
+    return data;
   } catch (err) {
     console.warn("[supportSessionsSync] fetch session error", err);
+    return null;
+  }
+}
+
+/** שליפת סשן שיתוף מסך מהענן לטעינת דף אורח (ללא bootstrap מקומי). */
+export async function fetchGuestScreenSessionForBootstrap(sessionId) {
+  if (!cloudSessionSyncEnabled() || !sessionId) return null;
+  try {
+    let { data, error } = await fetchSupportSessionRow(sessionId, GUEST_BOOTSTRAP_FIELDS);
+    if (error && isMissingColumnError(error)) {
+      ({ data, error } = await fetchSupportSessionRow(sessionId, GUEST_BOOTSTRAP_FIELDS_LEGACY));
+    }
+    if (error) {
+      console.warn("[supportSessionsSync] guest bootstrap fetch failed", error);
+      return null;
+    }
+    if (!data?.id || data.session_type === "rustdesk") return null;
+    return data;
+  } catch (err) {
+    console.warn("[supportSessionsSync] guest bootstrap fetch error", err);
     return null;
   }
 }

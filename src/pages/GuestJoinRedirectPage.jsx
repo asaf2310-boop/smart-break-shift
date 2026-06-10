@@ -29,6 +29,7 @@ export default function GuestJoinRedirectPage() {
     let cancelled = false;
 
     const run = async () => {
+      try {
       if (!token) {
         setError(messageForGuestLinkError(GUEST_LINK_ERROR.INVALID));
         return;
@@ -56,6 +57,12 @@ export default function GuestJoinRedirectPage() {
 
       const path = buildFullGuestPath(resolved.sessionId, resolved.kind, resolved.bootstrap);
       navigate(path, { replace: true });
+      } catch (err) {
+        console.warn("[GuestJoinRedirect] resolve failed", err);
+        if (!cancelled) {
+          setError(messageForGuestLinkError(GUEST_LINK_ERROR.NOT_FOUND));
+        }
+      }
     };
 
     void run();

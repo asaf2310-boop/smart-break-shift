@@ -8,6 +8,7 @@ import {
   Monitor,
   ShieldAlert,
   AlertCircle,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -17,6 +18,7 @@ import {
   GUEST_BOOTSTRAP_QUERY_KEY,
   endSession,
   resolveGuestSession,
+  resolveGuestSessionAsync,
   screenShareFeaturesAvailable,
   startSessionCloudPoll,
   subscribeScreenShare,
@@ -83,6 +85,7 @@ export default function ScreenShareGuestPage() {
   const [session, setSession] = useState(() =>
     resolveGuestSession(sessionId, bootstrapKey)
   );
+  const [sessionLoading, setSessionLoading] = useState(() => !resolveGuestSession(sessionId, bootstrapKey));
   const [consentChecked, setConsentChecked] = useState(false);
   const [recordingConsentChecked, setRecordingConsentChecked] = useState(false);
   const [includeSystemAudio, setIncludeSystemAudio] = useState(false);
@@ -429,7 +432,7 @@ export default function ScreenShareGuestPage() {
         conn.on("data", (raw) => {
           const data = parsePeerData(raw);
           if (data?.type === "session_ended_by_agent") {
-            handleEndedByAgent(data.message);
+            handleEndedByAgent();
             return;
           }
           if (data?.type === "request_video_retry") {
@@ -509,8 +512,34 @@ export default function ScreenShareGuestPage() {
   }, [sessionId]);
 
   useEffect(() => {
-    const refresh = () => setSession(resolveGuestSession(sessionId, bootstrapKey));
-    refresh();
+    let cancelled = false;
+    const hydrate = async () => {
+      const local = resolveGuestSession(sessionId, bootstrapKey);
+      if (local) {
+        if (!cancelled) {
+          setSession(local);
+          setSessionLoading(false);
+        }
+        return;
+      }
+      if (!cancelled) setSessionLoading(true);
+      const fromCloud = await resolveGuestSessionAsync(sessionId, bootstrapKey);
+      if (!cancelled) {
+        setSession(fromCloud || resolveGuestSession(sessionId, bootstrapKey));
+        setSessionLoading(false);
+      }
+    };
+    void hydrate();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, bootstrapKey]);
+
+  useEffect(() => {
+    const refresh = () => {
+      const latest = resolveGuestSession(sessionId, bootstrapKey);
+      if (latest) setSession(latest);
+    };
     return subscribeScreenShare(refresh);
   }, [sessionId, bootstrapKey]);
 
@@ -536,12 +565,13 @@ export default function ScreenShareGuestPage() {
 
   useEffect(() => {
     return () => {
+      if (!shared && !sharingRef.current) return;
       if (sessionId && !endNotifiedRef.current) {
         endInStore("client_closed");
       }
       stopPeerAndStream();
     };
-  }, [sessionId, endInStore, stopPeerAndStream]);
+  }, [sessionId, shared, endInStore, stopPeerAndStream]);
 
   useEffect(() => {
     if (!shared) return undefined;
@@ -672,6 +702,17 @@ export default function ScreenShareGuestPage() {
     return (
       <div className={m3PageClass("flex items-center justify-center p-6")} dir="rtl">
         <p className="text-slate-600 text-center">שיתוף מסך אינו פעיל בסביבה זו.</p>
+      </div>
+    );
+  }
+
+  if (sessionLoading) {
+    return (
+      <div className={m3PageClass("flex items-center justify-center p-6")} dir="rtl">
+        <div className="flex items-center gap-2 text-slate-600 text-sm">
+          <Loader2 className="w-5 h-5 animate-spin text-teal-600" />
+          <span>טוען קישור שיתוף…</span>
+        </div>
       </div>
     );
   }
