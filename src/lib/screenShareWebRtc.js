@@ -95,6 +95,64 @@ export async function diagnoseInboundVideo(pc) {
 }
 
 /**
+ * getDisplayMedia constraints — avoid displaySurface:"monitor" (rejects window/tab → OverconstrainedError).
+ * @param {{ includeAudio?: boolean }} [options]
+ */
+export function buildDisplayMediaConstraints(options = {}) {
+  const { includeAudio = false } = options;
+  return {
+    video: {
+      cursor: "always",
+      frameRate: { ideal: 15, max: 30 },
+    },
+    audio: includeAudio ? true : false,
+  };
+}
+
+/**
+ * Acquire display stream; retries with { video: true } if strict prefs fail.
+ * @param {{ includeAudio?: boolean }} [options]
+ */
+export async function acquireDisplayMediaStream(options = {}) {
+  const { includeAudio = false } = options;
+  const attempts = [
+    { label: "preferred", constraints: buildDisplayMediaConstraints({ includeAudio }) },
+    { label: "fallback", constraints: { video: true, audio: includeAudio ? true : false } },
+  ];
+
+  let lastError = null;
+  for (const { label, constraints } of attempts) {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia(constraints);
+      console.log(`[WebRTC:guest:getDisplayMedia] ok (${label})`);
+      return { stream, constraintLabel: label };
+    } catch (err) {
+      lastError = err;
+      console.warn(`[WebRTC:guest:getDisplayMedia] failed (${label})`, err?.name, err?.message);
+      if (err?.name !== "OverconstrainedError") throw err;
+    }
+  }
+  throw lastError || new Error("getDisplayMedia failed");
+}
+
+/**
+ * @param {RTCPeerConnection | null | undefined} pc
+ * @param {MediaStream | null | undefined} stream
+ */
+export function hasOutboundVideoSender(pc, stream) {
+  const videoTrack = stream?.getVideoTracks?.()?.[0];
+  if (!pc || !videoTrack) return false;
+  return pc
+    .getSenders()
+    .some(
+      (sender) =>
+        sender.track?.kind === "video" &&
+        sender.track.id === videoTrack.id &&
+        sender.track.readyState === "live"
+    );
+}
+
+/**
  * @param {MediaStream | null | undefined} stream
  * @param {{ reason?: string, sessionId?: string }} [context]
  */

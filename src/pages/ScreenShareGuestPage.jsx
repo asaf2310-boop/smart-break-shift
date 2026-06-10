@@ -35,8 +35,10 @@ import { m3PageClass } from "@/lib/hypPage";
 import SessionFileShare from "@/components/remote/SessionFileShare";
 import { getPeerJsOptions } from "@/lib/webrtcConfig";
 import {
+  acquireDisplayMediaStream,
   attachPeerConnectionDebugLogging,
   ensureOutboundTracksOnPeerConnection,
+  hasOutboundVideoSender,
   logOutboundVideoTrack,
   waitForIceConnected,
 } from "@/lib/screenShareWebRtc";
@@ -263,6 +265,10 @@ export default function ScreenShareGuestPage() {
       videoTrack.enabled = true;
       logOutboundVideoTrack(stream, { reason: "before_place_call", sessionId });
       const call = peer.call(sessionId, stream);
+      if (!call) {
+        setError("לא ניתן לפתוח שיחה לנציג — ודאו שהנציג פתח את מסך הצפייה");
+        return false;
+      }
       callRef.current = call;
 
       let stopPcDebug = () => {};
@@ -361,8 +367,23 @@ export default function ScreenShareGuestPage() {
           continue;
         }
 
-        const iceOk = await waitForIceConnected(pc, 20000);
-        if (iceOk) return true;
+        if (!hasOutboundVideoSender(pc, stream)) {
+          ensureOutboundTracksOnPeerConnection(pc, stream);
+        }
+
+        // Call placed with outbound video — allow UI success while ICE completes (old flow).
+        if (hasOutboundVideoSender(pc, stream)) {
+          void waitForIceConnected(pc, 25000).then((iceOk) => {
+            if (!sharingRef.current || iceOk) return;
+            setError(
+              "שיתוף המסך נשלח — ממתין לחיבור רשת. אם הנציג לא רואה תמונה, ודאו ש-TURN מוגדר"
+            );
+          });
+          return true;
+        }
+
+        const iceOk = await waitForIceConnected(pc, 12000);
+        if (iceOk && hasOutboundVideoSender(pc, stream)) return true;
 
         if (attempt < maxAttempts) {
           setError(`מנסה להתחבר לנציג (ניסיון ${attempt + 1}/${maxAttempts})…`);
@@ -538,13 +559,9 @@ export default function ScreenShareGuestPage() {
         );
       }
 
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          cursor: "always",
-          displaySurface: "monitor",
-          frameRate: { ideal: 15, max: 30 },
-        },
-        audio: includeSystemAudio && systemAudioSupported ? true : false,
+      console.log("[WebRTC:guest] starting getDisplayMedia", { sessionId });
+      const { stream } = await acquireDisplayMediaStream({
+        includeAudio: includeSystemAudio && systemAudioSupported,
       });
       const displayVideoTrack = stream.getVideoTracks()[0];
       if (!displayVideoTrack) {
@@ -605,6 +622,9 @@ export default function ScreenShareGuestPage() {
         message = "הרשאת שיתוף מסך נדחתה — אשרו בחלון הדפדפן ונסו שוב";
       } else if (name === "NotFoundError") {
         message = "לא נבחר מסך לשיתוף";
+      } else if (name === "OverconstrainedError") {
+        message =
+          "הדפדפן לא הצליח לשתף את הבחירה — נסו שוב ובחרו מסך שלם, חלון או לשונית";
       }
       setError(message);
       streamRef.current?.getTracks().forEach((t) => t.stop());

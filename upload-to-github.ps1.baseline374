@@ -1,4 +1,4 @@
-# Upload local tree to GitHub (replaces branch contents).
+﻿# Upload local tree to GitHub (replaces branch contents).
 # Usage:
 #   .\upload-to-github.ps1                          # interactive menu
 #   .\upload-to-github.ps1 -Target Demo           # upload with demo-oriented warnings
@@ -90,15 +90,71 @@ $TokenSecure = Read-Host "Paste a GitHub token (classic: repo scope, or fine-gra
 $TokenPtr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($TokenSecure)
 $Token = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($TokenPtr)
 [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($TokenPtr)
-$Token = $Token.Trim().Trim([char]0xFEFF)
+$Token = $Token.Trim()
 
 if (-not $Token) {
     Write-Host "No token entered. Cancelled." -ForegroundColor Red
     exit 1
 }
 
-. (Join-Path $Root 'github-upload-lib.ps1')
-Initialize-GitHubUploadScript
+$Headers = @{
+    Authorization = "Bearer $Token"
+    Accept        = "application/vnd.github+json"
+    "X-GitHub-Api-Version" = "2022-11-28"
+}
+
+function Show-GitHubAuthHelp {
+    param([int]$StatusCode = 401)
+
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Red
+    Write-Host " GitHub API error: $StatusCode Unauthorized" -ForegroundColor Red
+    Write-Host "========================================" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "The token was rejected. Common fixes:" -ForegroundColor Yellow
+    Write-Host "  1. Create a NEW token: https://github.com/settings/tokens" -ForegroundColor Gray
+    Write-Host "     Classic PAT: check scope [repo] (full control of private repos)" -ForegroundColor Gray
+    Write-Host "     Fine-grained: Repository $Repo + Contents Read and write" -ForegroundColor Gray
+    Write-Host "  2. Paste only the token (ghp_... or github_pat_...), no spaces or quotes" -ForegroundColor Gray
+    Write-Host "  3. If the org uses SSO: authorize the token for the organization" -ForegroundColor Gray
+    Write-Host "  4. Expired or revoked tokens return 401 - generate a fresh one" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "Repo: https://github.com/$Owner/$Repo" -ForegroundColor Cyan
+    Write-Host ""
+}
+
+function Test-GitHubToken {
+    try {
+        $user = Invoke-RestMethod -Method Get -Uri "https://api.github.com/user" -Headers $Headers
+        Write-Host "GitHub login OK: $($user.login)" -ForegroundColor Green
+    } catch {
+        $status = 0
+        if ($_.Exception.Response) {
+            $status = [int]$_.Exception.Response.StatusCode
+        }
+        Show-GitHubAuthHelp -StatusCode $(if ($status) { $status } else { 401 })
+        exit 1
+    }
+
+    try {
+        Invoke-RestMethod -Method Get -Uri "https://api.github.com/repos/$Owner/$Repo" -Headers $Headers | Out-Null
+        Write-Host "Repository access OK: $Owner/$Repo" -ForegroundColor Green
+    } catch {
+        $status = 0
+        if ($_.Exception.Response) {
+            $status = [int]$_.Exception.Response.StatusCode
+        }
+        if ($status -eq 404) {
+            Write-Host "Token works but repo $Owner/$Repo not found or no access." -ForegroundColor Red
+            Write-Host "Check repo name or grant this token access to the repository." -ForegroundColor Yellow
+        } else {
+            Show-GitHubAuthHelp -StatusCode $(if ($status) { $status } else { 403 })
+        }
+        exit 1
+    }
+    Write-Host ""
+}
+
 Test-GitHubToken
 
 function Convert-ToGitHubPath([string]$FullName) {
@@ -120,9 +176,27 @@ function Should-Skip([string]$Path) {
     if ($normalized -match "(^|/)\.cursor(/|$)") { return $true }
     if ($normalized -match "(^|/)\.agents(/|$)") { return $true }
     if ($normalized -match "upload-to-github\.ps1$") { return $true }
-    if ($normalized -match '(^|/)\.upload-to-github-progress\.json$') { return $true }
-    if ($normalized -match '(^|/)github-upload-lib\.ps1$') { return $true }
     return $false
+}
+
+function Invoke-GitHubJson($Method, $Url, $Body = $null) {
+    try {
+        if ($null -eq $Body) {
+            return Invoke-RestMethod -Method $Method -Uri $Url -Headers $Headers
+        }
+        $json = $Body | ConvertTo-Json -Depth 20
+        return Invoke-RestMethod -Method $Method -Uri $Url -Headers $Headers -Body $json -ContentType "application/json"
+    } catch {
+        $status = 0
+        if ($_.Exception.Response) {
+            $status = [int]$_.Exception.Response.StatusCode
+        }
+        if ($status -eq 401 -or $status -eq 403) {
+            Show-GitHubAuthHelp -StatusCode $status
+            exit 1
+        }
+        throw
+    }
 }
 
 function Get-ParentCommitSha {
@@ -240,64 +314,26 @@ $files = Get-ChildItem -Path $Root -Recurse -File | Where-Object {
 
 Write-Host "Preparing $($files.Count) files from $Root ..." -ForegroundColor Cyan
 
-
-$uploadProgressBlobs = Get-UploadProgressBlobMap
-$cachedBlobCount = $uploadProgressBlobs.Count
-if ($cachedBlobCount -gt 0) {
-    Write-Host "Resume: $cachedBlobCount file(s) from a previous run can be skipped if unchanged." -ForegroundColor Cyan
-    Write-Host "Progress file: $(Get-UploadProgressFilePath)" -ForegroundColor DarkGray
-}
-
 $treeEntries = New-Object System.Collections.ArrayList
 $i = 0
 foreach ($file in $files) {
     $i++
     $path = Convert-ToGitHubPath $file.FullName
+    Write-Host "[$i/$($files.Count)] $path" -ForegroundColor Gray
 
-    $blobSha = $null
-    $fromCache = $false
-    if ($uploadProgressBlobs.ContainsKey($path)) {
-        $cached = $uploadProgressBlobs[$path]
-        if (Test-CanReuseUploadProgressBlob -FileInfo $file -Entry $cached) {
-            $blobSha = $cached.sha
-            $fromCache = $true
-        }
-    }
-
-    if (-not $fromCache) {
-        $bytes = [IO.File]::ReadAllBytes($file.FullName)
-        $content = [Convert]::ToBase64String($bytes)
-        $blob = Invoke-GitHubJson -Method Post -Url "https://api.github.com/repos/$Owner/$Repo/git/blobs" -Body @{
-            content  = $content
-            encoding = "base64"
-        } -Operation "Create blob: $path" -PriorSuccessCount $script:SuccessfulBlobCount `
-            -FailedFilePath $path -FailedFileBytes $bytes.Length
-
-        $blobSha = $blob.sha
-        $script:SuccessfulBlobCount++
-
-        $uploadProgressBlobs[$path] = @{
-            sha          = $blobSha
-            size         = $file.Length
-            lastWriteUtc = $file.LastWriteTimeUtc.ToString("o")
-        }
-        Save-UploadProgressBlobMap -BlobMap $uploadProgressBlobs
-
-        Write-Host "[$i/$($files.Count)] $path OK" -ForegroundColor Gray
-    } else {
-        Write-Host "[$i/$($files.Count)] $path OK (resumed - skipped re-upload)" -ForegroundColor DarkGray
+    $bytes = [IO.File]::ReadAllBytes($file.FullName)
+    $content = [Convert]::ToBase64String($bytes)
+    $blob = Invoke-GitHubJson "Post" "https://api.github.com/repos/$Owner/$Repo/git/blobs" @{
+        content  = $content
+        encoding = "base64"
     }
 
     [void]$treeEntries.Add(@{
             path = $path
             mode = "100644"
             type = "blob"
-            sha  = $blobSha
+            sha  = $blob.sha
         })
-
-    if ($i -lt $files.Count) {
-        Start-Sleep -Milliseconds $script:BlobUploadDelayMs
-    }
 }
 
 Write-Host "Reading branch $Branch..." -ForegroundColor Cyan
@@ -325,8 +361,6 @@ $commit = Invoke-GitHubJson "Post" "https://api.github.com/repos/$Owner/$Repo/gi
 Write-Host "Updating branch $Branch..." -ForegroundColor Cyan
 $refResult = Confirm-BranchRefUpdate -BranchName $Branch -CommitSha $commit.sha -TreeSha $tree.sha -BranchExists $branchExists
 $headSha = $refResult.HeadSha
-
-Clear-UploadProgressFile
 
 Write-Host ""
 Write-Host "Done. GitHub branch $Branch matches your local project tree." -ForegroundColor Green

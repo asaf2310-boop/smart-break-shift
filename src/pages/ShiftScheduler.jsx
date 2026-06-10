@@ -13,6 +13,7 @@ import {
   WEEKDAY_LABELS,
   getStoredAgentName,
   getWeekStartIsrael,
+  getAgentConstraintsWeekStart,
   getWeekDays,
   getIsraelDateStr,
   getConstraintsDeadline,
@@ -71,7 +72,7 @@ export default function ShiftScheduler() {
   const thisWeekStart = useMemo(() => getWeekStartIsrael(now), [israelTodayKey]);
   const nextWeekStart = useMemo(() => addDays(thisWeekStart, 7), [thisWeekStart]);
 
-  const constraintsWeekStart = nextWeekStart;
+  const constraintsWeekStart = useMemo(() => getAgentConstraintsWeekStart(now), [israelTodayKey]);
   const currentWeekDays = useMemo(() => getWeekDays(thisWeekStart), [thisWeekStart.getTime()]);
   const scheduleDays = useMemo(() => getWeekDays(nextWeekStart), [nextWeekStart.getTime()]);
   const constraintsDays = useMemo(() => getWeekDays(constraintsWeekStart), [constraintsWeekStart.getTime()]);
@@ -278,8 +279,6 @@ export default function ShiftScheduler() {
 
   const getVacationRequest = (date) =>
     vacationRequests.find(r => r.date === format(date, "yyyy-MM-dd") && r.date >= constraintsDateFrom && r.date <= constraintsDateTo);
-
-  const constraintsWeekStartStr = format(constraintsWeekStart, "yyyy-MM-dd");
 
   // Fetch confirmation for the constraints week
   const { data: confirmations = [], isLoading: loadingConfirm } = useQuery({

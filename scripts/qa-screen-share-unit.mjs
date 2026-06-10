@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import {
   collectRemoteVideoStream,
   diagnoseInboundVideoKey,
+  hasOutboundVideoSender,
   sendPeerDataMessage,
   summarizeInboundVideoStatsFromReport,
 } from "../src/lib/screenShareWebRtc.js";
@@ -69,5 +70,15 @@ assert.equal(inbound.framesReceived, 7);
 assert.equal(diagnoseInboundVideoKey(2000, 10), "ok");
 assert.equal(diagnoseInboundVideoKey(500, 0), "codec");
 assert.equal(diagnoseInboundVideoKey(0, 0), "not_sent");
+
+const liveTrack = { kind: "video", id: "v1", readyState: "live" };
+const endedTrack = { kind: "video", id: "v2", readyState: "ended" };
+const mockStream = { getVideoTracks: () => [liveTrack] };
+const mockPcWithSender = {
+  getSenders: () => [{ track: liveTrack }],
+};
+assert.equal(hasOutboundVideoSender(mockPcWithSender, mockStream), true);
+assert.equal(hasOutboundVideoSender(mockPcWithSender, { getVideoTracks: () => [endedTrack] }), false);
+assert.equal(hasOutboundVideoSender(null, mockStream), false);
 
 console.log("qa-screen-share-unit: OK");
