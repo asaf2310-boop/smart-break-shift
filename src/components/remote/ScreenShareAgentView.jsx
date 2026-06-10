@@ -469,18 +469,25 @@ export default function ScreenShareAgentView({
       return "לקוח מחובר — ממתין לווידאו";
     }
     if (status === "connecting") return PEER_STATUS_LABELS.connecting;
+    if (status === "disconnected") return PEER_STATUS_LABELS.disconnected;
+    if (status === "error") return PEER_STATUS_LABELS.error;
+    if (
+      liveSession?.consentAt &&
+      liveSession?.agentPeerReadyAt &&
+      !liveSession?.guestStreamConnectedAt
+    ) {
+      return PEER_STATUS_LABELS.connecting;
+    }
     if (liveSession?.consentAt) {
       return "לקוח אישר — ממתין לשיתוף מסך";
     }
     if (tabHidden && status === "connected") return PEER_STATUS_LABELS.paused;
     if (status === "connected") return PEER_STATUS_LABELS.connected;
-    if (status === "disconnected") return PEER_STATUS_LABELS.disconnected;
     if (status === "ended") {
       return isGuestInitiatedEnd(liveSession?.endedReason)
         ? GUEST_ENDED_LABEL
         : PEER_STATUS_LABELS.ended;
     }
-    if (status === "error") return PEER_STATUS_LABELS.error;
     if (!liveSession?.agentPeerReadyAt) return "מפעיל חיבור לקבלת שיתוף מסך…";
     if (!liveSession?.consentAt) return "ממתין שהלקוח יפתח את הקישור וישתף מסך";
     return PEER_STATUS_LABELS[status] || status;

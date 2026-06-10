@@ -376,17 +376,15 @@ export default function ScreenShareGuestPage() {
         }
 
         if (hasOutboundVideoSender(pc, stream)) {
-          const iceOk = await waitForIceConnected(pc, 12000);
-          if (iceOk) return true;
-          if (attempt < maxAttempts) {
-            setError(`ממתין לחיבור לנציג (ניסיון ${attempt + 1}/${maxAttempts})…`);
-            await sleep(1500 * attempt);
-            continue;
-          }
-          setError(
-            "שיתוף המסך נשלח — ממתין לחיבור רשת. אם הנציג לא רואה תמונה, ודאו שהנציג פתח סשן צפייה"
-          );
-          return false;
+          // Call placed with outbound video — succeed immediately; ICE may take >12s (TURN).
+          // Do not close/retry on ICE timeout — that drops the agent's incoming call.
+          void waitForIceConnected(pc, 25000).then((iceOk) => {
+            if (!sharingRef.current || iceOk) return;
+            setError(
+              "שיתוף המסך נשלח — ממתין לחיבור רשת. אם הנציג לא רואה תמונה, ודאו ש-TURN מוגדר"
+            );
+          });
+          return true;
         }
 
         const iceOk = await waitForIceConnected(pc, 12000);
