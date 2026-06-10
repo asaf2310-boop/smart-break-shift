@@ -143,7 +143,7 @@ export function ScreenShareSessionProvider({ children }) {
           className={
             viewOpen
               ? "fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-3 sm:p-6"
-              : "fixed -left-[10000px] top-0 h-px w-px overflow-hidden opacity-0 pointer-events-none"
+              : "fixed left-[-9999px] top-0 w-[320px] h-[180px] overflow-hidden opacity-0 pointer-events-none"
           }
           aria-hidden={!viewOpen}
           dir="rtl"
@@ -152,7 +152,7 @@ export function ScreenShareSessionProvider({ children }) {
             className={
               viewOpen
                 ? "relative flex w-full max-w-5xl max-h-[92vh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
-                : "h-px w-px"
+                : "w-[320px] h-[180px]"
             }
           >
             {viewOpen && (
@@ -185,7 +185,7 @@ export function ScreenShareSessionProvider({ children }) {
                 </div>
               </div>
             )}
-            <div className={viewOpen ? "overflow-y-auto p-4" : "h-px w-px"}>
+            <div className={viewOpen ? "overflow-y-auto p-4" : "w-[320px] h-[180px]"}>
               <ScreenShareAgentView
                 sessionId={backgroundSessionId}
                 agentName={agentName}

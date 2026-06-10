@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { Download, FileSpreadsheet, Loader2, Trash2, Upload } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Download, FileSpreadsheet, Loader2, Save, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,11 +11,12 @@ import {
   loadLatestMetrics,
 } from "@/lib/agentMetricsApi";
 import { downloadMetricsTemplate, parseMetricsFile } from "@/lib/agentMetricsImport";
+import { getMetricsRankingNote, rankMetricRows } from "@/lib/agentMetricsScoring";
 
 export default function AdminMetricsPanel() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
-  const [importing, setImporting] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [snapshot, setSnapshot] = useState(null);
   const [periodLabel, setPeriodLabel] = useState("");
   const [preview, setPreview] = useState(null);
@@ -42,6 +43,28 @@ export default function AdminMetricsPanel() {
     void refresh();
   }, [refresh]);
 
+  const previewRows = useMemo(() => {
+    if (!preview?.rows?.length) return [];
+    return rankMetricRows(
+      preview.rows.map((r) => ({
+        agent_name: r.agentName,
+        metrics: r.metrics,
+        id: r.agentName,
+      })),
+      preview.columns
+    );
+  }, [preview]);
+
+  const savedRows = useMemo(() => {
+    if (!snapshot?.rows?.length) return [];
+    return rankMetricRows(snapshot.rows, snapshot.columns);
+  }, [snapshot]);
+
+  const rankingNote = useMemo(
+    () => getMetricsRankingNote(preview?.columns || snapshot?.columns || []),
+    [preview?.columns, snapshot?.columns]
+  );
+
   const handleFileChange = async (event) => {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -63,10 +86,14 @@ export default function AdminMetricsPanel() {
         const base = file.name.replace(/\.(xlsx|xls|csv)$/i, "");
         setPeriodLabel(base);
       }
+      toast({
+        title: "קובץ נטען",
+        description: "בדקו את התצוגה המקדימה ולחצו «שמור נתונים»",
+      });
       if (parsed.errors?.length) {
         toast({
-          title: "תצוגה מקדימה",
-          description: `נמצאו ${parsed.rows.length} שורות · ${parsed.errors.length} אזהרות`,
+          title: "אזהרות בקובץ",
+          description: `${parsed.errors.length} שורות עם בעיות — ראו תצוגה מקדימה`,
         });
       }
     } catch (err) {
@@ -79,16 +106,16 @@ export default function AdminMetricsPanel() {
     }
   };
 
-  const handleImport = async () => {
+  const handleSave = async () => {
     if (!preview?.rows?.length) {
       toast({
-        title: "אין נתונים",
-        description: "בחרו קובץ Excel עם שם נציג ומדדים",
+        title: "אין נתונים לשמירה",
+        description: "בחרו קובץ Excel תחילה",
         variant: "destructive",
       });
       return;
     }
-    setImporting(true);
+    setSaving(true);
     try {
       const result = await importMetricsDataset({
         periodLabel: periodLabel.trim(),
@@ -97,20 +124,20 @@ export default function AdminMetricsPanel() {
         rows: preview.rows,
       });
       toast({
-        title: "המדדים עודכנו",
-        description: `יובאו ${result.rowCount} שורות${periodLabel ? ` · ${periodLabel}` : ""}`,
+        title: "נשמר בהצלחה",
+        description: `נשמרו ${result.rowCount} נציגים${periodLabel ? ` · ${periodLabel}` : ""}`,
       });
       setPreview(null);
       setSelectedFile(null);
       await refresh();
     } catch (err) {
       toast({
-        title: "הייבוא נכשל",
+        title: "השמירה נכשלה",
         description: err.message || "נסו שוב",
         variant: "destructive",
       });
     } finally {
-      setImporting(false);
+      setSaving(false);
     }
   };
 
@@ -133,8 +160,8 @@ export default function AdminMetricsPanel() {
   return (
     <div className="space-y-6" dir="rtl">
       <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-950 leading-relaxed">
-        העלו קובץ Excel (.xlsx) או CSV עם עמודת <strong>שם נציג</strong> ועמודות מדדים נוספות.
-        כל העלאה מחליפה את הנתונים הקודמים. הנציגים רואים את הטבלה במסך «מדדים».
+        העלו קובץ Excel (.xlsx) או CSV — הנתונים יוצגו בתצוגה מקדימה בלבד.
+        לחצו <strong>שמור נתונים</strong> כדי לפרסם לנציגים. כל שמירה מחליפה את הדיווח הקודם.
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -160,20 +187,6 @@ export default function AdminMetricsPanel() {
               <Download className="h-3.5 w-3.5" />
               הורד תבנית
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              className="gap-1 bg-violet-600 hover:bg-violet-700"
-              disabled={!preview?.rows?.length || importing}
-              onClick={handleImport}
-            >
-              {importing ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Upload className="h-3.5 w-3.5" />
-              )}
-              {importing ? "מייבא..." : "עדכן מדדים"}
-            </Button>
           </div>
         </div>
 
@@ -182,30 +195,49 @@ export default function AdminMetricsPanel() {
             <FileSpreadsheet className="h-4 w-4 text-violet-600" />
             מבנה קובץ מומלץ
           </div>
-          <p>שורה ראשונה = כותרות. עמודה ראשונה (או «שם נציג») = שם הנציג כפי שמופיע במערכת.</p>
-          <p className="text-xs">דוגמה: שיחות · זמן ממוצע · עמידה ביעד % · ציון שביעות רצון</p>
-          {preview?.rows?.length > 0 && (
-            <p className="text-teal-800 font-medium pt-1">
-              תצוגה מקדימה: {preview.rows.length} נציגים · {preview.columns.length - 1} מדדים
-            </p>
-          )}
+          <p>שורה ראשונה = כותרות. חובה עמודת <strong>שם נציג</strong>.</p>
+          <p className="text-xs">
+            מומלץ: <strong>שיחות ממוצע לשעה</strong> (50% מהדירוג) + שיחות · עמידה ביעד % · ציון שביעות רצון
+          </p>
+          <p className="text-xs text-violet-800 font-medium">{rankingNote}</p>
         </div>
       </div>
 
       {preview?.rows?.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-slate-700">תצוגה מקדימה לפני שמירה</h3>
-          <AgentMetricsTable columns={preview.columns} rows={preview.rows.map((r) => ({
-            agent_name: r.agentName,
-            metrics: r.metrics,
-            id: r.agentName,
-          }))} />
+        <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50/50 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">תצוגה מקדימה — טרם נשמר</h3>
+              <p className="text-xs text-slate-600 mt-0.5">
+                {preview.rows.length} נציגים · ממוין מהטוב ביותר · {rankingNote}
+              </p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+              disabled={saving}
+              onClick={handleSave}
+            >
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              {saving ? "שומר..." : "שמור נתונים"}
+            </Button>
+          </div>
+          <AgentMetricsTable
+            columns={preview.columns}
+            rows={previewRows}
+            showRank
+          />
         </div>
       )}
 
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-slate-800">נתונים פעילים במערכת</h3>
+          <h3 className="text-sm font-semibold text-slate-800">נתונים שמורים במערכת</h3>
           {snapshot?.upload && (
             <Button type="button" variant="outline" size="sm" className="gap-1 text-red-700" onClick={handleClear}>
               <Trash2 className="h-3.5 w-3.5" />
@@ -230,9 +262,9 @@ export default function AdminMetricsPanel() {
                 : "—"}
               {snapshot.upload?.file_name && ` · ${snapshot.upload.file_name}`}
               {" · "}
-              {snapshot.rows.length} נציגים
+              {snapshot.rows.length} נציגים · {rankingNote}
             </p>
-            <AgentMetricsTable columns={snapshot.columns} rows={snapshot.rows} />
+            <AgentMetricsTable columns={snapshot.columns} rows={savedRows} showRank />
           </>
         ) : (
           <AgentMetricsTable columns={[]} rows={[]} />

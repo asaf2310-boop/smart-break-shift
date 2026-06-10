@@ -102,12 +102,13 @@ export async function parseMetricsFile(file) {
 export function downloadMetricsTemplate() {
   const headers = [
     "שם נציג",
+    "שיחות ממוצע לשעה",
     "שיחות",
-    "זמן ממוצע (דק)",
+    "ממוצע משך שיחה (דק)",
     "עמידה ביעד %",
     "ציון שביעות רצון",
   ];
-  const sample = ["אוראל כליפה", 120, 4.5, 92, 4.8];
+  const sample = ["אוראל כליפה", 8.5, 120, 4.5, 0.92, 4.8];
   const ws = XLSX.utils.aoa_to_sheet([headers, sample]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "מדדים");

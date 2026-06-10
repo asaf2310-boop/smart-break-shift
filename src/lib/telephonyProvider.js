@@ -7,6 +7,7 @@
  */
 
 import { Web } from "sip.js";
+import { parseIceServers } from "@/lib/webrtcConfig";
 
 /** @typedef {'idle' | 'connecting' | 'registered' | 'unregistered' | 'error'} SipRegistrationState */
 
@@ -123,19 +124,7 @@ function getCurrentAgentNameForSip() {
   }
 }
 
-/** @returns {RTCIceServer[]} */
-export function parseIceServers() {
-  const fallback = [{ urls: "stun:stun.l.google.com:19302" }];
-  const raw = import.meta.env.VITE_ICE_SERVERS?.trim();
-  if (!raw) return fallback;
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-  } catch {
-    /* invalid JSON — use STUN default */
-  }
-  return fallback;
-}
+export { parseIceServers };
 
 function buildOutboundDestination(phone, domain) {
   const normalized = normalizePhone(phone);

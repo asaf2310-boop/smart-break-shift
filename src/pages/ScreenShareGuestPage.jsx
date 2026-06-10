@@ -33,6 +33,7 @@ import { GUEST_LINK_ERROR, messageForGuestLinkError } from "@/lib/shortGuestLink
 import { demoModeEnabled } from "@/api/demoClient";
 import { m3PageClass } from "@/lib/hypPage";
 import SessionFileShare from "@/components/remote/SessionFileShare";
+import { getPeerJsOptions } from "@/lib/webrtcConfig";
 
 const GUEST_INFO_BANNER = demoModeEnabled
   ? "דמו — שיתוף מסך בדפדפן (צפייה בלבד). מומלץ Chrome או Edge. לפרודקשן: PeerServer עצמי."
@@ -329,7 +330,7 @@ export default function ScreenShareGuestPage() {
 
     let peer = peerRef.current;
     if (!peer || peer.destroyed) {
-      peer = new Peer({ debug: 0 });
+      peer = new Peer(getPeerJsOptions());
       peerRef.current = peer;
       bindPeerAgentEndListener(peer);
       await new Promise((resolve, reject) => {
@@ -472,7 +473,7 @@ export default function ScreenShareGuestPage() {
       }
       setSession(resolveGuestSession(sessionId, bootstrapKey));
 
-      const peer = new Peer({ debug: 0 });
+      const peer = new Peer(getPeerJsOptions());
       peerRef.current = peer;
       bindPeerAgentEndListener(peer);
 

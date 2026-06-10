@@ -56,6 +56,7 @@ import {
   updateRecordingMetadata,
 } from "@/lib/screenShareStore";
 import SessionFileShare from "@/components/remote/SessionFileShare";
+import { getPeerJsOptions } from "@/lib/webrtcConfig";
 
 const MAX_RECORDING_SECONDS = 30 * 60;
 
@@ -457,6 +458,12 @@ export default function ScreenShareAgentView({
 
   const attachRemoteStream = useCallback(
     (remoteStream) => {
+      const videoTracks = remoteStream?.getVideoTracks?.() || [];
+      if (!videoTracks.length) {
+        setHasRemoteStream(false);
+        setErrorDetail("לא התקבל זרם וידאו מהלקוח — בדקו שיתוף מסך בדפדפן הלקוח");
+        return;
+      }
       remoteStreamRef.current = remoteStream;
       setHasRemoteStream(true);
       setTabHidden(false);
@@ -558,9 +565,7 @@ export default function ScreenShareAgentView({
     chunksRef.current = [];
     metadataPersistedRef.current = false;
 
-    const peer = new Peer(sessionId, {
-      debug: 0,
-    });
+    const peer = new Peer(getPeerJsOptions(sessionId));
     peerRef.current = peer;
 
     peer.on("open", () => {
@@ -600,6 +605,27 @@ export default function ScreenShareAgentView({
       call.on("stream", (remoteStream) => {
         attachRemoteStream(remoteStream);
       });
+
+      const pc = call.peerConnection;
+      if (pc) {
+        pc.addEventListener("track", (event) => {
+          if (event.track?.kind !== "video") return;
+          const stream =
+            event.streams?.[0] || new MediaStream([event.track]);
+          attachRemoteStream(stream);
+        });
+
+        const onIceStateChange = () => {
+          if (sessionEndedRef.current) return;
+          if (pc.iceConnectionState === "failed") {
+            setStatus("error");
+            setErrorDetail(
+              "חיבור WebRTC נכשל — ייתכן שנדרש שרת TURN לרשתות שונות. פנו למנהל המערכת להגדרת VITE_TURN_URL"
+            );
+          }
+        };
+        pc.addEventListener("iceconnectionstatechange", onIceStateChange);
+      }
 
       call.on("close", () => {
         handleStreamDisconnect();
