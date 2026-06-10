@@ -137,6 +137,20 @@ function pickWebmMimeType() {
   return candidates.find((t) => MediaRecorder.isTypeSupported(t)) || "";
 }
 
+/** One agent Peer per sessionId on PeerServer — prevents duplicate registration */
+const agentPeerRegistry = new Map();
+
+function destroyRegistryPeer(sessionId, peer) {
+  const registered = agentPeerRegistry.get(sessionId);
+  if (registered === peer) agentPeerRegistry.delete(sessionId);
+  if (!peer || peer.destroyed) return;
+  try {
+    peer.destroy();
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
  * PeerJS flow (documented):
  * - Agent opens first: `new Peer(sessionId)` and waits for incoming call
@@ -647,9 +661,11 @@ export default function ScreenShareAgentView({
     setTabHidden(false);
     try {
       callRef.current?.close();
-      peerRef.current?.destroy();
     } catch {
       /* ignore */
+    }
+    if (sessionId && peerRef.current) {
+      destroyRegistryPeer(sessionId, peerRef.current);
     }
     callRef.current = null;
     peerRef.current = null;
@@ -753,8 +769,22 @@ export default function ScreenShareAgentView({
     [sessionId, clearNoCallTimer]
   );
 
+  const peerHandlersRef = useRef({});
+  peerHandlersRef.current = {
+    attachRemoteStream,
+    handleStreamDisconnect,
+    handleSessionEndedByGuest,
+    stopRecordingInternal,
+    clearVideoRetryTimer,
+    scheduleGuestVideoRetries,
+    stopInboundStatsPolling,
+    clearNoCallTimer,
+    scheduleNoCallWarning,
+  };
+
   useEffect(() => {
     if (!sessionId) return undefined;
+    const handlers = peerHandlersRef.current;
     sessionEndedRef.current = false;
 
     const resumedSession = getSession(sessionId);
@@ -765,19 +795,30 @@ export default function ScreenShareAgentView({
     setStatus(guestAlreadyLinked ? "connecting" : "waiting");
     setHasRemoteStream(false);
     hasRemoteStreamRef.current = false;
-    clearVideoRetryTimer();
+    handlers.clearVideoRetryTimer();
     setErrorDetail("");
     setRecordedBlob(null);
     setTabHidden(false);
     chunksRef.current = [];
     metadataPersistedRef.current = false;
 
+    const existingPeer = agentPeerRegistry.get(sessionId);
+    if (existingPeer && !existingPeer.destroyed) {
+      console.warn("[WebRTC:agent] destroying stale peer before recreate", {
+        sessionId,
+        connectionEpoch,
+      });
+      destroyRegistryPeer(sessionId, existingPeer);
+    }
+
     console.log("[WebRTC:agent] creating Peer", {
       sessionId,
+      connectionEpoch,
       viewOpen: viewOpenRef.current,
       expectedGuestCallTarget: sessionId,
     });
     const peer = new Peer(getPeerJsOptions(sessionId));
+    agentPeerRegistry.set(sessionId, peer);
     peerRef.current = peer;
 
     const syncPeerSessionRecord = () => {
@@ -800,7 +841,7 @@ export default function ScreenShareAgentView({
         markAgentPeerReady(sessionId);
         syncPeerSessionRecord();
       }
-      scheduleNoCallWarning(peer);
+      handlers.scheduleNoCallWarning(peer);
       setStatus((prev) => {
         if (prev === "ended") return prev;
         const latest = sessionId ? getSession(sessionId) : null;
@@ -835,12 +876,12 @@ export default function ScreenShareAgentView({
         if (data?.type !== "guest_end") return;
         const reason = data.reason || "client_stop";
         endSession(sessionId, { endedReason: reason });
-        handleSessionEndedByGuest();
+        handlers.handleSessionEndedByGuest();
       });
     });
 
     peer.on("call", (call) => {
-      clearNoCallTimer();
+      handlers.clearNoCallTimer();
       console.log("[WebRTC:agent] call received", {
         sessionId,
         agentPeerId: peer.id || sessionId,
@@ -859,12 +900,12 @@ export default function ScreenShareAgentView({
       let stopPcDebug = () => {};
 
       call.on("stream", (remoteStream) => {
-        attachRemoteStream(remoteStream);
+        handlers.attachRemoteStream(remoteStream);
       });
 
       const pc = call.peerConnection;
       if (pc) {
-        stopInboundStatsPolling();
+        handlers.stopInboundStatsPolling();
         inboundStatsPollStopRef.current = startInboundVideoStatsPolling(
           pc,
           {
@@ -912,7 +953,7 @@ export default function ScreenShareAgentView({
         stopWatchReceivers = watchRemoteVideoFromPeerConnection(
           pc,
           (stream) => {
-            attachRemoteStream(stream);
+            handlers.attachRemoteStream(stream);
           },
           { attempts: 80, intervalMs: 500 }
         );
@@ -950,25 +991,25 @@ export default function ScreenShareAgentView({
       call.on("close", () => {
         stopWatchReceivers();
         stopPcDebug();
-        stopInboundStatsPolling();
-        clearVideoRetryTimer();
-        handleStreamDisconnect();
+        handlers.stopInboundStatsPolling();
+        handlers.clearVideoRetryTimer();
+        handlers.handleStreamDisconnect();
       });
 
       call.on("error", () => {
         if (sessionEndedRef.current) return;
         stopWatchReceivers();
         stopPcDebug();
-        stopInboundStatsPolling();
-        clearVideoRetryTimer();
-        handleStreamDisconnect();
+        handlers.stopInboundStatsPolling();
+        handlers.clearVideoRetryTimer();
+        handlers.handleStreamDisconnect();
         if (sessionEndedRef.current) return;
         setErrorDetail("השיחה נותקה — לחצו «חזור לצפייה»");
       });
 
       const guestPeerId = call.peer;
       if (guestPeerId) lastGuestPeerIdRef.current = guestPeerId;
-      scheduleGuestVideoRetries(guestPeerId);
+      handlers.scheduleGuestVideoRetries(guestPeerId);
 
       answerIncomingCallRecvOnly(call);
       setStatus("connecting");
@@ -985,7 +1026,7 @@ export default function ScreenShareAgentView({
               tryRestartIce(pc);
             }
             requestGuestVideoRetry(peerRef.current, guestPeerId);
-            scheduleGuestVideoRetries(guestPeerId);
+            handlers.scheduleGuestVideoRetries(guestPeerId);
           });
         }, 6000);
       }
@@ -1001,7 +1042,7 @@ export default function ScreenShareAgentView({
       if (sessionEndedRef.current) return;
       const latest = getSession(sessionId);
       if (latest?.status === "ended" && isGuestInitiatedEnd(latest?.endedReason)) {
-        handleSessionEndedByGuest();
+        handlers.handleSessionEndedByGuest();
         return;
       }
       if (err?.type === "unavailable-id" && unavailableIdRetriesRef.current < 3) {
@@ -1018,7 +1059,7 @@ export default function ScreenShareAgentView({
         return;
       }
       if (sessionId) clearAgentPeerReady(sessionId);
-      stopRecordingInternal();
+      handlers.stopRecordingInternal();
       setStatus("error");
       setReconnecting(false);
       const msg =
@@ -1029,21 +1070,17 @@ export default function ScreenShareAgentView({
     });
 
     return () => {
-      clearNoCallTimer();
+      handlers.clearNoCallTimer();
       if (sessionId) clearAgentPeerReady(sessionId);
-      clearVideoRetryTimer();
-      stopInboundStatsPolling();
-      stopRecordingInternal(false);
+      handlers.clearVideoRetryTimer();
+      handlers.stopInboundStatsPolling();
+      handlers.stopRecordingInternal(false);
       try {
         callRef.current?.close();
       } catch {
         /* ignore */
       }
-      try {
-        peer.destroy();
-      } catch {
-        /* ignore */
-      }
+      destroyRegistryPeer(sessionId, peer);
       peerRef.current = null;
       callRef.current = null;
       remoteStreamRef.current = null;
@@ -1051,19 +1088,7 @@ export default function ScreenShareAgentView({
       setHasRemoteStream(false);
       if (videoRef.current) videoRef.current.srcObject = null;
     };
-  }, [
-    sessionId,
-    connectionEpoch,
-    attachRemoteStream,
-    handleStreamDisconnect,
-    handleSessionEndedByGuest,
-    stopRecordingInternal,
-    clearVideoRetryTimer,
-    scheduleGuestVideoRetries,
-    stopInboundStatsPolling,
-    clearNoCallTimer,
-    scheduleNoCallWarning,
-  ]);
+  }, [sessionId, connectionEpoch]);
 
   useEffect(() => {
     const stream = remoteStreamRef.current;
@@ -1209,10 +1234,8 @@ export default function ScreenShareAgentView({
     } catch {
       /* ignore */
     }
-    try {
-      peerRef.current?.destroy();
-    } catch {
-      /* ignore */
+    if (sessionId && peerRef.current) {
+      destroyRegistryPeer(sessionId, peerRef.current);
     }
     callRef.current = null;
     peerRef.current = null;
@@ -1458,9 +1481,11 @@ export default function ScreenShareAgentView({
     const teardown = () => {
       try {
         callRef.current?.close();
-        peerRef.current?.destroy();
       } catch {
         /* ignore */
+      }
+      if (sessionId && peerRef.current) {
+        destroyRegistryPeer(sessionId, peerRef.current);
       }
       if (sessionId) endSession(sessionId, { endedReason: "agent_ended" });
       setStatus("ended");
