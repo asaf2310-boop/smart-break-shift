@@ -491,7 +491,7 @@ export default function RemoteSupportPanel({
                 {customerName
                   ? `לקוח: ${customerName} · `
                   : ""}
-                שני מצבים: צפייה בדפדפן (שלב א) או RustDesk
+                שני מצבים: צפייה בדפדפן או RustDesk
               </DialogDescription>
             </DialogHeader>
 
@@ -523,7 +523,7 @@ export default function RemoteSupportPanel({
               </TabsList>
               <p className="text-[11px] text-center text-slate-500 mt-1">
                 {supportMode === "screen"
-                  ? "שלב א — צפייה בלבד, ללא התקנה"
+                  ? "צפייה בלבד, ללא התקנה"
                   : "שליטה מלאה בעכבר ומקלדת"}
               </p>
 

@@ -1,68 +1,34 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, Copy, Link2, Mail, MonitorPlay, ShieldAlert } from "lucide-react";
-import { demoModeEnabled, demoSendRealEmailEnabled } from "@/api/demoClient";
+import { Check, Copy, Link2, MonitorPlay } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
-import { createCallLog, createEmailLog, getCustomerById } from "@/lib/crmStore";
+import { createCallLog } from "@/lib/crmStore";
 import { useScreenShareSession } from "@/contexts/ScreenShareSessionContext";
 import {
   buildScreenShareGuestUrl,
-  buildScreenShareMailtoUrl,
   createScreenSession,
-  DEMO_SCREEN_SHARE_EMAIL_MESSAGE,
   ensureGuestLinkReady,
-  GUEST_LINK_CLOUD_PENDING_MESSAGE,
   endSession,
   getActiveScreenSessionForAgent,
-  getLastEmailLogForSession,
   getSession,
   listSessionsForCustomer,
   markAgentPeerOpened,
-  sendScreenShareEmail,
+  GUEST_LINK_CLOUD_PENDING_MESSAGE,
   startSessionCloudPoll,
   subscribeScreenShare,
 } from "@/lib/screenShareStore";
-import EmailStatusBanner from "@/components/remote/EmailStatusBanner";
-import EmailDiagnosticButton from "@/components/remote/EmailDiagnosticButton";
-import SessionEmailStatus from "@/components/remote/SessionEmailStatus";
-
-const DEMO_BANNER =
-  "שלב א — צפייה בדפדפן בלבד (PeerJS). דמו: PeerServer ציבורי; לפרודקשן יש לארח PeerServer או Supabase Realtime.";
-
-function isValidEmail(value) {
-  const trimmed = String(value || "").trim();
-  return trimmed.includes("@") && trimmed.length > 3;
-}
 
 export default function ScreenSharePanel({
   agentName,
   crmCustomerId,
-  customerName,
-  customerEmail: customerEmailProp,
-  hideEmailStatusBanner = false,
   onSessionActiveChange,
 }) {
   const { toast } = useToast();
   const { openSessionView, backgroundSessionId } = useScreenShareSession();
-  const [emailTo, setEmailTo] = useState("");
   const [session, setSession] = useState(null);
   const [copied, setCopied] = useState(false);
   const [opening, setOpening] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [resending, setResending] = useState(false);
-  const [emailLogRevision, setEmailLogRevision] = useState(0);
-
-  const defaultCustomerEmail = useMemo(() => {
-    if (customerEmailProp) return String(customerEmailProp).trim();
-    if (crmCustomerId) return getCustomerById(crmCustomerId)?.email?.trim() || "";
-    return "";
-  }, [customerEmailProp, crmCustomerId]);
-
-  useEffect(() => {
-    setEmailTo(defaultCustomerEmail);
-  }, [defaultCustomerEmail]);
+  const [autoCopiedForSession, setAutoCopiedForSession] = useState(null);
 
   useEffect(() => {
     if (session?.id) return;
@@ -96,7 +62,6 @@ export default function ScreenSharePanel({
       } else {
         setSession(latest);
       }
-      setEmailLogRevision((n) => n + 1);
     };
     refresh();
     const stopCloudPoll =
@@ -108,30 +73,12 @@ export default function ScreenSharePanel({
     };
   }, [session?.id, session?.status]);
 
-  const lastEmailLog = useMemo(() => {
-    if (!session?.id) return null;
-    return getLastEmailLogForSession(session.id);
-  }, [session?.id, session?.emailSentAt, emailLogRevision]);
-
   const linkReady = Boolean(session?.agentPeerReadyAt);
 
   const guestUrl = useMemo(() => {
     if (!session?.id || !linkReady) return "";
     return buildScreenShareGuestUrl(session);
   }, [session, linkReady]);
-
-  const mailtoHref = useMemo(
-    () =>
-      guestUrl
-        ? buildScreenShareMailtoUrl({
-            to: emailTo,
-            customerName,
-            agentName,
-            guestUrl,
-          })
-        : null,
-    [emailTo, customerName, agentName, guestUrl]
-  );
 
   const logSessionStart = useCallback(
     (created) => {
@@ -148,60 +95,49 @@ export default function ScreenSharePanel({
     [crmCustomerId, agentName]
   );
 
-  const sendGuestLinkEmail = useCallback(
-    async (activeSession, url) => {
-      const result = await sendScreenShareEmail({
-        to: emailTo,
-        sessionId: activeSession.id,
-        crmCustomerId,
-        agentName,
-        customerName,
-        guestUrl: url,
-      });
-      const { log, simulated, message } = result;
-      if (crmCustomerId) {
-        createEmailLog({
-          customer_id: crmCustomerId,
-          to_email: log.to,
-          subject: log.subject,
-          body: log.body,
-          agent_name: agentName,
-          status: simulated ? "simulated" : "sent",
+  const copyGuestLink = useCallback(
+    async (activeSession, { silent = false } = {}) => {
+      const ready = await ensureGuestLinkReady(activeSession);
+      if (!ready.ok) {
+        if (!silent) {
+          toast({
+            title: "הקישור לא מוכן",
+            description: "לא ניתן ליצור קישור — נסו שוב",
+            variant: "destructive",
+          });
+        }
+        return false;
+      }
+      const linkedSession = ready.session || activeSession;
+      if (linkedSession !== session) setSession(linkedSession);
+      const url = buildScreenShareGuestUrl(linkedSession);
+      if (!url) {
+        if (!silent) {
+          toast({
+            title: "הקישור לא מוכן",
+            description: "לא ניתן ליצור קישור — נסו שוב",
+            variant: "destructive",
+          });
+        }
+        return false;
+      }
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      if (!silent) {
+        toast({
+          title: "הועתק",
+          description: ready.cloudSynced
+            ? "קישור הלקוח הועתק — שלחו ללקוח"
+            : `קישור הלקוח הועתק. ${GUEST_LINK_CLOUD_PENDING_MESSAGE}`,
         });
       }
-      if (simulated) {
-        toast({
-          title: demoSendRealEmailEnabled
-            ? "המייל לא נשלח"
-            : "סשן פעיל — הקישור מוכן",
-          description: message || DEMO_SCREEN_SHARE_EMAIL_MESSAGE,
-          variant: demoSendRealEmailEnabled ? "destructive" : undefined,
-        });
-      } else if (demoSendRealEmailEnabled) {
-        toast({
-          title: "סשן פעיל — הקישור מוכן",
-          description: "נשלח במייל",
-        });
-      } else {
-        toast({
-          title: "סשן התחיל והקישור נשלח",
-          description: `קישור שיתוף מסך נשלח ל-${log.to}. השאירו מסך זה פתוח.`,
-        });
-      }
+      return true;
     },
-    [emailTo, crmCustomerId, agentName, customerName, toast]
+    [session, toast]
   );
 
   const handleOpenAgentSession = async () => {
-    if (!isValidEmail(emailTo)) {
-      toast({
-        title: "מייל לא תקין",
-        description: "הזינו כתובת מייל תקינה של הלקוח",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setOpening(true);
     try {
       let activeSession = session;
@@ -209,7 +145,7 @@ export default function ScreenSharePanel({
         const created = createScreenSession({
           crmCustomerId,
           agentName,
-          customerEmail: emailTo,
+          customerEmail: "",
         });
         activeSession = created;
         logSessionStart(created);
@@ -224,186 +160,51 @@ export default function ScreenSharePanel({
         return;
       }
       setSession(opened);
+      setAutoCopiedForSession(null);
       openSessionView(opened.id);
       toast({
         title: "סשן נפתח",
-        description: "ממתינים לחיבור — לאחר «מוכן לקישור» שלחו את הקישור ללקוח",
+        description: "ממתינים לחיבור — הקישור יופיע להעתקה",
       });
     } finally {
       setOpening(false);
     }
   };
 
-  const handleSendGuestLink = async () => {
-    if (!session?.id) return;
-    if (!linkReady) {
-      toast({
-        title: "המתינו לחיבור",
-        description: "פתחו את סשן הצפייה והמתינו עד שיופיע «מוכן לקישור» לפני שליחה",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!isValidEmail(emailTo)) {
-      toast({
-        title: "מייל לא תקין",
-        description: "הזינו כתובת מייל תקינה של הלקוח",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setSending(true);
-    try {
-      const ready = await ensureGuestLinkReady(session);
-      if (!ready.ok) {
+  useEffect(() => {
+    if (!session?.id || !linkReady || autoCopiedForSession === session.id) return;
+    let cancelled = false;
+    void (async () => {
+      const ok = await copyGuestLink(session, { silent: true });
+      if (!cancelled && ok) {
+        setAutoCopiedForSession(session.id);
         toast({
-          title: "הקישור לא מוכן",
-          description: "לא ניתן ליצור קישור קצר — נסו שוב",
-          variant: "destructive",
-        });
-        return;
-      }
-      const linkedSession = ready.session || session;
-      if (linkedSession !== session) setSession(linkedSession);
-      const url = buildScreenShareGuestUrl(linkedSession);
-      if (!url) {
-        toast({
-          title: "הקישור לא מוכן",
-          description: "לא ניתן ליצור קישור — נסו שוב",
-          variant: "destructive",
-        });
-        return;
-      }
-      await sendGuestLinkEmail(linkedSession, url);
-      if (!ready.cloudSynced) {
-        toast({
-          title: "הקישור נשלח",
-          description: GUEST_LINK_CLOUD_PENDING_MESSAGE,
+          title: "קישור מוכן",
+          description: "הקישור הועתק ללוח — שלחו ללקוח",
         });
       }
-    } catch (err) {
-      setEmailLogRevision((n) => n + 1);
-      const rateLimited = err.status === 429;
-      const rateLimitLabel = err.limit ? `${err.limit} לשעה` : "מהשרת";
-      toast({
-        title: rateLimited ? `מגבלת שליחה (${rateLimitLabel})` : "לא הצליח",
-        description: (
-          <span>
-            {err.message ||
-              (rateLimited
-                ? "יותר מדי שליחות מהדפדפן הזה — נסו שוב בעוד שעה או השתמשו ב-mailto"
-                : "בדקו את כתובת המייל והרשת")}
-            {session?.id && mailtoHref ? (
-              <>
-                {" "}
-                — או{" "}
-                <a href={mailtoHref} className="underline font-medium">
-                  פתחו mailto
-                </a>
-              </>
-            ) : null}
-          </span>
-        ),
-        variant: "destructive",
-      });
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handleResendEmail = async () => {
-    if (!session?.id || !guestUrl) return;
-    if (!isValidEmail(emailTo)) {
-      toast({
-        title: "מייל לא תקין",
-        description: "הזינו כתובת מייל תקינה של הלקוח",
-        variant: "destructive",
-      });
-      return;
-    }
-    setResending(true);
-    try {
-      const ready = await ensureGuestLinkReady(session);
-      if (!ready.ok) {
-        toast({
-          title: "הקישור לא מוכן",
-          description: "לא ניתן לשלוח קישור — נסו שוב",
-          variant: "destructive",
-        });
-        return;
-      }
-      const linkedSession = ready.session || session;
-      if (linkedSession !== session) setSession(linkedSession);
-      const url = buildScreenShareGuestUrl(linkedSession);
-      if (!url) {
-        toast({
-          title: "הקישור לא מוכן",
-          description: "לא ניתן לשלוח קישור — נסו שוב",
-          variant: "destructive",
-        });
-        return;
-      }
-      await sendGuestLinkEmail(linkedSession, url);
-      if (!ready.cloudSynced) {
-        toast({
-          title: "הקישור נשלח",
-          description: GUEST_LINK_CLOUD_PENDING_MESSAGE,
-        });
-      }
-      setEmailLogRevision((n) => n + 1);
-    } catch (err) {
-      setEmailLogRevision((n) => n + 1);
-      const rateLimited = err.status === 429;
-      const rateLimitLabel = err.limit ? `${err.limit} לשעה` : "מהשרת";
-      toast({
-        title: rateLimited ? `מגבלת שליחה (${rateLimitLabel})` : "לא הצליח לשלוח שוב",
-        description: err.message || "בדקו את כתובת המייל והרשת",
-        variant: "destructive",
-      });
-    } finally {
-      setResending(false);
-    }
-  };
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [session, linkReady, autoCopiedForSession, copyGuestLink, toast]);
 
   const handleCopyLink = async () => {
     if (!session?.id) return;
     if (!linkReady) {
       toast({
         title: "המתינו לחיבור",
-        description: "פתחו את סשן הצפייה והמתינו עד שיופיע «מוכן לקישור»",
+        description: "המתינו עד שיופיע «מוכן לקישור»",
         variant: "destructive",
       });
       return;
     }
     try {
-      const ready = await ensureGuestLinkReady(session);
-      if (!ready.ok) {
-        toast({
-          title: "הקישור לא מוכן",
-          description: "לא ניתן להעתיק קישור — נסו שוב",
-          variant: "destructive",
-        });
-        return;
-      }
-      const linkedSession = ready.session || session;
-      if (linkedSession !== session) setSession(linkedSession);
-      const url = buildScreenShareGuestUrl(linkedSession) || guestUrl;
-      if (!url) return;
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-      toast({
-        title: "הועתק",
-        description: ready.cloudSynced
-          ? "קישור הלקוח הועתק"
-          : `קישור הלקוח הועתק. ${GUEST_LINK_CLOUD_PENDING_MESSAGE}`,
-      });
+      await copyGuestLink(session);
     } catch {
-      const url = buildScreenShareGuestUrl(session);
       toast({
         title: "לא הועתק",
-        description: url || guestUrl,
+        description: guestUrl || "נסו שוב",
         variant: "destructive",
       });
     }
@@ -412,60 +213,32 @@ export default function ScreenSharePanel({
   const handleEndSession = useCallback(() => {
     if (session?.id) endSession(session.id);
     setSession(null);
+    setAutoCopiedForSession(null);
     toast({ title: "הסתיים", description: "סשן צפייה במסך נסגר" });
   }, [session?.id, toast]);
 
   return (
     <div className="space-y-4" dir="rtl">
-      {!hideEmailStatusBanner && <EmailStatusBanner />}
-      <div className="bg-teal-50 border border-teal-200 rounded-xl px-3 py-2 flex items-start gap-2 text-teal-950 text-xs leading-relaxed">
-        <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-teal-700" />
-        <span>{DEMO_BANNER}</span>
-      </div>
-
-      <p className="text-sm text-slate-700 leading-relaxed bg-slate-50 rounded-xl p-3 border border-slate-100">
-        שלב א: <strong>פתחו סשן צפייה</strong> (החיבור מוכן) → שלחו קישור ללקוח → הלקוח מאשר
-        ומשתף מסך — <strong>צפייה בלבד</strong>, ללא התקנת תוכנה. ניתן לסגור חלון זה ולהמשיך
-        לעבוד — תקבלו התראה כשהלקוח יתחבר.
-      </p>
-
       {!session?.agentPeerOpenedAt ? (
         <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="ss-email">מייל לקוח</Label>
-            <Input
-              id="ss-email"
-              type="email"
-              inputMode="email"
-              autoComplete="email"
-              placeholder="customer@example.com"
-              value={emailTo}
-              onChange={(e) => setEmailTo(e.target.value)}
-              className="text-left font-mono text-sm"
-              dir="ltr"
-            />
-          </div>
-          <div className="flex justify-end">
-            <EmailDiagnosticButton />
-          </div>
           <Button
             type="button"
             onClick={handleOpenAgentSession}
-            disabled={!isValidEmail(emailTo) || opening}
+            disabled={opening}
             className="w-full gap-2 bg-teal-600 hover:bg-teal-700"
           >
             <MonitorPlay className="w-4 h-4" />
             {opening ? "פותח סשן..." : "פתח סשן צפייה"}
           </Button>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            הקישור ללקוח ייווצר רק אחרי שהחיבור מוכן — לא לפני.
+          <p className="text-xs text-slate-500 leading-relaxed text-center">
+            לאחר הפתיחה ייווצר קישור להעתקה ללקוח
           </p>
         </div>
       ) : (
         <div className="space-y-3">
           {!linkReady && !session.guestStreamConnectedAt && !session.consentAt && (
             <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 leading-relaxed">
-              מפעיל חיבור לקבלת שיתוף מסך — המתינו עד שיופיע «מוכן לקישור» לפני שליחה ללקוח.
+              מפעיל חיבור — ממתין ל«מוכן לקישור»…
             </p>
           )}
           {!linkReady && (session.guestStreamConnectedAt || session.consentAt) && (
@@ -477,12 +250,7 @@ export default function ScreenSharePanel({
           )}
           {linkReady && !session.consentAt && (
             <p className="text-sm text-teal-900 bg-teal-50 border border-teal-200 rounded-xl px-3 py-2 leading-relaxed font-medium">
-              מוכן לקישור — שלחו ללקוח את הקישור למטה.
-            </p>
-          )}
-          {linkReady && !session.consentAt && lastEmailLog?.status === "sent" && (
-            <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 leading-relaxed">
-              הקישור נשלח במייל — ממתין שהלקוח יפתח, יאשר וישתף מסך.
+              מוכן — העתיקו את הקישור ושלחו ללקוח
             </p>
           )}
           {session.consentAt && !session.recordingConsentAt && (
@@ -512,63 +280,6 @@ export default function ScreenSharePanel({
             <p className="text-xs text-slate-500 rounded-lg border border-dashed border-slate-200 p-2 text-center">
               הקישור יופיע כאן כשהחיבור מוכן
             </p>
-          )}
-          <SessionEmailStatus
-            log={lastEmailLog}
-            sessionEmailSentAt={session.emailSentAt}
-          />
-
-          <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="ss-email-resend">מייל לקוח (לשליחה מחדש)</Label>
-              <Input
-                id="ss-email-resend"
-                type="email"
-                inputMode="email"
-                autoComplete="email"
-                value={emailTo}
-                onChange={(e) => setEmailTo(e.target.value)}
-                className="text-left font-mono text-sm"
-                dir="ltr"
-              />
-            </div>
-            <Button
-              type="button"
-              onClick={handleSendGuestLink}
-              disabled={!isValidEmail(emailTo) || sending || resending || !linkReady}
-              className="w-full gap-2 bg-teal-600 hover:bg-teal-700"
-            >
-              <Mail className="w-4 h-4" />
-              {sending
-                ? "שולח..."
-                : lastEmailLog?.status === "sent"
-                  ? "שלח שוב במייל"
-                  : demoSendRealEmailEnabled
-                    ? "שלח קישור במייל"
-                    : demoModeEnabled
-                      ? "שלח קישור (דמו)"
-                      : "שלח קישור במייל"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleResendEmail}
-              disabled={!isValidEmail(emailTo) || resending || sending || !linkReady}
-              className="w-full gap-2 border-teal-300 text-teal-900 hover:bg-teal-50"
-            >
-              <Mail className="w-4 h-4" />
-              {resending ? "שולח שוב..." : "שלח שוב במייל"}
-            </Button>
-          </div>
-
-          {mailtoHref && (
-            <a
-              href={mailtoHref}
-              className="flex items-center justify-center gap-2 w-full rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-sm text-teal-800 hover:bg-teal-100"
-            >
-              <Mail className="w-4 h-4" />
-              פתח בלקוח דוא״ל (mailto)
-            </a>
           )}
 
           <div className="space-y-3 rounded-xl border border-teal-200 bg-teal-50/80 p-3">
