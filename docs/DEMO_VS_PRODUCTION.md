@@ -188,6 +188,7 @@ exit 0
 - [ ] בדקתי ב-`preview-live.ps1` — לא רואים CRM, בסיס ידע, השתלטות מרחוק, באנר "דמו פעיל".
 - [ ] ב-Vercel → פרויקט **פרודקשן** → Settings → Environment Variables → **Production**: אין `VITE_DEMO_MODE=true`.
 - [ ] יש `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` ב-Production.
+- [ ] (טלפוניה) אם Softphone חי — VITE_SIP_WS_URL + משתני שרת SIP; ראו [SELF_HOSTED_PBX.md](./SELF_HOSTED_PBX.md).
 - [ ] (אופציונלי) הרצתי `scripts/verify-prod-build.ps1` — עבר בלי מחרוזות דמו ב-`dist/`.
 - [ ] אחרי deploy — אימות ידני באתר הלייב (להלן).
 
@@ -233,3 +234,4 @@ exit 0
 ## סיכום במשפט
 
 **קוד אחד ב-GitHub, שני אתרים ב-Vercel — ההפרדה היא במשתני הסביבה בזמן build, לא בקובץ נפרד ב-repo.**
+

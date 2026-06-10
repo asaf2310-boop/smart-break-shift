@@ -18,6 +18,11 @@ import {
   screenShareFeaturesAvailable,
   subscribeScreenShare,
 } from "@/lib/screenShareStore";
+import {
+  cloudSessionSyncEnabled,
+  syncRustDeskSessionToCloud,
+  syncScreenShareSessionToCloud,
+} from "@/lib/supportSessionsSync";
 import { hypHeaderIconClass, m3PageClass } from "@/lib/hypPage";
 import { cn } from "@/lib/utils";
 
@@ -47,6 +52,16 @@ export default function RemoteSupportPage() {
       unsubRust();
       unsubScreen();
     };
+  }, []);
+
+  useEffect(() => {
+    if (!cloudSessionSyncEnabled()) return;
+    for (const session of listScreenSessions()) {
+      syncScreenShareSessionToCloud(session);
+    }
+    for (const session of listRustDeskSessions()) {
+      syncRustDeskSessionToCloud(session);
+    }
   }, []);
 
   const activeRust = rustDeskSessions.filter((s) => s.status === "active").length;
@@ -107,18 +122,24 @@ export default function RemoteSupportPage() {
             </div>
           </div>
           <ol className="m3-label-medium space-y-2 list-decimal list-inside text-on-surface-variant leading-relaxed">
-            <li>בכרטיס לקוח ב-CRM — «תמיכה מרחוק», או מהכפתור למטה.</li>
+            {demoModeEnabled ? (
+              <li>בכרטיס לקוח ב-CRM — «תמיכה מרחוק», או מהכפתור למטה.</li>
+            ) : (
+              <li>התחילו סשן מהכפתור למטה (או מסרגל הטלפוניה כשיש לקוח מקושר).</li>
+            )}
             <li>בחרו שלב א (דפדפן) או RustDesk לפי צורך הטיפול.</li>
-            <li>שלחו מייל (דמו) או העתיקו קישור — הלקוח מאשר בדף הקישור.</li>
+            <li>שלחו מייל או העתיקו קישור — הלקוח מאשר בדף הקישור.</li>
             <li>סיימו את הסשן בסיום הטיפול.</li>
           </ol>
-          <Link
-            to="/crm"
-            className="inline-flex items-center gap-2 m3-btn-outlined text-sm py-2"
-          >
-            <Contact className="w-4 h-4" />
-            מעבר ל-CRM
-          </Link>
+          {demoModeEnabled && (
+            <Link
+              to="/crm"
+              className="inline-flex items-center gap-2 m3-btn-outlined text-sm py-2"
+            >
+              <Contact className="w-4 h-4" />
+              מעבר ל-CRM
+            </Link>
+          )}
         </motion.div>
 
         {demoAvailable ? (
@@ -278,7 +299,7 @@ export default function RemoteSupportPage() {
             transition={{ delay: 0.1 }}
             className="m3-card p-4 sm:p-6 m3-label-medium text-on-surface-variant"
           >
-            תמיכה מרחוק זמינה בסביבת דמו. השתמשו בכרטיס לקוח ב-CRM כשהפיצ&apos;ר פעיל.
+            מודול תמיכה מרחוק אינו פעיל. פנו למנהל המערכת.
           </motion.div>
         )}
       </div>

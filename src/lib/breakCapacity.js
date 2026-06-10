@@ -26,6 +26,18 @@ export function getBreakLimits(settings) {
   };
 }
 
+/** true when agents cannot register/cancel (deadline passed and no admin override). */
+export function isBreakRegistrationBlocked(
+  dateStr,
+  settings,
+  now = new Date(),
+  { skipDeadlineCheck = false } = {}
+) {
+  if (skipDeadlineCheck) return false;
+  if (settings?.registration_override_open) return false;
+  return isBreakRegistrationClosed(dateStr, now);
+}
+
 export function countSlotRegistrations(registrations, timeSlot, breakType) {
   return registrations.filter(
     (r) => r.time_slot === timeSlot && r.break_type === breakType
@@ -62,7 +74,7 @@ export function validateBreakRegistration({
     );
   }
 
-  if (date && !skipDeadlineCheck && isBreakRegistrationClosed(date, now)) {
+  if (date && isBreakRegistrationBlocked(date, settings, now, { skipDeadlineCheck })) {
     throw new BreakRegistrationError(
       "REGISTRATION_CLOSED",
       BREAK_REGISTRATION_DEADLINE_MESSAGE

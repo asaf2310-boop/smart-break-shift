@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { BookOpen, CalendarClock, CalendarDays, Contact, GraduationCap, Home, Monitor, ShieldCheck } from "lucide-react";
+import { BookOpen, CalendarClock, CalendarDays, Contact, Film, GraduationCap, Home, MessageCircle, Monitor, ShieldCheck } from "lucide-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { demoModeEnabled } from "@/api/demoClient";
 import { brandVisualEnabled } from "@/lib/brandShell";
@@ -17,6 +17,7 @@ export default function AppNav() {
   const isCrm = location.pathname.startsWith("/crm");
   const isKnowledge = location.pathname.startsWith("/knowledge");
   const isRemoteSupport = location.pathname.startsWith("/remote-support");
+  const isCustomerChat = location.pathname.startsWith("/customer-chat");
 
   const useBrandNav = brandVisualEnabled;
 
@@ -64,19 +65,23 @@ export default function AppNav() {
             <GraduationCap className="w-4 h-4" />
             הדרכה
           </Link>
+          <Link to="/remote-support" className={tabClass(isRemoteSupport)}>
+            <Monitor className="w-4 h-4" />
+            השתלטות מרחוק
+          </Link>
           {demoModeEnabled && (
             <>
               <Link to="/crm" className={tabClass(isCrm)}>
                 <Contact className="w-4 h-4" />
                 CRM
               </Link>
-              <Link to="/remote-support" className={tabClass(isRemoteSupport)}>
-                <Monitor className="w-4 h-4" />
-                השתלטות מרחוק
-              </Link>
               <Link to="/knowledge" className={tabClass(isKnowledge)}>
                 <BookOpen className="w-4 h-4" />
                 בסיס ידע
+              </Link>
+              <Link to="/customer-chat" className={tabClass(isCustomerChat)}>
+                <MessageCircle className="w-4 h-4" />
+                צ&apos;אט
               </Link>
             </>
           )}
@@ -93,6 +98,13 @@ export default function AppNav() {
               <Link to="/admin/users" className={tabClass(location.pathname === "/admin/users")}>
                 <ShieldCheck className="w-4 h-4" />
                 נציגים
+              </Link>
+              <Link
+                to="/admin/recordings"
+                className={tabClass(location.pathname.startsWith("/admin/recordings"))}
+              >
+                <Film className="w-4 h-4" />
+                הקלטות
               </Link>
               {demoModeEnabled && (
                 <Link to="/admin/knowledge" className={tabClass(location.pathname === "/admin/knowledge")}>

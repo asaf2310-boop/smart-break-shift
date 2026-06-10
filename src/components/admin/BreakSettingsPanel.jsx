@@ -2,9 +2,14 @@ import React, { useState, useEffect } from "react";
 import { dataClient } from "@/api/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Settings, Save, AlertTriangle, Check } from "lucide-react";
+import { Settings, Save, AlertTriangle, Unlock } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { getLiveQueryOptions } from "@/lib/liveQuery";
+import {
+  BREAK_REGISTRATION_OVERRIDE_MESSAGE,
+  getIsraelDateStr,
+  isBreakRegistrationClosed,
+} from "@/constants/scheduling";
 
 const DEFAULT_NOTICE_TEXT = "עקב מחסור בנציגים, היום לא תתאפשר יציאה בזוגות להפסקת צהריים.";
 
@@ -26,6 +31,7 @@ export default function BreakSettingsPanel({ selectedDate }) {
     short_max_per_slot: 1,
     show_shortage_notice: false,
     shortage_notice_text: DEFAULT_NOTICE_TEXT,
+    registration_override_open: false,
   });
 
   useEffect(() => {
@@ -35,6 +41,7 @@ export default function BreakSettingsPanel({ selectedDate }) {
         short_max_per_slot: existing.short_max_per_slot ?? 1,
         show_shortage_notice: existing.show_shortage_notice ?? false,
         shortage_notice_text: existing.shortage_notice_text || DEFAULT_NOTICE_TEXT,
+        registration_override_open: existing.registration_override_open ?? false,
       });
     } else {
       setForm({
@@ -42,6 +49,7 @@ export default function BreakSettingsPanel({ selectedDate }) {
         short_max_per_slot: 1,
         show_shortage_notice: false,
         shortage_notice_text: DEFAULT_NOTICE_TEXT,
+        registration_override_open: false,
       });
     }
   }, [existing?.id, dateStr]);
@@ -61,6 +69,33 @@ export default function BreakSettingsPanel({ selectedDate }) {
   });
 
   const handleChange = (field, value) => setForm(f => ({ ...f, [field]: value }));
+
+  const toggleOverrideMutation = useMutation({
+    mutationFn: async (nextOpen) => {
+      const payload = { ...form, registration_override_open: nextOpen };
+      if (existing) {
+        return dataClient.entities.BreakSettings.update(existing.id, payload);
+      }
+      return dataClient.entities.BreakSettings.create({ ...payload, date: dateStr });
+    },
+    onSuccess: (_, nextOpen) => {
+      setForm((f) => ({ ...f, registration_override_open: nextOpen }));
+      queryClient.invalidateQueries({ queryKey: ["break-settings", dateStr] });
+      queryClient.invalidateQueries({ queryKey: ["break-day", dateStr] });
+      toast({
+        title: nextOpen ? "רישום נפתח" : "רישום נסגר",
+        description: nextOpen
+          ? "נציגים יכולים להירשם ולבטל גם לאחר 10:00"
+          : "חזרה לכלל הרגיל — סגירה ב-10:00",
+      });
+    },
+    onError: () => {
+      toast({ title: "שגיאה", description: "לא הצלחנו לעדכן את מצב הרישום" });
+    },
+  });
+
+  const isTodayIsrael = dateStr === getIsraelDateStr();
+  const pastDeadlineToday = isTodayIsrael && isBreakRegistrationClosed(dateStr);
 
   const Counter = ({ field, label }) => (
     <div className="flex items-center justify-between">
@@ -89,6 +124,64 @@ export default function BreakSettingsPanel({ selectedDate }) {
       </div>
 
       <div className="p-5 space-y-5">
+        {/* Manual registration override */}
+        <div className="space-y-3">
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">רישום ידני</p>
+          <div
+            className={`rounded-2xl border px-4 py-3 space-y-3 ${
+              form.registration_override_open
+                ? "border-emerald-200 bg-emerald-50/80"
+                : pastDeadlineToday
+                  ? "border-amber-200 bg-amber-50/60"
+                  : "border-slate-100 bg-slate-50/50"
+            }`}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <Unlock
+                  className={`w-4 h-4 flex-shrink-0 ${
+                    form.registration_override_open ? "text-emerald-600" : "text-slate-400"
+                  }`}
+                />
+                <div>
+                  <span className="text-sm font-semibold text-slate-700 block">פתיחת רישום ידנית</span>
+                  <span className="text-xs text-slate-500">
+                    אפשר לנציגים להירשם ולבטל גם לאחר 10:00 (שעון ישראל)
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={toggleOverrideMutation.isPending}
+                onClick={() =>
+                  toggleOverrideMutation.mutate(!form.registration_override_open)
+                }
+                className={`relative w-11 h-6 rounded-full transition-all duration-300 flex-shrink-0 ${
+                  form.registration_override_open ? "bg-emerald-500" : "bg-slate-200"
+                } disabled:opacity-50`}
+                aria-pressed={form.registration_override_open}
+                aria-label="פתיחת רישום ידנית להפסקות"
+              >
+                <div
+                  className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all duration-300 ${
+                    form.registration_override_open ? "left-5" : "left-0.5"
+                  }`}
+                />
+              </button>
+            </div>
+            {form.registration_override_open && (
+              <p className="text-xs text-emerald-800 leading-relaxed">{BREAK_REGISTRATION_OVERRIDE_MESSAGE}</p>
+            )}
+            {pastDeadlineToday && !form.registration_override_open && (
+              <p className="text-xs text-amber-800">
+                רישום ליום זה כבר נסגר ב-10:00 — הפעלת המתג תפתח מחדש לנציגים.
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="border-t border-slate-100" />
+
         {/* Capacity controls */}
         <div className="space-y-3">
           <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">מכסת נציגים למשבצת</p>

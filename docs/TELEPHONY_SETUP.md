@@ -3,6 +3,8 @@
 מסמך זה מסביר **מה נדרש מכם** כדי לאפשר שיחות נכנסות ויוצאות אמיתיות מהדפדפן.  
 במצב דמו (`VITE_DEMO_MODE=true`) האפליקציה **אינה** מבצעת חיוג לרשת — רק סימולציה ב-`localStorage`.
 
+> **מרכזייה עצמאית (FreePBX על Hetzner):** מדריך שלב-אחר-שלב — [SELF_HOSTED_PBX.md](./SELF_HOSTED_PBX.md) (VPS, WSS, תור 10 נציגים, Trunk).
+
 ---
 
 ## מה כבר קיים באפליקציה
@@ -95,8 +97,8 @@ flowchart LR
 ```
 
 1. **שלב א'** — דמו ללקוח (`VITE_DEMO_MODE=true`): הדרכה, UI, CRM מדומה.  
-2. **שלב ב' (MVP)** — `VITE_SIP_WS_URL` + `/api/sip-token`, HTTPS, נציג אחד, softphone בדפדפן.  
-3. **שלב ג'** — הקלטות, CDR/webhooks, תור אמיתי, Twilio, TURN ייעודי.
+2. **שלב ב' (Lab)** — VPS + FreePBX + WSS + שלוחות 101–110 — ראו [SELF_HOSTED_PBX.md](./SELF_HOSTED_PBX.md).  
+3. **שלב ג'** — Trunk + DID, CDR/webhooks, TURN, הקלטות.
 
 ### בדיקה מקומית (`vercel dev`)
 

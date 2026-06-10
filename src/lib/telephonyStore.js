@@ -170,7 +170,14 @@ const DEMO_QUEUE_PHONES = [
   { phone: "052-9081123", customer_name: "פנייה חוזרת" },
   { phone: "03-5550198", customer_name: null },
   { phone: "054-7712044", customer_name: "שירות — חשבון" },
+  { phone: "050-3319022", customer_name: "בירור חשבון" },
+  { phone: "058-4401188", customer_name: null },
+  { phone: "02-6123456", customer_name: "מוקד ראשי" },
+  { phone: "053-7789901", customer_name: "פנייה דחופה" },
 ];
+
+const DEMO_MAX_QUEUE = 8;
+const DEMO_MAX_ON_CALL_AGENTS = 8;
 
 let demoTickerId = null;
 let demoOnCallAgents = new Set();
@@ -304,11 +311,12 @@ function seedDemoTelephonyDashboard(currentAgentName) {
   let queueCalls = data.queueCalls;
   let centerStats = data.centerStats;
   if (!queueCalls.length) {
-    queueCalls = DEMO_QUEUE_PHONES.slice(0, 2).map((row, index) => ({
+    const seedCount = Math.min(4, DEMO_QUEUE_PHONES.length);
+    queueCalls = DEMO_QUEUE_PHONES.slice(0, seedCount).map((row, index) => ({
       id: `queue_seed_${index}`,
       phone: row.phone,
       customer_name: row.customer_name,
-      waiting_seconds: 35 + index * 22,
+      waiting_seconds: 28 + index * 18,
     }));
     changed = true;
   }
@@ -319,9 +327,9 @@ function seedDemoTelephonyDashboard(currentAgentName) {
     !centerStats.abandoned
   ) {
     centerStats = {
-      incoming: 18,
-      answered: 11,
-      abandoned: 2,
+      incoming: 42,
+      answered: 31,
+      abandoned: 4,
       waiting: queueCalls.length,
     };
     changed = true;
@@ -334,7 +342,8 @@ function seedDemoTelephonyDashboard(currentAgentName) {
   }
 
   if (!demoOnCallAgents.size && agents.length) {
-    demoOnCallAgents = new Set([agents[0]]);
+    const onCallCount = Math.min(3, agents.length, DEMO_MAX_ON_CALL_AGENTS);
+    demoOnCallAgents = new Set(agents.slice(0, onCallCount));
   }
 }
 
@@ -344,11 +353,15 @@ function tickDemoTelephonyDashboard() {
   const data = readPersisted();
   const agents = getAgentNamesList();
 
-  if (Math.random() < 0.35 && agents.length) {
+  if (Math.random() < 0.4 && agents.length) {
     const pick = agents[Math.floor(Math.random() * agents.length)];
     if (!isActiveCallForAgent(pick)) {
-      if (Math.random() < 0.5) demoOnCallAgents.add(pick);
-      else demoOnCallAgents.delete(pick);
+      if (demoOnCallAgents.size < DEMO_MAX_ON_CALL_AGENTS && Math.random() < 0.55) {
+        demoOnCallAgents.add(pick);
+      } else if (demoOnCallAgents.size > 0 && Math.random() < 0.45) {
+        const busy = [...demoOnCallAgents];
+        demoOnCallAgents.delete(busy[Math.floor(Math.random() * busy.length)]);
+      }
     }
   }
 
@@ -359,23 +372,23 @@ function tickDemoTelephonyDashboard() {
 
   let centerStats = { ...data.centerStats };
 
-  if (Math.random() < 0.2 && queueCalls.length < 5) {
+  if (Math.random() < 0.22 && queueCalls.length < DEMO_MAX_QUEUE) {
     const template =
       DEMO_QUEUE_PHONES[Math.floor(Math.random() * DEMO_QUEUE_PHONES.length)];
     queueCalls.push({
       id: makeId("queue"),
       phone: template.phone,
       customer_name: template.customer_name,
-      waiting_seconds: 8,
+      waiting_seconds: 6 + Math.floor(Math.random() * 12),
     });
     centerStats.incoming += 1;
-  } else if (Math.random() < 0.18 && queueCalls.length) {
+  } else if (Math.random() < 0.2 && queueCalls.length) {
     queueCalls.shift();
-    if (Math.random() < 0.55) centerStats.answered += 1;
+    if (Math.random() < 0.6) centerStats.answered += 1;
     else centerStats.abandoned += 1;
   }
 
-  if (Math.random() < 0.25) centerStats.incoming += 1;
+  if (Math.random() < 0.18) centerStats.incoming += 1;
 
   centerStats.waiting = queueCalls.length;
   writePersisted({ queueCalls, centerStats });

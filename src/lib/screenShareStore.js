@@ -1,4 +1,8 @@
-import { demoModeEnabled, demoSendRealEmailEnabled } from "@/api/demoClient";
+import {
+  demoModeEnabled,
+  demoSendRealEmailEnabled,
+  remoteSupportEnabled,
+} from "@/api/demoClient";
 import { cleanEnvValue } from "@/api/supabase";
 import {
   escapeHtml,
@@ -10,12 +14,22 @@ import {
   simulatedReasonForApiResult,
   simulatedReasonForDemoSendDisabled,
 } from "@/lib/emailSimulatedReason";
+import { getStoredAgentName } from "@/constants/scheduling";
+import { syncScreenShareSessionToCloud } from "@/lib/supportSessionsSync";
+import { buildShortGuestUrl } from "@/lib/shortGuestLink";
+import {
+  decodeGuestBootstrapPayload,
+  encodeGuestBootstrapPayload,
+  generateShortCode,
+  GUEST_BOOTSTRAP_QUERY_KEY,
+} from "@/lib/guestLinkCodec";
+
+export { GUEST_BOOTSTRAP_QUERY_KEY, encodeGuestBootstrapPayload, decodeGuestBootstrapPayload };
 
 export const SCREEN_SHARE_STORAGE_KEY = "smart-break-shift-screen-share-v1";
 export const SCREEN_SHARE_CHANGE_EVENT = "screen-share-changed";
 /** דמו: תוקף קישור אורח — 72 שעות מיצירת הסשן (לא מחיקה אוטומטית מ-localStorage) */
 export const DEMO_GUEST_SESSION_TTL_MS = 72 * 60 * 60 * 1000;
-export const GUEST_BOOTSTRAP_QUERY_KEY = "b";
 
 const EMAIL_SUBJECT_SCREEN =
   "שיתוף מסך לתמיכה טכנית (צפייה בלבד) — באישורך";
@@ -24,11 +38,11 @@ export const DEMO_SCREEN_SHARE_EMAIL_MESSAGE =
   "בדמו: הקישור מוכן — העתיקו את הקישור למטה או פתחו mailto";
 
 function makeId(prefix) {
-  return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+  return `${prefix}${generateShortCode(8)}`;
 }
 
 function readStore() {
-  if (!demoModeEnabled || typeof window === "undefined") {
+  if (!remoteSupportEnabled || typeof window === "undefined") {
     return { sessions: [], emailLogs: [], recordings: [] };
   }
   try {
@@ -50,7 +64,7 @@ function readSessions() {
 }
 
 function writeStore({ sessions, emailLogs, recordings }) {
-  if (!demoModeEnabled || typeof window === "undefined") return;
+  if (!remoteSupportEnabled || typeof window === "undefined") return;
   const current = readStore();
   localStorage.setItem(
     SCREEN_SHARE_STORAGE_KEY,
@@ -67,17 +81,28 @@ function writeSessions(sessions) {
   writeStore({ sessions });
 }
 
-export function screenShareDemoAvailable() {
-  return demoModeEnabled;
+function cloudSyncSession(session, options) {
+  if (session) syncScreenShareSessionToCloud(session, options);
 }
 
-/** alias — אותה דרישת דמו כמו remoteSupport */
+/** @deprecated use screenShareFeaturesAvailable */
+export function screenShareDemoAvailable() {
+  return screenShareFeaturesAvailable();
+}
+
+/** צפייה בדפדפן — זמין בפרודקשן (ברירת מחדל) ובדמו */
 export function screenShareFeaturesAvailable() {
-  return demoModeEnabled;
+  return remoteSupportEnabled;
 }
 
 export function getSession(id) {
   return readSessions().find((s) => s.id === id) || null;
+}
+
+export function getSessionByShortCode(shortCode) {
+  const code = String(shortCode || "").trim();
+  if (!code) return null;
+  return readSessions().find((s) => s.shortCode === code) || null;
 }
 
 /** כתובת ציבורית לקישורים במייל — VITE_APP_URL או origin; מ-localhost מעדיף env */
@@ -88,57 +113,6 @@ export function getPublicAppOrigin() {
   const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(origin);
   if (isLocal && fromEnv) return fromEnv;
   return fromEnv || origin;
-}
-
-function toBase64Url(str) {
-  if (typeof btoa === "undefined") return "";
-  const bytes = new TextEncoder().encode(str);
-  let binary = "";
-  bytes.forEach((b) => {
-    binary += String.fromCharCode(b);
-  });
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function fromBase64Url(encoded) {
-  if (!encoded || typeof atob === "undefined") return null;
-  try {
-    const padded = encoded.replace(/-/g, "+").replace(/_/g, "/");
-    const padLen = (4 - (padded.length % 4)) % 4;
-    const binary = atob(padded + "=".repeat(padLen));
-    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
-    return new TextDecoder().decode(bytes);
-  } catch {
-    return null;
-  }
-}
-
-function encodeGuestBootstrapPayload(session) {
-  if (!session?.id || !session.createdAt) return "";
-  const payload = {
-    c: session.createdAt,
-    a: String(session.agentName || "").slice(0, 120),
-    e: String(session.customerEmail || "").slice(0, 200),
-    r: session.crmCustomerId || null,
-  };
-  return toBase64Url(JSON.stringify(payload));
-}
-
-function decodeGuestBootstrapPayload(encoded) {
-  const json = fromBase64Url(encoded);
-  if (!json) return null;
-  try {
-    const parsed = JSON.parse(json);
-    if (!parsed?.c || Number.isNaN(new Date(parsed.c).getTime())) return null;
-    return {
-      createdAt: parsed.c,
-      agentName: String(parsed.a || "").slice(0, 120),
-      customerEmail: String(parsed.e || "").slice(0, 200),
-      crmCustomerId: parsed.r || null,
-    };
-  } catch {
-    return null;
-  }
 }
 
 export function isGuestSessionExpired(session) {
@@ -152,7 +126,7 @@ export function isGuestSessionExpired(session) {
  * דמו: יוצר סשן ב-localStorage של האורח מפרמטר bootstrap ב-URL (מכשיר/דפדפן אחר).
  */
 export function bootstrapGuestSessionFromUrl(sessionId, bootstrapParam) {
-  if (!demoModeEnabled || !sessionId || !bootstrapParam) return null;
+  if (!remoteSupportEnabled || !sessionId || !bootstrapParam) return null;
 
   const payload = decodeGuestBootstrapPayload(bootstrapParam);
   if (!payload) return null;
@@ -177,6 +151,7 @@ export function bootstrapGuestSessionFromUrl(sessionId, bootstrapParam) {
     recordings: [],
     emailSentAt: null,
     endedAt: null,
+    endedReason: null,
   };
 
   if (isGuestSessionExpired(session)) return null;
@@ -227,8 +202,9 @@ export function createScreenSession({
   const id = makeId("ss");
   const session = {
     id,
+    shortCode: generateShortCode(6),
     crmCustomerId: crmCustomerId || null,
-    agentName: String(agentName || "").trim(),
+    agentName: String(agentName || getStoredAgentName() || "").trim(),
     customerEmail: String(customerEmail || "").trim(),
     status: "active",
     createdAt: now,
@@ -239,9 +215,11 @@ export function createScreenSession({
     recordings: [],
     emailSentAt: null,
     endedAt: null,
+    endedReason: null,
   };
   const sessions = [...readSessions(), session];
   writeSessions(sessions);
+  cloudSyncSession(session);
   return session;
 }
 
@@ -253,6 +231,7 @@ export function updateSession(id, patch) {
     return updated;
   });
   writeSessions(sessions);
+  if (updated) cloudSyncSession(updated);
   return updated;
 }
 
@@ -265,6 +244,23 @@ export function logScreenConsent(id) {
 export function logRecordingConsent(id) {
   const now = new Date().toISOString();
   return updateSession(id, { recordingConsentAt: now });
+}
+
+/**
+ * סנכרון מצב מהאורח (PeerJS) ל-localStorage של הנציג — מכשירים נפרדים.
+ * מעדכן רק שדות שחסרים אצל הנציג (לא דורס ערכים קיימים).
+ */
+export function applyGuestPeerSync(id, { consentAt, recordingConsentAt } = {}) {
+  if (!id) return null;
+  const session = getSession(id);
+  if (!session) return null;
+  const patch = {};
+  if (consentAt && !session.consentAt) patch.consentAt = consentAt;
+  if (recordingConsentAt && !session.recordingConsentAt) {
+    patch.recordingConsentAt = recordingConsentAt;
+  }
+  if (Object.keys(patch).length === 0) return session;
+  return updateSession(id, patch);
 }
 
 /** נציג התחיל הקלטה — מוצג לאורח (דמו) */
@@ -401,6 +397,9 @@ export function appendSessionRecording(sessionId, meta) {
     ),
     recordings: [...store.recordings, entry],
   });
+  cloudSyncSession(getSession(sessionId), {
+    recordingCount: sessionRecordings.length,
+  });
   return entry;
 }
 
@@ -497,12 +496,13 @@ export function buildDemoRecordingAuditExport() {
   };
 }
 
-export function endSession(id) {
+export function endSession(id, { endedReason = "agent_ended" } = {}) {
   const now = new Date().toISOString();
   return updateSession(id, {
     status: "ended",
     endedAt: now,
     recordingActiveAt: null,
+    endedReason: endedReason || null,
   });
 }
 
@@ -511,29 +511,22 @@ export function endSession(id) {
  * @param {string} [origin] — ברירת מחדל getPublicAppOrigin()
  */
 export function buildScreenShareGuestUrl(sessionOrId, origin) {
-  const base = (origin || getPublicAppOrigin()).replace(/\/$/, "");
-  let sessionId;
   let session = null;
 
   if (sessionOrId && typeof sessionOrId === "object" && sessionOrId.id) {
     session = sessionOrId;
-    sessionId = session.id;
   } else {
-    sessionId = String(sessionOrId || "").trim();
+    const sessionId = String(sessionOrId || "").trim();
     session = sessionId ? getSession(sessionId) : null;
   }
 
-  if (!sessionId) return "";
+  if (!session?.id) return "";
+  if (!remoteSupportEnabled || !session.createdAt) {
+    const base = (origin || getPublicAppOrigin()).replace(/\/$/, "");
+    return `${base}/support/screen/${encodeURIComponent(session.id)}`;
+  }
 
-  const path = `${base}/support/screen/${encodeURIComponent(sessionId)}`;
-  if (!demoModeEnabled || !session?.createdAt) return path;
-
-  const bootstrap = encodeGuestBootstrapPayload(session);
-  if (!bootstrap) return path;
-
-  const params = new URLSearchParams();
-  params.set(GUEST_BOOTSTRAP_QUERY_KEY, bootstrap);
-  return `${path}?${params.toString()}`;
+  return buildShortGuestUrl(session, { kind: "screen", origin });
 }
 
 export function buildScreenShareEmailBody({
@@ -804,5 +797,15 @@ export function subscribeScreenShare(callback) {
   if (typeof window === "undefined") return () => {};
   const handler = () => callback();
   window.addEventListener(SCREEN_SHARE_CHANGE_EVENT, handler);
-  return () => window.removeEventListener(SCREEN_SHARE_CHANGE_EVENT, handler);
+  // Cross-tab sync: localStorage write triggers `storage` events in other tabs.
+  const onStorage = (e) => {
+    if (!e) return;
+    if (e.key !== SCREEN_SHARE_STORAGE_KEY) return;
+    callback();
+  };
+  window.addEventListener("storage", onStorage);
+  return () => {
+    window.removeEventListener(SCREEN_SHARE_CHANGE_EVENT, handler);
+    window.removeEventListener("storage", onStorage);
+  };
 }

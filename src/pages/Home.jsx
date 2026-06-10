@@ -1,5 +1,5 @@
 import React from "react";
-import { BookOpen, CalendarClock, CalendarDays, Contact, GraduationCap, Monitor } from "lucide-react";
+import { BookOpen, CalendarClock, CalendarDays, Contact, GraduationCap, MessageCircle, Monitor } from "lucide-react";
 import { getAgentNamesList } from "@/constants/scheduling";
 import AgentLogin from "@/components/auth/AgentLogin";
 import HypHomeShell from "@/components/hyp/HypHomeShell";
@@ -32,6 +32,13 @@ const productionCards = [
     icon: GraduationCap,
     iconTile: "m3-icon-tile",
   },
+  {
+    to: "/remote-support",
+    title: "השתלטות מרחוק",
+    desc: "צפייה בדפדפן · RustDesk · אישור ותיעוד",
+    icon: Monitor,
+    iconTile: "m3-icon-tile",
+  },
 ];
 
 const demoOnlyCards = [
@@ -43,17 +50,17 @@ const demoOnlyCards = [
     iconTile: "m3-icon-tile",
   },
   {
-    to: "/remote-support",
-    title: "השתלטות מרחוק",
-    desc: "שלב א: צפייה בדפדפן · RustDesk · סשנים",
-    icon: Monitor,
-    iconTile: "m3-icon-tile",
-  },
-  {
     to: "/knowledge",
     title: "בסיס ידע",
     desc: "שאלות ותשובות ממסמכי הארגון",
     icon: BookOpen,
+    iconTile: "m3-icon-tile",
+  },
+  {
+    to: "/customer-chat",
+    title: "צ'אט לקוחות",
+    desc: "תור המתנה, קבלת שיחות ומענה ללקוחות",
+    icon: MessageCircle,
     iconTile: "m3-icon-tile",
   },
 ];

@@ -118,6 +118,9 @@ export const BREAK_REGISTRATION_DEADLINE_HOUR = 10;
 export const BREAK_REGISTRATION_DEADLINE_MESSAGE =
   "רישום וביטול הפסקות ליום זה נסגרים בשעה 10:00 בבוקר (שעון ישראל). לא ניתן לפעול לאחר המועד.";
 
+export const BREAK_REGISTRATION_OVERRIDE_MESSAGE =
+  "רישום הפסקות פתוח באופן ידני על ידי המנהל — ניתן להירשם ולבטל גם לאחר 10:00.";
+
 export function parseDateStrLocal(dateStr) {
   const [y, m, d] = String(dateStr || "").split("-").map(Number);
   return new Date(y, m - 1, d);

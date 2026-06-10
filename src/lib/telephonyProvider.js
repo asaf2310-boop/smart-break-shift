@@ -114,6 +114,29 @@ function extractCallerPhone(session) {
   return "unknown";
 }
 
+function getCurrentAgentNameForSip() {
+  if (typeof window === "undefined") return "";
+  try {
+    return localStorage.getItem("agent_name")?.trim() || "";
+  } catch {
+    return "";
+  }
+}
+
+/** @returns {RTCIceServer[]} */
+export function parseIceServers() {
+  const fallback = [{ urls: "stun:stun.l.google.com:19302" }];
+  const raw = import.meta.env.VITE_ICE_SERVERS?.trim();
+  if (!raw) return fallback;
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+  } catch {
+    /* invalid JSON — use STUN default */
+  }
+  return fallback;
+}
+
 function buildOutboundDestination(phone, domain) {
   const normalized = normalizePhone(phone);
   if (!normalized) throw new Error("הזינו מספר טלפון");
@@ -148,7 +171,13 @@ async function fetchSipCredentials() {
   }
 
   try {
-    const res = await fetch("/api/sip-token", { credentials: "same-origin" });
+    const agentName = getCurrentAgentNameForSip();
+    const params = agentName ? `?agent=${encodeURIComponent(agentName)}` : "";
+    const headers = agentName ? { "x-agent-name": agentName } : {};
+    const res = await fetch(`/api/sip-token${params}`, {
+      credentials: "same-origin",
+      headers,
+    });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data?.ok) {
       return {
@@ -240,7 +269,7 @@ async function createSimpleUser(credentials) {
       displayName: credentials.user,
       sessionDescriptionHandlerFactoryOptions: {
         peerConnectionConfiguration: {
-          iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+          iceServers: parseIceServers(),
         },
       },
     },

@@ -1,7 +1,16 @@
 /**
  * Vercel serverless — SIP credentials for in-browser WebRTC softphone.
- * Secrets live in server env only (SIP_USER, SIP_PASSWORD, SIP_DOMAIN).
- * Client fetches at connect time — not embedded in Vite build.
+ * Secrets live in server env only — not embedded in Vite build.
+ *
+ * Multi-agent:
+ *   GET /api/sip-token?agent=101
+ *   GET /api/sip-token?agent=רחלה%20מנשה
+ *   Header: x-agent-name (optional fallback)
+ *
+ * Env patterns:
+ *   SIP_USER_101 / SIP_PASSWORD_101  — per extension
+ *   SIP_AGENT_MAP={"שם נציג":"101",...}  — name → extension
+ *   SIP_USER / SIP_PASSWORD — fallback when no agent resolved
  */
 
 function getSiteOrigin(req) {
@@ -38,6 +47,63 @@ function corsHeaders(req) {
   return {};
 }
 
+function parseAgentMap() {
+  const raw = process.env.SIP_AGENT_MAP?.trim();
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function resolveAgentKey(req) {
+  const queryAgent = req.query?.agent;
+  if (typeof queryAgent === "string" && queryAgent.trim()) {
+    return queryAgent.trim();
+  }
+  const header = req.headers["x-agent-name"];
+  if (typeof header === "string" && header.trim()) {
+    return header.trim();
+  }
+  return null;
+}
+
+function resolveExtension(agentKey) {
+  if (!agentKey) return null;
+  if (/^\d{3,5}$/.test(agentKey)) return agentKey;
+  const map = parseAgentMap();
+  const mapped = map[agentKey];
+  if (mapped != null && String(mapped).trim()) {
+    return String(mapped).replace(/\D/g, "") || String(mapped).trim();
+  }
+  return null;
+}
+
+function resolveSipCredentials(extension) {
+  const domain = process.env.SIP_DOMAIN?.trim();
+  const wsUrl =
+    process.env.SIP_WS_URL?.trim() || process.env.VITE_SIP_WS_URL?.trim() || "";
+
+  if (extension) {
+    const ext = String(extension).replace(/\D/g, "") || extension;
+    const user = process.env[`SIP_USER_${ext}`]?.trim();
+    const password = process.env[`SIP_PASSWORD_${ext}`]?.trim();
+    if (user && password && domain && wsUrl) {
+      return { wsUrl, user, password, domain, extension: ext };
+    }
+  }
+
+  const user = process.env.SIP_USER?.trim();
+  const password = process.env.SIP_PASSWORD?.trim();
+  if (user && password && domain && wsUrl) {
+    return { wsUrl, user, password, domain, extension: null };
+  }
+
+  return null;
+}
+
 export default async function handler(req, res) {
   Object.entries(corsHeaders(req)).forEach(([k, v]) => res.setHeader(k, v));
 
@@ -53,27 +119,26 @@ export default async function handler(req, res) {
     return res.status(403).json({ ok: false, reason: "Forbidden" });
   }
 
-  const user = process.env.SIP_USER?.trim();
-  const password = process.env.SIP_PASSWORD?.trim();
-  const domain = process.env.SIP_DOMAIN?.trim();
-  const wsUrl =
-    process.env.SIP_WS_URL?.trim() || process.env.VITE_SIP_WS_URL?.trim() || "";
+  const agentKey = resolveAgentKey(req);
+  const extension = resolveExtension(agentKey);
+  const creds = resolveSipCredentials(extension);
 
-  if (!wsUrl || !user || !password || !domain) {
-    return res.status(503).json({
-      ok: false,
-      reason: "SIP לא מוגדר בשרת (SIP_WS_URL, SIP_USER, SIP_PASSWORD, SIP_DOMAIN)",
-    });
+  if (!creds) {
+    const hint = agentKey
+      ? `לא נמצאו אישורי SIP לנציג «${agentKey}» (SIP_USER_${extension || "XXX"} / SIP_AGENT_MAP)`
+      : "SIP לא מוגדר בשרת (SIP_WS_URL, SIP_USER, SIP_PASSWORD, SIP_DOMAIN)";
+    return res.status(503).json({ ok: false, reason: hint });
   }
 
-  const clientUser = process.env.VITE_SIP_USER?.trim() || user;
+  const clientUser = process.env.VITE_SIP_USER?.trim() || creds.user;
 
   return res.status(200).json({
     ok: true,
-    wsUrl,
+    wsUrl: creds.wsUrl,
     user: clientUser,
-    password,
-    domain,
-    aor: `sip:${clientUser}@${domain}`,
+    password: creds.password,
+    domain: creds.domain,
+    extension: creds.extension,
+    aor: `sip:${clientUser}@${creds.domain}`,
   });
 }

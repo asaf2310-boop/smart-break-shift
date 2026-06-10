@@ -4,6 +4,7 @@ import { BookOpen, Maximize2, X } from "lucide-react";
 import KnowledgeChat from "@/components/knowledge/KnowledgeChat";
 import { CHAT_FLOAT_CHROME_CLASS } from "@/lib/floatingWidgetChrome";
 import { demoModeEnabled } from "@/api/demoClient";
+import { isCustomerChatGuestPath } from "@/lib/customerChatPaths";
 
 /** FAB + מיני-צ'אט ידע — לא מוצג בדף /knowledge המלא */
 export default function FloatingKnowledgeWidget() {
@@ -12,6 +13,7 @@ export default function FloatingKnowledgeWidget() {
 
   if (!demoModeEnabled) return null;
   if (location.pathname === "/knowledge") return null;
+  if (isCustomerChatGuestPath(location.pathname, location.search)) return null;
 
   return (
     <>
