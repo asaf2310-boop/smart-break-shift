@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import React, { useCallback, useEffect, useRef, useState } from "react";
+=======
+import React, { useEffect, useRef, useState } from "react";
+>>>>>>> 842dd9e (Initial commit)
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import Peer from "peerjs";
 import { motion } from "framer-motion";
@@ -12,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+<<<<<<< HEAD
   AlertDialog,
   AlertDialogAction,
   AlertDialogContent,
@@ -59,6 +64,18 @@ function parsePeerData(raw) {
   }
   return raw && typeof raw === "object" ? raw : null;
 }
+=======
+  logRecordingConsent,
+  logScreenConsent,
+  GUEST_BOOTSTRAP_QUERY_KEY,
+  resolveGuestSession,
+  screenShareDemoAvailable,
+  subscribeScreenShare,
+} from "@/lib/screenShareStore";
+
+const DEMO_BANNER =
+  "דמו — שיתוף מסך בדפדפן (צפייה בלבד). מומלץ Chrome או Edge. לפרודקשן: PeerServer עצמי.";
+>>>>>>> 842dd9e (Initial commit)
 
 /** אודיו מערכת ב-getDisplayMedia — בדרך כלל Chrome/Edge בדסקטופ */
 function displayMediaSystemAudioSupported() {
@@ -86,6 +103,7 @@ export default function ScreenShareGuestPage() {
   const peerRef = useRef(null);
   const callRef = useRef(null);
   const streamRef = useRef(null);
+<<<<<<< HEAD
   const reconnectTimerRef = useRef(null);
   const sharingRef = useRef(false);
   const endNotifiedRef = useRef(false);
@@ -442,6 +460,8 @@ export default function ScreenShareGuestPage() {
     isAgentEndedSession,
     handleEndedByAgent,
   ]);
+=======
+>>>>>>> 842dd9e (Initial commit)
 
   useEffect(() => {
     const refresh = () => setSession(resolveGuestSession(sessionId, bootstrapKey));
@@ -471,6 +491,7 @@ export default function ScreenShareGuestPage() {
 
   useEffect(() => {
     return () => {
+<<<<<<< HEAD
       if (sessionId && !endNotifiedRef.current) {
         endInStore("client_closed");
       }
@@ -506,6 +527,17 @@ export default function ScreenShareGuestPage() {
       window.removeEventListener("pagehide", tryEndOnUnload);
     };
   }, [sessionId, shared, endInStore, notifyAgentSessionEnded]);
+=======
+      try {
+        callRef.current?.close();
+        peerRef.current?.destroy();
+      } catch {
+        /* ignore */
+      }
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+>>>>>>> 842dd9e (Initial commit)
 
   const handleShareScreen = async () => {
     if (!session || session.status === "ended") return;
@@ -525,6 +557,7 @@ export default function ScreenShareGuestPage() {
       }
 
       const stream = await navigator.mediaDevices.getDisplayMedia({
+<<<<<<< HEAD
         video: {
           frameRate: { ideal: 15, max: 30 },
         },
@@ -537,6 +570,15 @@ export default function ScreenShareGuestPage() {
 
       stream.getVideoTracks()[0]?.addEventListener("ended", () => {
         endGuestSessionWithNotify("client_stop", { updateUi: true });
+=======
+        video: { displaySurface: "monitor" },
+        audio: includeSystemAudio && systemAudioSupported,
+      });
+      streamRef.current = stream;
+
+      stream.getVideoTracks()[0]?.addEventListener("ended", () => {
+        setShared(false);
+>>>>>>> 842dd9e (Initial commit)
         setError("שיתוף המסך הופסק מהדפדפן");
       });
 
@@ -546,9 +588,14 @@ export default function ScreenShareGuestPage() {
       }
       setSession(resolveGuestSession(sessionId, bootstrapKey));
 
+<<<<<<< HEAD
       const peer = new Peer(getPeerJsOptions());
       peerRef.current = peer;
       bindPeerAgentEndListener(peer);
+=======
+      const peer = new Peer({ debug: 0 });
+      peerRef.current = peer;
+>>>>>>> 842dd9e (Initial commit)
 
       await new Promise((resolve, reject) => {
         const timeout = setTimeout(
@@ -565,6 +612,7 @@ export default function ScreenShareGuestPage() {
         });
       });
 
+<<<<<<< HEAD
       sharingRef.current = true;
       const connected = await connectMediaToAgent(peer, stream);
       if (!connected) {
@@ -575,6 +623,21 @@ export default function ScreenShareGuestPage() {
       notifyAgentGuestReady(resolveGuestSession(sessionId, bootstrapKey));
       setShared(true);
       setError("");
+=======
+      const call = peer.call(sessionId, stream);
+      callRef.current = call;
+
+      call.on("close", () => {
+        setShared(false);
+      });
+
+      call.on("error", () => {
+        setError("החיבור לנציג נותק");
+        setShared(false);
+      });
+
+      setShared(true);
+>>>>>>> 842dd9e (Initial commit)
     } catch (err) {
       const name = err?.name || "";
       let message = err?.message || "לא ניתן לשתף מסך";
@@ -595,10 +658,17 @@ export default function ScreenShareGuestPage() {
     }
   };
 
+<<<<<<< HEAD
   if (!screenShareFeaturesAvailable()) {
     return (
       <div className={m3PageClass("flex items-center justify-center p-6")} dir="rtl">
         <p className="text-slate-600 text-center">שיתוף מסך אינו פעיל בסביבה זו.</p>
+=======
+  if (!screenShareDemoAvailable()) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50" dir="rtl">
+        <p className="text-slate-600 text-center">שיתוף מסך זמין במצב דמו בלבד.</p>
+>>>>>>> 842dd9e (Initial commit)
       </div>
     );
   }
@@ -607,7 +677,14 @@ export default function ScreenShareGuestPage() {
     shared && Boolean(session?.recordingConsentAt && session?.recordingActiveAt);
 
   return (
+<<<<<<< HEAD
     <div className={m3PageClass("flex items-center justify-center p-4 relative")} dir="rtl">
+=======
+    <div
+      className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50 to-cyan-50 flex items-center justify-center p-4 relative"
+      dir="rtl"
+    >
+>>>>>>> 842dd9e (Initial commit)
       {showRecordingWatermark && (
         <div
           className="fixed bottom-4 left-4 z-50 pointer-events-none select-none text-sm font-semibold text-slate-800/45 tracking-wide"
@@ -624,7 +701,11 @@ export default function ScreenShareGuestPage() {
       >
         <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-start gap-2 text-amber-950 text-xs leading-relaxed">
           <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
+<<<<<<< HEAD
           <span>{GUEST_INFO_BANNER}</span>
+=======
+          <span>{DEMO_BANNER}</span>
+>>>>>>> 842dd9e (Initial commit)
         </div>
 
         <div className="p-6 space-y-5">
@@ -639,6 +720,7 @@ export default function ScreenShareGuestPage() {
           {!session ? (
             <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 rounded-xl p-3 border border-red-100">
               <AlertCircle className="w-5 h-5 shrink-0" />
+<<<<<<< HEAD
               <p>
                 {bootstrapKey
                   ? messageForGuestLinkError(GUEST_LINK_ERROR.EXPIRED)
@@ -659,6 +741,14 @@ export default function ScreenShareGuestPage() {
                 uploadedBy="guest"
                 uploaderLabel="לקוח"
               />
+=======
+              <p>קישור לא תקין או שפג תוקפו. בקשו מהנציג קישור חדש.</p>
+            </div>
+          ) : session.status === "ended" ? (
+            <p className="text-sm text-center text-slate-600">סשן שיתוף המסך הסתיים.</p>
+          ) : shared ? (
+            <div className="text-center space-y-3">
+>>>>>>> 842dd9e (Initial commit)
               <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" />
               <p className="font-semibold text-emerald-800">המסך משותף לנציג</p>
               {session.recordingConsentAt && session.recordingActiveAt && (
@@ -671,6 +761,7 @@ export default function ScreenShareGuestPage() {
                   המסך מוקלט
                 </div>
               )}
+<<<<<<< HEAD
               {error && (
                 <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed">
                   {error}
@@ -710,6 +801,15 @@ export default function ScreenShareGuestPage() {
                 uploadedBy="guest"
                 uploaderLabel="לקוח"
               />
+=======
+              <p className="text-xs text-slate-500 leading-relaxed">
+                השאירו דף זה פתוח. לעצירה — לחצו «הפסק שיתוף» בחלון הדפדפן או סגרו את
+                השיתוף.
+              </p>
+            </div>
+          ) : (
+            <>
+>>>>>>> 842dd9e (Initial commit)
               <ol className="text-sm text-slate-700 space-y-2 list-decimal list-inside bg-slate-50 rounded-xl p-3 border border-slate-100 leading-relaxed">
                 <li>השתמשו ב-Chrome או Edge (מומלץ)</li>
                 <li>סמנו «אני מאשר שיתוף מסך»</li>
@@ -786,6 +886,7 @@ export default function ScreenShareGuestPage() {
           </p>
         </div>
       </motion.div>
+<<<<<<< HEAD
 
       <AlertDialog open={showAgentEndedDialog} onOpenChange={setShowAgentEndedDialog}>
         <AlertDialogContent dir="rtl" className="text-right">
@@ -800,6 +901,8 @@ export default function ScreenShareGuestPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+=======
+>>>>>>> 842dd9e (Initial commit)
     </div>
   );
 }

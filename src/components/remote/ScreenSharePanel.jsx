@@ -6,12 +6,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { createCallLog, createEmailLog, getCustomerById } from "@/lib/crmStore";
+<<<<<<< HEAD
 import { useScreenShareSession } from "@/contexts/ScreenShareSessionContext";
+=======
+>>>>>>> 842dd9e (Initial commit)
 import {
   buildScreenShareGuestUrl,
   buildScreenShareMailtoUrl,
   createScreenSession,
   DEMO_SCREEN_SHARE_EMAIL_MESSAGE,
+<<<<<<< HEAD
   ensureGuestLinkReady,
   GUEST_LINK_CLOUD_PENDING_MESSAGE,
   endSession,
@@ -23,6 +27,15 @@ import {
   sendScreenShareEmail,
   subscribeScreenShare,
 } from "@/lib/screenShareStore";
+=======
+  endSession,
+  getLastEmailLogForSession,
+  getSession,
+  sendScreenShareEmail,
+  subscribeScreenShare,
+} from "@/lib/screenShareStore";
+import ScreenShareAgentView from "@/components/remote/ScreenShareAgentView";
+>>>>>>> 842dd9e (Initial commit)
 import EmailStatusBanner from "@/components/remote/EmailStatusBanner";
 import EmailDiagnosticButton from "@/components/remote/EmailDiagnosticButton";
 import SessionEmailStatus from "@/components/remote/SessionEmailStatus";
@@ -41,6 +54,7 @@ export default function ScreenSharePanel({
   customerName,
   customerEmail: customerEmailProp,
   hideEmailStatusBanner = false,
+<<<<<<< HEAD
   onSessionActiveChange,
 }) {
   const { toast } = useToast();
@@ -50,6 +64,14 @@ export default function ScreenSharePanel({
   const [copied, setCopied] = useState(false);
   const [opening, setOpening] = useState(false);
   const [sending, setSending] = useState(false);
+=======
+}) {
+  const { toast } = useToast();
+  const [emailTo, setEmailTo] = useState("");
+  const [session, setSession] = useState(null);
+  const [copied, setCopied] = useState(false);
+  const [starting, setStarting] = useState(false);
+>>>>>>> 842dd9e (Initial commit)
   const [resending, setResending] = useState(false);
   const [emailLogRevision, setEmailLogRevision] = useState(0);
 
@@ -64,6 +86,7 @@ export default function ScreenSharePanel({
   }, [defaultCustomerEmail]);
 
   useEffect(() => {
+<<<<<<< HEAD
     if (session?.id) return;
     let active = null;
     if (crmCustomerId) {
@@ -95,6 +118,12 @@ export default function ScreenSharePanel({
       } else {
         setSession(latest);
       }
+=======
+    if (!session?.id) return undefined;
+    const refresh = () => {
+      const latest = getSession(session.id);
+      if (latest) setSession(latest);
+>>>>>>> 842dd9e (Initial commit)
       setEmailLogRevision((n) => n + 1);
     };
     refresh();
@@ -106,12 +135,19 @@ export default function ScreenSharePanel({
     return getLastEmailLogForSession(session.id);
   }, [session?.id, session?.emailSentAt, emailLogRevision]);
 
+<<<<<<< HEAD
   const linkReady = Boolean(session?.agentPeerReadyAt);
 
   const guestUrl = useMemo(() => {
     if (!session?.id || !linkReady) return "";
     return buildScreenShareGuestUrl(session);
   }, [session, linkReady]);
+=======
+  const guestUrl = useMemo(() => {
+    if (!session?.id) return "";
+    return buildScreenShareGuestUrl(session);
+  }, [session]);
+>>>>>>> 842dd9e (Initial commit)
 
   const mailtoHref = useMemo(
     () =>
@@ -185,7 +221,11 @@ export default function ScreenSharePanel({
     [emailTo, crmCustomerId, agentName, customerName, toast]
   );
 
+<<<<<<< HEAD
   const handleOpenAgentSession = async () => {
+=======
+  const handleStartSessionAndSend = async () => {
+>>>>>>> 842dd9e (Initial commit)
     if (!isValidEmail(emailTo)) {
       toast({
         title: "מייל לא תקין",
@@ -195,16 +235,24 @@ export default function ScreenSharePanel({
       return;
     }
 
+<<<<<<< HEAD
     setOpening(true);
     try {
       let activeSession = session;
       if (!activeSession?.id || activeSession.status === "ended") {
+=======
+    setStarting(true);
+    try {
+      let activeSession = session;
+      if (!activeSession?.id) {
+>>>>>>> 842dd9e (Initial commit)
         const created = createScreenSession({
           crmCustomerId,
           agentName,
           customerEmail: emailTo,
         });
         activeSession = created;
+<<<<<<< HEAD
         logSessionStart(created);
       }
       const opened = markAgentPeerOpened(activeSession.id);
@@ -275,6 +323,14 @@ export default function ScreenSharePanel({
           description: GUEST_LINK_CLOUD_PENDING_MESSAGE,
         });
       }
+=======
+        setSession(created);
+        logSessionStart(created);
+      }
+
+      const url = buildScreenShareGuestUrl(activeSession);
+      await sendGuestLinkEmail(activeSession, url);
+>>>>>>> 842dd9e (Initial commit)
     } catch (err) {
       setEmailLogRevision((n) => n + 1);
       const rateLimited = err.status === 429;
@@ -301,7 +357,11 @@ export default function ScreenSharePanel({
         variant: "destructive",
       });
     } finally {
+<<<<<<< HEAD
       setSending(false);
+=======
+      setStarting(false);
+>>>>>>> 842dd9e (Initial commit)
     }
   };
 
@@ -317,6 +377,7 @@ export default function ScreenSharePanel({
     }
     setResending(true);
     try {
+<<<<<<< HEAD
       const ready = await ensureGuestLinkReady(session);
       if (!ready.ok) {
         toast({
@@ -344,6 +405,9 @@ export default function ScreenSharePanel({
           description: GUEST_LINK_CLOUD_PENDING_MESSAGE,
         });
       }
+=======
+      await sendGuestLinkEmail(session, guestUrl);
+>>>>>>> 842dd9e (Initial commit)
       setEmailLogRevision((n) => n + 1);
     } catch (err) {
       setEmailLogRevision((n) => n + 1);
@@ -360,6 +424,7 @@ export default function ScreenSharePanel({
   };
 
   const handleCopyLink = async () => {
+<<<<<<< HEAD
     if (!session?.id) return;
     if (!linkReady) {
       toast({
@@ -397,6 +462,18 @@ export default function ScreenSharePanel({
       toast({
         title: "לא הועתק",
         description: url || guestUrl,
+=======
+    if (!guestUrl) return;
+    try {
+      await navigator.clipboard.writeText(guestUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast({ title: "הועתק", description: "קישור הלקוח הועתק" });
+    } catch {
+      toast({
+        title: "לא הועתק",
+        description: guestUrl,
+>>>>>>> 842dd9e (Initial commit)
         variant: "destructive",
       });
     }
@@ -417,12 +494,20 @@ export default function ScreenSharePanel({
       </div>
 
       <p className="text-sm text-slate-700 leading-relaxed bg-slate-50 rounded-xl p-3 border border-slate-100">
+<<<<<<< HEAD
         שלב א: <strong>פתחו סשן צפייה</strong> (החיבור מוכן) → שלחו קישור ללקוח → הלקוח מאשר
         ומשתף מסך — <strong>צפייה בלבד</strong>, ללא התקנת תוכנה. ניתן לסגור חלון זה ולהמשיך
         לעבוד — תקבלו התראה כשהלקוח יתחבר.
       </p>
 
       {!session?.agentPeerOpenedAt ? (
+=======
+        שלב א: הלקוח פותח קישור בדפדפן, מאשר ומשתף מסך — <strong>צפייה בלבד</strong>, ללא
+        התקנת תוכנה. הנציג חייב להשאיר חלון זה פתוח בזמן הצפייה.
+      </p>
+
+      {!session ? (
+>>>>>>> 842dd9e (Initial commit)
         <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3">
           <div className="space-y-1.5">
             <Label htmlFor="ss-email">מייל לקוח</Label>
@@ -443,6 +528,7 @@ export default function ScreenSharePanel({
           </div>
           <Button
             type="button"
+<<<<<<< HEAD
             onClick={handleOpenAgentSession}
             disabled={!isValidEmail(emailTo) || opening}
             className="w-full gap-2 bg-teal-600 hover:bg-teal-700"
@@ -476,6 +562,35 @@ export default function ScreenSharePanel({
           {linkReady && !session.consentAt && lastEmailLog?.status === "sent" && (
             <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 leading-relaxed">
               הקישור נשלח במייל — ממתין שהלקוח יפתח, יאשר וישתף מסך.
+=======
+            onClick={handleStartSessionAndSend}
+            disabled={!isValidEmail(emailTo) || starting}
+            className="w-full gap-2 bg-teal-600 hover:bg-teal-700"
+          >
+            <MonitorPlay className="w-4 h-4" />
+            {starting
+              ? "מפעיל סשן ושולח..."
+              : demoSendRealEmailEnabled
+                ? "התחל סשן ושלח קישור במייל"
+                : demoModeEnabled
+                  ? "התחל סשן (דמו — העתקת קישור)"
+                  : "התחל סשן ושלח קישור במייל"}
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {!session.consentAt && (
+            <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 leading-relaxed">
+              ממתין לאישור הלקוח בקישור —{" "}
+              {demoModeEnabled && !demoSendRealEmailEnabled
+                ? "העתיקו את הקישור למטה או פתחו mailto; "
+                : lastEmailLog?.status === "sent"
+                  ? "הקישור נשלח במייל; "
+                  : lastEmailLog?.status === "failed"
+                    ? "שליחת המייל נכשלה — לחצו «שלח שוב במייל» או mailto; "
+                    : "שלחו את הקישור במייל (כפתור «שלח שוב במייל»); "}
+              האישור נרשם כשהלקוח מאשר בדף שיתוף המסך.
+>>>>>>> 842dd9e (Initial commit)
             </p>
           )}
           {session.consentAt && !session.recordingConsentAt && (
@@ -484,6 +599,7 @@ export default function ScreenSharePanel({
               בקישור.
             </p>
           )}
+<<<<<<< HEAD
           {linkReady ? (
             <div className="flex items-center gap-2 text-xs text-slate-600 break-all rounded-lg border border-slate-200 p-2 bg-slate-50">
               <Link2 className="w-3.5 h-3.5 shrink-0" />
@@ -506,6 +622,24 @@ export default function ScreenSharePanel({
               הקישור יופיע כאן כשהחיבור מוכן
             </p>
           )}
+=======
+          <div className="flex items-center gap-2 text-xs text-slate-600 break-all rounded-lg border border-slate-200 p-2 bg-slate-50">
+            <Link2 className="w-3.5 h-3.5 shrink-0" />
+            <span className="font-mono text-left flex-1" dir="ltr">
+              {guestUrl}
+            </span>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={handleCopyLink}
+              className="shrink-0 gap-1"
+            >
+              {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              העתק
+            </Button>
+          </div>
+>>>>>>> 842dd9e (Initial commit)
           <SessionEmailStatus
             log={lastEmailLog}
             sessionEmailSentAt={session.emailSentAt}
@@ -527,6 +661,7 @@ export default function ScreenSharePanel({
             </div>
             <Button
               type="button"
+<<<<<<< HEAD
               onClick={handleSendGuestLink}
               disabled={!isValidEmail(emailTo) || sending || resending || !linkReady}
               className="w-full gap-2 bg-teal-600 hover:bg-teal-700"
@@ -547,6 +682,11 @@ export default function ScreenSharePanel({
               variant="outline"
               onClick={handleResendEmail}
               disabled={!isValidEmail(emailTo) || resending || sending || !linkReady}
+=======
+              variant="outline"
+              onClick={handleResendEmail}
+              disabled={!isValidEmail(emailTo) || resending || starting}
+>>>>>>> 842dd9e (Initial commit)
               className="w-full gap-2 border-teal-300 text-teal-900 hover:bg-teal-50"
             >
               <Mail className="w-4 h-4" />
@@ -564,6 +704,7 @@ export default function ScreenSharePanel({
             </a>
           )}
 
+<<<<<<< HEAD
           <div className="space-y-3 rounded-xl border border-teal-200 bg-teal-50/80 p-3">
             {session.guestStreamConnectedAt ? (
               <p className="text-sm font-medium text-teal-900">
@@ -594,6 +735,13 @@ export default function ScreenSharePanel({
               סיים סשן ובטל קישור
             </Button>
           </div>
+=======
+          <ScreenShareAgentView
+            sessionId={session.id}
+            agentName={agentName}
+            onEnded={handleEndSession}
+          />
+>>>>>>> 842dd9e (Initial commit)
         </div>
       )}
     </div>

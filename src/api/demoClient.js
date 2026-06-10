@@ -1,9 +1,14 @@
+<<<<<<< HEAD
+=======
+import { validateBreakRegistration } from "@/lib/breakCapacity";
+>>>>>>> 842dd9e (Initial commit)
 import {
   createDemoAppUser,
   listAllDemoAppUsers,
   softDeleteDemoAppUser,
   updateDemoAppUser,
 } from "@/lib/appUsersStore";
+<<<<<<< HEAD
 import { demoModeEnabled } from "./demoMode";
 
 export { demoModeEnabled } from "./demoMode";
@@ -12,6 +17,14 @@ export { customerChatEnabled } from "./customerChatMode";
 
 export const DEMO_STORE_KEY = "smart-break-shift-demo-store-v1";
 
+=======
+
+export const DEMO_STORE_KEY = "smart-break-shift-demo-store-v1";
+
+/** Build-time only (Vercel `VITE_*` at deploy). Off unless value is exactly "true". */
+export const demoModeEnabled = import.meta.env.VITE_DEMO_MODE === "true";
+
+>>>>>>> 842dd9e (Initial commit)
 /**
  * בדמו: שליחת מייל אמיתית דרך /api/send-email (Resend).
  * ברירת מחדל: מופעלת כש-demoModeEnabled; כיבוי מפורש ב-build: VITE_DEMO_SEND_REAL_EMAIL=false
@@ -221,7 +234,10 @@ function createEntity(entityName) {
       const store = readStore();
 
       if (entityName === "BreakRegistration") {
+<<<<<<< HEAD
         const { validateBreakRegistration } = await import("@/lib/breakCapacity");
+=======
+>>>>>>> 842dd9e (Initial commit)
         const registrations = (store.breakRegistrations || []).filter((r) => r.date === row.date);
         const settings = (store.breakSettings || []).find((s) => s.date === row.date) || null;
         validateBreakRegistration({
@@ -230,7 +246,10 @@ function createEntity(entityName) {
           agentName: row.agent_name,
           breakType: row.break_type,
           timeSlot: row.time_slot,
+<<<<<<< HEAD
           date: row.date,
+=======
+>>>>>>> 842dd9e (Initial commit)
         });
       }
 
@@ -250,7 +269,10 @@ function createEntity(entityName) {
 
     async update(id, row) {
       const store = readStore();
+<<<<<<< HEAD
 
+=======
+>>>>>>> 842dd9e (Initial commit)
       let updated = null;
       store[storeKey] = (store[storeKey] || []).map((existing) => {
         if (existing.id !== id) return existing;
@@ -278,7 +300,10 @@ const demoAgentEntity = {
       active: u.active !== false,
       blocked: u.blocked === true,
       needs_password_setup: u.needsPasswordSetup !== false && !u.password,
+<<<<<<< HEAD
       password_plain: u.password || null,
+=======
+>>>>>>> 842dd9e (Initial commit)
     }));
   },
   async list() {
@@ -293,7 +318,10 @@ const demoAgentEntity = {
       active: true,
       blocked: false,
       needs_password_setup: true,
+<<<<<<< HEAD
       password_plain: null,
+=======
+>>>>>>> 842dd9e (Initial commit)
     };
   },
   async update(id, row) {
@@ -310,7 +338,10 @@ const demoAgentEntity = {
       active: u.active !== false,
       blocked: u.blocked === true,
       needs_password_setup: u.needsPasswordSetup !== false && !u.password,
+<<<<<<< HEAD
       password_plain: u.password || null,
+=======
+>>>>>>> 842dd9e (Initial commit)
     };
   },
   async delete(id) {

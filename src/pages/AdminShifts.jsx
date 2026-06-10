@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { format, addDays, subDays } from "date-fns";
 import { motion } from "framer-motion";
+<<<<<<< HEAD
 import { ShieldCheck, ChevronRight, ChevronLeft, Check, Palmtree, X, Sun, Moon, MessageSquare } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { dataClient } from "@/api/client";
@@ -15,6 +16,13 @@ import {
   parseDateStrLocal,
   formatDateStr,
 } from "@/constants/scheduling";
+=======
+import { ShieldCheck, ChevronRight, ChevronLeft, Check, Palmtree, X, Sun, Moon } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { dataClient } from "@/api/client";
+import { Link } from "react-router-dom";
+import { AGENT_NAMES, HOLIDAY_EVE_DATES, WEEKDAY_LABELS, getWeekDays } from "@/constants/scheduling";
+>>>>>>> 842dd9e (Initial commit)
 import AutoScheduleBuilder from "../components/shifts/AutoScheduleBuilder";
 import PublishedScheduleEditor from "../components/shifts/PublishedScheduleEditor";
 import VacationApprovalPanel from "../components/admin/VacationApprovalPanel";
@@ -29,6 +37,7 @@ const SHIFTS = [
   { type: "evening", label: "משמרת ערב", time: "09:00 – 17:00", icon: Moon, gradient: "from-indigo-400 to-purple-500", bg: "bg-indigo-50/50" },
 ];
 
+<<<<<<< HEAD
 export default function AdminShifts() {
   const [selectedDate, setSelectedDate] = useState(() => getTodayIsraelDate());
   const [activeTab, setActiveTab] = useState("current"); // "current" | "next"
@@ -36,6 +45,19 @@ export default function AdminShifts() {
   const calendarWeekStart = getWeekStartIsrael();
   const adminWeekOffset =
     Math.round((weekStart.getTime() - calendarWeekStart.getTime()) / (7 * 24 * 60 * 60 * 1000));
+=======
+function getWeekStart(date) {
+  const d = new Date(date);
+  d.setDate(d.getDate() - d.getDay());
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+export default function AdminShifts() {
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [activeTab, setActiveTab] = useState("current"); // "current" | "next"
+  const weekStart = getWeekStart(selectedDate);
+>>>>>>> 842dd9e (Initial commit)
 
   const weekDays = useMemo(() => getWeekDays(weekStart), [weekStart]);
 
@@ -68,7 +90,11 @@ export default function AdminShifts() {
           <input
             type="date"
             value={format(selectedDate, "yyyy-MM-dd")}
+<<<<<<< HEAD
             onChange={(e) => setSelectedDate(parseDateStrLocal(e.target.value))}
+=======
+            onChange={e => setSelectedDate(new Date(e.target.value))}
+>>>>>>> 842dd9e (Initial commit)
             className="text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl px-4 py-2 shadow-sm outline-none focus:border-indigo-400"
           />
           <button onClick={() => setSelectedDate(d => addDays(d, 7))} className="w-9 h-9 rounded-xl bg-white border border-slate-200 hover:border-indigo-300 flex items-center justify-center transition-all shadow-sm">
@@ -76,6 +102,7 @@ export default function AdminShifts() {
           </button>
         </div>
 
+<<<<<<< HEAD
         <p className="text-center text-[11px] text-slate-500 mb-2 font-mono" dir="ltr">
           weekStart={formatDateStr(weekStart)} · current {formatDateStr(weekDays[0])}–{formatDateStr(weekDays[4])} · next {formatDateStr(addDays(weekStart, 7))}–{formatDateStr(addDays(weekStart, 11))}
         </p>
@@ -87,6 +114,8 @@ export default function AdminShifts() {
           </p>
         )}
 
+=======
+>>>>>>> 842dd9e (Initial commit)
         {/* Tabs */}
         <div className="flex justify-center gap-2 mb-6">
           <button
@@ -98,9 +127,12 @@ export default function AdminShifts() {
             }`}
           >
             שיבוץ נוכחי
+<<<<<<< HEAD
             <span className="block text-[10px] font-normal opacity-90 mt-0.5">
               {format(weekDays[0], "dd/MM")}–{format(weekDays[4], "dd/MM")}
             </span>
+=======
+>>>>>>> 842dd9e (Initial commit)
           </button>
           <button
             onClick={() => setActiveTab("next")}
@@ -111,9 +143,12 @@ export default function AdminShifts() {
             }`}
           >
             שיבוץ שבוע הבא
+<<<<<<< HEAD
             <span className="block text-[10px] font-normal opacity-90 mt-0.5">
               {format(addDays(weekStart, 7), "dd/MM")}–{format(addDays(weekStart, 11), "dd/MM")}
             </span>
+=======
+>>>>>>> 842dd9e (Initial commit)
           </button>
         </div>
 
@@ -277,7 +312,11 @@ function ConstraintsView({ weekStart }) {
                   .map(v => ({ name: v.agent_name, type: "vac_approved", note: v.note })),
                 ...vacAgents.filter(v => v.status !== "approved")
                   .filter(v => !unavailAgents.find(u => u.agent_name === v.agent_name) && !approvedVacAgents.find(a => a.agent_name === v.agent_name))
+<<<<<<< HEAD
                   .map(v => ({ name: v.agent_name, type: "vac_" + v.status, note: v.note })),
+=======
+                  .map(v => ({ name: v.agent_name, type: "vac_" + v.status })),
+>>>>>>> 842dd9e (Initial commit)
               ].filter(item => {
                 if (seenNames.has(item.name)) return false;
                 seenNames.add(item.name);
@@ -329,6 +368,7 @@ function ConstraintsView({ weekStart }) {
                           icon = <Palmtree className="w-2.5 h-2.5 flex-shrink-0" />;
                         }
                         return (
+<<<<<<< HEAD
                           <div
                             key={item.name}
                             title={item.note ? `${item.name}: ${item.note}` : item.name}
@@ -345,6 +385,15 @@ function ConstraintsView({ weekStart }) {
                               <span className="text-[11px] text-indigo-700/90 bg-indigo-50/80 rounded-md px-1 py-0.5 mt-0.5 leading-snug line-clamp-2">
                                 {item.note}
                               </span>
+=======
+                          <div key={item.name} className={`flex flex-col px-1.5 py-1 rounded-lg border text-xs font-medium ${bg} ${textColor}`}>
+                            <div className="flex items-center gap-1">
+                              {icon}
+                              <span className="truncate">{item.name}</span>
+                            </div>
+                            {item.note && (
+                              <span className="text-xs opacity-70 mt-0.5 leading-tight">{item.note}</span>
+>>>>>>> 842dd9e (Initial commit)
                             )}
                           </div>
                         );

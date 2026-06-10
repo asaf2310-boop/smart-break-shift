@@ -5,7 +5,11 @@ import { ArrowRight, BookOpen } from "lucide-react";
 import KnowledgeChat from "@/components/knowledge/KnowledgeChat";
 import { demoModeEnabled } from "@/api/demoClient";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
+<<<<<<< HEAD
 import { hypHeaderIconClass, m3PageClass } from "@/lib/hypPage";
+=======
+import { m3PageClass } from "@/lib/hypPage";
+>>>>>>> 842dd9e (Initial commit)
 import { cn } from "@/lib/utils";
 
 export default function KnowledgePage() {
@@ -20,8 +24,18 @@ export default function KnowledgePage() {
           className="flex items-center justify-between mb-6"
         >
           <div className="flex items-center gap-3">
+<<<<<<< HEAD
             <div className={hypHeaderIconClass("w-12 h-12 shadow-elevation-2")}>
               <BookOpen className="w-6 h-6 text-white" />
+=======
+            <div
+              className={cn(
+                "w-12 h-12 rounded-2xl flex items-center justify-center shadow-elevation-2",
+                demoModeEnabled ? "hyp-page-icon" : "bg-primary"
+              )}
+            >
+              <BookOpen className={cn("w-6 h-6", demoModeEnabled ? "text-white" : "text-primary-foreground")} />
+>>>>>>> 842dd9e (Initial commit)
             </div>
             <div>
               <h1 className="m3-headline-small text-xl font-semibold">שאל את הידע</h1>

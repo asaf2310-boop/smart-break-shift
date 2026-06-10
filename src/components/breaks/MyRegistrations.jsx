@@ -1,5 +1,6 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
+<<<<<<< HEAD
 import { Coffee, UtensilsCrossed } from "lucide-react";
 
 export default function MyRegistrations({
@@ -30,6 +31,13 @@ export default function MyRegistrations({
     );
   };
 
+=======
+import { Coffee, UtensilsCrossed, X } from "lucide-react";
+
+export default function MyRegistrations({ lunchReg, shortReg, onCancel }) {
+  if (!lunchReg && !shortReg) return null;
+
+>>>>>>> 842dd9e (Initial commit)
   return (
     <AnimatePresence>
       <motion.div
@@ -38,9 +46,13 @@ export default function MyRegistrations({
         exit={{ opacity: 0, y: -10, scale: 0.98 }}
         className="rounded-3xl border border-slate-200 bg-white shadow-sm p-5"
       >
+<<<<<<< HEAD
         <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-3 text-right">
           ההרשמות שלי{selectedDateLabel ? ` · ${selectedDateLabel}` : ""}
         </p>
+=======
+        <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-3 text-right">ההרשמות שלי היום</p>
+>>>>>>> 842dd9e (Initial commit)
         <div className="flex flex-col sm:flex-row gap-3">
           <AnimatePresence>
             {shortReg && (
@@ -60,7 +72,16 @@ export default function MyRegistrations({
                     <p className="text-slate-800 font-bold text-sm">{shortReg.time_slot}</p>
                   </div>
                 </div>
+<<<<<<< HEAD
                 {cancelButton(shortReg, "short")}
+=======
+                <button
+                  onClick={() => onCancel(shortReg.id)}
+                  className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-red-100 hover:text-red-500 text-slate-400 flex items-center justify-center transition-all"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+>>>>>>> 842dd9e (Initial commit)
               </motion.div>
             )}
             {lunchReg && (
@@ -80,7 +101,16 @@ export default function MyRegistrations({
                     <p className="text-slate-800 font-bold text-sm">{lunchReg.time_slot}</p>
                   </div>
                 </div>
+<<<<<<< HEAD
                 {cancelButton(lunchReg, "lunch")}
+=======
+                <button
+                  onClick={() => onCancel(lunchReg.id)}
+                  className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-red-100 hover:text-red-500 text-slate-400 flex items-center justify-center transition-all"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+>>>>>>> 842dd9e (Initial commit)
               </motion.div>
             )}
           </AnimatePresence>
@@ -88,4 +118,8 @@ export default function MyRegistrations({
       </motion.div>
     </AnimatePresence>
   );
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 842dd9e (Initial commit)

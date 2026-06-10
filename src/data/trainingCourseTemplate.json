@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 {
   "source": "לוז קורס דיגיטל 12-19.4.xlsx",
   "sessions": [
@@ -31,3 +32,38 @@
     { "id": "d7-coaching", "dayOffset": 7, "startTime": "12:00", "endTime": "16:00", "title": "חניכות במוקד" }
   ]
 }
+=======
+{
+  "source": "לוז קורס דיגיטל 12-19.4.xlsx",
+  "sessions": [
+    { "id": "d0-intake-process", "dayOffset": 0, "startTime": "10:00", "endTime": "11:00", "title": "תהליך קליטה בחברה" },
+    { "id": "d0-acquiring-crm", "dayOffset": 0, "startTime": "11:00", "endTime": "13:00", "title": "הדרכה על עולם הסליקה וCRM יעד" },
+    { "id": "d0-break-lunch-1", "dayOffset": 0, "startTime": "13:00", "endTime": "13:30", "title": "הפסקה", "isBreak": true },
+    { "id": "d0-call-center-intro", "dayOffset": 0, "startTime": "13:30", "endTime": "14:00", "title": "הכרות ראשונית עם המוקד" },
+
+    { "id": "d1-crm-portal", "dayOffset": 1, "startTime": "09:00", "endTime": "13:00", "title": "המשך הדרכה CRM יעד + הדרכה על פורטל לקוחות" },
+    { "id": "d1-break-lunch", "dayOffset": 1, "startTime": "13:00", "endTime": "13:30", "title": "הפסקה", "isBreak": true },
+    { "id": "d1-listening", "dayOffset": 1, "startTime": "13:30", "endTime": "15:00", "title": "האזנות במוקד" },
+
+    { "id": "d2-portal-crm-review", "dayOffset": 2, "startTime": "09:00", "endTime": "10:00", "title": "חזרה על פורטל יעד וCRM" },
+    { "id": "d2-easycount-accounting", "dayOffset": 2, "startTime": "10:00", "endTime": "11:00", "title": "הדרכה על מערכת איזיקאונט — מסך הנה\"ח ודוח הכנסות" },
+    { "id": "d2-easycount-reports", "dayOffset": 2, "startTime": "11:00", "endTime": "12:30", "title": "הדרכה על מערכת איזיקאונט — דוחות והגדרות" },
+    { "id": "d2-break-lunch", "dayOffset": 2, "startTime": "13:00", "endTime": "13:30", "title": "הפסקה", "isBreak": true },
+    { "id": "d2-dynamics-crm", "dayOffset": 2, "startTime": "13:30", "endTime": "15:00", "title": "הדרכה על CRM דיינמיקס" },
+    { "id": "d2-listening-tickets", "dayOffset": 2, "startTime": "15:00", "endTime": "17:00", "title": "האזנות + טיפול בטיקטים" },
+
+    { "id": "d3-easycount-review", "dayOffset": 3, "startTime": "09:00", "endTime": "10:00", "title": "הדרכה על מערכת איזיקאונט — חזרה על החומר והמשך דוחות והגדרות" },
+    { "id": "d3-easycount-tax", "dayOffset": 3, "startTime": "10:00", "endTime": "12:00", "title": "הדרכה על מערכת איזיקאונט — המשך הגדרות ורשות המיסים" },
+    { "id": "d3-easycount-mgmt", "dayOffset": 3, "startTime": "12:00", "endTime": "13:00", "title": "הדרכה על מערכת איזיקאונט — ניהול ומפיצים" },
+    { "id": "d3-break-lunch", "dayOffset": 3, "startTime": "13:00", "endTime": "13:30", "title": "הפסקה", "isBreak": true },
+    { "id": "d3-phone-whatsapp", "dayOffset": 3, "startTime": "14:00", "endTime": "17:00", "title": "מענה לשיחות במוקד טלפון ווואטסאפ" },
+
+    { "id": "d4-review-all", "dayOffset": 4, "startTime": "10:00", "endTime": "12:00", "title": "חזרה על כל החומר הנלמד" },
+    { "id": "d4-break-lunch", "dayOffset": 4, "startTime": "12:00", "endTime": "12:30", "title": "הפסקה", "isBreak": true },
+    { "id": "d4-call-handling", "dayOffset": 4, "startTime": "12:30", "endTime": "17:00", "title": "מענה לשיחות במוקד" },
+
+    { "id": "d7-exam-wrap", "dayOffset": 7, "startTime": "10:00", "endTime": "12:00", "title": "מבחן וסיום קורס" },
+    { "id": "d7-coaching", "dayOffset": 7, "startTime": "12:00", "endTime": "16:00", "title": "חניכות במוקד" }
+  ]
+}
+>>>>>>> 842dd9e (Initial commit)

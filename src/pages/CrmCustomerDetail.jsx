@@ -65,7 +65,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/components/ui/use-toast";
 import HypPageLayout from "@/components/hyp/HypPageLayout";
+<<<<<<< HEAD
 import { m3PageClass } from "@/lib/hypPage";
+=======
+>>>>>>> 842dd9e (Initial commit)
 import { useTelephony } from "@/context/TelephonyContext";
 import { telephonyDemoAvailable } from "@/lib/telephonyStore";
 import RemoteSupportPanel from "@/components/remote/RemoteSupportPanel";
@@ -114,7 +117,11 @@ export default function CrmCustomerDetail() {
 
   if (!customer) {
     return (
+<<<<<<< HEAD
       <div className={m3PageClass("flex items-center justify-center p-6")} dir="rtl">
+=======
+      <div className="min-h-screen flex items-center justify-center p-6" dir="rtl">
+>>>>>>> 842dd9e (Initial commit)
         <div className="text-center">
           <p className="text-slate-600 mb-4">לקוח לא נמצא</p>
           <Link to="/crm" className="text-indigo-600 font-semibold text-sm">
@@ -556,6 +563,10 @@ export default function CrmCustomerDetail() {
             </section>
           </>
         )}
+<<<<<<< HEAD
+=======
+      </div>
+>>>>>>> 842dd9e (Initial commit)
 
       <ReferralTransferDialog
         referral={transferRef}

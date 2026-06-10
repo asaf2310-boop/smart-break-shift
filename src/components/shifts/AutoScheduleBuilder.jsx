@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Zap, Sun, Moon, Check, X, RefreshCw, Plus, MessageSquare } from "lucide-react";
 
 const DAYS = ["ראשון", "שני", "שלישי", "רביעי", "חמישי"];
+<<<<<<< HEAD
 import {
   AGENT_NAMES,
   HOLIDAY_EVE_DATES,
@@ -13,15 +14,24 @@ import {
 } from "@/constants/scheduling";
 import { sendScheduleSmsNotifications } from "@/lib/scheduleSms";
 import { refreshScheduleQueriesAfterPublish } from "@/lib/shiftScheduleQuery";
+=======
+import { AGENT_NAMES, HOLIDAY_EVE_DATES } from "@/constants/scheduling";
+import { sendScheduleSmsNotifications } from "@/lib/scheduleSms";
+>>>>>>> 842dd9e (Initial commit)
 import { useToast } from "@/components/ui/use-toast";
 import { demoModeEnabled } from "@/api/demoClient";
 
 // Auto-schedule algorithm:
 // - For regular days: split available agents evenly between morning & evening
+<<<<<<< HEAD
 // - Auto-assign puts each agent on at most one shift per day (admin may override when editing)
 // - Balance tracked across the week so each agent gets ~equal morning/evening
 // - At most MAX_MORNING_AUTO_ASSIGNMENTS_PER_WEEK morning shifts (08:00–16:00) per agent in one generated week
 // - Evening assignments are not capped by auto-schedule (manual add may differ)
+=======
+// - An agent works only ONE shift per day
+// - Balance tracked across the week so each agent gets ~equal morning/evening
+>>>>>>> 842dd9e (Initial commit)
 // - For holiday eve: only agents who explicitly marked themselves available (not unavailable) appear, under "holiday_eve" key
 function buildAutoSchedule(weekDays, unavailabilities, vacationRequests, confirmedAgentNames = new Set()) {
   const schedule = {};
@@ -58,6 +68,7 @@ function buildAutoSchedule(weekDays, unavailabilities, vacationRequests, confirm
     // Agents available for each shift
     const availMorning = AGENT_NAMES.filter(n => !isUnavailable(n, dateStr, "morning"));
     const availEvening = AGENT_NAMES.filter(n => !isUnavailable(n, dateStr, "evening"));
+<<<<<<< HEAD
     const canAssignMorning = (name) =>
       agentMorningCount[name] < MAX_MORNING_AUTO_ASSIGNMENTS_PER_WEEK;
 
@@ -65,12 +76,18 @@ function buildAutoSchedule(weekDays, unavailabilities, vacationRequests, confirm
     const onlyMorning = AGENT_NAMES.filter(
       n => availMorning.includes(n) && !availEvening.includes(n) && canAssignMorning(n)
     );
+=======
+
+    // Agents only available for one shift go directly there
+    const onlyMorning = AGENT_NAMES.filter(n => availMorning.includes(n) && !availEvening.includes(n));
+>>>>>>> 842dd9e (Initial commit)
     const onlyEvening = AGENT_NAMES.filter(n => !availMorning.includes(n) && availEvening.includes(n));
     const bothAvail = AGENT_NAMES.filter(n => availMorning.includes(n) && availEvening.includes(n));
 
     const morningAgents = [...onlyMorning];
     const eveningAgents = [...onlyEvening];
 
+<<<<<<< HEAD
     // Agents at morning cap but free for evening → evening only
     bothAvail.filter(n => !canAssignMorning(n)).forEach(n => eveningAgents.push(n));
 
@@ -86,6 +103,16 @@ function buildAutoSchedule(weekDays, unavailabilities, vacationRequests, confirm
 
     // Sort bothCanMorning: those with most morning excess go to evening, least go to morning
     const sorted = [...bothCanMorning].sort((a, b) => {
+=======
+    // Target: morning and evening should each get half of total available agents
+    const totalAvail = onlyMorning.length + onlyEvening.length + bothAvail.length;
+    const targetMorning = Math.round(totalAvail / 2);
+    const morningNeeded = Math.max(0, targetMorning - onlyMorning.length);
+    // morningNeeded = how many from bothAvail should go to morning
+
+    // Sort bothAvail: those with most morning excess go to evening, least go to morning
+    const sorted = [...bothAvail].sort((a, b) => {
+>>>>>>> 842dd9e (Initial commit)
       const biasA = agentMorningCount[a] - agentEveningCount[a];
       const biasB = agentMorningCount[b] - agentEveningCount[b];
       return biasA - biasB; // ascending: least morning first → send to morning
@@ -170,6 +197,7 @@ function NotePopover({ note, onSave, color = "indigo" }) {
   );
 }
 
+<<<<<<< HEAD
 /** Agents not already listed in this shift cell (same cell only — not day-wide). */
 function agentsAvailableForCell(cellAgents) {
   return AGENT_NAMES.filter((name) => !cellAgents.includes(name));
@@ -188,6 +216,9 @@ function ShiftCell({
   onAgentClick,
   cellHighlighted = false,
 }) {
+=======
+function ShiftCell({ cellKey, agents, notes = {}, availableToAdd, onRemove, onAdd, onNoteChange, color = "indigo" }) {
+>>>>>>> 842dd9e (Initial commit)
   const [showDropdown, setShowDropdown] = useState(false);
   const ref = useRef(null);
 
@@ -198,6 +229,7 @@ function ShiftCell({
   }, []);
 
   const bgClass = color === "purple" ? "bg-purple-50 border-purple-200 text-purple-700" : "bg-indigo-50 border-indigo-200 text-indigo-700";
+<<<<<<< HEAD
   const pillHighlightClass =
     "ring-2 ring-amber-400 border-amber-400 bg-amber-100 shadow-sm text-amber-900";
 
@@ -208,11 +240,17 @@ function ShiftCell({
       }`}
       dir="rtl"
     >
+=======
+
+  return (
+    <div className="flex flex-col gap-1">
+>>>>>>> 842dd9e (Initial commit)
       {agents.length === 0 && (
         <div className="flex items-center justify-center gap-1 text-xs text-red-400 py-1">
           <X className="w-3 h-3" /> אין
         </div>
       )}
+<<<<<<< HEAD
       <div className="flex flex-col gap-1">
       {agents.map(agent => {
         const pillHighlighted = selectedAgent && agent === selectedAgent;
@@ -237,6 +275,12 @@ function ShiftCell({
             >
               {agent}
             </button>
+=======
+      {agents.map(agent => (
+        <div key={agent} className={`w-full px-1.5 py-1 rounded-lg border flex flex-col gap-0.5 ${bgClass}`}>
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-xs font-semibold leading-tight truncate">{agent}</span>
+>>>>>>> 842dd9e (Initial commit)
             <div className="flex items-center gap-1 flex-shrink-0">
               <NotePopover
                 note={notes[`${cellKey}|${agent}`]}
@@ -249,12 +293,19 @@ function ShiftCell({
             </div>
           </div>
           {notes[`${cellKey}|${agent}`] && (
+<<<<<<< HEAD
             <div className="text-xs opacity-70 leading-tight break-words text-right">{notes[`${cellKey}|${agent}`]}</div>
           )}
         </div>
         );
       })}
       </div>
+=======
+            <div className="text-xs opacity-70 leading-tight truncate">{notes[`${cellKey}|${agent}`]}</div>
+          )}
+        </div>
+      ))}
+>>>>>>> 842dd9e (Initial commit)
       <div className="relative" ref={ref}>
         <button
           onClick={() => setShowDropdown(v => !v)}
@@ -285,11 +336,15 @@ function ShiftCell({
 export default function AutoScheduleBuilder({ weekStart }) {
   const [assignments, setAssignments] = useState(null); // null = not generated yet
   const [notes, setNotes] = useState({}); // { "cellKey|agentName": "note text" }
+<<<<<<< HEAD
   const [selectedAgent, setSelectedAgent] = useState(null);
+=======
+>>>>>>> 842dd9e (Initial commit)
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [sendSmsOnPublish, setSendSmsOnPublish] = useState(true);
   const { toast } = useToast();
+<<<<<<< HEAD
   const scheduleGridRef = useRef(null);
 
   useEffect(() => {
@@ -305,6 +360,8 @@ export default function AutoScheduleBuilder({ weekStart }) {
   const handleAgentClick = (agent) => {
     setSelectedAgent((prev) => (prev === agent ? null : agent));
   };
+=======
+>>>>>>> 842dd9e (Initial commit)
 
   const handleNoteChange = (cellKey, agent, value) => {
     setNotes(prev => {
@@ -373,6 +430,7 @@ export default function AutoScheduleBuilder({ weekStart }) {
     ).then(r => r.flat());
     await Promise.all(allWeekRegs.map(r => dataClient.entities.ShiftRegistration.delete(r.id)));
 
+<<<<<<< HEAD
     let savedRecords = [];
     if (records.length > 0) {
       savedRecords = await dataClient.entities.ShiftRegistration.bulkCreate(records);
@@ -384,6 +442,14 @@ export default function AutoScheduleBuilder({ weekStart }) {
       dateTo,
       records: savedRecords.length ? savedRecords : records,
     });
+=======
+    if (records.length > 0) {
+      await dataClient.entities.ShiftRegistration.bulkCreate(records);
+    }
+
+    await queryClient.invalidateQueries({ queryKey: ["shift-registrations-builder"] });
+    await queryClient.invalidateQueries({ queryKey: ["shift-registrations"] });
+>>>>>>> 842dd9e (Initial commit)
 
     const smsResult = await sendScheduleSmsNotifications({
       records,
@@ -463,7 +529,11 @@ export default function AutoScheduleBuilder({ weekStart }) {
       {assignments && (
         <>
           {/* Preview table */}
+<<<<<<< HEAD
           <div ref={scheduleGridRef} className="rounded-2xl border border-slate-100 overflow-x-auto mb-4">
+=======
+          <div className="rounded-2xl border border-slate-100 overflow-hidden mb-4">
+>>>>>>> 842dd9e (Initial commit)
             {/* Header */}
             <div className="grid grid-cols-6 bg-slate-50 border-b border-slate-100">
               <div className="py-2 px-3 text-xs font-semibold text-slate-400">משמרת</div>
@@ -479,7 +549,11 @@ export default function AutoScheduleBuilder({ weekStart }) {
               { type: "morning", label: "בוקר", time: "08:00–16:00", Icon: Sun, color: "text-amber-500" },
               { type: "evening", label: "ערב", time: "09:00–17:00", Icon: Moon, color: "text-indigo-500" },
             ].map(shift => (
+<<<<<<< HEAD
               <div key={shift.type} className="grid grid-cols-6 auto-rows-auto items-stretch border-t border-slate-100">
+=======
+              <div key={shift.type} className="grid grid-cols-6 border-t border-slate-100">
+>>>>>>> 842dd9e (Initial commit)
                 <div className="flex flex-col items-center justify-center gap-0.5 py-3 px-2 border-l border-slate-100">
                   <shift.Icon className={`w-4 h-4 ${shift.color}`} />
                   <span className={`text-xs font-bold ${shift.color}`}>{shift.label}</span>
@@ -493,10 +567,16 @@ export default function AutoScheduleBuilder({ weekStart }) {
                   if (isHolidayEve && shift.type === "morning") {
                     const cellKey = `${dateStr}|holiday_eve`;
                     const agents = assignments[cellKey] || [];
+<<<<<<< HEAD
                     const availableToAdd = agentsAvailableForCell(agents);
                     const cellHighlighted = selectedAgent && agents.includes(selectedAgent);
                     return (
                       <div key={dateStr} className="py-2 px-1 flex flex-col gap-1 bg-purple-50/50 row-span-2 self-stretch">
+=======
+                    const availableToAdd = AGENT_NAMES.filter(n => !agents.includes(n));
+                    return (
+                      <div key={dateStr} className="py-2 px-1 flex flex-col gap-1 bg-purple-50/50 row-span-2">
+>>>>>>> 842dd9e (Initial commit)
                         <div className="text-center text-xs font-bold text-purple-600 mb-0.5">ערב חג</div>
                         <div className="text-center text-xs text-purple-400 mb-1">09:00–14:00</div>
                         <ShiftCell
@@ -505,9 +585,12 @@ export default function AutoScheduleBuilder({ weekStart }) {
                           notes={notes}
                           availableToAdd={availableToAdd}
                           color="purple"
+<<<<<<< HEAD
                           selectedAgent={selectedAgent}
                           onAgentClick={handleAgentClick}
                           cellHighlighted={cellHighlighted}
+=======
+>>>>>>> 842dd9e (Initial commit)
                           onRemove={(agent) => setAssignments(prev => ({
                             ...prev,
                             [cellKey]: prev[cellKey].filter(a => a !== agent)
@@ -527,18 +610,32 @@ export default function AutoScheduleBuilder({ weekStart }) {
 
                   const cellKey = `${dateStr}|${shift.type}`;
                   const agents = assignments[cellKey] || [];
+<<<<<<< HEAD
                   const availableToAdd = agentsAvailableForCell(agents);
                   const cellHighlighted = selectedAgent && agents.includes(selectedAgent);
                   return (
                     <div key={dateStr} className="py-2 px-1 self-stretch">
                     <ShiftCell
+=======
+                  const allAssignedOnDay = [
+                    ...(assignments[`${dateStr}|morning`] || []),
+                    ...(assignments[`${dateStr}|evening`] || []),
+                  ];
+                  const availableToAdd = AGENT_NAMES.filter(n => !allAssignedOnDay.includes(n));
+                  return (
+                    <ShiftCell
+                      key={dateStr}
+>>>>>>> 842dd9e (Initial commit)
                       cellKey={cellKey}
                       agents={agents}
                       notes={notes}
                       availableToAdd={availableToAdd}
+<<<<<<< HEAD
                       selectedAgent={selectedAgent}
                       onAgentClick={handleAgentClick}
                       cellHighlighted={cellHighlighted}
+=======
+>>>>>>> 842dd9e (Initial commit)
                       onRemove={(agent) => setAssignments(prev => ({
                         ...prev,
                         [cellKey]: prev[cellKey].filter(a => a !== agent)
@@ -549,7 +646,10 @@ export default function AutoScheduleBuilder({ weekStart }) {
                       }))}
                       onNoteChange={handleNoteChange}
                     />
+<<<<<<< HEAD
                     </div>
+=======
+>>>>>>> 842dd9e (Initial commit)
                   );
                 })}
               </div>

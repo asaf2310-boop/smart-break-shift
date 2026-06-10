@@ -1,9 +1,15 @@
 // Inspired by react-hot-toast library
 import { useState, useEffect } from "react";
 
+<<<<<<< HEAD
 const TOAST_LIMIT = 5;
 const TOAST_REMOVE_DELAY = 400;
 const DEFAULT_TOAST_DURATION = 2000;
+=======
+const TOAST_LIMIT = 20;
+const TOAST_REMOVE_DELAY = 1000000;
+const DEFAULT_TOAST_DURATION = 1000;
+>>>>>>> 842dd9e (Initial commit)
 const ERROR_TOAST_DURATION = 5000;
 
 const actionTypes = {
@@ -112,6 +118,7 @@ function dispatch(action) {
   });
 }
 
+<<<<<<< HEAD
 function dismissToastsByDedupeKey(dedupeKey) {
   if (!dedupeKey) return;
   const matches = memoryState.toasts.filter((t) => t.dedupeKey === dedupeKey);
@@ -126,6 +133,9 @@ function toast({ duration, variant, dedupeKey, ...props }) {
     dismissToastsByDedupeKey(dedupeKey);
   }
 
+=======
+function toast({ duration, variant, ...props }) {
+>>>>>>> 842dd9e (Initial commit)
   const id = genId();
 
   const update = (props) =>
@@ -146,7 +156,10 @@ function toast({ duration, variant, dedupeKey, ...props }) {
     toast: {
       ...props,
       variant,
+<<<<<<< HEAD
       dedupeKey,
+=======
+>>>>>>> 842dd9e (Initial commit)
       id,
       open: true,
       onOpenChange: (open) => {

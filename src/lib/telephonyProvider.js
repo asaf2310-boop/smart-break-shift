@@ -1,4 +1,5 @@
 /**
+<<<<<<< HEAD
  * In-browser WebRTC softphone via sip.js (WSS + WebRTC).
  * Demo simulation stays in telephonyStore when SIP is not configured.
  *
@@ -31,10 +32,17 @@ export const SIP_REGISTRATION = {
   error: "error",
 };
 
+=======
+ * Production telephony integration (stub).
+ * Real WebRTC/SIP or Twilio Voice requires server-side secrets and HTTPS.
+ */
+
+>>>>>>> 842dd9e (Initial commit)
 export function getSipConfig() {
   const wsUrl = import.meta.env.VITE_SIP_WS_URL?.trim();
   const user = import.meta.env.VITE_SIP_USER?.trim();
   const password = import.meta.env.VITE_SIP_PASSWORD?.trim();
+<<<<<<< HEAD
   if (!wsUrl) return null;
   return {
     wsUrl,
@@ -42,6 +50,10 @@ export function getSipConfig() {
     hasClientPassword: Boolean(password),
     usesServerCredentials: !password,
   };
+=======
+  if (!wsUrl || !user) return null;
+  return { wsUrl, user, hasPassword: Boolean(password) };
+>>>>>>> 842dd9e (Initial commit)
 }
 
 export function getTwilioConfig() {
@@ -67,6 +79,7 @@ export function isHttpsRequired() {
   return typeof window !== "undefined" && window.location?.protocol === "http:";
 }
 
+<<<<<<< HEAD
 export function isSipTelephonyActive() {
   return Boolean(simpleUser && sipConfig);
 }
@@ -444,12 +457,18 @@ export async function toggleSipMute() {
 /**
  * Health check for configured telephony (no network dial).
  * @returns {Promise<{ ok: boolean, reason?: string, provider?: string }>}
+=======
+/**
+ * Placeholder for production dial — not implemented in this repo.
+ * @returns {Promise<{ ok: false, reason: string }>}
+>>>>>>> 842dd9e (Initial commit)
  */
 export async function connectProductionCall() {
   const provider = getConfiguredProvider();
   if (!provider) {
     return { ok: false, reason: "לא הוגדר ספק טלפוניה (SIP או Twilio)" };
   }
+<<<<<<< HEAD
   if (provider === "twilio") {
     return {
       ok: false,
@@ -469,5 +488,16 @@ export async function connectProductionCall() {
     ok: true,
     reason: `SIP מוכן (${credentials.source === "server" ? "אישורים מהשרת" : "אישורים מקומיים"})`,
     provider: "sip",
+=======
+  if (isHttpsRequired()) {
+    return { ok: false, reason: "WebRTC דורש HTTPS — פרסמו ב-Vercel או דומה" };
+  }
+  return {
+    ok: false,
+    reason:
+      provider === "sip"
+        ? "אינטגרציית SIP/WebRTC טרם מומשה — ראו docs/TELEPHONY_SETUP.md"
+        : "אינטגרציית Twilio Voice טרם מומשה — ראו docs/TELEPHONY_SETUP.md",
+>>>>>>> 842dd9e (Initial commit)
   };
 }

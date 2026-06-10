@@ -1,5 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+<<<<<<< HEAD
 import { Link, Navigate, useSearchParams } from "react-router-dom";
+=======
+import { Link, Navigate } from "react-router-dom";
+>>>>>>> 842dd9e (Initial commit)
 import { motion } from "framer-motion";
 import {
   ArrowRight,
@@ -34,8 +38,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
+<<<<<<< HEAD
 import { hypHeaderIconClass, m3PageClass } from "@/lib/hypPage";
 import { cn } from "@/lib/utils";
+=======
+import { m3PageClass } from "@/lib/hypPage";
+>>>>>>> 842dd9e (Initial commit)
 
 function ReferralCard({ referral, variant = "personal" }) {
   const topicClass =
@@ -79,9 +87,13 @@ export default function CrmDashboard() {
   const [departmentQueues, setDepartmentQueues] = useState([]);
   const [handledToday, setHandledToday] = useState(0);
   const [addOpen, setAddOpen] = useState(false);
+<<<<<<< HEAD
   const [addInitial, setAddInitial] = useState(null);
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
+=======
+  const { toast } = useToast();
+>>>>>>> 842dd9e (Initial commit)
 
   const refresh = useCallback(() => {
     setOpenReferrals(listOpenReferralsForAgent(agentName));
@@ -94,6 +106,7 @@ export default function CrmDashboard() {
     return subscribeCrmStore(refresh);
   }, [refresh]);
 
+<<<<<<< HEAD
   useEffect(() => {
     const notfound = searchParams.get("notfound");
     const addphone = searchParams.get("addphone");
@@ -116,6 +129,8 @@ export default function CrmDashboard() {
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams, toast]);
 
+=======
+>>>>>>> 842dd9e (Initial commit)
   const searchResults = useMemo(
     () => searchCustomersByContact(query),
     [query]
@@ -150,7 +165,10 @@ export default function CrmDashboard() {
   const handleAddCustomer = (data) => {
     const created = createCustomer(data);
     setAddOpen(false);
+<<<<<<< HEAD
     setAddInitial(null);
+=======
+>>>>>>> 842dd9e (Initial commit)
     toast({ title: "לקוח נוסף", description: created.name });
     refresh();
   };
@@ -172,8 +190,13 @@ export default function CrmDashboard() {
           </Link>
           <div className="flex items-start justify-between gap-4">
             <div>
+<<<<<<< HEAD
               <div className={cn(hypHeaderIconClass("shadow-elevation-1 mb-3"), !demoModeEnabled && "bg-primary")}>
                 <FolderOpen className={cn("w-6 h-6", demoModeEnabled ? "text-white" : "text-primary-foreground")} />
+=======
+              <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center shadow-elevation-1 mb-3">
+                <FolderOpen className="w-6 h-6 text-primary-foreground" />
+>>>>>>> 842dd9e (Initial commit)
               </div>
               <h1 className="m3-headline-small font-medium">CRM — פניות</h1>
               <p className="m3-label-medium mt-1">
@@ -301,6 +324,7 @@ export default function CrmDashboard() {
         )}
       </div>
 
+<<<<<<< HEAD
       <Dialog
         open={addOpen}
         onOpenChange={(open) => {
@@ -308,10 +332,14 @@ export default function CrmDashboard() {
           if (!open) setAddInitial(null);
         }}
       >
+=======
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+>>>>>>> 842dd9e (Initial commit)
         <DialogContent className="sm:max-w-md rounded-2xl shadow-elevation-3" dir="rtl">
           <DialogHeader>
             <DialogTitle>לקוח חדש</DialogTitle>
           </DialogHeader>
+<<<<<<< HEAD
           <CustomerForm
             initial={addInitial}
             onSubmit={handleAddCustomer}
@@ -321,6 +349,9 @@ export default function CrmDashboard() {
             }}
             submitLabel="הוספה"
           />
+=======
+          <CustomerForm onSubmit={handleAddCustomer} onCancel={() => setAddOpen(false)} submitLabel="הוספה" />
+>>>>>>> 842dd9e (Initial commit)
         </DialogContent>
       </Dialog>
     </div>

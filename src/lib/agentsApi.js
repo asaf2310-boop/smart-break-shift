@@ -5,6 +5,7 @@ import {
   listAllDemoAppUsers,
   normalizeEmail,
   setDemoUserBlocked,
+<<<<<<< HEAD
   setDemoUserPasswordByAdmin,
   softDeleteDemoAppUser,
   updateDemoAppUser,
@@ -19,10 +20,16 @@ export function isPlaceholderAgentEmail(email) {
   const normalized = normalizeEmail(email);
   return !normalized || normalized.endsWith(PENDING_EMAIL_SUFFIX);
 }
+=======
+  softDeleteDemoAppUser,
+  updateDemoAppUser,
+} from "@/lib/appUsersStore";
+>>>>>>> 842dd9e (Initial commit)
 
 function mapSupabaseRow(row) {
   return {
     id: row.id,
+<<<<<<< HEAD
     email: row.email || "",
     name: row.display_name,
     active: row.active !== false && !row.deleted_at,
@@ -30,6 +37,14 @@ function mapSupabaseRow(row) {
     needsPasswordSetup: row.needs_password_setup !== false && !row.password_plain,
     authUserId: row.auth_user_id,
     password: row.password_plain || null,
+=======
+    email: row.email,
+    name: row.display_name,
+    active: row.active !== false && !row.deleted_at,
+    blocked: row.blocked === true,
+    needsPasswordSetup: row.needs_password_setup,
+    authUserId: row.auth_user_id,
+>>>>>>> 842dd9e (Initial commit)
   };
 }
 
@@ -41,11 +56,15 @@ function mapDemoRow(u) {
     active: u.active !== false,
     blocked: u.blocked === true,
     needsPasswordSetup: u.needsPasswordSetup !== false && !u.password,
+<<<<<<< HEAD
     password: u.password || null,
+=======
+>>>>>>> 842dd9e (Initial commit)
   };
 }
 
 export async function listManagedAgents() {
+<<<<<<< HEAD
   try {
     if (!demoModeEnabled) {
       await ensureAgentsSeeded();
@@ -104,17 +123,41 @@ export async function createManagedAgent({ email, name }) {
 
   if (demoModeEnabled) {
     if (!normalized) throw new Error("invalid_fields");
+=======
+  if (demoModeEnabled) {
+    return listAllDemoAppUsers().map(mapDemoRow);
+  }
+  const rows = await dataClient.entities.Agent.list("-created_at", 500);
+  return (rows || [])
+    .filter((r) => r.active !== false && !r.deleted_at)
+    .map(mapSupabaseRow);
+}
+
+export async function createManagedAgent({ email, name }) {
+  const normalized = normalizeEmail(email);
+  const displayName = String(name || "").trim();
+  if (!normalized || !displayName) throw new Error("invalid_fields");
+
+  if (demoModeEnabled) {
+>>>>>>> 842dd9e (Initial commit)
     const u = createDemoAppUser({ email: normalized, name: displayName });
     return mapDemoRow(u);
   }
 
   const row = await dataClient.entities.Agent.create({
+<<<<<<< HEAD
     email: normalized || null,
+=======
+    email: normalized,
+>>>>>>> 842dd9e (Initial commit)
     display_name: displayName,
     active: true,
     blocked: false,
     needs_password_setup: true,
+<<<<<<< HEAD
     password_plain: null,
+=======
+>>>>>>> 842dd9e (Initial commit)
   });
   return mapSupabaseRow(row);
 }
@@ -124,17 +167,23 @@ export async function updateManagedAgent(id, { email, name }) {
     const u = updateDemoAppUser(id, { email, name });
     return mapDemoRow(u);
   }
+<<<<<<< HEAD
 
   const payload = {};
   if (email !== undefined) {
     const normalized = normalizeEmail(email);
     payload.email = normalized || null;
   }
+=======
+  const payload = {};
+  if (email !== undefined) payload.email = normalizeEmail(email);
+>>>>>>> 842dd9e (Initial commit)
   if (name !== undefined) payload.display_name = String(name).trim();
   const row = await dataClient.entities.Agent.update(id, payload);
   return mapSupabaseRow(row);
 }
 
+<<<<<<< HEAD
 /** מנהל בלבד — מגדיר סיסמה ומאלץ הגדרה מחדש בכניסה הבאה */
 export async function adminSetManagedAgentPassword(id, password, { forceSetup = true } = {}) {
   const plain = String(password || "");
@@ -154,6 +203,8 @@ export async function adminSetManagedAgentPassword(id, password, { forceSetup = 
   return mapSupabaseRow(row);
 }
 
+=======
+>>>>>>> 842dd9e (Initial commit)
 export async function setManagedAgentBlocked(id, blocked) {
   if (demoModeEnabled) {
     const u = setDemoUserBlocked(id, blocked);

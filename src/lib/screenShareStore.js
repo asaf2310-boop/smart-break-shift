@@ -1,8 +1,12 @@
+<<<<<<< HEAD
 import {
   demoModeEnabled,
   demoSendRealEmailEnabled,
   remoteSupportEnabled,
 } from "@/api/demoClient";
+=======
+import { demoModeEnabled, demoSendRealEmailEnabled } from "@/api/demoClient";
+>>>>>>> 842dd9e (Initial commit)
 import { cleanEnvValue } from "@/api/supabase";
 import {
   escapeHtml,
@@ -14,6 +18,7 @@ import {
   simulatedReasonForApiResult,
   simulatedReasonForDemoSendDisabled,
 } from "@/lib/emailSimulatedReason";
+<<<<<<< HEAD
 import { getStoredAgentName } from "@/constants/scheduling";
 import { agentOwnsBreakRegistration } from "@/lib/breakCapacity";
 import {
@@ -30,11 +35,17 @@ import {
 } from "@/lib/guestLinkCodec";
 
 export { GUEST_BOOTSTRAP_QUERY_KEY, encodeGuestBootstrapPayload, decodeGuestBootstrapPayload };
+=======
+>>>>>>> 842dd9e (Initial commit)
 
 export const SCREEN_SHARE_STORAGE_KEY = "smart-break-shift-screen-share-v1";
 export const SCREEN_SHARE_CHANGE_EVENT = "screen-share-changed";
 /** דמו: תוקף קישור אורח — 72 שעות מיצירת הסשן (לא מחיקה אוטומטית מ-localStorage) */
 export const DEMO_GUEST_SESSION_TTL_MS = 72 * 60 * 60 * 1000;
+<<<<<<< HEAD
+=======
+export const GUEST_BOOTSTRAP_QUERY_KEY = "b";
+>>>>>>> 842dd9e (Initial commit)
 
 const EMAIL_SUBJECT_SCREEN =
   "שיתוף מסך לתמיכה טכנית (צפייה בלבד) — באישורך";
@@ -43,11 +54,19 @@ export const DEMO_SCREEN_SHARE_EMAIL_MESSAGE =
   "בדמו: הקישור מוכן — העתיקו את הקישור למטה או פתחו mailto";
 
 function makeId(prefix) {
+<<<<<<< HEAD
   return `${prefix}${generateShortCode(8)}`;
 }
 
 function readStore() {
   if (!remoteSupportEnabled || typeof window === "undefined") {
+=======
+  return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+}
+
+function readStore() {
+  if (!demoModeEnabled || typeof window === "undefined") {
+>>>>>>> 842dd9e (Initial commit)
     return { sessions: [], emailLogs: [], recordings: [] };
   }
   try {
@@ -69,7 +88,11 @@ function readSessions() {
 }
 
 function writeStore({ sessions, emailLogs, recordings }) {
+<<<<<<< HEAD
   if (!remoteSupportEnabled || typeof window === "undefined") return;
+=======
+  if (!demoModeEnabled || typeof window === "undefined") return;
+>>>>>>> 842dd9e (Initial commit)
   const current = readStore();
   localStorage.setItem(
     SCREEN_SHARE_STORAGE_KEY,
@@ -86,6 +109,7 @@ function writeSessions(sessions) {
   writeStore({ sessions });
 }
 
+<<<<<<< HEAD
 function cloudSyncSession(session, options) {
   if (session) syncScreenShareSessionToCloud(session, options);
 }
@@ -98,12 +122,22 @@ export function screenShareDemoAvailable() {
 /** צפייה בדפדפן — זמין בפרודקשן (ברירת מחדל) ובדמו */
 export function screenShareFeaturesAvailable() {
   return remoteSupportEnabled;
+=======
+export function screenShareDemoAvailable() {
+  return demoModeEnabled;
+}
+
+/** alias — אותה דרישת דמו כמו remoteSupport */
+export function screenShareFeaturesAvailable() {
+  return demoModeEnabled;
+>>>>>>> 842dd9e (Initial commit)
 }
 
 export function getSession(id) {
   return readSessions().find((s) => s.id === id) || null;
 }
 
+<<<<<<< HEAD
 export function getSessionByShortCode(shortCode) {
   const code = String(shortCode || "").trim();
   if (!code) return null;
@@ -159,6 +193,8 @@ export function markGuestStreamConnected(id) {
   });
 }
 
+=======
+>>>>>>> 842dd9e (Initial commit)
 /** כתובת ציבורית לקישורים במייל — VITE_APP_URL או origin; מ-localhost מעדיף env */
 export function getPublicAppOrigin() {
   const fromEnv = cleanEnvValue(import.meta.env.VITE_APP_URL)?.replace(/\/$/, "") || "";
@@ -169,16 +205,73 @@ export function getPublicAppOrigin() {
   return fromEnv || origin;
 }
 
+<<<<<<< HEAD
 export function isGuestSessionExpired(session) {
   if (!session?.createdAt) return true;
   if (session.status === "ended") return false;
   // Production: active sessions stay valid until the agent ends them.
   if (cloudSessionSyncEnabled()) return false;
+=======
+function toBase64Url(str) {
+  if (typeof btoa === "undefined") return "";
+  const bytes = new TextEncoder().encode(str);
+  let binary = "";
+  bytes.forEach((b) => {
+    binary += String.fromCharCode(b);
+  });
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function fromBase64Url(encoded) {
+  if (!encoded || typeof atob === "undefined") return null;
+  try {
+    const padded = encoded.replace(/-/g, "+").replace(/_/g, "/");
+    const padLen = (4 - (padded.length % 4)) % 4;
+    const binary = atob(padded + "=".repeat(padLen));
+    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
+function encodeGuestBootstrapPayload(session) {
+  if (!session?.id || !session.createdAt) return "";
+  const payload = {
+    c: session.createdAt,
+    a: String(session.agentName || "").slice(0, 120),
+    e: String(session.customerEmail || "").slice(0, 200),
+    r: session.crmCustomerId || null,
+  };
+  return toBase64Url(JSON.stringify(payload));
+}
+
+function decodeGuestBootstrapPayload(encoded) {
+  const json = fromBase64Url(encoded);
+  if (!json) return null;
+  try {
+    const parsed = JSON.parse(json);
+    if (!parsed?.c || Number.isNaN(new Date(parsed.c).getTime())) return null;
+    return {
+      createdAt: parsed.c,
+      agentName: String(parsed.a || "").slice(0, 120),
+      customerEmail: String(parsed.e || "").slice(0, 200),
+      crmCustomerId: parsed.r || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function isGuestSessionExpired(session) {
+  if (!session?.createdAt) return true;
+>>>>>>> 842dd9e (Initial commit)
   const created = new Date(session.createdAt).getTime();
   if (Number.isNaN(created)) return true;
   return Date.now() - created > DEMO_GUEST_SESSION_TTL_MS;
 }
 
+<<<<<<< HEAD
 export const GUEST_LINK_CLOUD_PENDING_MESSAGE =
   "הסנכרון לענן עדיין בתהליך — אם הלקוח לא מצליח לפתוח את הקישור, נסו שוב בעוד רגע";
 
@@ -224,17 +317,27 @@ export async function ensureGuestLinkReady(session) {
   };
 }
 
+=======
+>>>>>>> 842dd9e (Initial commit)
 /**
  * דמו: יוצר סשן ב-localStorage של האורח מפרמטר bootstrap ב-URL (מכשיר/דפדפן אחר).
  */
 export function bootstrapGuestSessionFromUrl(sessionId, bootstrapParam) {
+<<<<<<< HEAD
   if (!remoteSupportEnabled || !sessionId || !bootstrapParam) return null;
+=======
+  if (!demoModeEnabled || !sessionId || !bootstrapParam) return null;
+>>>>>>> 842dd9e (Initial commit)
 
   const payload = decodeGuestBootstrapPayload(bootstrapParam);
   if (!payload) return null;
 
   const existing = getSession(sessionId);
   if (existing) {
+<<<<<<< HEAD
+=======
+    if (existing.status === "ended") return existing;
+>>>>>>> 842dd9e (Initial commit)
     return existing;
   }
 
@@ -252,7 +355,10 @@ export function bootstrapGuestSessionFromUrl(sessionId, bootstrapParam) {
     recordings: [],
     emailSentAt: null,
     endedAt: null,
+<<<<<<< HEAD
     endedReason: null,
+=======
+>>>>>>> 842dd9e (Initial commit)
   };
 
   if (isGuestSessionExpired(session)) return null;
@@ -303,12 +409,17 @@ export function createScreenSession({
   const id = makeId("ss");
   const session = {
     id,
+<<<<<<< HEAD
     shortCode: null,
     agentPeerOpenedAt: null,
     agentPeerReadyAt: null,
     guestStreamConnectedAt: null,
     crmCustomerId: crmCustomerId || null,
     agentName: String(agentName || getStoredAgentName() || "").trim(),
+=======
+    crmCustomerId: crmCustomerId || null,
+    agentName: String(agentName || "").trim(),
+>>>>>>> 842dd9e (Initial commit)
     customerEmail: String(customerEmail || "").trim(),
     status: "active",
     createdAt: now,
@@ -319,11 +430,17 @@ export function createScreenSession({
     recordings: [],
     emailSentAt: null,
     endedAt: null,
+<<<<<<< HEAD
     endedReason: null,
   };
   const sessions = [...readSessions(), session];
   writeSessions(sessions);
   cloudSyncSession(session);
+=======
+  };
+  const sessions = [...readSessions(), session];
+  writeSessions(sessions);
+>>>>>>> 842dd9e (Initial commit)
   return session;
 }
 
@@ -335,7 +452,10 @@ export function updateSession(id, patch) {
     return updated;
   });
   writeSessions(sessions);
+<<<<<<< HEAD
   if (updated) cloudSyncSession(updated);
+=======
+>>>>>>> 842dd9e (Initial commit)
   return updated;
 }
 
@@ -350,6 +470,7 @@ export function logRecordingConsent(id) {
   return updateSession(id, { recordingConsentAt: now });
 }
 
+<<<<<<< HEAD
 /**
  * סנכרון מצב מהאורח (PeerJS) ל-localStorage של הנציג — מכשירים נפרדים.
  * מעדכן רק שדות שחסרים אצל הנציג (לא דורס ערכים קיימים).
@@ -367,6 +488,8 @@ export function applyGuestPeerSync(id, { consentAt, recordingConsentAt } = {}) {
   return updateSession(id, patch);
 }
 
+=======
+>>>>>>> 842dd9e (Initial commit)
 /** נציג התחיל הקלטה — מוצג לאורח (דמו) */
 export function setRecordingActive(id) {
   const now = new Date().toISOString();
@@ -501,9 +624,12 @@ export function appendSessionRecording(sessionId, meta) {
     ),
     recordings: [...store.recordings, entry],
   });
+<<<<<<< HEAD
   cloudSyncSession(getSession(sessionId), {
     recordingCount: sessionRecordings.length,
   });
+=======
+>>>>>>> 842dd9e (Initial commit)
   return entry;
 }
 
@@ -600,12 +726,17 @@ export function buildDemoRecordingAuditExport() {
   };
 }
 
+<<<<<<< HEAD
 export function endSession(id, { endedReason = "agent_ended" } = {}) {
+=======
+export function endSession(id) {
+>>>>>>> 842dd9e (Initial commit)
   const now = new Date().toISOString();
   return updateSession(id, {
     status: "ended",
     endedAt: now,
     recordingActiveAt: null,
+<<<<<<< HEAD
     endedReason: endedReason || null,
     shortCode: null,
     agentPeerOpenedAt: null,
@@ -652,15 +783,26 @@ export function listScreenSessionsForAgent(agentName, { limit } = {}) {
   return filtered;
 }
 
+=======
+  });
+}
+
+>>>>>>> 842dd9e (Initial commit)
 /**
  * @param {string|{ id: string, createdAt?: string, agentName?: string, customerEmail?: string, crmCustomerId?: string|null }} sessionOrId
  * @param {string} [origin] — ברירת מחדל getPublicAppOrigin()
  */
 export function buildScreenShareGuestUrl(sessionOrId, origin) {
+<<<<<<< HEAD
+=======
+  const base = (origin || getPublicAppOrigin()).replace(/\/$/, "");
+  let sessionId;
+>>>>>>> 842dd9e (Initial commit)
   let session = null;
 
   if (sessionOrId && typeof sessionOrId === "object" && sessionOrId.id) {
     session = sessionOrId;
+<<<<<<< HEAD
   } else {
     const sessionId = String(sessionOrId || "").trim();
     session = sessionId ? getSession(sessionId) : null;
@@ -674,6 +816,25 @@ export function buildScreenShareGuestUrl(sessionOrId, origin) {
   }
 
   return buildShortGuestUrl(session, { kind: "screen", origin });
+=======
+    sessionId = session.id;
+  } else {
+    sessionId = String(sessionOrId || "").trim();
+    session = sessionId ? getSession(sessionId) : null;
+  }
+
+  if (!sessionId) return "";
+
+  const path = `${base}/support/screen/${encodeURIComponent(sessionId)}`;
+  if (!demoModeEnabled || !session?.createdAt) return path;
+
+  const bootstrap = encodeGuestBootstrapPayload(session);
+  if (!bootstrap) return path;
+
+  const params = new URLSearchParams();
+  params.set(GUEST_BOOTSTRAP_QUERY_KEY, bootstrap);
+  return `${path}?${params.toString()}`;
+>>>>>>> 842dd9e (Initial commit)
 }
 
 export function buildScreenShareEmailBody({
@@ -944,6 +1105,7 @@ export function subscribeScreenShare(callback) {
   if (typeof window === "undefined") return () => {};
   const handler = () => callback();
   window.addEventListener(SCREEN_SHARE_CHANGE_EVENT, handler);
+<<<<<<< HEAD
   // Cross-tab sync: localStorage write triggers `storage` events in other tabs.
   const onStorage = (e) => {
     if (!e) return;
@@ -955,4 +1117,7 @@ export function subscribeScreenShare(callback) {
     window.removeEventListener(SCREEN_SHARE_CHANGE_EVENT, handler);
     window.removeEventListener("storage", onStorage);
   };
+=======
+  return () => window.removeEventListener(SCREEN_SHARE_CHANGE_EVENT, handler);
+>>>>>>> 842dd9e (Initial commit)
 }

@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import { demoModeEnabled } from "@/api/demoMode";
+=======
+import { demoModeEnabled } from "@/api/demoClient";
+>>>>>>> 842dd9e (Initial commit)
 
 export const APP_USERS_STORAGE_KEY = "app-users-v1";
 
@@ -134,6 +138,7 @@ export function setDemoUserPassword(id, password) {
   return users[index];
 }
 
+<<<<<<< HEAD
 /** מנהל — הגדרת/איפוס סיסמה (גלויה בפאנל ניהול) */
 export function setDemoUserPasswordByAdmin(id, password, { forceSetup = true } = {}) {
   const users = readRawUsers();
@@ -148,6 +153,8 @@ export function setDemoUserPasswordByAdmin(id, password, { forceSetup = true } =
   return users[index];
 }
 
+=======
+>>>>>>> 842dd9e (Initial commit)
 export function verifyDemoUserPassword(user, password) {
   if (!user?.password) return false;
   return user.password === String(password);

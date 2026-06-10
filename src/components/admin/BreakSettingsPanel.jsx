@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { dataClient } from "@/api/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
+<<<<<<< HEAD
 import { Settings, Save, AlertTriangle, Unlock } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { getLiveQueryOptions } from "@/lib/liveQuery";
@@ -10,6 +11,11 @@ import {
   getIsraelDateStr,
   isBreakRegistrationClosed,
 } from "@/constants/scheduling";
+=======
+import { Settings, Save, AlertTriangle, Check } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
+import { getLiveQueryOptions } from "@/lib/liveQuery";
+>>>>>>> 842dd9e (Initial commit)
 
 const DEFAULT_NOTICE_TEXT = "עקב מחסור בנציגים, היום לא תתאפשר יציאה בזוגות להפסקת צהריים.";
 
@@ -31,7 +37,10 @@ export default function BreakSettingsPanel({ selectedDate }) {
     short_max_per_slot: 1,
     show_shortage_notice: false,
     shortage_notice_text: DEFAULT_NOTICE_TEXT,
+<<<<<<< HEAD
     registration_override_open: false,
+=======
+>>>>>>> 842dd9e (Initial commit)
   });
 
   useEffect(() => {
@@ -41,7 +50,10 @@ export default function BreakSettingsPanel({ selectedDate }) {
         short_max_per_slot: existing.short_max_per_slot ?? 1,
         show_shortage_notice: existing.show_shortage_notice ?? false,
         shortage_notice_text: existing.shortage_notice_text || DEFAULT_NOTICE_TEXT,
+<<<<<<< HEAD
         registration_override_open: existing.registration_override_open ?? false,
+=======
+>>>>>>> 842dd9e (Initial commit)
       });
     } else {
       setForm({
@@ -49,7 +61,10 @@ export default function BreakSettingsPanel({ selectedDate }) {
         short_max_per_slot: 1,
         show_shortage_notice: false,
         shortage_notice_text: DEFAULT_NOTICE_TEXT,
+<<<<<<< HEAD
         registration_override_open: false,
+=======
+>>>>>>> 842dd9e (Initial commit)
       });
     }
   }, [existing?.id, dateStr]);
@@ -70,6 +85,7 @@ export default function BreakSettingsPanel({ selectedDate }) {
 
   const handleChange = (field, value) => setForm(f => ({ ...f, [field]: value }));
 
+<<<<<<< HEAD
   const toggleOverrideMutation = useMutation({
     mutationFn: async (nextOpen) => {
       const payload = { ...form, registration_override_open: nextOpen };
@@ -97,6 +113,8 @@ export default function BreakSettingsPanel({ selectedDate }) {
   const isTodayIsrael = dateStr === getIsraelDateStr();
   const pastDeadlineToday = isTodayIsrael && isBreakRegistrationClosed(dateStr);
 
+=======
+>>>>>>> 842dd9e (Initial commit)
   const Counter = ({ field, label }) => (
     <div className="flex items-center justify-between">
       <span className="text-sm text-slate-600">{label}</span>
@@ -124,6 +142,7 @@ export default function BreakSettingsPanel({ selectedDate }) {
       </div>
 
       <div className="p-5 space-y-5">
+<<<<<<< HEAD
         {/* Manual registration override */}
         <div className="space-y-3">
           <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">רישום ידני</p>
@@ -182,6 +201,8 @@ export default function BreakSettingsPanel({ selectedDate }) {
 
         <div className="border-t border-slate-100" />
 
+=======
+>>>>>>> 842dd9e (Initial commit)
         {/* Capacity controls */}
         <div className="space-y-3">
           <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">מכסת נציגים למשבצת</p>

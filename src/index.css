@@ -293,8 +293,12 @@ body,
   }
 
   html.app-brand-background .m3-page,
+<<<<<<< HEAD
   html.app-brand-background .login-shell--demo,
   html.app-brand-background .login-shell--brand {
+=======
+  html.app-brand-background .login-shell--demo {
+>>>>>>> 842dd9e (Initial commit)
     background: transparent;
     background-color: transparent;
   }
@@ -598,8 +602,12 @@ body,
 
   /** HYP demo — in-app pages (nav, cards, scheduling shells) */
   html.app-hyp-demo .hyp-page,
+<<<<<<< HEAD
   html.app-hyp-demo .hyp-scheduling-root,
   html.app-hyp-demo .hyp-demo-app-shell {
+=======
+  html.app-hyp-demo .hyp-scheduling-root {
+>>>>>>> 842dd9e (Initial commit)
     @apply min-h-screen text-[color:var(--hyp-text-primary)];
     background: transparent;
     background-color: transparent;
@@ -634,12 +642,16 @@ body,
   }
 
   html.app-hyp-demo .hyp-nav-shell {
+<<<<<<< HEAD
     background: linear-gradient(
       to bottom,
       color-mix(in srgb, var(--hyp-bg) 95%, transparent),
       color-mix(in srgb, var(--hyp-bg) 70%, transparent),
       transparent
     );
+=======
+    @apply bg-gradient-to-b from-hyp-bg/95 via-hyp-bg/70 to-transparent;
+>>>>>>> 842dd9e (Initial commit)
   }
 
   html.app-hyp-demo .hyp-nav-bar {
@@ -804,6 +816,7 @@ body,
     color: #fff;
   }
 
+<<<<<<< HEAD
   html.app-hyp-demo .hyp-page h1,
   html.app-hyp-demo .hyp-scheduling-root h1,
   html.app-hyp-demo .hyp-demo-app-shell h1,
@@ -846,10 +859,34 @@ body,
   html.app-hyp-demo .hyp-page .bg-white,
   html.app-hyp-demo .hyp-scheduling-root .bg-white,
   html.app-hyp-demo .hyp-demo-app-shell .bg-white {
+=======
+  html.app-hyp-demo .hyp-scheduling-root h1,
+  html.app-hyp-demo .hyp-scheduling-root .hyp-scheduling-title {
+    color: var(--hyp-text-primary);
+  }
+
+  html.app-hyp-demo .hyp-scheduling-root .text-indigo-600,
+  html.app-hyp-demo .hyp-scheduling-root .text-indigo-500 {
+    color: var(--hyp-brand-blue);
+  }
+
+  html.app-hyp-demo .hyp-scheduling-root .text-slate-500,
+  html.app-hyp-demo .hyp-scheduling-root .text-slate-400 {
+    color: var(--hyp-text-muted);
+  }
+
+  html.app-hyp-demo .hyp-scheduling-root .text-slate-800,
+  html.app-hyp-demo .hyp-scheduling-root .text-slate-700 {
+    color: var(--hyp-text-secondary);
+  }
+
+  html.app-hyp-demo .hyp-scheduling-root .bg-white {
+>>>>>>> 842dd9e (Initial commit)
     background: rgb(255 255 255 / 0.72);
     backdrop-filter: blur(12px);
   }
 
+<<<<<<< HEAD
   html.app-hyp-demo .hyp-page .border-slate-200,
   html.app-hyp-demo .hyp-scheduling-root .border-slate-200,
   html.app-hyp-demo .hyp-demo-app-shell .border-slate-200 {
@@ -933,6 +970,51 @@ body,
     background-image: none !important;
   }
 
+=======
+  html.app-hyp-demo .hyp-scheduling-root .border-slate-200 {
+    border-color: rgb(29 78 216 / 0.14);
+  }
+
+  html.app-hyp-demo .hyp-scheduling-root .from-indigo-500,
+  html.app-hyp-demo .hyp-scheduling-root .from-indigo-400 {
+    --tw-gradient-from: var(--hyp-brand-blue) var(--tw-gradient-from-position);
+  }
+
+  html.app-hyp-demo .hyp-scheduling-root .to-purple-600,
+  html.app-hyp-demo .hyp-scheduling-root .to-purple-500 {
+    --tw-gradient-to: var(--hyp-brand-blue-light) var(--tw-gradient-to-position);
+  }
+
+  html.app-hyp-demo .hyp-scheduling-root .from-amber-400 {
+    --tw-gradient-from: var(--hyp-brand-blue) var(--tw-gradient-from-position);
+  }
+
+  html.app-hyp-demo .hyp-scheduling-root .to-orange-500 {
+    --tw-gradient-to: var(--hyp-brand-teal) var(--tw-gradient-to-position);
+  }
+
+  html.app-hyp-demo .hyp-scheduling-root .shadow-indigo-500\/30 {
+    --tw-shadow-color: rgb(29 78 216 / 0.3);
+  }
+
+  html.app-hyp-demo .hyp-scheduling-root .border-indigo-100 {
+    border-color: rgb(29 78 216 / 0.18);
+  }
+
+  html.app-hyp-demo .hyp-scheduling-root .border-t-indigo-400,
+  html.app-hyp-demo .hyp-scheduling-root .border-indigo-500\/30 {
+    border-color: rgb(29 78 216 / 0.35);
+  }
+
+  html.app-hyp-demo .hyp-scheduling-root .bg-indigo-300\/20 {
+    background-color: rgb(59 130 246 / 0.12);
+  }
+
+  html.app-hyp-demo .hyp-scheduling-root .bg-purple-300\/20 {
+    background-color: rgb(13 148 136 / 0.1);
+  }
+
+>>>>>>> 842dd9e (Initial commit)
   html.app-hyp-demo .login-shell--demo .login-shell__title {
     color: var(--hyp-text-primary);
   }
@@ -979,6 +1061,7 @@ body,
     box-shadow: 0 0 20px rgb(29 78 216 / 0.15);
   }
 
+<<<<<<< HEAD
   html.app-hyp-demo .m3-page .bg-primary[class~="rounded-2xl"],
   html.app-hyp-demo .hyp-page .bg-primary[class~="rounded-2xl"],
   html.app-hyp-demo .hyp-page .bg-primary[class~="rounded-xl"],
@@ -990,6 +1073,11 @@ body,
   html.app-hyp-demo .hyp-scheduling-root [class*="bg-primary/"],
   html.app-hyp-demo .hyp-demo-app-shell [class*="bg-primary/"] {
     background-color: rgb(29 78 216 / 0.1);
+=======
+  html.app-hyp-demo .m3-page .bg-primary.rounded-2xl,
+  html.app-hyp-demo .hyp-page .bg-primary.rounded-2xl {
+    background: var(--hyp-brand-blue);
+>>>>>>> 842dd9e (Initial commit)
   }
 
   html.app-hyp-demo .text-primary {
@@ -1000,6 +1088,7 @@ body,
     background-color: rgb(219 234 254 / 0.65);
   }
 
+<<<<<<< HEAD
   html.app-hyp-demo .hyp-page .text-purple-500,
   html.app-hyp-demo .hyp-page .text-purple-700,
   html.app-hyp-demo .hyp-scheduling-root .text-purple-500,
@@ -1024,6 +1113,8 @@ body,
     background-color: rgb(219 234 254 / 0.45);
   }
 
+=======
+>>>>>>> 842dd9e (Initial commit)
   .m3-card {
     @apply rounded-2xl text-card-foreground border transition-all duration-300;
     background: var(--brand-glass-bg);
@@ -1197,15 +1288,25 @@ body,
     overscroll-behavior: contain;
   }
 
+<<<<<<< HEAD
   /** Brand / demo login — premium shell layout (background from html.app-brand-background) */
   .login-shell--demo,
   .login-shell--brand,
   .login-hero-shell.login-hero-bg {
+=======
+  /** Demo login — premium shell layout (background from html.app-brand-background) */
+  .login-shell--demo,
+  .login-shell--demo.login-hero-bg {
+>>>>>>> 842dd9e (Initial commit)
     background: transparent;
     background-color: transparent;
   }
 
+<<<<<<< HEAD
   .login-hero-shell.login-hero-bg {
+=======
+  .login-shell--demo.login-hero-bg {
+>>>>>>> 842dd9e (Initial commit)
     @apply isolate;
     position: relative;
     inset: auto;
@@ -1233,17 +1334,28 @@ body,
     gap: var(--login-demo-gap);
   }
 
+<<<<<<< HEAD
   html:has(.login-hero-shell.login-hero-bg),
   html:has(.login-hero-shell.login-hero-bg) body,
   html:has(.login-hero-shell.login-hero-bg) #root {
+=======
+  html:has(.login-shell--demo.login-hero-bg),
+  html:has(.login-shell--demo.login-hero-bg) body,
+  html:has(.login-shell--demo.login-hero-bg) #root {
+>>>>>>> 842dd9e (Initial commit)
     height: 100%;
     max-height: 100%;
     overflow: hidden;
   }
 
+<<<<<<< HEAD
   .login-hero-shell .login-shell__brand-zone,
   .login-hero-shell .logo-wrapper,
   .m3-page .login-shell__brand-zone.logo-wrapper {
+=======
+  .login-shell--demo .login-shell__brand-zone,
+  .login-shell--demo .logo-wrapper {
+>>>>>>> 842dd9e (Initial commit)
     position: relative;
     @apply z-[1] flex items-end justify-center shrink-0;
     width: var(--login-demo-logo-width);
@@ -1253,6 +1365,7 @@ body,
     pointer-events: none;
   }
 
+<<<<<<< HEAD
   .login-hero-shell .login-shell__brand-zone:has(.login-shell__hero-title) {
     width: auto;
     max-width: min(90vw, 28rem);
@@ -1266,6 +1379,8 @@ body,
       0 0 40px rgb(181 124 255 / 0.2);
   }
 
+=======
+>>>>>>> 842dd9e (Initial commit)
   @keyframes login-demo-curves-drift {
     0%,
     100% {
@@ -1290,16 +1405,25 @@ body,
     }
   }
 
+<<<<<<< HEAD
   .login-hero-shell .logo-wrapper img,
   .m3-page .logo-wrapper img {
+=======
+  .login-shell--demo .logo-wrapper img {
+>>>>>>> 842dd9e (Initial commit)
     width: 100%;
     height: auto;
     object-fit: contain;
   }
 
+<<<<<<< HEAD
   /** Black matte in source PNG — screen blends it away on #F3EEF7 / brand shell */
   .login-hero-shell .login-shell__hero-img,
   .m3-page .login-shell__hero-img {
+=======
+  /** Black matte in source PNG — screen blends it away on #F3EEF7 / demo shell */
+  .login-shell--demo .login-shell__hero-img {
+>>>>>>> 842dd9e (Initial commit)
     display: block;
     width: 100%;
     height: auto;
@@ -1315,7 +1439,11 @@ body,
     transition: filter 0.4s ease;
   }
 
+<<<<<<< HEAD
   .login-hero-shell .login-shell__content--demo {
+=======
+  .login-shell--demo .login-shell__content--demo {
+>>>>>>> 842dd9e (Initial commit)
     @apply z-[2] flex flex-col items-center justify-center shrink-0;
     width: 100%;
     max-width: 100%;
@@ -1350,7 +1478,11 @@ body,
     }
   }
 
+<<<<<<< HEAD
   .login-hero-shell .login-shell__card-wrap {
+=======
+  .login-shell--demo .login-shell__card-wrap {
+>>>>>>> 842dd9e (Initial commit)
     @apply relative shrink-0 w-full mx-auto z-[2];
     width: var(--login-demo-card-width);
     max-width: var(--login-demo-lockup-width);
@@ -1363,40 +1495,62 @@ body,
   }
 
   @media (prefers-reduced-motion: reduce) {
+<<<<<<< HEAD
     .login-hero-shell .login-shell__card-wrap {
+=======
+    .login-shell--demo .login-shell__card-wrap {
+>>>>>>> 842dd9e (Initial commit)
       animation: none;
     }
   }
 
   @media (max-width: 640px) {
+<<<<<<< HEAD
     .login-hero-shell.login-hero-bg {
+=======
+    .login-shell--demo.login-hero-bg {
+>>>>>>> 842dd9e (Initial commit)
       --login-demo-logo-width: 280px;
       --login-demo-card-max-vw: 90vw;
       --login-demo-lockup-width: min(var(--login-demo-card-width), 90vw);
     }
 
     .login-shell--demo .login-shell__card--demo,
+<<<<<<< HEAD
     .login-shell--brand .login-shell__card--demo,
     .login-shell--demo .login-card,
     .login-shell--brand .login-card {
+=======
+    .login-shell--demo .login-card {
+>>>>>>> 842dd9e (Initial commit)
       max-width: 90vw;
       padding: 28px 24px;
     }
   }
 
   @media (max-height: 700px) {
+<<<<<<< HEAD
     .login-hero-shell.login-hero-bg {
+=======
+    .login-shell--demo.login-hero-bg {
+>>>>>>> 842dd9e (Initial commit)
       --login-demo-shell-padding: 16px;
       --login-demo-logo-width: 280px;
       --login-demo-logo-gap: 12px;
     }
 
+<<<<<<< HEAD
     .login-shell--demo .login-shell__card--demo, .login-shell--brand .login-shell__card--demo,
     .login-shell--demo .login-card, .login-shell--brand .login-card {
+=======
+    .login-shell--demo .login-shell__card--demo,
+    .login-shell--demo .login-card {
+>>>>>>> 842dd9e (Initial commit)
       padding: 24px 28px;
       border-radius: 28px;
     }
 
+<<<<<<< HEAD
     .login-shell--demo .login-shell__card-header, .login-shell--brand .login-shell__card-header {
       @apply gap-1.5 mb-3;
     }
@@ -1408,6 +1562,17 @@ body,
 
     .login-shell--demo .login-shell__title,
     .login-shell--brand .login-shell__title {
+=======
+    .login-shell--demo .login-shell__card-header {
+      @apply gap-1.5 mb-3;
+    }
+
+    .login-shell--demo .login-shell__card form {
+      @apply space-y-3;
+    }
+
+    .login-shell--demo .login-shell__title {
+>>>>>>> 842dd9e (Initial commit)
       font-size: clamp(1.0625rem, 2.8vw, 1.25rem);
     }
 
@@ -1420,8 +1585,13 @@ body,
     @apply rounded-2xl text-foreground;
   }
 
+<<<<<<< HEAD
   .login-shell--demo .login-shell__card--demo, .login-shell--brand .login-shell__card--demo,
   .login-shell--demo .login-card, .login-shell--brand .login-card {
+=======
+  .login-shell--demo .login-shell__card--demo,
+  .login-shell--demo .login-card {
+>>>>>>> 842dd9e (Initial commit)
     position: relative;
     isolation: isolate;
     width: var(--login-demo-card-width);
@@ -1456,12 +1626,20 @@ body,
   }
 
   @media (prefers-reduced-motion: reduce) {
+<<<<<<< HEAD
     .login-shell--demo .login-shell__card--demo, .login-shell--brand .login-shell__card--demo {
+=======
+    .login-shell--demo .login-shell__card--demo {
+>>>>>>> 842dd9e (Initial commit)
       animation: none;
     }
   }
 
+<<<<<<< HEAD
   .login-shell--demo .login-shell__card--demo:hover, .login-shell--brand .login-shell__card--demo:hover {
+=======
+  .login-shell--demo .login-shell__card--demo:hover {
+>>>>>>> 842dd9e (Initial commit)
     animation: none;
     box-shadow:
       0 24px 68px rgb(138 43 226 / 0.22),
@@ -1469,13 +1647,21 @@ body,
       inset 0 1px 0 rgb(255 255 255 / 0.9);
   }
 
+<<<<<<< HEAD
   .login-shell--demo .login-shell__card--demo, .login-shell--brand .login-shell__card--demo > * {
+=======
+  .login-shell--demo .login-shell__card--demo > * {
+>>>>>>> 842dd9e (Initial commit)
     position: relative;
     z-index: 3;
   }
 
   /** Soft purple + cyan ambient glow inside card */
+<<<<<<< HEAD
   .login-shell--demo .login-shell__card--demo::after, .login-shell--brand .login-shell__card--demo::after {
+=======
+  .login-shell--demo .login-shell__card--demo::after {
+>>>>>>> 842dd9e (Initial commit)
     content: "";
     position: absolute;
     inset: 0;
@@ -1490,7 +1676,11 @@ body,
   }
 
   /** Purple → cyan gradient border ring (below form — mask can fail in some engines) */
+<<<<<<< HEAD
   .login-shell--demo .login-shell__card--demo::before, .login-shell--brand .login-shell__card--demo::before {
+=======
+  .login-shell--demo .login-shell__card--demo::before {
+>>>>>>> 842dd9e (Initial commit)
     content: "";
     position: absolute;
     inset: 0;
@@ -1516,7 +1706,11 @@ body,
     transition: opacity 0.35s ease;
   }
 
+<<<<<<< HEAD
   .login-shell--demo .login-shell__card--demo:hover::before, .login-shell--brand .login-shell__card--demo:hover::before {
+=======
+  .login-shell--demo .login-shell__card--demo:hover::before {
+>>>>>>> 842dd9e (Initial commit)
     opacity: 1;
   }
 
@@ -1524,7 +1718,11 @@ body,
     @apply flex flex-col items-center gap-2.5 mb-5 text-center;
   }
 
+<<<<<<< HEAD
   .login-shell--demo .login-shell__card-header, .login-shell--brand .login-shell__card-header {
+=======
+  .login-shell--demo .login-shell__card-header {
+>>>>>>> 842dd9e (Initial commit)
     @apply gap-2 mb-4;
   }
 
@@ -1533,7 +1731,11 @@ body,
     max-width: 20rem;
   }
 
+<<<<<<< HEAD
   .login-shell--demo .login-shell__title, .login-shell--brand .login-shell__title {
+=======
+  .login-shell--demo .login-shell__title {
+>>>>>>> 842dd9e (Initial commit)
     margin: 0;
     font-family: var(--font-heebo);
     font-size: clamp(1.125rem, 3vw, 1.4375rem);
@@ -1544,7 +1746,11 @@ body,
     max-width: 24rem;
   }
 
+<<<<<<< HEAD
   .login-shell--demo .login-shell__subtitle, .login-shell--brand .login-shell__subtitle {
+=======
+  .login-shell--demo .login-shell__subtitle {
+>>>>>>> 842dd9e (Initial commit)
     font-family: var(--font-heebo);
     font-size: clamp(1rem, 2.6vw, 1.125rem);
     font-weight: 600;
@@ -1554,14 +1760,22 @@ body,
     max-width: 22rem;
   }
 
+<<<<<<< HEAD
   .login-shell--demo .login-shell__card form,
   .login-shell--brand .login-shell__card form {
+=======
+  .login-shell--demo .login-shell__card form {
+>>>>>>> 842dd9e (Initial commit)
     @apply space-y-3;
     font-family: var(--font-heebo);
   }
 
+<<<<<<< HEAD
   .login-shell--demo .login-shell__card form > p.text-sm,
   .login-shell--brand .login-shell__card form > p.text-sm {
+=======
+  .login-shell--demo .login-shell__card form > p.text-sm {
+>>>>>>> 842dd9e (Initial commit)
     color: var(--login-demo-text-secondary);
     @apply leading-relaxed;
   }
@@ -1578,7 +1792,11 @@ body,
     color: rgb(138 43 226 / 0.5);
   }
 
+<<<<<<< HEAD
   .login-shell--demo .login-demo-input, .login-shell--brand .login-demo-input {
+=======
+  .login-shell--demo .login-demo-input {
+>>>>>>> 842dd9e (Initial commit)
     @apply rounded-2xl border outline-none;
     height: var(--login-demo-input-height);
     min-height: var(--login-demo-input-height);
@@ -1598,17 +1816,29 @@ body,
       background-color 0.25s ease;
   }
 
+<<<<<<< HEAD
   .login-shell--demo .login-demo-input::placeholder, .login-shell--brand .login-demo-input::placeholder {
+=======
+  .login-shell--demo .login-demo-input::placeholder {
+>>>>>>> 842dd9e (Initial commit)
     color: var(--login-demo-text-secondary);
     opacity: 0.75;
   }
 
+<<<<<<< HEAD
   .login-shell--demo .login-demo-input:hover:not(:disabled):not([readonly]), .login-shell--brand .login-demo-input:hover:not(:disabled):not([readonly]) {
+=======
+  .login-shell--demo .login-demo-input:hover:not(:disabled):not([readonly]) {
+>>>>>>> 842dd9e (Initial commit)
     border-color: rgb(138 43 226 / 0.38);
     background: rgb(255 255 255 / 0.82);
   }
 
+<<<<<<< HEAD
   .login-shell--demo .login-demo-input:focus-visible, .login-shell--brand .login-demo-input:focus-visible {
+=======
+  .login-shell--demo .login-demo-input:focus-visible {
+>>>>>>> 842dd9e (Initial commit)
     border-color: var(--brand-purple);
     box-shadow:
       inset 0 1px 2px rgb(255 255 255 / 0.95),
@@ -1618,7 +1848,11 @@ body,
       0 0 32px rgb(25 211 243 / 0.12);
   }
 
+<<<<<<< HEAD
   .login-shell--demo .login-demo-input[readonly], .login-shell--brand .login-demo-input[readonly] {
+=======
+  .login-shell--demo .login-demo-input[readonly] {
+>>>>>>> 842dd9e (Initial commit)
     @apply border-input/80 bg-muted/35 text-muted-foreground cursor-default;
   }
 
@@ -1633,6 +1867,7 @@ body,
     text-decoration-color: rgb(138 43 226 / 0.45);
   }
 
+<<<<<<< HEAD
   .login-shell--demo .login-shell__card .text-red-300,
   .login-shell--brand .login-shell__card .text-red-300 {
     @apply text-destructive;
@@ -1644,6 +1879,17 @@ body,
   }
 
   .login-shell--demo .login-demo-submit, .login-shell--brand .login-demo-submit {
+=======
+  .login-shell--demo .login-shell__card .text-red-300 {
+    @apply text-destructive;
+  }
+
+  .login-shell--demo .login-shell__card .text-emerald-200 {
+    @apply text-emerald-700;
+  }
+
+  .login-shell--demo .login-demo-submit {
+>>>>>>> 842dd9e (Initial commit)
     @apply flex items-center justify-center;
     height: var(--login-demo-submit-height);
     min-height: var(--login-demo-submit-height);
@@ -1660,7 +1906,11 @@ body,
       transform 0.25s ease;
   }
 
+<<<<<<< HEAD
   .login-shell--demo .login-demo-submit:not(:disabled):hover, .login-shell--brand .login-demo-submit:not(:disabled):hover {
+=======
+  .login-shell--demo .login-demo-submit:not(:disabled):hover {
+>>>>>>> 842dd9e (Initial commit)
     background: var(--login-demo-btn-gradient-hover);
     transform: translateY(-2px);
     box-shadow:
@@ -1670,14 +1920,22 @@ body,
       inset 0 1px 0 rgb(255 255 255 / 0.32);
   }
 
+<<<<<<< HEAD
   .login-shell--demo .login-demo-submit:not(:disabled):active, .login-shell--brand .login-demo-submit:not(:disabled):active {
+=======
+  .login-shell--demo .login-demo-submit:not(:disabled):active {
+>>>>>>> 842dd9e (Initial commit)
     transform: translateY(0);
     box-shadow:
       0 4px 16px rgb(138 43 226 / 0.3),
       inset 0 1px 0 rgb(255 255 255 / 0.22);
   }
 
+<<<<<<< HEAD
   .login-shell--demo .login-demo-badge, .login-shell--brand .login-demo-badge {
+=======
+  .login-shell--demo .login-demo-badge {
+>>>>>>> 842dd9e (Initial commit)
     @apply inline-flex items-center text-[0.6875rem] font-semibold tracking-[0.08em] px-3 py-1 rounded-full;
     font-family: var(--font-heebo);
     color: var(--login-demo-text);
@@ -1764,6 +2022,7 @@ body,
   }
 }
 
+<<<<<<< HEAD
 /* Customer chat — light readable bubbles (agent / bot) */
 .customer-chat-bubble {
   direction: rtl;
@@ -1842,6 +2101,8 @@ html.app-hyp-demo .customer-chat-bubble--staff {
   }
 }
 
+=======
+>>>>>>> 842dd9e (Initial commit)
 /* Knowledge base chat — RTL / mixed-script message bubbles */
 .knowledge-chat-message,
 .chat-message {
@@ -1860,6 +2121,7 @@ html.app-hyp-demo .customer-chat-bubble--staff {
   direction: inherit;
   unicode-bidi: plaintext;
 }
+<<<<<<< HEAD
 
 /* Training calendar — premium day cards (TrainingPage.jsx) */
 .training-day-card {
@@ -2517,3 +2779,5 @@ html.app-hyp-demo .customer-chat-bubble--staff {
     height: 1px;
   }
 }
+=======
+>>>>>>> 842dd9e (Initial commit)

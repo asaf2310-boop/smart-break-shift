@@ -4,7 +4,11 @@ import { listDemoAppUsers } from "@/lib/appUsersStore";
 import { getAgentSession } from "@/lib/agentAuth";
 import { clearAdminSession, isAdminSessionActive } from "@/hooks/useIsAdmin";
 
+<<<<<<< HEAD
 export const REAL_AGENT_NAMES = [
+=======
+const REAL_AGENT_NAMES = [
+>>>>>>> 842dd9e (Initial commit)
   "רחלה מנשה",
   "שרון שפיר",
   "תהילה קיפרווסר",
@@ -86,20 +90,26 @@ export function getWeekStart(date) {
   return d;
 }
 
+<<<<<<< HEAD
 /** Sunday week start for Israel's calendar day (DST-safe). */
 export function getWeekStartIsrael(now = new Date()) {
   return getWeekStart(parseDateStrLocal(getIsraelDateStr(now)));
 }
 
+=======
+>>>>>>> 842dd9e (Initial commit)
 export function getWeekDays(weekStart) {
   return Array.from({ length: 5 }, (_, i) => addDays(weekStart, i));
 }
 
+<<<<<<< HEAD
 /** Sunday start of the work week where admins publish agent shifts (calendar week + 7). */
 export function getPublishedScheduleWeekStart(now = new Date()) {
   return addDays(getWeekStartIsrael(now), 7);
 }
 
+=======
+>>>>>>> 842dd9e (Initial commit)
 /** דד-ליין אילוצים: רביעי 16:00 */
 export function getConstraintsDeadline(weekStart) {
   const wednesday = addDays(weekStart, 3);
@@ -110,6 +120,7 @@ export function getConstraintsDeadline(weekStart) {
 export function formatDateStr(date) {
   return format(date, "yyyy-MM-dd");
 }
+<<<<<<< HEAD
 
 /** מועד אחרון לרישום/ביטול הפסקות — כל יום עד 10:00 שעון ישראל */
 export const BREAK_REGISTRATION_TIMEZONE = "Asia/Jerusalem";
@@ -236,3 +247,5 @@ export function canMarkMorningUnavailable(records, dateFrom, dateTo, dateStr) {
     MAX_MORNING_UNAVAILABLE_DAYS_PER_WEEK
   );
 }
+=======
+>>>>>>> 842dd9e (Initial commit)

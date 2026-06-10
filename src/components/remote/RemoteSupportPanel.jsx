@@ -27,18 +27,25 @@ import { useToast } from "@/components/ui/use-toast";
 import { createCallLog, createEmailLog, getCustomerById } from "@/lib/crmStore";
 import {
   buildConsentUrl,
+<<<<<<< HEAD
   ensureConsentLinkReady,
+=======
+>>>>>>> 842dd9e (Initial commit)
   buildRustDeskDeepLink,
   buildRustDeskMailtoUrl,
   createSession,
   endSession,
   formatConnectionDetails,
   getSession,
+<<<<<<< HEAD
   listSessions as listRustDeskSessions,
+=======
+>>>>>>> 842dd9e (Initial commit)
   remoteSupportFeaturesAvailable,
   sendRustDeskDownloadEmail,
   subscribeRemoteSupport,
 } from "@/lib/remoteSupportStore";
+<<<<<<< HEAD
 import {
   cloudSessionSyncEnabled,
   syncRustDeskSessionToCloud,
@@ -48,6 +55,8 @@ import {
   listSessions as listScreenShareSessions,
   REMOTE_SUPPORT_OPEN_EVENT,
 } from "@/lib/screenShareStore";
+=======
+>>>>>>> 842dd9e (Initial commit)
 
 const PANEL_DEMO_BANNER =
   "דמו — בחרו למטה: שלב א צפייה בדפדפן (ללא התקנה) או שליטה מלאה ב-RustDesk.";
@@ -83,7 +92,10 @@ export default function RemoteSupportPanel({
   const [emailTo, setEmailTo] = useState("");
   const [sendingRustDeskEmail, setSendingRustDeskEmail] = useState(false);
   const [startingRustDeskSession, setStartingRustDeskSession] = useState(false);
+<<<<<<< HEAD
   const [screenSessionActive, setScreenSessionActive] = useState(false);
+=======
+>>>>>>> 842dd9e (Initial commit)
 
   const defaultCustomerEmail = useMemo(() => {
     if (customerEmailProp) return String(customerEmailProp).trim();
@@ -109,6 +121,7 @@ export default function RemoteSupportPanel({
   }, [open, defaultCustomerEmail]);
 
   useEffect(() => {
+<<<<<<< HEAD
     const onOpenRequest = () => {
       setOpen(true);
       setSupportMode("screen");
@@ -128,6 +141,8 @@ export default function RemoteSupportPanel({
   }, [open]);
 
   useEffect(() => {
+=======
+>>>>>>> 842dd9e (Initial commit)
     if (!session?.id) return undefined;
     const refresh = () => {
       const latest = getSession(session.id);
@@ -139,8 +154,13 @@ export default function RemoteSupportPanel({
 
   const consentUrl = useMemo(() => {
     if (!session?.id) return "";
+<<<<<<< HEAD
     return buildConsentUrl(session);
   }, [session]);
+=======
+    return buildConsentUrl(session.id);
+  }, [session?.id]);
+>>>>>>> 842dd9e (Initial commit)
 
   const deepLink = useMemo(
     () => buildRustDeskDeepLink(rustDeskId, password),
@@ -232,7 +252,10 @@ export default function RemoteSupportPanel({
         agentName,
         rustDeskId: normalizedId,
         password,
+<<<<<<< HEAD
         customerEmail: emailTo,
+=======
+>>>>>>> 842dd9e (Initial commit)
       });
       setSession(created);
       setRustDeskId(normalizedId);
@@ -248,6 +271,7 @@ export default function RemoteSupportPanel({
         });
       }
 
+<<<<<<< HEAD
       const ready = await ensureConsentLinkReady(created);
       if (!ready.ok) {
         toast({
@@ -276,6 +300,10 @@ export default function RemoteSupportPanel({
             "הסנכרון לענן עדיין בתהליך — אם הלקוח לא מצליח לפתוח את הקישור, נסו שוב בעוד רגע",
         });
       }
+=======
+      const consentUrlForEmail = buildConsentUrl(created.id);
+      await sendRustDeskLinkEmail(consentUrlForEmail, created.id);
+>>>>>>> 842dd9e (Initial commit)
       setStep(3);
     } catch (err) {
       const rateLimited = err.status === 429;
@@ -468,6 +496,7 @@ export default function RemoteSupportPanel({
       </Button>
 
       <Dialog open={open} onOpenChange={handleOpenChange}>
+<<<<<<< HEAD
         <DialogContent
           className={`rounded-2xl gap-0 p-0 overflow-hidden ${
             supportMode === "screen"
@@ -476,6 +505,9 @@ export default function RemoteSupportPanel({
           }`}
           dir="rtl"
         >
+=======
+        <DialogContent className="sm:max-w-lg rounded-2xl gap-0 p-0 overflow-hidden" dir="rtl">
+>>>>>>> 842dd9e (Initial commit)
           <div className="bg-violet-50 border-b border-violet-200 px-4 py-2 flex items-start gap-2 text-violet-950 text-xs leading-relaxed">
             <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-violet-700" />
             <span>{PANEL_DEMO_BANNER}</span>
@@ -534,7 +566,10 @@ export default function RemoteSupportPanel({
                   customerName={customerName}
                   customerEmail={customerEmailProp}
                   hideEmailStatusBanner={hideEmailStatusBanner}
+<<<<<<< HEAD
                   onSessionActiveChange={setScreenSessionActive}
+=======
+>>>>>>> 842dd9e (Initial commit)
                 />
               </TabsContent>
 
