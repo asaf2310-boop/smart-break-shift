@@ -17,6 +17,12 @@ export function isRemotePartyEnded(reason) {
   return !isGuestInitiatedEnd(reason);
 }
 
+/** סשן שהסתיים על ידי הנציג (לא על ידי הלקוח). */
+export function isAgentEndedSession(session) {
+  if (!session || session.status !== "ended") return false;
+  return session.endedReason === SESSION_END_REASON.AGENT;
+}
+
 /** נציג מסיים — ScreenShareAgentView שולח הודעת Peer ללקוח לפני endSession */
 export const SCREEN_SHARE_AGENT_END_EVENT = "screen-share-agent-end-request";
 

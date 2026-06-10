@@ -26,6 +26,7 @@ import {
 } from "@/lib/screenShareStore";
 import { cloudSessionSyncEnabled } from "@/lib/supportSessionsSync";
 import {
+  isAgentEndedSession,
   isGuestInitiatedEnd,
   SESSION_END_REASON,
 } from "@/lib/screenShareSessionEnd";
@@ -363,7 +364,6 @@ export default function ScreenShareGuestPage() {
       bootstrapKey,
       isStreamAlive,
       clearReconnectTimer,
-      isAgentEndedSession,
       handleEndedByAgent,
     ]
   );
