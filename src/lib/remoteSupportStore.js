@@ -246,7 +246,8 @@ export function resolveConsentSession(sessionId, bootstrapParam = null) {
 }
 
 export async function ensureConsentLinkReady(session) {
-  if (!session?.id || !cloudSessionSyncEnabled()) return { ok: true };
+  if (!session?.id) return { ok: false, error: "missing session", cloudSynced: false };
+  if (!cloudSessionSyncEnabled()) return { ok: true, session, cloudSynced: true };
 
   let workingSession = session;
   if (!workingSession.shortCode) {
@@ -254,16 +255,32 @@ export async function ensureConsentLinkReady(session) {
     if (updated) workingSession = updated;
   }
   if (!workingSession.shortCode) {
-    return { ok: false, error: "missing short code" };
+    return { ok: false, error: "missing short code", cloudSynced: false };
   }
 
   const syncResult = await syncRustDeskSessionToCloudAwait(workingSession);
-  if (!syncResult.ok) return syncResult;
+  let cloudSynced = false;
+  if (syncResult.ok) {
+    cloudSynced = await waitForShortCodeInCloud(workingSession.shortCode);
+  }
 
-  const ready = await waitForShortCodeInCloud(workingSession.shortCode);
-  return ready
-    ? { ok: true, session: workingSession }
-    : { ok: false, error: "short code not synced to cloud" };
+  if (!cloudSynced) {
+    syncRustDeskSessionToCloud(workingSession);
+    console.warn("[remoteSupportStore] consent link cloud sync pending", {
+      sessionId: workingSession.id,
+      shortCode: workingSession.shortCode,
+      syncError: syncResult.error || "short code not visible after verify",
+    });
+  }
+
+  return {
+    ok: true,
+    session: workingSession,
+    cloudSynced,
+    cloudError: cloudSynced
+      ? undefined
+      : syncResult.error || "short code not synced to cloud",
+  };
 }
 
 export function buildConsentUrl(sessionIdOrSession, origin) {

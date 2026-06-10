@@ -12,6 +12,7 @@ import {
   createScreenSession,
   DEMO_SCREEN_SHARE_EMAIL_MESSAGE,
   ensureGuestLinkReady,
+  GUEST_LINK_CLOUD_PENDING_MESSAGE,
   endSession,
   getLastEmailLogForSession,
   getSession,
@@ -182,10 +183,7 @@ export default function ScreenSharePanel({
       if (!ready.ok) {
         toast({
           title: "הקישור לא מוכן",
-          description:
-            ready.error === "short code not synced to cloud"
-              ? "הסנכרון לענן לא הושלם — נסו שוב בעוד רגע"
-              : "לא ניתן ליצור קישור קצר — בדקו חיבור ל-Supabase",
+          description: "לא ניתן ליצור קישור קצר — נסו שוב",
           variant: "destructive",
         });
         return;
@@ -193,7 +191,21 @@ export default function ScreenSharePanel({
       const linkedSession = ready.session || activeSession;
       if (linkedSession !== activeSession) setSession(linkedSession);
       const url = buildScreenShareGuestUrl(linkedSession);
+      if (!url) {
+        toast({
+          title: "הקישור לא מוכן",
+          description: "לא ניתן ליצור קישור — נסו שוב",
+          variant: "destructive",
+        });
+        return;
+      }
       await sendGuestLinkEmail(linkedSession, url);
+      if (!ready.cloudSynced) {
+        toast({
+          title: "הקישור נשלח",
+          description: GUEST_LINK_CLOUD_PENDING_MESSAGE,
+        });
+      }
     } catch (err) {
       setEmailLogRevision((n) => n + 1);
       const rateLimited = err.status === 429;
@@ -240,7 +252,7 @@ export default function ScreenSharePanel({
       if (!ready.ok) {
         toast({
           title: "הקישור לא מוכן",
-          description: "לא ניתן לשלוח קישור — נסו שוב בעוד רגע",
+          description: "לא ניתן לשלוח קישור — נסו שוב",
           variant: "destructive",
         });
         return;
@@ -248,7 +260,21 @@ export default function ScreenSharePanel({
       const linkedSession = ready.session || session;
       if (linkedSession !== session) setSession(linkedSession);
       const url = buildScreenShareGuestUrl(linkedSession);
+      if (!url) {
+        toast({
+          title: "הקישור לא מוכן",
+          description: "לא ניתן לשלוח קישור — נסו שוב",
+          variant: "destructive",
+        });
+        return;
+      }
       await sendGuestLinkEmail(linkedSession, url);
+      if (!ready.cloudSynced) {
+        toast({
+          title: "הקישור נשלח",
+          description: GUEST_LINK_CLOUD_PENDING_MESSAGE,
+        });
+      }
       setEmailLogRevision((n) => n + 1);
     } catch (err) {
       setEmailLogRevision((n) => n + 1);
@@ -271,19 +297,24 @@ export default function ScreenSharePanel({
       if (!ready.ok) {
         toast({
           title: "הקישור לא מוכן",
-          description: "לא ניתן להעתיק קישור — נסו שוב בעוד רגע",
+          description: "לא ניתן להעתיק קישור — נסו שוב",
           variant: "destructive",
         });
         return;
       }
       const linkedSession = ready.session || session;
       if (linkedSession !== session) setSession(linkedSession);
-      const url = buildScreenShareGuestUrl(linkedSession);
+      const url = buildScreenShareGuestUrl(linkedSession) || guestUrl;
       if (!url) return;
       await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-      toast({ title: "הועתק", description: "קישור הלקוח הועתק" });
+      toast({
+        title: "הועתק",
+        description: ready.cloudSynced
+          ? "קישור הלקוח הועתק"
+          : `קישור הלקוח הועתק. ${GUEST_LINK_CLOUD_PENDING_MESSAGE}`,
+      });
     } catch {
       const url = buildScreenShareGuestUrl(session);
       toast({

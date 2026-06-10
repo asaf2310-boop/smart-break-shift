@@ -164,8 +164,17 @@ export function resolveGuestFromToken(
   };
 }
 
-const SHORT_CODE_LOOKUP_ATTEMPTS = 4;
-const SHORT_CODE_LOOKUP_BASE_DELAY_MS = 350;
+const SHORT_CODE_LOOKUP_ATTEMPTS = 8;
+const SHORT_CODE_LOOKUP_BASE_DELAY_MS = 400;
+
+function isPermanentShortCodeLookupError(message) {
+  if (!message) return false;
+  const m = String(message).toLowerCase();
+  return (
+    (m.includes("column") && m.includes("short_code")) ||
+    (m.includes("relation") && m.includes("support_sessions"))
+  );
+}
 
 async function fetchGuestSessionByShortCodeOnce(shortCode) {
   const { data, error } = await supabase
@@ -193,22 +202,36 @@ async function fetchGuestSessionByShortCodeOnce(shortCode) {
 }
 
 async function lookupShortCodeWithRetries(shortCode, { attempts = SHORT_CODE_LOOKUP_ATTEMPTS } = {}) {
+  let lastError = null;
   for (let i = 0; i < attempts; i += 1) {
     const result = await fetchGuestSessionByShortCodeOnce(shortCode);
-    if (result.row || result.error) return result;
+    if (result.row) return result;
+    if (result.error) {
+      lastError = result.error;
+      if (isPermanentShortCodeLookupError(result.error)) {
+        return result;
+      }
+    }
     if (i < attempts - 1) {
       await new Promise((resolve) =>
         setTimeout(resolve, SHORT_CODE_LOOKUP_BASE_DELAY_MS * (i + 1))
       );
     }
   }
-  return { row: null, error: null };
+  return { row: null, error: lastError };
 }
 
 /** Verify short_code is readable from Supabase before sharing a /j/ link. */
 export async function waitForShortCodeInCloud(shortCode) {
   if (!cloudSessionSyncEnabled() || !shortCode) return true;
   const result = await lookupShortCodeWithRetries(shortCode);
+  if (!result.row) {
+    console.warn(
+      "[shortGuestLink] short_code not visible in cloud",
+      shortCode,
+      result.error || "not found after retries"
+    );
+  }
   return Boolean(result.row);
 }
 

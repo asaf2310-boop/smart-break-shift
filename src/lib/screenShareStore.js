@@ -129,9 +129,16 @@ export function isGuestSessionExpired(session) {
   return Date.now() - created > DEMO_GUEST_SESSION_TTL_MS;
 }
 
-/** Await cloud row before sharing /j/ short links (external devices resolve via Supabase). */
+export const GUEST_LINK_CLOUD_PENDING_MESSAGE =
+  "הסנכרון לענן עדיין בתהליך — אם הלקוח לא מצליח לפתוח את הקישור, נסו שוב בעוד רגע";
+
+/**
+ * Ensure a local short link exists; best-effort cloud sync for /j/ resolution on guest devices.
+ * Copy/email must not block on cloud verification when the URL is already buildable locally.
+ */
 export async function ensureGuestLinkReady(session) {
-  if (!session?.id || !cloudSessionSyncEnabled()) return { ok: true };
+  if (!session?.id) return { ok: false, error: "missing session", cloudSynced: false };
+  if (!cloudSessionSyncEnabled()) return { ok: true, session, cloudSynced: true };
 
   let workingSession = session;
   if (!workingSession.shortCode) {
@@ -139,16 +146,32 @@ export async function ensureGuestLinkReady(session) {
     if (updated) workingSession = updated;
   }
   if (!workingSession.shortCode) {
-    return { ok: false, error: "missing short code" };
+    return { ok: false, error: "missing short code", cloudSynced: false };
   }
 
   const syncResult = await syncScreenShareSessionToCloudAwait(workingSession);
-  if (!syncResult.ok) return syncResult;
+  let cloudSynced = false;
+  if (syncResult.ok) {
+    cloudSynced = await waitForShortCodeInCloud(workingSession.shortCode);
+  }
 
-  const ready = await waitForShortCodeInCloud(workingSession.shortCode);
-  return ready
-    ? { ok: true, session: workingSession }
-    : { ok: false, error: "short code not synced to cloud" };
+  if (!cloudSynced) {
+    syncScreenShareSessionToCloud(workingSession);
+    console.warn("[screenShareStore] guest link cloud sync pending", {
+      sessionId: workingSession.id,
+      shortCode: workingSession.shortCode,
+      syncError: syncResult.error || "short code not visible after verify",
+    });
+  }
+
+  return {
+    ok: true,
+    session: workingSession,
+    cloudSynced,
+    cloudError: cloudSynced
+      ? undefined
+      : syncResult.error || "short code not synced to cloud",
+  };
 }
 
 /**

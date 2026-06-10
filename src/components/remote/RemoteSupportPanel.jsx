@@ -244,7 +244,7 @@ export default function RemoteSupportPanel({
       if (!ready.ok) {
         toast({
           title: "הקישור לא מוכן",
-          description: "לא ניתן לשלוח קישור אישור — נסו שוב בעוד רגע",
+          description: "לא ניתן לשלוח קישור אישור — נסו שוב",
           variant: "destructive",
         });
         return;
@@ -252,7 +252,22 @@ export default function RemoteSupportPanel({
       const linkedSession = ready.session || created;
       if (linkedSession !== created) setSession(linkedSession);
       const consentUrlForEmail = buildConsentUrl(linkedSession);
+      if (!consentUrlForEmail) {
+        toast({
+          title: "הקישור לא מוכן",
+          description: "לא ניתן לשלוח קישור אישור — נסו שוב",
+          variant: "destructive",
+        });
+        return;
+      }
       await sendRustDeskLinkEmail(consentUrlForEmail, linkedSession.id);
+      if (!ready.cloudSynced) {
+        toast({
+          title: "הקישור נשלח",
+          description:
+            "הסנכרון לענן עדיין בתהליך — אם הלקוח לא מצליח לפתוח את הקישור, נסו שוב בעוד רגע",
+        });
+      }
       setStep(3);
     } catch (err) {
       const rateLimited = err.status === 429;
