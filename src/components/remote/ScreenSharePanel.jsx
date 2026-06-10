@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, Copy, Link2, MonitorPlay } from "lucide-react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Check, Copy, Loader2, MonitorPlay } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { createCallLog } from "@/lib/crmStore";
 import { useScreenShareSession } from "@/contexts/ScreenShareSessionContext";
+import { cloudSessionSyncEnabled } from "@/lib/supportSessionsSync";
 import {
   buildScreenShareGuestUrl,
   createScreenSession,
@@ -26,9 +27,11 @@ export default function ScreenSharePanel({
   const { toast } = useToast();
   const { openSessionView, backgroundSessionId } = useScreenShareSession();
   const [session, setSession] = useState(null);
-  const [copied, setCopied] = useState(false);
+  const [manualCopied, setManualCopied] = useState(false);
   const [opening, setOpening] = useState(false);
-  const [autoCopiedForSession, setAutoCopiedForSession] = useState(null);
+  const [guestLinkUrl, setGuestLinkUrl] = useState("");
+  const [guestLinkPreparing, setGuestLinkPreparing] = useState(false);
+  const autoCopySessionRef = useRef(null);
 
   useEffect(() => {
     if (session?.id) return;
@@ -75,10 +78,10 @@ export default function ScreenSharePanel({
 
   const linkReady = Boolean(session?.agentPeerReadyAt);
 
-  const guestUrl = useMemo(() => {
-    if (!session?.id || !linkReady) return "";
-    return buildScreenShareGuestUrl(session);
-  }, [session, linkReady]);
+  const guestLinkShareable = Boolean(
+    guestLinkUrl &&
+      (!cloudSessionSyncEnabled() || session?.shortCodeCloudSynced)
+  );
 
   const logSessionStart = useCallback(
     (created) => {
@@ -95,46 +98,58 @@ export default function ScreenSharePanel({
     [crmCustomerId, agentName]
   );
 
+  const resolveShareableGuestUrl = useCallback(async (activeSession) => {
+    const ready = await ensureGuestLinkReady(activeSession);
+    if (!ready.ok) return { ok: false, url: "", session: activeSession, cloudSynced: false };
+
+    const linkedSession = ready.session || activeSession;
+    const url = buildScreenShareGuestUrl(linkedSession);
+    const shareable =
+      Boolean(url) &&
+      (!cloudSessionSyncEnabled() || linkedSession.shortCodeCloudSynced);
+
+    return {
+      ok: shareable,
+      url: shareable ? url : "",
+      session: linkedSession,
+      cloudSynced: ready.cloudSynced,
+    };
+  }, []);
+
   const copyGuestLink = useCallback(
-    async (activeSession, { silent = false } = {}) => {
-      const ready = await ensureGuestLinkReady(activeSession);
-      if (!ready.ok) {
+    async (activeSession, { silent = false, showManualCopied = true } = {}) => {
+      const resolved = await resolveShareableGuestUrl(activeSession);
+      if (!resolved.ok || !resolved.url) {
         if (!silent) {
           toast({
             title: "הקישור לא מוכן",
-            description: "לא ניתן ליצור קישור — נסו שוב",
+            description: resolved.cloudSynced === false
+              ? GUEST_LINK_CLOUD_PENDING_MESSAGE
+              : "לא ניתן ליצור קישור — נסו שוב",
             variant: "destructive",
           });
         }
         return false;
       }
-      const linkedSession = ready.session || activeSession;
-      if (linkedSession !== session) setSession(linkedSession);
-      const url = buildScreenShareGuestUrl(linkedSession);
-      if (!url) {
-        if (!silent) {
-          toast({
-            title: "הקישור לא מוכן",
-            description: "לא ניתן ליצור קישור — נסו שוב",
-            variant: "destructive",
-          });
-        }
-        return false;
+      if (resolved.session?.id) {
+        const latest = getSession(resolved.session.id);
+        if (latest) setSession(latest);
       }
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setGuestLinkUrl(resolved.url);
+      await navigator.clipboard.writeText(resolved.url);
+      if (showManualCopied) {
+        setManualCopied(true);
+        window.setTimeout(() => setManualCopied(false), 2000);
+      }
       if (!silent) {
         toast({
           title: "הועתק",
-          description: ready.cloudSynced
-            ? "קישור הלקוח הועתק — שלחו ללקוח"
-            : `קישור הלקוח הועתק. ${GUEST_LINK_CLOUD_PENDING_MESSAGE}`,
+          description: "קישור הלקוח הועתק — שלחו ללקוח",
         });
       }
       return true;
     },
-    [session, toast]
+    [resolveShareableGuestUrl, toast]
   );
 
   const handleOpenAgentSession = async () => {
@@ -160,7 +175,8 @@ export default function ScreenSharePanel({
         return;
       }
       setSession(opened);
-      setAutoCopiedForSession(null);
+      setGuestLinkUrl("");
+      autoCopySessionRef.current = null;
       openSessionView(opened.id);
       toast({
         title: "סשן נפתח",
@@ -172,39 +188,99 @@ export default function ScreenSharePanel({
   };
 
   useEffect(() => {
-    if (!session?.id || !linkReady || autoCopiedForSession === session.id) return;
+    const sessionId = session?.id;
+    if (!sessionId || !linkReady) {
+      setGuestLinkUrl("");
+      setGuestLinkPreparing(false);
+      return undefined;
+    }
+
+    const alreadyShareable =
+      Boolean(guestLinkUrl) &&
+      (!cloudSessionSyncEnabled() || session.shortCodeCloudSynced);
+    if (alreadyShareable) {
+      setGuestLinkPreparing(false);
+      return undefined;
+    }
+
     let cancelled = false;
+    setGuestLinkPreparing(true);
+
     void (async () => {
-      const ok = await copyGuestLink(session, { silent: true });
-      if (!cancelled && ok) {
-        setAutoCopiedForSession(session.id);
-        toast({
-          title: "קישור מוכן",
-          description: "הקישור הועתק ללוח — שלחו ללקוח",
-        });
+      const latest = getSession(sessionId) || session;
+      const resolved = await resolveShareableGuestUrl(latest);
+      if (cancelled) return;
+
+      if (resolved.session?.id) {
+        const refreshed = getSession(resolved.session.id);
+        if (refreshed) setSession(refreshed);
       }
+
+      if (resolved.ok && resolved.url) {
+        setGuestLinkUrl(resolved.url);
+        setGuestLinkPreparing(false);
+
+        if (autoCopySessionRef.current !== sessionId) {
+          autoCopySessionRef.current = sessionId;
+          try {
+            await navigator.clipboard.writeText(resolved.url);
+            toast({
+              title: "קישור מוכן",
+              description: "הקישור הקצר הועתק ללוח — שלחו ללקוח",
+            });
+          } catch {
+            toast({
+              title: "קישור מוכן",
+              description: "לחצו «העתק קישור» לשליחה ללקוח",
+            });
+          }
+        }
+        return;
+      }
+
+      if (!cancelled) setGuestLinkPreparing(true);
     })();
+
     return () => {
       cancelled = true;
     };
-  }, [session, linkReady, autoCopiedForSession, copyGuestLink, toast]);
+  }, [
+    session?.id,
+    session?.shortCodeCloudSynced,
+    session?.shortCode,
+    linkReady,
+    guestLinkUrl,
+    resolveShareableGuestUrl,
+    toast,
+  ]);
 
   const handleCopyLink = async () => {
     if (!session?.id) return;
-    if (!linkReady) {
+    if (!linkReady || guestLinkPreparing) {
       toast({
-        title: "המתינו לחיבור",
-        description: "המתינו עד שיופיע «מוכן לקישור»",
+        title: "המתינו לקישור",
+        description: "מכין קישור קצר — נסו שוב בעוד רגע",
         variant: "destructive",
       });
       return;
     }
+    if (guestLinkUrl) {
+      try {
+        await navigator.clipboard.writeText(guestLinkUrl);
+        setManualCopied(true);
+        window.setTimeout(() => setManualCopied(false), 2000);
+        toast({ title: "הועתק", description: "קישור הלקוח הועתק — שלחו ללקוח" });
+      } catch {
+        toast({ title: "לא הועתק", description: "נסו שוב", variant: "destructive" });
+      }
+      return;
+    }
     try {
-      await copyGuestLink(session);
+      await copyGuestLink(session, { showManualCopied: true });
     } catch {
       toast({
         title: "לא הועתק",
-        description: guestUrl || "נסו שוב",
+        description: "נסו שוב",
         variant: "destructive",
       });
     }
@@ -213,7 +289,8 @@ export default function ScreenSharePanel({
   const handleEndSession = useCallback(() => {
     if (session?.id) endSession(session.id);
     setSession(null);
-    setAutoCopiedForSession(null);
+    setGuestLinkUrl("");
+    autoCopySessionRef.current = null;
     toast({ title: "הסתיים", description: "סשן צפייה במסך נסגר" });
   }, [session?.id, toast]);
 
@@ -260,25 +337,38 @@ export default function ScreenSharePanel({
             </p>
           )}
           {linkReady ? (
-            <div className="flex items-center gap-2 text-xs text-slate-600 break-all rounded-lg border border-slate-200 p-2 bg-slate-50">
-              <Link2 className="w-3.5 h-3.5 shrink-0" />
-              <span className="font-mono text-left flex-1" dir="ltr">
-                {guestUrl || "טוען קישור…"}
-              </span>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={handleCopyLink}
-                className="shrink-0 gap-1"
-              >
-                {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                העתק
-              </Button>
-            </div>
+            guestLinkShareable ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+                <p className="text-sm font-medium text-teal-900">קישור קצר מוכן ללקוח</p>
+                {session?.shortCode ? (
+                  <p className="text-xs text-slate-500 font-mono" dir="ltr">
+                    …/j/{session.shortCode}
+                  </p>
+                ) : null}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleCopyLink}
+                  className="w-full gap-1.5"
+                >
+                  {manualCopied ? (
+                    <Check className="w-3.5 h-3.5" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
+                  {manualCopied ? "הועתק" : "העתק קישור"}
+                </Button>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-600 rounded-lg border border-dashed border-slate-200 p-3 text-center flex items-center justify-center gap-2">
+                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                מכין קישור קצר ללקוח…
+              </p>
+            )
           ) : (
             <p className="text-xs text-slate-500 rounded-lg border border-dashed border-slate-200 p-2 text-center">
-              הקישור יופיע כאן כשהחיבור מוכן
+              הקישור יופיע כשהחיבור מוכן
             </p>
           )}
 
