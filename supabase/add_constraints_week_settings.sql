@@ -12,5 +12,15 @@ alter table constraints_week_settings enable row level security;
 drop policy if exists "anon_all_constraints_week_settings" on constraints_week_settings;
 create policy "anon_all_constraints_week_settings" on constraints_week_settings for all using (true) with check (true);
 
--- אופציונלי — עדכון מיידי בין אדמין לנציגים
-alter publication supabase_realtime add table constraints_week_settings;
+-- אופציונלי — עדכון מיידי בין אדמין לנציגים (דלג אם כבר ב-publication)
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'constraints_week_settings'
+  ) then
+    alter publication supabase_realtime add table constraints_week_settings;
+  end if;
+end $$;

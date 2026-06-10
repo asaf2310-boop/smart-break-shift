@@ -142,7 +142,7 @@ export default function ConstraintsDeadlinePanel({ constraintsWeekStart }) {
         <div>
           <h2 className="font-bold text-slate-800">הארכת מועד הגשת אילוצים</h2>
           <p className="text-xs text-slate-400">
-            שבוע יעד {weekStartStr} · דד-ליין רגיל: {format(defaultDeadline, "dd/MM בשעה HH:mm")}
+            שבוע יעד {weekStartStr} (טופס נציגים) · דד-ליין רגיל: {format(defaultDeadline, "dd/MM בשעה HH:mm")}
           </p>
         </div>
       </div>

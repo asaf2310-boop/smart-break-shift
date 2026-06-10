@@ -100,6 +100,11 @@ export function getPublishedScheduleWeekStart(now = new Date()) {
   return addDays(getWeekStartIsrael(now), 7);
 }
 
+/** Sunday of the constraints week agents submit in ShiftScheduler (always next Israel week). */
+export function getAgentConstraintsWeekStart(now = new Date()) {
+  return addDays(getWeekStartIsrael(now), 7);
+}
+
 /** דד-ליין אילוצים: רביעי 16:00 (שבוע ההגשה — השבוע שלפני שבוע האילוצים) */
 export function getConstraintsDeadline(submissionWeekStart) {
   const wednesday = addDays(submissionWeekStart, 3);
