@@ -35,7 +35,7 @@ const productionCards = [
   {
     to: "/metrics",
     title: "מדדים",
-    desc: "ביצועים אישיים לפי דיווח המנהל",
+    desc: "טבלת כל הנציגים וציון משוקלל",
     icon: BarChart3,
     iconTile: "m3-icon-tile",
   },

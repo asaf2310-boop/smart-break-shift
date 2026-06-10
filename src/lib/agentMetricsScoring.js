@@ -100,3 +100,9 @@ export function getMetricsRankingNote(columns = []) {
   }
   return "דירוג: ממוצע כל המדדים המספריים (מומלץ לכלול עמודת «שיחות ממוצע לשעה» לשקלול 50%).";
 }
+
+/** ציון משוקלל 0–100 להצגה */
+export function formatCompositeScore(score) {
+  if (score === null || score === undefined || Number.isNaN(Number(score))) return "—";
+  return `${Math.round(Number(score) * 100)}`;
+}

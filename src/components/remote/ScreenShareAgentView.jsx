@@ -48,6 +48,7 @@ import {
   endSession,
   getSession,
   markGuestStreamConnected,
+  markAgentPeerReady,
   listRecordingsForSession,
   markRecordingDownloaded,
   setRecordingActive,
@@ -131,6 +132,7 @@ function pickWebmMimeType() {
 export default function ScreenShareAgentView({
   sessionId,
   agentName = "",
+  viewOpen = true,
   onEnded,
   className = "",
 }) {
@@ -433,6 +435,13 @@ export default function ScreenShareAgentView({
   }, [sessionId, refreshSessionData]);
 
   const displayStatusLabel = (() => {
+    if (hasRemoteStream) {
+      if (tabHidden && status === "connected") return PEER_STATUS_LABELS.paused;
+      return PEER_STATUS_LABELS.connected;
+    }
+    if (sessionRecord?.guestStreamConnectedAt || status === "connected") {
+      return "לקוח מחובר — ממתין לווידאו";
+    }
     if (tabHidden && status === "connected") return PEER_STATUS_LABELS.paused;
     if (status === "connected") return PEER_STATUS_LABELS.connected;
     if (status === "disconnected") return PEER_STATUS_LABELS.disconnected;
@@ -442,7 +451,8 @@ export default function ScreenShareAgentView({
         : PEER_STATUS_LABELS.ended;
     }
     if (status === "error") return PEER_STATUS_LABELS.error;
-    if (!sessionRecord?.consentAt) return "ממתין לאישור הלקוח בקישור";
+    if (!sessionRecord?.agentPeerReadyAt) return "מפעיל חיבור לקבלת שיתוף מסך…";
+    if (!sessionRecord?.consentAt) return "ממתין שהלקוח יפתח את הקישור וישתף מסך";
     return PEER_STATUS_LABELS[status] || status;
   })();
 
@@ -468,7 +478,14 @@ export default function ScreenShareAgentView({
       setHasRemoteStream(true);
       setTabHidden(false);
       setErrorDetail("");
-      if (sessionId) markGuestStreamConnected(sessionId);
+      if (sessionId) {
+        markGuestStreamConnected(sessionId);
+        const latest = getSession(sessionId);
+        if (latest && !latest.consentAt) {
+          applyGuestPeerSync(sessionId, { consentAt: new Date().toISOString() });
+          setSessionRecord(getSession(sessionId));
+        }
+      }
       const video = videoRef.current;
       if (video) {
         video.srcObject = remoteStream;
@@ -570,6 +587,10 @@ export default function ScreenShareAgentView({
 
     peer.on("open", () => {
       setReconnecting(false);
+      if (sessionId) {
+        markAgentPeerReady(sessionId);
+        setSessionRecord(getSession(sessionId));
+      }
       setStatus((prev) => (prev === "ended" ? prev : "waiting"));
     });
 
@@ -719,6 +740,11 @@ export default function ScreenShareAgentView({
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, [status, resumeVideoPlayback]);
+
+  useEffect(() => {
+    if (!viewOpen || !hasRemoteStream) return;
+    resumeVideoPlayback();
+  }, [viewOpen, hasRemoteStream, resumeVideoPlayback]);
 
   useEffect(() => {
     const onFullscreenChange = () => {
@@ -1069,16 +1095,40 @@ export default function ScreenShareAgentView({
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
       >
-        {status !== "connected" && !hasRemoteStream && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-2 z-10 pointer-events-none">
-            <Monitor className="w-10 h-10 opacity-50" />
-            <p className="text-xs text-center px-4">
-              {!sessionRecord?.consentAt
-                ? "ממתין שהלקוח יאשר בקישור וישתף מסך"
-                : reconnecting
-                  ? "מתחבר מחדש ללקוח…"
-                  : "השאירו דף זה פתוח — הווידאו יופיע כשהלקוח ישתף מסך"}
+        {!hasRemoteStream && status !== "ended" && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-3 z-10 px-4">
+            <Monitor className="w-10 h-10 opacity-50 pointer-events-none" />
+            <p className="text-xs text-center leading-relaxed pointer-events-none">
+              {!sessionRecord?.agentPeerReadyAt
+                ? "מפעיל חיבור — המתינו רגע לפני שליחת הקישור ללקוח"
+                : sessionRecord?.guestStreamConnectedAt || status === "connected"
+                  ? "הלקוח מחובר — ממתין להופעת התמונה. אם נשאר שחור: בקשו מהלקוח לשתף שוב או לחצו «חזור לצפייה»"
+                  : !sessionRecord?.consentAt
+                    ? "שלחו ללקוח את הקישור — הוא יאשר וישתף מסך"
+                    : reconnecting
+                      ? "מתחבר מחדש ללקוח…"
+                      : "השאירו חלון זה פתוח — הווידאו יופיע כשהלקוח ישתף מסך"}
             </p>
+            {(sessionRecord?.guestStreamConnectedAt || status === "connected") &&
+              canReconnect && (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleReconnect();
+                  }}
+                  disabled={reconnecting}
+                  className="gap-2 bg-teal-600 hover:bg-teal-700 pointer-events-auto"
+                >
+                  {reconnecting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4" />
+                  )}
+                  חזור לצפייה
+                </Button>
+              )}
           </div>
         )}
         {showReconnectOverlay && hasRemoteStream === false && status !== "waiting" && (

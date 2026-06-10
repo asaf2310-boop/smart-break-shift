@@ -39,7 +39,9 @@ export function ScreenShareSessionProvider({ children }) {
     }
     const active = listSessions().find(
       (s) =>
-        s.status === "active" && String(s.agentName || "").trim() === String(agentName).trim()
+        s.status === "active" &&
+        s.agentPeerOpenedAt &&
+        String(s.agentName || "").trim() === String(agentName).trim()
     );
     if (active?.id) {
       setBackgroundSessionId(active.id);
@@ -65,6 +67,7 @@ export function ScreenShareSessionProvider({ children }) {
       const sessions = listSessions().filter(
         (s) =>
           s.status === "active" &&
+          s.agentPeerOpenedAt &&
           String(s.agentName || "").trim() === String(agentName).trim()
       );
       for (const s of sessions) {
@@ -189,6 +192,7 @@ export function ScreenShareSessionProvider({ children }) {
               <ScreenShareAgentView
                 sessionId={backgroundSessionId}
                 agentName={agentName}
+                viewOpen={viewOpen}
                 onEnded={() => handleEnded(backgroundSessionId)}
               />
             </div>

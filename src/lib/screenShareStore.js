@@ -112,15 +112,38 @@ export function getSessionByShortCode(shortCode) {
   return session;
 }
 
-/** סשן שיתוף מסך פעיל של נציג (האחרון שנוצר) */
+/** סשן שיתוף מסך פעיל של נציג — רק אחרי «פתח סשן» מפורש */
 export function getActiveScreenSessionForAgent(agentName) {
   const name = String(agentName || getStoredAgentName() || "").trim();
   if (!name) return null;
   return (
     listSessions().find(
-      (s) => s.status === "active" && String(s.agentName || "").trim() === name
+      (s) =>
+        s.status === "active" &&
+        s.agentPeerOpenedAt &&
+        String(s.agentName || "").trim() === name
     ) || null
   );
+}
+
+/** הנציג לחץ «פתח סשן» — מתחילים Peer לפני יצירת קישור */
+export function markAgentPeerOpened(id) {
+  const session = getSession(id);
+  if (!session || session.status === "ended") return session;
+  if (session.agentPeerOpenedAt) return session;
+  return updateSession(id, {
+    agentPeerOpenedAt: new Date().toISOString(),
+  });
+}
+
+/** PeerJS של הנציג מוכן לקבל שיחה מהלקוח */
+export function markAgentPeerReady(id) {
+  const session = getSession(id);
+  if (!session || session.status === "ended") return session;
+  if (session.agentPeerReadyAt) return session;
+  return updateSession(id, {
+    agentPeerReadyAt: new Date().toISOString(),
+  });
 }
 
 export const REMOTE_SUPPORT_OPEN_EVENT = "remote-support-open-request";
@@ -280,7 +303,10 @@ export function createScreenSession({
   const id = makeId("ss");
   const session = {
     id,
-    shortCode: generateShortCode(6),
+    shortCode: null,
+    agentPeerOpenedAt: null,
+    agentPeerReadyAt: null,
+    guestStreamConnectedAt: null,
     crmCustomerId: crmCustomerId || null,
     agentName: String(agentName || getStoredAgentName() || "").trim(),
     customerEmail: String(customerEmail || "").trim(),
@@ -582,6 +608,9 @@ export function endSession(id, { endedReason = "agent_ended" } = {}) {
     recordingActiveAt: null,
     endedReason: endedReason || null,
     shortCode: null,
+    agentPeerOpenedAt: null,
+    agentPeerReadyAt: null,
+    guestStreamConnectedAt: null,
   });
 }
 
@@ -602,6 +631,9 @@ export function endAllActiveScreenSessions({ agentName } = {}) {
       endedReason: "agent_ended",
       shortCode: null,
       recordingActiveAt: null,
+      agentPeerOpenedAt: null,
+      agentPeerReadyAt: null,
+      guestStreamConnectedAt: null,
     };
     cloudSyncSession(ended);
     return ended;

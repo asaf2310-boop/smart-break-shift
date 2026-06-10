@@ -14,6 +14,7 @@ export const TOP_NAV_PATHS = new Set([
 ]);
 
 export function hasTopAppNav(pathname) {
+  if (pathname.startsWith("/metrics")) return true;
   return TOP_NAV_PATHS.has(pathname);
 }
 

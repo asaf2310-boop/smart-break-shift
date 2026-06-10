@@ -14,7 +14,8 @@ export default function AppNav() {
   const isBreaks = location.pathname === "/breaks";
   const isShifts = location.pathname === "/shifts";
   const isTraining = location.pathname === "/training";
-  const isMetrics = location.pathname === "/metrics";
+  const isMetrics =
+    location.pathname === "/metrics" || location.pathname.startsWith("/metrics/");
   const isCrm = location.pathname.startsWith("/crm");
   const isKnowledge = location.pathname.startsWith("/knowledge");
   const isRemoteSupport = location.pathname.startsWith("/remote-support");

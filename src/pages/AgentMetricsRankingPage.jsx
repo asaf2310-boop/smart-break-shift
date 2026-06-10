@@ -1,6 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { BarChart3, Loader2 } from "lucide-react";
+import { Loader2, Trophy } from "lucide-react";
 import AgentMetricsTable from "@/components/metrics/AgentMetricsTable";
 import MetricsSubNav from "@/components/metrics/MetricsSubNav";
 import BackendConfigBanner from "@/components/BackendConfigBanner";
@@ -10,12 +10,14 @@ import { useAgentMetricsSnapshot } from "@/hooks/useAgentMetricsSnapshot";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { getStoredAgentName } from "@/constants/scheduling";
 
-export default function AgentMetricsPage() {
+export default function AgentMetricsRankingPage() {
   const { displayName } = useAgentSession();
   const agentName = displayName || getStoredAgentName();
-  const { loading, snapshot, rankedRows } = useAgentMetricsSnapshot();
+  const { loading, snapshot, rankedRows, rankingNote } = useAgentMetricsSnapshot();
 
-  const hasData = Boolean(snapshot?.upload && rankedRows.length);
+  const myRow = rankedRows.find(
+    (r) => String(r.agent_name || "").trim() === String(agentName || "").trim()
+  );
 
   return (
     <HypPageLayout variant="scheduling" contentClassName="max-w-5xl px-4 py-8">
@@ -28,17 +30,14 @@ export default function AgentMetricsPage() {
         <div className="flex items-center gap-3 justify-center mb-1">
           <div
             className={hypHeaderIconClass(
-              "bg-gradient-to-br from-violet-400 to-indigo-500 shadow-lg shadow-violet-500/30"
+              "bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg shadow-amber-500/30"
             )}
           >
-            <BarChart3 className="w-5 h-5 text-white" />
+            <Trophy className="w-5 h-5 text-white" />
           </div>
-          <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">מדדי נציגים</h1>
+          <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">ציון משוקלל</h1>
         </div>
-        <p className="text-sm text-slate-500">
-          {agentName ? `מחובר כ־${agentName}` : "יש להתחבר כנציג"}
-          {hasData && " · טבלה מלאה של כל הנציגים"}
-        </p>
+        <p className="text-sm text-slate-500">דירוג נציגים לפי שקלול המדדים</p>
       </motion.div>
 
       <motion.div
@@ -52,41 +51,51 @@ export default function AgentMetricsPage() {
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-12 text-slate-500 text-sm">
             <Loader2 className="h-4 w-4 animate-spin" />
-            טוען מדדים...
+            טוען דירוג...
           </div>
         ) : !snapshot?.upload ? (
           <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500 leading-relaxed">
-            עדיין לא פורסמו מדדים.
-            <br />
-            המנהל יעלה קובץ Excel דרך ממשק הניהול.
+            עדיין לא פורסמו מדדים לדירוג.
           </div>
         ) : !rankedRows.length ? (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-8 text-center text-sm text-amber-900 leading-relaxed">
-            לא נמצאו שורות בדיווח האחרון.
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-8 text-center text-sm text-amber-900">
+            אין נתונים לחישוב ציון משוקלל.
           </div>
         ) : (
           <>
+            <div className="rounded-xl border border-violet-200 bg-violet-50/80 px-4 py-3 text-sm text-violet-950 leading-relaxed">
+              <p className="font-semibold mb-1">אופן החישוב</p>
+              <p className="text-violet-900/90 text-xs sm:text-sm">{rankingNote}</p>
+              <p className="text-violet-800/80 text-xs mt-2">
+                הציון המשוקלל מוצג בסולם 0–100 (100 = הביצועים הטובים ביותר בקבוצה לכל מדד).
+              </p>
+            </div>
+
+            {myRow && (
+              <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span className="text-teal-900">
+                  המיקום שלך: <strong>#{myRow._rank}</strong> מתוך {rankedRows.length}
+                </span>
+                <span className="font-bold text-teal-800">
+                  ציון: {Math.round((myRow._compositeScore ?? 0) * 100)}
+                </span>
+              </div>
+            )}
+
             {snapshot.upload?.period_label && (
               <p className="text-sm text-slate-600">
-                תקופת דיווח: <strong>{snapshot.upload.period_label}</strong>
-                {snapshot.upload?.uploaded_at && (
-                  <span className="text-slate-400 text-xs mr-2">
-                    · עודכן{" "}
-                    {new Date(snapshot.upload.uploaded_at).toLocaleDateString("he-IL")}
-                  </span>
-                )}
+                תקופה: <strong>{snapshot.upload.period_label}</strong>
               </p>
             )}
-            <p className="text-xs text-slate-500 leading-relaxed">
-              הנציג המוביל מסומן בצהוב. השורה שלך מסומנת בירוק. לציון המשוקלל — עברו ללשונית «ציון
-              משוקלל».
-            </p>
+
             <AgentMetricsTable
               columns={snapshot.columns}
               rows={rankedRows}
               highlightAgentName={agentName}
               showRank
+              showCompositeScore
               highlightLeader
+              hideMetricColumns
             />
           </>
         )}
