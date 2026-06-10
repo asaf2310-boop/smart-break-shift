@@ -456,9 +456,16 @@ export default function ScreenSharePanel({
         </div>
       ) : (
         <div className="space-y-3">
-          {!linkReady && (
+          {!linkReady && !session.guestStreamConnectedAt && !session.consentAt && (
             <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 leading-relaxed">
               מפעיל חיבור לקבלת שיתוף מסך — המתינו עד שיופיע «מוכן לקישור» לפני שליחה ללקוח.
+            </p>
+          )}
+          {!linkReady && (session.guestStreamConnectedAt || session.consentAt) && (
+            <p className="text-sm text-teal-900 bg-teal-50 border border-teal-200 rounded-xl px-3 py-2 leading-relaxed font-medium">
+              {session.guestStreamConnectedAt
+                ? "לקוח מחובר — ממתין לווידאו בחלון הצפייה"
+                : "הלקוח אישר — ממתין לשיתוף מסך"}
             </p>
           )}
           {linkReady && !session.consentAt && (

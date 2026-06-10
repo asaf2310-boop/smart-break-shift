@@ -190,6 +190,7 @@ export function ScreenShareSessionProvider({ children }) {
             )}
             <div className={viewOpen ? "overflow-y-auto p-4" : "w-[320px] h-[180px]"}>
               <ScreenShareAgentView
+                key={backgroundSessionId}
                 sessionId={backgroundSessionId}
                 agentName={agentName}
                 viewOpen={viewOpen}

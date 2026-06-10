@@ -161,6 +161,7 @@ export default function ScreenShareAgentView({
   const sessionEndedRef = useRef(false);
   const hasRemoteStreamRef = useRef(false);
   const videoRetryTimerRef = useRef(null);
+  const lastGuestPeerIdRef = useRef(null);
 
   const DEMO_AUTO_START_KEY = "demo-auto-start-recording";
   const [autoStartRecording, setAutoStartRecording] = useState(() => {
@@ -172,6 +173,7 @@ export default function ScreenShareAgentView({
 
   const [status, setStatus] = useState("idle");
   const [hasRemoteStream, setHasRemoteStream] = useState(false);
+  const [videoFramesReady, setVideoFramesReady] = useState(false);
   const [errorDetail, setErrorDetail] = useState("");
   const [connectionEpoch, setConnectionEpoch] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -180,6 +182,7 @@ export default function ScreenShareAgentView({
   const [sessionRecord, setSessionRecord] = useState(() =>
     sessionId ? getSession(sessionId) : null
   );
+  const [storeRevision, setStoreRevision] = useState(0);
   const [sessionRecordings, setSessionRecordings] = useState(() =>
     sessionId ? listRecordingsForSession(sessionId) : []
   );
@@ -437,11 +440,19 @@ export default function ScreenShareAgentView({
 
   useEffect(() => {
     if (!sessionId) return undefined;
-    refreshSessionData();
-    return subscribeScreenShare(() => {
+    const syncFromStore = () => {
+      setStoreRevision((n) => n + 1);
       refreshSessionData();
-    });
+    };
+    syncFromStore();
+    return subscribeScreenShare(syncFromStore);
   }, [sessionId, refreshSessionData]);
+
+  const liveSession = React.useMemo(() => {
+    void storeRevision;
+    if (!sessionId) return sessionRecord;
+    return getSession(sessionId) ?? sessionRecord;
+  }, [sessionId, sessionRecord, storeRevision]);
 
   const displayStatusLabel = (() => {
     if (hasRemoteStream) {
@@ -449,21 +460,38 @@ export default function ScreenShareAgentView({
       return PEER_STATUS_LABELS.connected;
     }
     if (status === "connecting") return PEER_STATUS_LABELS.connecting;
-    if (sessionRecord?.guestStreamConnectedAt) {
+    if (liveSession?.guestStreamConnectedAt) {
       return "לקוח מחובר — ממתין לווידאו";
+    }
+    if (liveSession?.consentAt) {
+      return "לקוח אישר — ממתין לשיתוף מסך";
     }
     if (tabHidden && status === "connected") return PEER_STATUS_LABELS.paused;
     if (status === "connected") return PEER_STATUS_LABELS.connected;
     if (status === "disconnected") return PEER_STATUS_LABELS.disconnected;
     if (status === "ended") {
-      return isGuestInitiatedEnd(sessionRecord?.endedReason)
+      return isGuestInitiatedEnd(liveSession?.endedReason)
         ? GUEST_ENDED_LABEL
         : PEER_STATUS_LABELS.ended;
     }
     if (status === "error") return PEER_STATUS_LABELS.error;
-    if (!sessionRecord?.agentPeerReadyAt) return "מפעיל חיבור לקבלת שיתוף מסך…";
-    if (!sessionRecord?.consentAt) return "ממתין שהלקוח יפתח את הקישור וישתף מסך";
+    if (!liveSession?.agentPeerReadyAt) return "מפעיל חיבור לקבלת שיתוף מסך…";
+    if (!liveSession?.consentAt) return "ממתין שהלקוח יפתח את הקישור וישתף מסך";
     return PEER_STATUS_LABELS[status] || status;
+  })();
+
+  const waitingOverlayMessage = (() => {
+    if (liveSession?.guestStreamConnectedAt || status === "connecting") {
+      return "הלקוח מחובר — ממתין להופעת התמונה. אם נשאר שחור: בקשו מהלקוח לשתף שוב או לחצו «חזור לצפייה»";
+    }
+    if (liveSession?.consentAt) {
+      return "הלקוח אישר — ממתין לשיתוף מסך ולהופעת התמונה";
+    }
+    if (!liveSession?.agentPeerReadyAt) {
+      return "מפעיל חיבור — המתינו רגע לפני שליחת הקישור ללקוח";
+    }
+    if (reconnecting) return "מתחבר מחדש ללקוח…";
+    return "שלחו ללקוח את הקישור — הוא יאשר וישתף מסך";
   })();
 
   const resumeVideoPlayback = useCallback(() => {
@@ -498,8 +526,9 @@ export default function ScreenShareAgentView({
         const latest = getSession(sessionId);
         if (latest && !latest.consentAt) {
           applyGuestPeerSync(sessionId, { consentAt: new Date().toISOString() });
-          setSessionRecord(getSession(sessionId));
         }
+        setSessionRecord(getSession(sessionId));
+        setStoreRevision((n) => n + 1);
       }
       const video = videoRef.current;
       if (video) {
@@ -530,6 +559,7 @@ export default function ScreenShareAgentView({
         track.enabled = true;
       }
       bindRemoteStreamToVideo(remoteStream);
+      setVideoFramesReady(false);
       watchVideoTrackActivation(remoteStream, () => {
         resumeVideoPlayback();
       });
@@ -540,6 +570,7 @@ export default function ScreenShareAgentView({
   const clearRemoteVideo = useCallback(() => {
     hasRemoteStreamRef.current = false;
     setHasRemoteStream(false);
+    setVideoFramesReady(false);
     if (videoRef.current) videoRef.current.srcObject = null;
   }, []);
 
@@ -575,6 +606,16 @@ export default function ScreenShareAgentView({
       }, 3500);
     },
     [clearVideoRetryTimer]
+  );
+
+  const requestGuestVideoRecovery = useCallback(
+    (guestPeerId) => {
+      const peer = peerRef.current;
+      if (!guestPeerId || !peer || peer.destroyed) return;
+      requestGuestVideoRetry(peer, guestPeerId);
+      scheduleGuestVideoRetries(guestPeerId);
+    },
+    [scheduleGuestVideoRetries]
   );
 
   const handleSessionEndedByGuest = useCallback(() => {
@@ -631,7 +672,7 @@ export default function ScreenShareAgentView({
     recordingFeaturesEnabled &&
     status === "connected" &&
     hasRemoteStream &&
-    Boolean(sessionRecord?.recordingConsentAt);
+    Boolean(liveSession?.recordingConsentAt);
 
   const recordDisabledReason = (() => {
     if (!recordingFeaturesEnabled) return null;
@@ -641,7 +682,7 @@ export default function ScreenShareAgentView({
     if (!hasRemoteStream) {
       return "אין זרם וידאו — המתינו להופעת התמונה לפני הקלטה";
     }
-    if (!sessionRecord?.recordingConsentAt) {
+    if (!liveSession?.recordingConsentAt) {
       return "הלקוח טרם אישר הקלטה בקישור שיתוף המסך";
     }
     return null;
@@ -651,7 +692,12 @@ export default function ScreenShareAgentView({
     if (!sessionId) return undefined;
     sessionEndedRef.current = false;
 
-    setStatus("waiting");
+    const resumedSession = getSession(sessionId);
+    const guestAlreadyLinked = Boolean(
+      resumedSession?.guestStreamConnectedAt || resumedSession?.consentAt
+    );
+
+    setStatus(guestAlreadyLinked ? "connecting" : "waiting");
     setHasRemoteStream(false);
     hasRemoteStreamRef.current = false;
     clearVideoRetryTimer();
@@ -664,13 +710,24 @@ export default function ScreenShareAgentView({
     const peer = new Peer(getPeerJsOptions(sessionId));
     peerRef.current = peer;
 
+    const syncPeerSessionRecord = () => {
+      if (!sessionId) return;
+      setSessionRecord(getSession(sessionId));
+      setStoreRevision((n) => n + 1);
+    };
+
     peer.on("open", () => {
       setReconnecting(false);
       if (sessionId) {
         markAgentPeerReady(sessionId);
-        setSessionRecord(getSession(sessionId));
+        syncPeerSessionRecord();
       }
-      setStatus((prev) => (prev === "ended" ? prev : "waiting"));
+      setStatus((prev) => {
+        if (prev === "ended") return prev;
+        const latest = sessionId ? getSession(sessionId) : null;
+        if (latest?.guestStreamConnectedAt) return "connecting";
+        return "waiting";
+      });
     });
 
     peer.on("connection", (conn) => {
@@ -685,11 +742,15 @@ export default function ScreenShareAgentView({
           }
         }
         if (data?.type === "guest_ready") {
-          applyGuestPeerSync(sessionId, {
-            consentAt: data.consentAt,
-            recordingConsentAt: data.recordingConsentAt,
-          });
-          setSessionRecord(getSession(sessionId));
+          if (sessionId) {
+            markAgentPeerReady(sessionId);
+            applyGuestPeerSync(sessionId, {
+              consentAt: data.consentAt,
+              recordingConsentAt: data.recordingConsentAt,
+            });
+            syncPeerSessionRecord();
+          }
+          setStatus((prev) => (prev === "ended" ? prev : "connecting"));
           return;
         }
         if (data?.type !== "guest_end") return;
@@ -700,6 +761,10 @@ export default function ScreenShareAgentView({
     });
 
     peer.on("call", (call) => {
+      if (sessionId) {
+        markAgentPeerReady(sessionId);
+        syncPeerSessionRecord();
+      }
       callRef.current = call;
       let stopWatchReceivers = () => {};
 
@@ -759,6 +824,7 @@ export default function ScreenShareAgentView({
       });
 
       const guestPeerId = call.peer;
+      if (guestPeerId) lastGuestPeerIdRef.current = guestPeerId;
       scheduleGuestVideoRetries(guestPeerId);
 
       try {
@@ -850,6 +916,64 @@ export default function ScreenShareAgentView({
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, [status, resumeVideoPlayback]);
+
+  useEffect(() => {
+    if (!viewOpen || !sessionId) return;
+    refreshSessionData();
+    if (remoteStreamRef.current && hasRemoteStreamRef.current) {
+      setHasRemoteStream(true);
+      setStatus((prev) => (prev === "ended" ? prev : "connected"));
+      resumeVideoPlayback();
+      return;
+    }
+    const latest = getSession(sessionId);
+    if (
+      (latest?.guestStreamConnectedAt || latest?.consentAt) &&
+      !hasRemoteStreamRef.current
+    ) {
+      setStatus((prev) => (prev === "ended" ? prev : "connecting"));
+      const guestPeerId = callRef.current?.peer || lastGuestPeerIdRef.current;
+      requestGuestVideoRecovery(guestPeerId);
+    }
+  }, [
+    viewOpen,
+    sessionId,
+    refreshSessionData,
+    resumeVideoPlayback,
+    requestGuestVideoRecovery,
+  ]);
+
+  useEffect(() => {
+    if (!hasRemoteStream || !viewOpen) {
+      setVideoFramesReady(false);
+      return undefined;
+    }
+    const video = videoRef.current;
+    if (!video) return undefined;
+    if (video.videoWidth > 0 && video.videoHeight > 0) {
+      setVideoFramesReady(true);
+      return undefined;
+    }
+    let tries = 0;
+    const timer = window.setInterval(() => {
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        setVideoFramesReady(true);
+        window.clearInterval(timer);
+        return;
+      }
+      tries += 1;
+      if (tries >= 24) {
+        window.clearInterval(timer);
+        setErrorDetail((prev) =>
+          prev ||
+          "זרם התקבל אך אין תמונה — בדקו TURN ב-Vercel או לחצו «חזור לצפייה»"
+        );
+        const guestPeerId = callRef.current?.peer || lastGuestPeerIdRef.current;
+        requestGuestVideoRecovery(guestPeerId);
+      }
+    }, 500);
+    return () => window.clearInterval(timer);
+  }, [hasRemoteStream, viewOpen, requestGuestVideoRecovery]);
 
   useEffect(() => {
     if (!viewOpen || !hasRemoteStream) return;
@@ -1205,21 +1329,23 @@ export default function ScreenShareAgentView({
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
       >
+        {hasRemoteStream && !videoFramesReady && status !== "ended" && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300 gap-3 z-10 px-4 bg-slate-950/60">
+            <Loader2 className="w-8 h-8 animate-spin opacity-70 pointer-events-none" />
+            <p className="text-xs text-center leading-relaxed pointer-events-none">
+              זרם התקבל — ממתין להופעת התמונה…
+            </p>
+          </div>
+        )}
         {!hasRemoteStream && status !== "ended" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-3 z-10 px-4">
             <Monitor className="w-10 h-10 opacity-50 pointer-events-none" />
             <p className="text-xs text-center leading-relaxed pointer-events-none">
-              {!sessionRecord?.agentPeerReadyAt
-                ? "מפעיל חיבור — המתינו רגע לפני שליחת הקישור ללקוח"
-                : status === "connecting" || sessionRecord?.guestStreamConnectedAt
-                  ? "הלקוח מחובר — ממתין להופעת התמונה. אם נשאר שחור: בקשו מהלקוח לשתף שוב או לחצו «חזור לצפייה»"
-                  : !sessionRecord?.consentAt
-                    ? "שלחו ללקוח את הקישור — הוא יאשר וישתף מסך"
-                    : reconnecting
-                      ? "מתחבר מחדש ללקוח…"
-                      : "השאירו חלון זה פתוח — הווידאו יופיע כשהלקוח ישתף מסך"}
+              {waitingOverlayMessage}
             </p>
-            {(status === "connecting" || sessionRecord?.guestStreamConnectedAt) &&
+            {(status === "connecting" ||
+              liveSession?.guestStreamConnectedAt ||
+              liveSession?.consentAt) &&
               canReconnect && (
                 <Button
                   type="button"
