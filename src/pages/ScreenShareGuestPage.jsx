@@ -268,7 +268,14 @@ export default function ScreenShareGuestPage() {
       }
       videoTrack.enabled = true;
       logOutboundVideoTrack(stream, { reason: "before_place_call", sessionId });
-      const call = peer.call(sessionId, stream);
+      const agentPeerId = sessionId;
+      console.log("[WebRTC:guest] placeCall", {
+        sessionId,
+        agentPeerId,
+        guestPeerId: peer.id || "(pending)",
+        targetMatchesSession: agentPeerId === sessionId,
+      });
+      const call = peer.call(agentPeerId, stream);
       if (!call) {
         setError("לא ניתן לפתוח שיחה לנציג — ודאו שהנציג פתח את מסך הצפייה");
         return false;
