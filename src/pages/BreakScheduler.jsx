@@ -24,7 +24,8 @@ import {
   BreakRegistrationError,
   createBreakRegistration,
   getBreakLimits,
-  isBreakRegistrationBlocked,  validateBreakRegistration,
+  isBreakRegistrationBlocked,
+  validateBreakRegistration,
 } from "@/lib/breakCapacity";
 import { getLiveQueryOptions } from "@/lib/liveQuery";
 import HypPageLayout from "@/components/hyp/HypPageLayout";
@@ -50,9 +51,6 @@ const writeCachedBreakDay = (dateStr, data) => {
 };
 
 export default function BreakScheduler() {
-=======
-  const [selectedDate, setSelectedDate] = useState(new Date());
->>>>>>> 842dd9e (Initial commit)
   const [agentName, setAgentName] = useState(() => getStoredAgentName());
   const [showNotice, setShowNotice] = useState(false);
   const queryClient = useQueryClient();
@@ -60,6 +58,7 @@ export default function BreakScheduler() {
 
   const dateStr = getIsraelDateStr();
   const selectedDate = useMemo(() => getTodayIsraelDate(), [dateStr]);
+
   const { data: breakDayData, isLoading, isFetching } = useQuery({
     queryKey: ["break-day", dateStr],
     queryFn: async () => {
@@ -90,6 +89,13 @@ export default function BreakScheduler() {
   }, []);
 
   useEffect(() => {
+    if (agentName && settings?.show_shortage_notice) setShowNotice(true);
+  }, [agentName, settings?.show_shortage_notice, settings?.id]);
+
+  const breakLimits = useMemo(() => getBreakLimits(settings), [settings]);
+  const registrationOverrideOpen = Boolean(settings?.registration_override_open);
+  const registrationClosed = isBreakRegistrationBlocked(dateStr, settings);
+
   const createMutation = useMutation({
     mutationFn: (data) => createBreakRegistration(dataClient, data),
     onSuccess: () => {
@@ -129,6 +135,26 @@ export default function BreakScheduler() {
       ? pendingRegistration.time_slot
       : null;
 
+  const handleLogout = async () => {
+    const { agentLogout } = await import("@/lib/agentAuth");
+    await agentLogout();
+    setAgentName("");
+    window.location.href = "/";
+  };
+
+  const handleRegister = (breakType) => (slot) => {
+    if (createMutation.isPending) {
+      return;
+    }
+    if (isInitialBreakLoad || isFetching) {
+      toast({ title: "רגע קטן", description: "מעדכנים זמינות להפסקות" });
+      return;
+    }
+    if (registrationClosed) {
+      toast({ title: "לא ניתן להירשם", description: BREAK_REGISTRATION_DEADLINE_MESSAGE });
+      return;
+    }
+
     try {
       validateBreakRegistration({
         registrations,
@@ -137,6 +163,42 @@ export default function BreakScheduler() {
         breakType,
         timeSlot: slot,
         date: dateStr,
+      });
+    } catch (error) {
+      if (error instanceof BreakRegistrationError) {
+        toast({ title: "לא ניתן להירשם", description: error.message });
+      }
+      return;
+    }
+
+    createMutation.mutate({
+      agent_name: agentName,
+      break_type: breakType,
+      time_slot: slot,
+      date: dateStr,
+    });
+  };
+
+  const handleCancel = (id) => {
+    if (registrationClosed) {
+      toast({ title: "לא ניתן לבטל", description: BREAK_REGISTRATION_DEADLINE_MESSAGE });
+      return;
+    }
+    if (deleteMutation.isPending) return;
+    deleteMutation.mutate(id);
+  };
+
+  const shortRegs = useMemo(() => registrations.filter(r => r.break_type === "short"), [registrations]);
+  const lunchRegs = useMemo(() => registrations.filter(r => r.break_type === "lunch"), [registrations]);
+  const myShortReg = useMemo(
+    () => shortRegs.find((r) => agentOwnsBreakRegistration(r, agentName)),
+    [shortRegs, agentName]
+  );
+  const myLunchReg = useMemo(
+    () => lunchRegs.find((r) => agentOwnsBreakRegistration(r, agentName)),
+    [lunchRegs, agentName]
+  );
+
   if (!agentName) {
     return <Navigate to="/" replace />;
   }
@@ -210,7 +272,13 @@ export default function BreakScheduler() {
             <p className="text-slate-500 text-sm">
               שלום <span className="text-indigo-600 font-semibold">{agentName}</span>
               {" · "}
-              הרשמה להפסקות ליום הנוכחי בלבד          </div>
+              הרשמה להפסקות ליום הנוכחי בלבד
+            </p>
+          </div>
+
+          <div className="order-3">
+            <DateSelector selectedDate={selectedDate} variant="light" readOnly />
+          </div>
         </motion.div>
 
         {/* My Registrations */}
@@ -230,7 +298,8 @@ export default function BreakScheduler() {
           />
         </motion.div>
 
-        {isFetching && !registrationClosed && (          <div className="mb-3 flex justify-center">
+        {isFetching && !registrationClosed && (
+          <div className="mb-3 flex justify-center">
             <div className="px-3 py-1.5 rounded-full bg-white/80 border border-indigo-100 text-xs font-semibold text-indigo-600 shadow-sm">
               מעדכן זמינות...
             </div>
@@ -256,6 +325,23 @@ export default function BreakScheduler() {
             {BREAK_REGISTRATION_DEADLINE_MESSAGE}
           </motion.div>
         )}
+
+        <div className="space-y-6">
+          <BreakSection
+            type="short"
+            title="הפסקת 10 דקות"
+            subtitle="10:00 – 12:00 · מקסימום נציג אחד למשבצת"
+            slots={SHORT_BREAK_SLOTS}
+            registrations={shortRegs}
+            onRegister={handleRegister("short")}
+            userRegistration={myShortReg}
+            agentName={agentName}
+            maxPerSlot={breakLimits.short}
+            registeringSlot={registeringSlotFor("short")}
+            registrationClosed={registrationClosed}
+            canCancel={!registrationClosed}
+            onCancel={handleCancel}
+            isDeleting={deleteMutation.isPending}
           />
           <BreakSection
             type="lunch"
@@ -271,7 +357,8 @@ export default function BreakScheduler() {
             registrationClosed={registrationClosed}
             canCancel={!registrationClosed}
             onCancel={handleCancel}
-            isDeleting={deleteMutation.isPending}          />
+            isDeleting={deleteMutation.isPending}
+          />
         </div>
     </HypPageLayout>
   );

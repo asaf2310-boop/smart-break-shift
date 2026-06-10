@@ -27,7 +27,15 @@ import { useToast } from "@/components/ui/use-toast";
 import { createCallLog, createEmailLog, getCustomerById } from "@/lib/crmStore";
 import {
   buildConsentUrl,
-  ensureConsentLinkReady,  remoteSupportFeaturesAvailable,
+  ensureConsentLinkReady,
+  buildRustDeskDeepLink,
+  buildRustDeskMailtoUrl,
+  createSession,
+  endSession,
+  formatConnectionDetails,
+  getSession,
+  listSessions as listRustDeskSessions,
+  remoteSupportFeaturesAvailable,
   sendRustDeskDownloadEmail,
   subscribeRemoteSupport,
 } from "@/lib/remoteSupportStore";
@@ -40,6 +48,43 @@ import {
   listSessions as listScreenShareSessions,
   REMOTE_SUPPORT_OPEN_EVENT,
 } from "@/lib/screenShareStore";
+
+const PANEL_DEMO_BANNER =
+  "דמו — בחרו למטה: שלב א צפייה בדפדפן (ללא התקנה) או שליטה מלאה ב-RustDesk.";
+
+const RUSTDESK_DEMO_BANNER =
+  "לפרודקשן: שרת RustDesk עצמי (hbbs/hbbr) + מדיניות אבטחה; אל תשמרו סיסמאות ב-localStorage.";
+
+function isValidEmail(value) {
+  const trimmed = String(value || "").trim();
+  return trimmed.includes("@") && trimmed.length > 3;
+}
+
+function normalizeRustDeskId(value) {
+  return String(value || "").replace(/\D/g, "").slice(0, 9);
+}
+
+export default function RemoteSupportPanel({
+  agentName,
+  crmCustomerId,
+  customerName,
+  customerEmail: customerEmailProp,
+  compact = false,
+  hideEmailStatusBanner = false,
+}) {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [supportMode, setSupportMode] = useState("screen");
+  const [step, setStep] = useState(1);
+  const [rustDeskId, setRustDeskId] = useState("");
+  const [password, setPassword] = useState("");
+  const [session, setSession] = useState(null);
+  const [copied, setCopied] = useState(false);
+  const [emailTo, setEmailTo] = useState("");
+  const [sendingRustDeskEmail, setSendingRustDeskEmail] = useState(false);
+  const [startingRustDeskSession, setStartingRustDeskSession] = useState(false);
+  const [screenSessionActive, setScreenSessionActive] = useState(false);
+
   const defaultCustomerEmail = useMemo(() => {
     if (customerEmailProp) return String(customerEmailProp).trim();
     if (crmCustomerId) return getCustomerById(crmCustomerId)?.email?.trim() || "";
@@ -83,6 +128,20 @@ import {
   }, [open]);
 
   useEffect(() => {
+    if (!session?.id) return undefined;
+    const refresh = () => {
+      const latest = getSession(session.id);
+      if (latest) setSession(latest);
+    };
+    refresh();
+    return subscribeRemoteSupport(refresh);
+  }, [session?.id]);
+
+  const consentUrl = useMemo(() => {
+    if (!session?.id) return "";
+    return buildConsentUrl(session);
+  }, [session]);
+
   const deepLink = useMemo(
     () => buildRustDeskDeepLink(rustDeskId, password),
     [rustDeskId, password]
@@ -173,7 +232,51 @@ import {
         agentName,
         rustDeskId: normalizedId,
         password,
-        customerEmail: emailTo,      setStep(3);
+        customerEmail: emailTo,
+      });
+      setSession(created);
+      setRustDeskId(normalizedId);
+
+      if (crmCustomerId) {
+        createCallLog({
+          customer_id: crmCustomerId,
+          call_type: "chat",
+          summary: `תמיכה מרחוק (RustDesk) — מזהה ${normalizedId}. ממתין לאישור לקוח בקישור. סשן: ${created.id}`,
+          agent_name: agentName,
+          duration_minutes: null,
+          referral_topic: null,
+        });
+      }
+
+      const ready = await ensureConsentLinkReady(created);
+      if (!ready.ok) {
+        toast({
+          title: "הקישור לא מוכן",
+          description: "לא ניתן לשלוח קישור אישור — נסו שוב",
+          variant: "destructive",
+        });
+        return;
+      }
+      const linkedSession = ready.session || created;
+      if (linkedSession !== created) setSession(linkedSession);
+      const consentUrlForEmail = buildConsentUrl(linkedSession);
+      if (!consentUrlForEmail) {
+        toast({
+          title: "הקישור לא מוכן",
+          description: "לא ניתן לשלוח קישור אישור — נסו שוב",
+          variant: "destructive",
+        });
+        return;
+      }
+      await sendRustDeskLinkEmail(consentUrlForEmail, linkedSession.id);
+      if (!ready.cloudSynced) {
+        toast({
+          title: "הקישור נשלח",
+          description:
+            "הסנכרון לענן עדיין בתהליך — אם הלקוח לא מצליח לפתוח את הקישור, נסו שוב בעוד רגע",
+        });
+      }
+      setStep(3);
     } catch (err) {
       const rateLimited = err.status === 429;
       toast({
@@ -372,7 +475,8 @@ import {
               : "sm:max-w-lg"
           }`}
           dir="rtl"
-        >          <div className="bg-violet-50 border-b border-violet-200 px-4 py-2 flex items-start gap-2 text-violet-950 text-xs leading-relaxed">
+        >
+          <div className="bg-violet-50 border-b border-violet-200 px-4 py-2 flex items-start gap-2 text-violet-950 text-xs leading-relaxed">
             <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-violet-700" />
             <span>{PANEL_DEMO_BANNER}</span>
           </div>
@@ -431,8 +535,6 @@ import {
                   customerEmail={customerEmailProp}
                   hideEmailStatusBanner={hideEmailStatusBanner}
                   onSessionActiveChange={setScreenSessionActive}
-=======
->>>>>>> 842dd9e (Initial commit)
                 />
               </TabsContent>
 

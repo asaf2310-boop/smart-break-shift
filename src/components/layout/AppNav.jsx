@@ -4,6 +4,7 @@ import { BarChart3, BookOpen, CalendarClock, CalendarDays, Contact, Film, Gradua
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { customerChatEnabled, demoModeEnabled } from "@/api/demoClient";
 import { brandVisualEnabled } from "@/lib/brandShell";
+
 /** גובה שורת הניווט העליונה — משמש גם ל-FloatingChatWidget */
 export const APP_NAV_HEIGHT = "var(--app-nav-height)";
 
@@ -21,20 +22,23 @@ export default function AppNav() {
   const isCustomerChat = location.pathname.startsWith("/customer-chat");
 
   const useBrandNav = brandVisualEnabled;
+
   const tabClass = (active) =>
     `flex flex-1 sm:flex-none items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 text-xs sm:text-sm whitespace-nowrap transition-all duration-200 ${
       active
         ? useBrandNav
           ? "hyp-nav-tab-active"
           : "m3-nav-tab-active"
-        : useBrandNav          ? "hyp-nav-tab-inactive"
+        : useBrandNav
+          ? "hyp-nav-tab-inactive"
           : "m3-nav-tab-inactive"
     }`;
 
   return (
     <nav
       className={
-        useBrandNav          ? "hyp-nav-shell fixed inset-x-0 top-0 z-[80] flex justify-center px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top,0px))] pointer-events-none"
+        useBrandNav
+          ? "hyp-nav-shell fixed inset-x-0 top-0 z-[80] flex justify-center px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top,0px))] pointer-events-none"
           : "fixed inset-x-0 top-0 z-[80] flex justify-center px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top,0px))] bg-gradient-to-b from-[#f7f3fb]/90 via-[#f7f3fb]/60 to-transparent pointer-events-none"
       }
       dir="rtl"
@@ -44,7 +48,8 @@ export default function AppNav() {
         <div className="min-w-0 overflow-x-auto pt-1">
         <div
           className={`${
-            useBrandNav ? "hyp-nav-bar" : "m3-nav-bar"          } flex w-max min-w-full sm:min-w-0 p-1.5 gap-1 justify-center`}
+            useBrandNav ? "hyp-nav-bar" : "m3-nav-bar"
+          } flex w-max min-w-full sm:min-w-0 p-1.5 gap-1 justify-center`}
         >
           <Link to="/" className={tabClass(location.pathname === "/")}>
             <Home className="w-4 h-4" />
@@ -75,14 +80,52 @@ export default function AppNav() {
               <MessageCircle className="w-4 h-4" />
               צ&apos;אט לקוחות
             </Link>
-          )}              <Link to="/knowledge" className={tabClass(isKnowledge)}>
+          )}
+          {demoModeEnabled && (
+            <>
+              <Link to="/crm" className={tabClass(isCrm)}>
+                <Contact className="w-4 h-4" />
+                CRM
+              </Link>
+              <Link to="/knowledge" className={tabClass(isKnowledge)}>
                 <BookOpen className="w-4 h-4" />
                 בסיס ידע
               </Link>
               <Link to="/customer-chat" className={tabClass(isCustomerChat)}>
                 <MessageCircle className="w-4 h-4" />
                 צ&apos;אט
-              </Link>              {demoModeEnabled && (
+              </Link>
+            </>
+          )}
+          {isAdmin && (
+            <>
+              <Link to="/admin" className={tabClass(location.pathname === "/admin")}>
+                <ShieldCheck className="w-4 h-4" />
+                מנהל
+              </Link>
+              <Link to="/admin/shifts" className={tabClass(location.pathname === "/admin/shifts")}>
+                <ShieldCheck className="w-4 h-4" />
+                משמרות מנהל
+              </Link>
+              <Link to="/admin/users" className={tabClass(location.pathname === "/admin/users")}>
+                <ShieldCheck className="w-4 h-4" />
+                נציגים
+              </Link>
+              <Link
+                to="/admin/recordings"
+                className={tabClass(location.pathname.startsWith("/admin/recordings"))}
+              >
+                <Film className="w-4 h-4" />
+                הקלטות
+              </Link>
+              <Link
+                to="/admin/metrics"
+                className={tabClass(location.pathname.startsWith("/admin/metrics"))}
+              >
+                <BarChart3 className="w-4 h-4" />
+                מדדים
+              </Link>
+              {demoModeEnabled && (
                 <Link to="/admin/knowledge" className={tabClass(location.pathname === "/admin/knowledge")}>
                   <BookOpen className="w-4 h-4" />
                   ניהול ידע
@@ -94,8 +137,6 @@ export default function AppNav() {
                   בוט צ&apos;אט
                 </Link>
               )}
-=======
->>>>>>> 842dd9e (Initial commit)
             </>
           )}
         </div>

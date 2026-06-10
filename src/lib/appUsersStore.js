@@ -1,4 +1,5 @@
 import { demoModeEnabled } from "@/api/demoMode";
+
 export const APP_USERS_STORAGE_KEY = "app-users-v1";
 
 const DEMO_SEED_USERS = [
@@ -147,8 +148,6 @@ export function setDemoUserPasswordByAdmin(id, password, { forceSetup = true } =
   return users[index];
 }
 
-=======
->>>>>>> 842dd9e (Initial commit)
 export function verifyDemoUserPassword(user, password) {
   if (!user?.password) return false;
   return user.password === String(password);

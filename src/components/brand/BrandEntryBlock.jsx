@@ -6,27 +6,14 @@ export default function BrandEntryBlock({
   onDark = false,
   subtitle = "מערכת מוקד",
   className,
-}) {  return (
+}) {
+  return (
     <div
       className={cn(
         "flex w-full flex-col items-center justify-center text-center gap-3 px-2",
         className,
       )}
     >
-=======
-      {!isLogin ? (
-        <BrandLogo
-          variant={logoVariant}
-          onDark={onDark}
-          linkToHome={false}
-          size={logoSize}
-          className={cn(
-            "mx-auto w-full justify-center",
-            onDark ? "max-w-[min(90vw,960px)]" : "max-w-lg sm:max-w-xl",
-          )}
-        />
-      ) : null}
->>>>>>> 842dd9e (Initial commit)
       {subtitle ? (
         <p
           className={cn(

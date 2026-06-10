@@ -1,4 +1,5 @@
 import { customerChatEnabled, demoModeEnabled } from "@/api/demoClient";
+
 const ADMIN_DEV_ROUTES_CORE = [
   { path: "/admin", label: "דשבורד מנהל" },
   { path: "/admin/shifts", label: "משמרות (מנהל)" },
@@ -14,11 +15,13 @@ const ADMIN_DEV_ROUTES_CUSTOMER_CHAT = [
   { path: "/chat/guest", label: "צ'אט לקוח (אורח)" },
   { path: "/customer-chat", label: "צ'אט לקוחות (נציג)" },
 ];
+
 /** Admin routes from App.jsx — keep in sync when adding /admin/* pages. */
 export const ADMIN_DEV_ROUTES = [
   ...ADMIN_DEV_ROUTES_CORE,
   ...(demoModeEnabled ? ADMIN_DEV_ROUTES_DEMO_ONLY : []),
-  ...(customerChatEnabled ? ADMIN_DEV_ROUTES_CUSTOMER_CHAT : []),];
+  ...(customerChatEnabled ? ADMIN_DEV_ROUTES_CUSTOMER_CHAT : []),
+];
 
 export function isAdminDevLinksVisible() {
   return import.meta.env.DEV || demoModeEnabled;

@@ -65,7 +65,57 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/components/ui/use-toast";
 import HypPageLayout from "@/components/hyp/HypPageLayout";
-import { m3PageClass } from "@/lib/hypPage";        <div className="text-center">
+import { m3PageClass } from "@/lib/hypPage";
+import { useTelephony } from "@/context/TelephonyContext";
+import { telephonyDemoAvailable } from "@/lib/telephonyStore";
+import RemoteSupportPanel from "@/components/remote/RemoteSupportPanel";
+import CustomerScreenRecordings from "@/components/crm/CustomerScreenRecordings";
+
+const callTypeIcon = {
+  incoming: Phone,
+  outgoing: Phone,
+  chat: MessageSquare,
+};
+
+export default function CrmCustomerDetail() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const agentName = getStoredAgentName();
+  const [customer, setCustomer] = useState(null);
+  const [calls, setCalls] = useState([]);
+  const [emails, setEmails] = useState([]);
+  const [referrals, setReferrals] = useState([]);
+  const [activeTab, setActiveTab] = useState("calls");
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [transferRef, setTransferRef] = useState(null);
+  const { toast } = useToast();
+  const { dialNumber } = useTelephony();
+
+  const refresh = useCallback(() => {
+    setCustomer(getCustomerById(id));
+    setCalls(listCallLogsForCustomer(id));
+    setEmails(listEmailLogsForCustomer(id));
+    setReferrals(listReferralsForCustomer(id));
+  }, [id]);
+
+  useEffect(() => {
+    refresh();
+    return subscribeCrmStore(refresh);
+  }, [refresh]);
+
+  if (!agentName) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (!crmDemoAvailable()) {
+    return <Navigate to="/crm" replace />;
+  }
+
+  if (!customer) {
+    return (
+      <div className={m3PageClass("flex items-center justify-center p-6")} dir="rtl">
+        <div className="text-center">
           <p className="text-slate-600 mb-4">לקוח לא נמצא</p>
           <Link to="/crm" className="text-indigo-600 font-semibold text-sm">
             חזרה לרשימה
@@ -506,9 +556,6 @@ import { m3PageClass } from "@/lib/hypPage";        <div className="text-center"
             </section>
           </>
         )}
-=======
-      </div>
->>>>>>> 842dd9e (Initial commit)
 
       <ReferralTransferDialog
         referral={transferRef}

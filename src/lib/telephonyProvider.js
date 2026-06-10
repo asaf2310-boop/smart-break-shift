@@ -30,6 +30,7 @@ export const SIP_REGISTRATION = {
   unregistered: "unregistered",
   error: "error",
 };
+
 export function getSipConfig() {
   const wsUrl = import.meta.env.VITE_SIP_WS_URL?.trim();
   const user = import.meta.env.VITE_SIP_USER?.trim();
@@ -40,7 +41,8 @@ export function getSipConfig() {
     user: user || null,
     hasClientPassword: Boolean(password),
     usesServerCredentials: !password,
-  };}
+  };
+}
 
 export function getTwilioConfig() {
   const accountSid = import.meta.env.VITE_TWILIO_ACCOUNT_SID?.trim();
@@ -441,7 +443,8 @@ export async function toggleSipMute() {
 
 /**
  * Health check for configured telephony (no network dial).
- * @returns {Promise<{ ok: boolean, reason?: string, provider?: string }>} */
+ * @returns {Promise<{ ok: boolean, reason?: string, provider?: string }>}
+ */
 export async function connectProductionCall() {
   const provider = getConfiguredProvider();
   if (!provider) {
@@ -465,5 +468,6 @@ export async function connectProductionCall() {
   return {
     ok: true,
     reason: `SIP מוכן (${credentials.source === "server" ? "אישורים מהשרת" : "אישורים מקומיים"})`,
-    provider: "sip",  };
+    provider: "sip",
+  };
 }

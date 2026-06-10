@@ -2,6 +2,413 @@
  * Helpers for PeerJS / WebRTC screen share (agent receives guest display).
  */
 
+const WEBRTC_DEBUG_STORAGE_KEY = "hyp_webrtc_debug_logs";
+const WEBRTC_DEBUG_MAX_ENTRIES = 200;
+
+/** @type {Record<string, string>} */
+const INBOUND_VIDEO_DIAGNOSIS = {
+  ok: "ווידאו מתקבל ומתפענח — bytesReceived ו-framesDecoded עולים",
+  codec: "bytesReceived עולה אך framesDecoded=0 — בעיית Codec או דקודר",
+  not_sent: "bytesReceived=0 — בעיית Track/SDP (הווידאו לא נשלח או לא הגיע)",
+  element: "framesDecoded עולה אך אין תמונה — בדקו אלמנט וידאו / CSS (opacity, z-index, גודל)",
+};
+
+/**
+ * @param {number} bytesReceived
+ * @param {number} framesDecoded
+ * @param {{ videoHasDimensions?: boolean }} [options]
+ * @returns {"ok"|"codec"|"not_sent"|"element"}
+ */
+export function diagnoseInboundVideoKey(bytesReceived, framesDecoded, options = {}) {
+  const { videoHasDimensions = true } = options;
+  if (bytesReceived > 0 && framesDecoded > 0) {
+    if (!videoHasDimensions) return "element";
+    return "ok";
+  }
+  if (bytesReceived > 0 && framesDecoded === 0) return "codec";
+  return "not_sent";
+}
+
+/**
+ * @param {RTCStatsReport} stats
+ * @param {{ videoHasDimensions?: boolean }} [options]
+ */
+export function summarizeInboundVideoStatsFromReport(stats, options = {}) {
+  let bytesReceived = 0;
+  let framesDecoded = 0;
+  let framesReceived = 0;
+  let packetsReceived = 0;
+  let packetsLost = 0;
+  stats.forEach((report) => {
+    if (report.type === "inbound-rtp" && report.kind === "video") {
+      bytesReceived += report.bytesReceived || 0;
+      framesDecoded += report.framesDecoded || 0;
+      framesReceived += report.framesReceived || 0;
+      packetsReceived += report.packetsReceived || 0;
+      packetsLost += report.packetsLost || 0;
+    }
+  });
+  const diagnosisKey = diagnoseInboundVideoKey(
+    bytesReceived,
+    framesDecoded,
+    options
+  );
+  return {
+    bytesReceived,
+    framesDecoded,
+    framesReceived,
+    packetsReceived,
+    packetsLost,
+    diagnosisKey,
+    diagnosis: INBOUND_VIDEO_DIAGNOSIS[diagnosisKey],
+  };
+}
+
+/**
+ * @param {RTCPeerConnection | null | undefined} pc
+ * @param {{ videoHasDimensions?: boolean }} [options]
+ */
+export async function summarizeInboundVideoStats(pc, options = {}) {
+  if (!pc?.getStats) return null;
+  try {
+    const stats = await pc.getStats();
+    return summarizeInboundVideoStatsFromReport(stats, options);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * אבחון מהיר מהקונסולה: diagnoseInboundVideo(pc)
+ * @param {RTCPeerConnection | null | undefined} pc
+ */
+export async function diagnoseInboundVideo(pc) {
+  const summary = await summarizeInboundVideoStats(pc);
+  if (!summary) {
+    console.warn("[WebRTC:diagnose] pc.getStats unavailable");
+    return null;
+  }
+  console.log("[WebRTC:diagnose] Frames Decoded:", summary.framesDecoded);
+  console.log("[WebRTC:diagnose] Bytes Received:", summary.bytesReceived);
+  console.log("[WebRTC:diagnose]", summary.diagnosis);
+  return summary;
+}
+
+/**
+ * @param {MediaStream | null | undefined} stream
+ * @param {{ reason?: string, sessionId?: string }} [context]
+ */
+export function logOutboundVideoTrack(stream, context = {}) {
+  const prefix = `[WebRTC:guest${context.reason ? `:${context.reason}` : ""}]`;
+  const track = stream?.getVideoTracks?.()?.[0];
+  if (!track) {
+    console.warn(prefix, "no video track in stream");
+    appendWebRtcDebugLog({
+      at: new Date().toISOString(),
+      type: "outbound_track",
+      error: "no_video_track",
+      context,
+    });
+    return null;
+  }
+
+  /** @type {Record<string, unknown>} */
+  let settings = {};
+  try {
+    settings = track.getSettings?.() || {};
+  } catch {
+    /* ignore */
+  }
+
+  console.log(prefix, "SCREEN TRACK");
+  console.log(prefix, "readyState:", track.readyState);
+  console.log(prefix, "enabled:", track.enabled);
+  console.log(prefix, "muted:", track.muted);
+  console.log(prefix, "getSettings():", settings);
+
+  const payload = {
+    at: new Date().toISOString(),
+    type: "outbound_track",
+    readyState: track.readyState,
+    enabled: track.enabled,
+    muted: track.muted,
+    id: track.id,
+    label: track.label,
+    settings,
+    context,
+  };
+  appendWebRtcDebugLog(payload);
+  return payload;
+}
+
+/**
+ * @param {HTMLVideoElement | null | undefined} video
+ * @param {MediaStream | null | undefined} stream
+ * @param {string} [label]
+ */
+export async function playRemoteVideoElement(video, stream, label = "agent") {
+  if (!video || !stream) return false;
+  video.muted = true;
+  video.autoplay = true;
+  video.playsInline = true;
+  if (video.srcObject !== stream) {
+    video.srcObject = stream;
+  }
+  try {
+    await video.play();
+    return true;
+  } catch (err) {
+    console.error(`[WebRTC:${label}] video.play() failed:`, err);
+    return false;
+  }
+}
+
+/**
+ * PeerJS peer.call() should attach tracks; ensure all stream tracks are on the PC senders.
+ * @param {RTCPeerConnection | null | undefined} pc
+ * @param {MediaStream | null | undefined} stream
+ */
+export function ensureOutboundTracksOnPeerConnection(pc, stream) {
+  if (!pc || !stream) return;
+  stream.getTracks().forEach((track) => {
+    if (!pc.getSenders().some((sender) => sender.track?.id === track.id)) {
+      pc.addTrack(track, stream);
+    }
+  });
+}
+
+/**
+ * סקריפט צופה — polling כל intervalMs עד שמתקבלות פריימים.
+ * @param {RTCPeerConnection} pc
+ * @param {{ role?: string, sessionId?: string, shouldStop?: () => boolean, getVideoElement?: () => HTMLVideoElement | null | undefined, onSummary?: (summary: ReturnType<typeof summarizeInboundVideoStatsFromReport> & { bytesRising?: boolean }) => void }} [context]
+ * @param {number} [intervalMs]
+ * @returns {() => void}
+ */
+export function startInboundVideoStatsPolling(pc, context = {}, intervalMs = 2000) {
+  const {
+    role = "agent",
+    sessionId,
+    shouldStop = () => false,
+    getVideoElement,
+    onSummary,
+  } = context;
+  let prevBytes = 0;
+  let stopped = false;
+  const prefix = `[WebRTC:${role}:poll${sessionId ? `:${sessionId.slice(0, 8)}` : ""}]`;
+
+  const tick = async () => {
+    if (stopped || shouldStop()) return;
+    const video = getVideoElement?.();
+    const videoHasDimensions =
+      !video || (video.videoWidth > 0 && video.videoHeight > 0);
+    const summary = await summarizeInboundVideoStats(pc, { videoHasDimensions });
+    if (!summary || stopped || shouldStop()) return;
+
+    const bytesRising = summary.bytesReceived > prevBytes;
+    prevBytes = summary.bytesReceived;
+    console.log(prefix, "inbound-rtp stats:");
+    console.log(prefix, "bytesReceived:", summary.bytesReceived, bytesRising ? "(עולה)" : "");
+    console.log(prefix, "framesReceived:", summary.framesReceived);
+    console.log(prefix, "framesDecoded:", summary.framesDecoded);
+    console.log(prefix, "packetsLost:", summary.packetsLost);
+    console.log(prefix, "אבחון:", summary.diagnosis);
+
+    const enriched = { ...summary, bytesRising, videoHasDimensions };
+    onSummary?.(enriched);
+    appendWebRtcDebugLog({
+      at: new Date().toISOString(),
+      type: "inbound_poll",
+      context: { role, sessionId },
+      ...enriched,
+    });
+  };
+
+  void tick();
+  const timerId = window.setInterval(() => {
+    if (stopped || shouldStop()) {
+      window.clearInterval(timerId);
+      return;
+    }
+    void tick();
+  }, intervalMs);
+
+  return () => {
+    stopped = true;
+    window.clearInterval(timerId);
+  };
+}
+
+/** @param {RTCStatsReport} stats */
+export function rtcStatsReportToJson(stats) {
+  const rows = [];
+  stats.forEach((report) => {
+    /** @type {Record<string, unknown>} */
+    const row = {
+      id: report.id,
+      type: report.type,
+      timestamp: report.timestamp,
+    };
+    Object.keys(report).forEach((key) => {
+      if (key === "id" || key === "type" || key === "timestamp") return;
+      row[key] = report[key];
+    });
+    rows.push(row);
+  });
+  return rows;
+}
+
+/** @param {object} entry */
+export function appendWebRtcDebugLog(entry) {
+  if (typeof window === "undefined") return;
+  window.__webrtcDebugLogs = window.__webrtcDebugLogs || [];
+  window.__webrtcDebugLogs.push(entry);
+  try {
+    const stored = JSON.parse(
+      window.localStorage.getItem(WEBRTC_DEBUG_STORAGE_KEY) || "[]"
+    );
+    if (!Array.isArray(stored)) return;
+    stored.push(entry);
+    while (stored.length > WEBRTC_DEBUG_MAX_ENTRIES) stored.shift();
+    window.localStorage.setItem(WEBRTC_DEBUG_STORAGE_KEY, JSON.stringify(stored));
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+export function getWebRtcDebugLogs() {
+  if (typeof window === "undefined") return [];
+  try {
+    const stored = JSON.parse(
+      window.localStorage.getItem(WEBRTC_DEBUG_STORAGE_KEY) || "[]"
+    );
+    return Array.isArray(stored) ? stored : window.__webrtcDebugLogs || [];
+  } catch {
+    return window.__webrtcDebugLogs || [];
+  }
+}
+
+export function clearWebRtcDebugLogs() {
+  if (typeof window === "undefined") return;
+  window.__webrtcDebugLogs = [];
+  try {
+    window.localStorage.removeItem(WEBRTC_DEBUG_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** הורדת כל לוגי WebRTC כקובץ JSON (מהקונסולה: exportWebRtcDebugLogs()) */
+export function exportWebRtcDebugLogs(filename) {
+  const logs = getWebRtcDebugLogs();
+  const blob = new Blob([JSON.stringify(logs, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download =
+    filename ||
+    `webrtc-debug-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+  return logs.length;
+}
+
+/**
+ * לוגים מלאים: iceconnectionstatechange, connectionstatechange, track, getStats → JSON.
+ * @param {RTCPeerConnection | null | undefined} pc
+ * @param {{ role?: string, sessionId?: string, guestPeerId?: string, attempt?: number }} [context]
+ * @returns {() => void} cleanup
+ */
+export function attachPeerConnectionDebugLogging(pc, context = {}) {
+  if (!pc) return () => {};
+
+  const label = [context.role, context.sessionId?.slice(0, 8)]
+    .filter(Boolean)
+    .join(":");
+  const prefix = `[WebRTC${label ? `:${label}` : ""}]`;
+
+  const captureStats = async (reason) => {
+    if (!pc.getStats) return;
+    try {
+      const stats = await pc.getStats();
+      const inboundVideo = summarizeInboundVideoStatsFromReport(stats);
+      console.log(prefix, reason, "pc.getStats() →", stats);
+      console.log(prefix, "Frames Decoded:", inboundVideo.framesDecoded);
+      console.log(prefix, "Bytes Received:", inboundVideo.bytesReceived);
+      console.log(prefix, inboundVideo.diagnosis);
+
+      const payload = {
+        at: new Date().toISOString(),
+        reason,
+        context,
+        iceConnectionState: pc.iceConnectionState,
+        iceGatheringState: pc.iceGatheringState,
+        connectionState: pc.connectionState,
+        signalingState: pc.signalingState,
+        inboundVideo,
+        stats: rtcStatsReportToJson(stats),
+      };
+
+      console.log(prefix, reason, "stats JSON:", JSON.stringify(payload, null, 2));
+      appendWebRtcDebugLog(payload);
+    } catch (err) {
+      console.warn(prefix, "getStats failed", err);
+    }
+  };
+
+  const onIceConnectionStateChange = () => {
+    console.log(prefix, "iceconnectionstatechange →", pc.iceConnectionState);
+    void captureStats(`iceconnectionstatechange:${pc.iceConnectionState}`);
+  };
+
+  const onConnectionStateChange = () => {
+    console.log(prefix, "connectionstatechange →", pc.connectionState);
+    void captureStats(`connectionstatechange:${pc.connectionState}`);
+  };
+
+  const onTrack = (event) => {
+    console.log(prefix, "TRACK RECEIVED");
+    console.log(prefix, "kind:", event.track?.kind);
+    console.log(prefix, "readyState:", event.track?.readyState);
+    console.log(prefix, "muted:", event.track?.muted);
+    console.log(prefix, "streams:", event.streams);
+    console.log(prefix, "track.id:", event.track?.id);
+    appendWebRtcDebugLog({
+      at: new Date().toISOString(),
+      type: "track_received",
+      kind: event.track?.kind,
+      readyState: event.track?.readyState,
+      muted: event.track?.muted,
+      streamIds: (event.streams || []).map((s) => s.id),
+      context,
+    });
+    void captureStats(`track:${event.track?.kind || "unknown"}`);
+  };
+
+  pc.addEventListener("iceconnectionstatechange", onIceConnectionStateChange);
+  pc.addEventListener("connectionstatechange", onConnectionStateChange);
+  pc.addEventListener("track", onTrack);
+
+  console.log(prefix, "debug logging attached", context);
+  void captureStats("attach");
+
+  return () => {
+    pc.removeEventListener("iceconnectionstatechange", onIceConnectionStateChange);
+    pc.removeEventListener("connectionstatechange", onConnectionStateChange);
+    pc.removeEventListener("track", onTrack);
+    void captureStats("detach");
+  };
+}
+
+if (typeof window !== "undefined") {
+  window.exportWebRtcDebugLogs = exportWebRtcDebugLogs;
+  window.getWebRtcDebugLogs = getWebRtcDebugLogs;
+  window.clearWebRtcDebugLogs = clearWebRtcDebugLogs;
+  window.diagnoseInboundVideo = diagnoseInboundVideo;
+  window.summarizeInboundVideoStats = summarizeInboundVideoStats;
+}
+
 /** @param {RTCPeerConnection | null | undefined} pc */
 export function collectRemoteVideoStream(pc) {
   if (!pc) return null;

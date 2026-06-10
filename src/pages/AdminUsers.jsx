@@ -21,17 +21,54 @@ import {
   adminSetManagedAgentPassword,
   createManagedAgent,
   deleteManagedAgent,
-  isPlaceholderAgentEmail,  listManagedAgents,
+  isPlaceholderAgentEmail,
+  listManagedAgents,
   setManagedAgentBlocked,
   updateManagedAgent,
 } from "@/lib/agentsApi";
-import { PASSWORD_MIN_LENGTH, PASSWORD_MIN_LENGTH_MSG } from "@/lib/agentAuth";export default function AdminUsers() {
+import { PASSWORD_MIN_LENGTH, PASSWORD_MIN_LENGTH_MSG } from "@/lib/agentAuth";
+import { demoModeEnabled } from "@/api/demoClient";
+import ChatBrandingPanel from "@/components/admin/ChatBrandingPanel";
+import HypPageLayout from "@/components/hyp/HypPageLayout";
+import { hypHeaderIconClass } from "@/lib/hypPage";
+
+function formatEmail(email) {
+  if (!email || isPlaceholderAgentEmail(email)) {
+    return <span className="text-slate-400 italic">לא הוגדר — לחץ עריכה</span>;
+  }
+  return (
+    <span dir="ltr" className="text-slate-600">
+      {email}
+    </span>
+  );
+}
+
+export default function AdminUsers() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [dialog, setDialog] = useState(null);
   const [form, setForm] = useState({ email: "", name: "" });
   const [passwordForm, setPasswordForm] = useState({ password: "", forceSetup: true });
-  const [revealedIds, setRevealedIds] = useState(() => new Set());    },
+  const [revealedIds, setRevealedIds] = useState(() => new Set());
+
+  const { data: users = [], isLoading } = useQuery({
+    queryKey: ["managed-agents"],
+    queryFn: listManagedAgents,
+  });
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["managed-agents"] });
+
+  const createMutation = useMutation({
+    mutationFn: () => createManagedAgent(form),
+    onSuccess: () => {
+      invalidate();
+      setDialog(null);
+      setForm({ email: "", name: "" });
+      toast({
+        title: "נציג נוסף",
+        description: "הגדיר/י אימייל וסיסמה — בכניסה הראשונה הנציג יגדיר סיסמה",
+      });
+    },
     onError: (err) => {
       toast({
         title: "שגיאה",
@@ -40,7 +77,8 @@ import { PASSWORD_MIN_LENGTH, PASSWORD_MIN_LENGTH_MSG } from "@/lib/agentAuth";e
             ? "אימייל כבר קיים"
             : err.message === "invalid_fields"
               ? "יש למלא שם ואימייל תקין"
-              : "לא הצלחנו לשמור",        variant: "destructive",
+              : "לא הצלחנו לשמור",
+        variant: "destructive",
       });
     },
   });
@@ -80,6 +118,55 @@ import { PASSWORD_MIN_LENGTH, PASSWORD_MIN_LENGTH_MSG } from "@/lib/agentAuth";e
       });
     },
   });
+
+  const blockMutation = useMutation({
+    mutationFn: ({ id, blocked }) => setManagedAgentBlocked(id, blocked),
+    onSuccess: (_, { blocked }) => {
+      invalidate();
+      toast({ title: blocked ? "הנציג נחסם" : "החסימה הוסרה" });
+    },
+    onError: () => toast({ title: "שגיאה", description: "לא הצלחנו לעדכן חסימה", variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => deleteManagedAgent(id),
+    onSuccess: () => {
+      invalidate();
+      toast({ title: "הנציג נמחק", description: "לא ניתן להתחבר עם האימייל" });
+    },
+    onError: () => toast({ title: "שגיאה", description: "לא הצלחנו למחוק", variant: "destructive" }),
+  });
+
+  const openCreate = () => {
+    setForm({ email: "", name: "" });
+    setDialog({ mode: "create" });
+  };
+
+  const openEdit = (user) => {
+    const email = isPlaceholderAgentEmail(user.email) ? "" : user.email;
+    setForm({ email, name: user.name });
+    setDialog({ mode: "edit", id: user.id });
+  };
+
+  const openPassword = (user) => {
+    setPasswordForm({ password: "", forceSetup: true });
+    setDialog({ mode: "password", id: user.id, userName: user.name });
+  };
+
+  const toggleReveal = (id) => {
+    setRevealedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (dialog.mode === "create") createMutation.mutate();
+    else if (dialog.mode === "edit") updateMutation.mutate();
+    else if (dialog.mode === "password") passwordMutation.mutate();
   };
 
   const statusBadge = (user) => {
@@ -267,7 +354,8 @@ import { PASSWORD_MIN_LENGTH, PASSWORD_MIN_LENGTH_MSG } from "@/lib/agentAuth";e
           <li className="text-amber-800">
             אזהרה: סיסמאות נשמרות לתצוגת מנהל — לא מומלץ לסביבות רגישות
           </li>
-        </ul>      </div>
+        </ul>
+      </div>
 
       {dialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -347,7 +435,8 @@ import { PASSWORD_MIN_LENGTH, PASSWORD_MIN_LENGTH_MSG } from "@/lib/agentAuth";e
                 type="button"
                 onClick={() => setDialog(null)}
                 className="flex-1 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold"
-              >                ביטול
+              >
+                ביטול
               </button>
               <button
                 type="submit"
@@ -355,7 +444,8 @@ import { PASSWORD_MIN_LENGTH, PASSWORD_MIN_LENGTH_MSG } from "@/lib/agentAuth";e
                   createMutation.isPending ||
                   updateMutation.isPending ||
                   passwordMutation.isPending
-                }                className="flex-1 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-white font-bold disabled:opacity-50"
+                }
+                className="flex-1 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-white font-bold disabled:opacity-50"
               >
                 שמירה
               </button>

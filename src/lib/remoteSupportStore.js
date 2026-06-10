@@ -10,7 +10,8 @@ import {
 import {
   getPublicAppOrigin,
   isGuestSessionExpired,
-} from "@/lib/screenShareStore";import {
+} from "@/lib/screenShareStore";
+import {
   escapeHtml,
   logEmailDelivery,
   postSendEmail,
@@ -27,7 +28,28 @@ import {
   syncRustDeskSessionToCloudAwait,
 } from "@/lib/supportSessionsSync";
 import { buildShortGuestUrl, waitForShortCodeInCloud } from "@/lib/shortGuestLink";
-import { generateShortCode } from "@/lib/guestLinkCodec";    return { sessions: [], emailLogs: [] };
+import { generateShortCode } from "@/lib/guestLinkCodec";
+
+export const REMOTE_SUPPORT_STORAGE_KEY = "smart-break-shift-remote-support-v1";
+export const REMOTE_SUPPORT_CHANGE_EVENT = "remote-support-changed";
+export const RUSTDESK_DOWNLOAD_URL = "https://rustdesk.com/download";
+
+const EMAIL_SUBJECT_RUSTDESK =
+  "קישור להורדת RustDesk — תמיכה מרחוק (באישורך בלבד)";
+
+export const DEMO_RUSTDESK_EMAIL_MESSAGE =
+  "בדמו: הקישור מוכן — העתיקו את הקישור או פתחו mailto";
+
+export const CONSENT_TEXT_DEFAULT =
+  "אני מאשר/ת שנציג התמיכה יקבל גישה מרחוק למחשב שלי באמצעות RustDesk לצורך טיפול בתקלה בלבד.";
+
+function makeId(prefix) {
+  return `${prefix}${generateShortCode(8)}`;
+}
+
+function readStore() {
+  if (!remoteSupportEnabled || typeof window === "undefined") {
+    return { sessions: [], emailLogs: [] };
   }
   try {
     const raw = localStorage.getItem(REMOTE_SUPPORT_STORAGE_KEY);
@@ -47,7 +69,8 @@ function readSessions() {
 }
 
 function writeStore({ sessions, emailLogs }) {
-  if (!remoteSupportEnabled || typeof window === "undefined") return;  const current = readStore();
+  if (!remoteSupportEnabled || typeof window === "undefined") return;
+  const current = readStore();
   localStorage.setItem(
     REMOTE_SUPPORT_STORAGE_KEY,
     JSON.stringify({
@@ -73,7 +96,8 @@ export function remoteSupportDemoAvailable() {
 
 /** צפייה בדפדפן + RustDesk — זמין בפרודקשן (ברירת מחדל) ובדמו */
 export function remoteSupportFeaturesAvailable() {
-  return remoteSupportEnabled;}
+  return remoteSupportEnabled;
+}
 
 export function getSession(id) {
   return readSessions().find((s) => s.id === id || s.consentToken === id) || null;
@@ -91,6 +115,16 @@ export function getSessionByShortCode(shortCode) {
   if (!session || session.status === "ended") return null;
   return session;
 }
+
+export function listSessions() {
+  return readSessions().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+export function listSessionsForCustomer(crmCustomerId) {
+  return listSessions().filter((s) => s.crmCustomerId === crmCustomerId);
+}
+
+export function createSession({ crmCustomerId, agentName, rustDeskId, password, customerEmail = "" }) {
   const now = new Date().toISOString();
   const id = makeId("rs");
   const session = {
@@ -99,7 +133,8 @@ export function getSessionByShortCode(shortCode) {
     consentToken: id,
     crmCustomerId: crmCustomerId || null,
     agentName: String(agentName || getStoredAgentName() || "").trim(),
-    customerEmail: String(customerEmail || "").trim(),    rustDeskId: String(rustDeskId || "").replace(/\D/g, "").slice(0, 12),
+    customerEmail: String(customerEmail || "").trim(),
+    rustDeskId: String(rustDeskId || "").replace(/\D/g, "").slice(0, 12),
     password: password ? String(password).trim() : null,
     consentAt: null,
     consentText: null,
@@ -111,7 +146,33 @@ export function getSessionByShortCode(shortCode) {
   };
   const sessions = [...readSessions(), session];
   writeSessions(sessions);
-  cloudSyncSession(session);  return updated;
+  cloudSyncSession(session);
+  return session;
+}
+
+export function updateSession(id, patch) {
+  let updated = null;
+  const sessions = readSessions().map((s) => {
+    if (s.id !== id) return s;
+    updated = {
+      ...s,
+      ...patch,
+      rustDeskId:
+        patch.rustDeskId !== undefined
+          ? String(patch.rustDeskId).replace(/\D/g, "").slice(0, 12)
+          : s.rustDeskId,
+      password:
+        patch.password !== undefined
+          ? patch.password
+            ? String(patch.password).trim()
+            : null
+          : s.password,
+    };
+    return updated;
+  });
+  writeSessions(sessions);
+  if (updated) cloudSyncSession(updated);
+  return updated;
 }
 
 export function logConsent(id, { consentText, source = "agent" } = {}) {
@@ -241,7 +302,8 @@ export function buildConsentUrl(sessionIdOrSession, origin) {
     return `${base}/support/consent/${encodeURIComponent(session.id)}`;
   }
 
-  return buildShortGuestUrl(session, { kind: "consent", origin });}
+  return buildShortGuestUrl(session, { kind: "consent", origin });
+}
 
 export function buildRustDeskEmailBody({
   customerName,
@@ -526,4 +588,5 @@ export function subscribeRemoteSupport(callback) {
   return () => {
     window.removeEventListener(REMOTE_SUPPORT_CHANGE_EVENT, handler);
     window.removeEventListener("storage", onStorage);
-  };}
+  };
+}

@@ -6,10 +6,7 @@
 -- חובה:
 --   • טבלאות בסיס (הפסקות, משמרות, חופשות, הגדרות)
 --   • טבלת agents + מדיניות RLS (התחברות נציגים)
-<<<<<<< HEAD
 --   • רק agents בפרויקט ריק: supabase/agents_full_setup.sql
-=======
->>>>>>> 842dd9e (Initial commit)
 --   • טריגרים למניעת משבצת מלאה וכפילות נציג
 --
 -- אופציונלי אך מומלץ:
@@ -20,10 +17,7 @@
 --   Authentication → Providers → Email (הפעלה)
 --   Authentication → SMTP (או Resend/SendGrid) — לאימייל איפוס סיסמה והזמנות
 --   Project Settings → API — VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY באפליקציה
-<<<<<<< HEAD
 --   Storage — bucket מצגות הדרכה: supabase/training_docs_storage.sql (או docs/TRAINING_STORAGE_SETUP.md)
-=======
->>>>>>> 842dd9e (Initial commit)
 -- =============================================================================
 
 -- ── 1. הרחבות ───────────────────────────────────────────────────────────────
@@ -46,10 +40,7 @@ create table if not exists break_settings (
   short_max_per_slot int default 1,
   show_shortage_notice boolean default false,
   shortage_notice_text text,
-<<<<<<< HEAD
   registration_override_open boolean default false,
-=======
->>>>>>> 842dd9e (Initial commit)
   created_at timestamptz default now()
 );
 
@@ -87,6 +78,14 @@ create table if not exists constraint_confirmations (
   confirmed_at timestamptz not null,
   created_at timestamptz default now(),
   unique (agent_name, week_start)
+);
+
+create table if not exists constraints_week_settings (
+  id uuid primary key default gen_random_uuid(),
+  week_start date not null unique,
+  submission_override_open boolean default false,
+  deadline_extended_until timestamptz,
+  created_at timestamptz default now()
 );
 
 -- צ'אט פנימי (אופציונלי — אם לא משתמשים בצ'אט, אין נזק)
@@ -128,10 +127,7 @@ create table if not exists agents (
   blocked boolean not null default false,
   needs_password_setup boolean not null default true,
   deleted_at timestamptz,
-<<<<<<< HEAD
   password_plain text,
-=======
->>>>>>> 842dd9e (Initial commit)
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -140,11 +136,8 @@ create table if not exists agents (
 alter table agents add column if not exists blocked boolean not null default false;
 alter table agents add column if not exists deleted_at timestamptz;
 alter table agents add column if not exists needs_password_setup boolean not null default true;
-<<<<<<< HEAD
 alter table agents add column if not exists password_plain text;
 alter table agents alter column email drop not null;
-=======
->>>>>>> 842dd9e (Initial commit)
 
 -- ── 3. אינדקסים ──────────────────────────────────────────────────────────────
 create index if not exists idx_break_reg_date on break_registrations(date);
@@ -154,14 +147,10 @@ create index if not exists idx_vacation_date on vacation_requests(date);
 create index if not exists idx_chat_messages_created_at on chat_messages(created_at);
 create index if not exists idx_chat_messages_recipient on chat_messages(recipient_name);
 create index if not exists idx_chat_presence_last_seen on chat_presence(last_seen_at);
-<<<<<<< HEAD
 drop index if exists idx_agents_email_lower;
 create unique index if not exists idx_agents_email_lower
   on agents (lower(trim(email)))
   where email is not null and trim(email) <> '';
-=======
-create unique index if not exists idx_agents_email_lower on agents (lower(trim(email)));
->>>>>>> 842dd9e (Initial commit)
 
 -- ── 4. RLS ───────────────────────────────────────────────────────────────────
 alter table break_registrations enable row level security;
@@ -170,6 +159,7 @@ alter table shift_registrations enable row level security;
 alter table shift_unavailabilities enable row level security;
 alter table vacation_requests enable row level security;
 alter table constraint_confirmations enable row level security;
+alter table constraints_week_settings enable row level security;
 alter table chat_messages enable row level security;
 alter table chat_presence enable row level security;
 alter table chat_settings enable row level security;
@@ -182,6 +172,7 @@ drop policy if exists "anon_all_shift_registrations" on shift_registrations;
 drop policy if exists "anon_all_shift_unavailabilities" on shift_unavailabilities;
 drop policy if exists "anon_all_vacation_requests" on vacation_requests;
 drop policy if exists "anon_all_constraint_confirmations" on constraint_confirmations;
+drop policy if exists "anon_all_constraints_week_settings" on constraints_week_settings;
 drop policy if exists "anon_all_chat_messages" on chat_messages;
 drop policy if exists "anon_all_chat_presence" on chat_presence;
 drop policy if exists "anon_all_chat_settings" on chat_settings;
@@ -194,6 +185,7 @@ create policy "anon_all_shift_registrations" on shift_registrations for all usin
 create policy "anon_all_shift_unavailabilities" on shift_unavailabilities for all using (true) with check (true);
 create policy "anon_all_vacation_requests" on vacation_requests for all using (true) with check (true);
 create policy "anon_all_constraint_confirmations" on constraint_confirmations for all using (true) with check (true);
+create policy "anon_all_constraints_week_settings" on constraints_week_settings for all using (true) with check (true);
 create policy "anon_all_chat_messages" on chat_messages for all using (true) with check (true);
 create policy "anon_all_chat_presence" on chat_presence for all using (true) with check (true);
 create policy "anon_all_chat_settings" on chat_settings for all using (true) with check (true);
@@ -327,6 +319,7 @@ declare
     'shift_unavailabilities',
     'vacation_requests',
     'constraint_confirmations',
+    'constraints_week_settings',
     'chat_messages',
     'chat_presence',
     'chat_settings'

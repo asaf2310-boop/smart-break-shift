@@ -22,7 +22,8 @@ export default function BreakSection({
 }) {
   const isLunch = type === "lunch";
   const userRegsForType = registrations.filter((r) =>
-    agentOwnsBreakRegistration(r, agentName)  );
+    agentOwnsBreakRegistration(r, agentName)
+  );
   const hasRegistered = userRegsForType.length > 0 || !!userRegistration;
 
   return (
@@ -86,7 +87,8 @@ export default function BreakSection({
               canCancel={canCancel}
               onCancel={onCancel}
               isDeleting={isDeleting}
-              myRegistration={userRegsForType.find((r) => r.time_slot === slot) || null}            />
+              myRegistration={userRegsForType.find((r) => r.time_slot === slot) || null}
+            />
           );
         })}
       </div>

@@ -7,24 +7,65 @@ import { useAgentSession } from "@/hooks/useAgentSession";
 import { useTelephony } from "@/context/TelephonyContext";
 import AgentTelephonySidebar from "@/components/telephony/AgentTelephonySidebar";
 import CallDispositionModal from "@/components/telephony/CallDispositionModal";
-import { getCustomerByPhone } from "@/lib/crmStore";import {
+import { getCustomerByPhone } from "@/lib/crmStore";
+import {
   AGENT_TELEPHONY_STATUS,
   CALL_STATUS,
   connectAgentTelephonyAvailable,
   dismissCallDisposition,
   getActiveCall,
   getAgentTelephonyStatus,
-  getPendingDisposition,  hangUp,
+  getPendingDisposition,
+  hangUp,
   isAgentTelephonyConnected,
   setAgentTelephonyStatus,
   simulateInboundCall,
   startOutboundCall,
-  submitCallDisposition,} from "@/lib/telephonyStore";
+  submitCallDisposition,
+  subscribeTelephony,
+  telephonyDemoAvailable,
+  toggleMute,
+  answerInbound,
+  bindSipTelephonyEvents,
+  isRealSipEnabled,
+} from "@/lib/telephonyStore";
 import {
   connectProductionCall,
   getConfiguredProvider,
   getSipRegistrationState,
-  getSipRegistrationError,  const hasTopNav = TOP_NAV_PATHS.has(pathname);
+  getSipRegistrationError,
+  isTelephonyConfigured,
+  isHttpsRequired,
+} from "@/lib/telephonyProvider";
+import { PHONE_FLOAT_CHROME_CLASS } from "@/lib/floatingWidgetChrome";
+
+const TOP_NAV_PATHS = new Set(["/breaks", "/shifts"]);
+
+function formatDuration(sec) {
+  if (!sec || sec < 1) return "0:00";
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function statusTone(status) {
+  switch (status) {
+    case CALL_STATUS.connected.value:
+      return "bg-emerald-500";
+    case CALL_STATUS.ringing.value:
+    case CALL_STATUS.dialing.value:
+      return "bg-amber-500 animate-pulse";
+    case CALL_STATUS.ended.value:
+      return "bg-slate-400";
+    default:
+      return "bg-teal-500";
+  }
+}
+
+export default function SoftphoneWidget() {
+  const { pathname, search } = useLocation();
+  const navigate = useNavigate();
+  const hasTopNav = TOP_NAV_PATHS.has(pathname);
   const { displayName } = useAgentSession();
   const agentName = displayName || getStoredAgentName();
   const {
@@ -42,16 +83,47 @@ import {
   const remoteAudioRef = useRef(null);
   const showWidget = telephonyDemoAvailable() || isTelephonyConfigured();
   const isDemo = telephonyDemoAvailable();
-  const isSip = isRealSipEnabled();  const provider = getConfiguredProvider();
+  const isSip = isRealSipEnabled();
+  const provider = getConfiguredProvider();
 
   const [number, setNumber] = useState("");
   const [crmMeta, setCrmMeta] = useState(null);
   const [active, setActive] = useState(() => getActiveCall());
-  const [pendingDisposition, setPendingDisposition] = useState(() => getPendingDisposition());  const [tick, setTick] = useState(0);
+  const [pendingDisposition, setPendingDisposition] = useState(() => getPendingDisposition());
+  const [telephonyConnected, setTelephonyConnected] = useState(() =>
+    isAgentTelephonyConnected()
+  );
+  const [statusKey, setStatusKey] = useState(() => getAgentTelephonyStatus(agentName));
+  const [statusPending, setStatusPending] = useState(false);
+  const [sipRegistration, setSipRegistration] = useState(() => getSipRegistrationState());
+  const [sipError, setSipError] = useState(() => getSipRegistrationError());
+  const [callError, setCallError] = useState(null);
+  const [tick, setTick] = useState(0);
 
   const refresh = useCallback(() => {
     setActive(getActiveCall());
-    setPendingDisposition(getPendingDisposition());  useEffect(() => {
+    setPendingDisposition(getPendingDisposition());
+    setTelephonyConnected(isAgentTelephonyConnected());
+    setStatusKey(getAgentTelephonyStatus(agentName));
+  }, [agentName]);
+
+  useEffect(() => {
+    if (isSip) {
+      bindSipTelephonyEvents(remoteAudioRef.current);
+    }
+  }, [isSip]);
+
+  useEffect(() => subscribeTelephony(refresh), [refresh]);
+
+  useEffect(() => {
+    if (!isSip) return undefined;
+    const id = setInterval(() => {
+      setSipRegistration(getSipRegistrationState());
+      setSipError(getSipRegistrationError());
+    }, 800);
+    return () => clearInterval(id);
+  }, [isSip]);
+  useEffect(() => {
     refresh();
   }, [sidebarOpen, dialOpen, refresh]);
 
@@ -127,6 +199,13 @@ import {
     );
   }, [outboundMatch, inCall]);
 
+  const liveDuration = useMemo(() => {
+    if (!active?.connected_at) return 0;
+    return Math.max(0, Math.round((Date.now() - new Date(active.connected_at).getTime()) / 1000));
+  }, [active?.connected_at, tick]);
+
+  if (!showWidget || !agentName || isCustomerChatGuestPath(pathname, search)) return null;
+
   const handleStatusChange = (e) => {
     const key = e.target.value;
     setStatusPending(true);
@@ -172,17 +251,14 @@ import {
   };
 
   const handleMute = async () => {
-    await toggleMute();    refresh();
+    await toggleMute();
+    refresh();
   };
 
   const handleInboundDemo = () => {
     simulateInboundCall({
       agentName,
       phone: number || "050-1234567",
-=======
-      customer_id: crmMeta?.customerId,
-      customer_name: crmMeta?.customerName || "לקוח דמו",
->>>>>>> 842dd9e (Initial commit)
     });
     refresh();
   };
@@ -218,7 +294,8 @@ import {
       setCallError(result.reason);
     } else {
       setCallError(result.reason);
-    }  };
+    }
+  };
 
   const handleToggleMain = () => {
     if (sidebarOpen) {
@@ -238,7 +315,18 @@ import {
         call={pendingDisposition}
         onSubmit={handleDispositionSubmit}
         onDismiss={handleDispositionDismiss}
-      />          telephonyConnected={telephonyConnected}
+      />
+      {sidebarOpen && (
+        <AgentTelephonySidebar
+          agentName={agentName}
+          isDemo={isDemo}
+          isSip={isSip}
+          provider={provider}
+          isHttpsRequired={isHttpsRequired()}
+          sipRegistration={sipRegistration}
+          sipError={sipError}
+          callError={callError}
+          telephonyConnected={telephonyConnected}
           statusKey={statusKey}
           onStatusChange={handleStatusChange}
           onDisconnect={handleDisconnect}
@@ -267,7 +355,8 @@ import {
           screenPopCustomer={screenPopCustomer}
           outboundMatch={outboundMatch}
           onOpenCrm={handleOpenCrm}
-          onCreateCustomer={handleCreateCustomer}        />
+          onCreateCustomer={handleCreateCustomer}
+        />
       )}
 
       <div className="pointer-events-auto flex flex-col items-center gap-1.5">

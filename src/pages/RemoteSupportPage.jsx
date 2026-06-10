@@ -4,7 +4,8 @@ import { motion } from "framer-motion";
 import { ArrowRight, Contact, Film, Monitor, MonitorPlay, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { useScreenShareSession } from "@/contexts/ScreenShareSessionContext";import DemoRecordingsLibrary from "@/components/remote/DemoRecordingsLibrary";
+import { useScreenShareSession } from "@/contexts/ScreenShareSessionContext";
+import DemoRecordingsLibrary from "@/components/remote/DemoRecordingsLibrary";
 import { demoModeEnabled } from "@/api/demoClient";
 import { getStoredAgentName } from "@/constants/scheduling";
 import RemoteSupportPanel from "@/components/remote/RemoteSupportPanel";
@@ -27,7 +28,8 @@ import {
   syncRustDeskSessionToCloud,
   syncScreenShareSessionToCloud,
 } from "@/lib/supportSessionsSync";
-import { hypHeaderIconClass, m3PageClass } from "@/lib/hypPage";import { cn } from "@/lib/utils";
+import { hypHeaderIconClass, m3PageClass } from "@/lib/hypPage";
+import { cn } from "@/lib/utils";
 
 function formatWhen(iso) {
   if (!iso) return "—";
@@ -42,11 +44,67 @@ const SCREEN_SESSION_LIST_LIMIT = 5;
 export default function RemoteSupportPage() {
   const agentName = getStoredAgentName();
   const { toast } = useToast();
-  const { openSessionView } = useScreenShareSession();  const demoAvailable =
+  const { openSessionView } = useScreenShareSession();
+  const demoAvailable =
     remoteSupportFeaturesAvailable() || screenShareFeaturesAvailable();
   const [rustDeskSessions, setRustDeskSessions] = useState(() => listRustDeskSessions());
   const [screenSessions, setScreenSessions] = useState(() => listScreenSessions());
   const [closingAll, setClosingAll] = useState(false);
+
+  useEffect(() => {
+    const refreshRust = () => setRustDeskSessions(listRustDeskSessions());
+    const refreshScreen = () => setScreenSessions(listScreenSessions());
+    refreshRust();
+    refreshScreen();
+    const unsubRust = subscribeRemoteSupport(refreshRust);
+    const unsubScreen = subscribeScreenShare(refreshScreen);
+    return () => {
+      unsubRust();
+      unsubScreen();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!cloudSessionSyncEnabled()) return;
+    for (const session of listScreenSessions()) {
+      syncScreenShareSessionToCloud(session);
+    }
+    for (const session of listRustDeskSessions()) {
+      syncRustDeskSessionToCloud(session);
+    }
+  }, []);
+
+  const myScreenSessions = useMemo(
+    () => listScreenSessionsForAgent(agentName, { limit: SCREEN_SESSION_LIST_LIMIT }),
+    [screenSessions, agentName]
+  );
+
+  const activeRust = rustDeskSessions.filter((s) => s.status === "active").length;
+  const activeScreen = myScreenSessions.filter((s) => s.status === "active").length;
+  const totalMyActive = useMemo(
+    () => listScreenSessionsForAgent(agentName).filter((s) => s.status === "active").length,
+    [screenSessions, agentName]
+  );
+
+  const handleCloseAllActive = async () => {
+    if (!totalMyActive) return;
+    if (!window.confirm(`לסגור ${totalMyActive} סשנים פעילים? הקישורים יבוטלו.`)) return;
+    setClosingAll(true);
+    try {
+      const closed = endAllActiveScreenSessions({ agentName });
+      toast({
+        title: "הסשנים נסגרו",
+        description: closed ? `נסגרו ${closed} סשנים` : "לא נמצאו סשנים פעילים",
+      });
+    } finally {
+      setClosingAll(false);
+    }
+  };
+
+  const handleOpenSession = (sessionId) => {
+    openSessionView?.(sessionId);
+  };
+
   return (
     <div className={m3PageClass("pt-app-nav")} dir="rtl">
       <div className="max-w-2xl mx-auto px-4 py-6 sm:py-10">
@@ -56,7 +114,8 @@ export default function RemoteSupportPage() {
           className="flex items-center justify-between mb-6"
         >
           <div className="flex items-center gap-3">
-            <div className={hypHeaderIconClass("w-12 h-12 shadow-elevation-2")}>              <Monitor className="w-6 h-6 text-white" />
+            <div className={hypHeaderIconClass("w-12 h-12 shadow-elevation-2")}>
+              <Monitor className="w-6 h-6 text-white" />
             </div>
             <div>
               <h1 className="m3-headline-small text-xl font-semibold">השתלטות מרחוק</h1>
@@ -118,7 +177,8 @@ export default function RemoteSupportPage() {
               <Contact className="w-4 h-4" />
               מעבר ל-CRM
             </Link>
-          )}        </motion.div>
+          )}
+        </motion.div>
 
         {demoAvailable ? (
           <>
@@ -140,7 +200,8 @@ export default function RemoteSupportPage() {
               transition={{ delay: 0.12 }}
               className="m3-card p-4 sm:p-6 mb-4"
             >
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-4">                <h2 className="m3-label-large font-semibold flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                <h2 className="m3-label-large font-semibold flex items-center gap-2">
                   <MonitorPlay className="w-4 h-4 text-teal-700" />
                   סשני צפייה (דפדפן)
                 </h2>
@@ -171,7 +232,8 @@ export default function RemoteSupportPage() {
                 <p className="m3-label-medium text-on-surface-variant">אין סשני צפייה עדיין.</p>
               ) : (
                 <ul className="divide-y divide-outline-variant/40">
-                  {myScreenSessions.map((s) => {                    const lastMail = getLastEmailLogForSession(s.id);
+                  {myScreenSessions.map((s) => {
+                    const lastMail = getLastEmailLogForSession(s.id);
                     const mailLabel =
                       lastMail?.status === "sent"
                         ? `מייל: נשלח ${formatWhen(lastMail.sentAt)}`
@@ -185,11 +247,13 @@ export default function RemoteSupportPage() {
                     const isActive = s.status === "active";
                     return (
                     <li key={s.id} className="py-3 flex flex-wrap items-center justify-between gap-2">
-                      <div className="min-w-0 flex-1">                        <p className="m3-label-medium font-mono text-left text-xs" dir="ltr">
+                      <div className="min-w-0 flex-1">
+                        <p className="m3-label-medium font-mono text-left text-xs" dir="ltr">
                           {s.id}
                         </p>
                         <p className="m3-label-medium text-on-surface-variant text-xs mt-0.5">
-                          {formatWhen(s.createdAt)}                          {s.customerEmail ? ` · ${s.customerEmail}` : ""}
+                          {formatWhen(s.createdAt)}
+                          {s.customerEmail ? ` · ${s.customerEmail}` : ""}
                         </p>
                         {mailLabel ? (
                           <p className="m3-label-medium text-xs mt-0.5 text-teal-800">{mailLabel}</p>
@@ -210,7 +274,8 @@ export default function RemoteSupportPage() {
                           <span className="m3-badge text-xs bg-surface-container-high">
                             הסתיים
                           </span>
-                        )}                        {s.crmCustomerId && (
+                        )}
+                        {s.crmCustomerId && (
                           <Link
                             to={`/crm/${s.crmCustomerId}`}
                             className="text-primary text-xs hover:underline"
@@ -300,7 +365,8 @@ export default function RemoteSupportPage() {
             transition={{ delay: 0.1 }}
             className="m3-card p-4 sm:p-6 m3-label-medium text-on-surface-variant"
           >
-            מודול תמיכה מרחוק אינו פעיל. פנו למנהל המערכת.          </motion.div>
+            מודול תמיכה מרחוק אינו פעיל. פנו למנהל המערכת.
+          </motion.div>
         )}
       </div>
     </div>

@@ -11,7 +11,8 @@ import {
   Maximize2,
   Minimize2,
   Monitor,
-  RefreshCw,  Square,
+  RefreshCw,
+  Square,
   Wifi,
   WifiOff,
   X,
@@ -28,7 +29,8 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { demoModeEnabled, remoteSupportEnabled } from "@/api/demoClient";
 
-const recordingFeaturesEnabled = remoteSupportEnabled;import { createCallLog } from "@/lib/crmStore";
+const recordingFeaturesEnabled = remoteSupportEnabled;
+import { createCallLog } from "@/lib/crmStore";
 import {
   downloadRecordingBlob,
   getRecordingBlob,
@@ -46,7 +48,8 @@ import {
   endSession,
   getSession,
   markGuestStreamConnected,
-  markAgentPeerReady,  listRecordingsForSession,
+  markAgentPeerReady,
+  listRecordingsForSession,
   markRecordingDownloaded,
   setRecordingActive,
   setRecordingStopped,
@@ -57,12 +60,26 @@ import SessionFileShare from "@/components/remote/SessionFileShare";
 import { getPeerJsOptions, isTurnConfigured } from "@/lib/webrtcConfig";
 import {
   answerIncomingCallRecvOnly,
+  attachPeerConnectionDebugLogging,
   describeIcePath,
+  playRemoteVideoElement,
   requestGuestVideoRetry,
+  startInboundVideoStatsPolling,
   tryRestartIce,
   watchRemoteVideoFromPeerConnection,
   watchVideoTrackActivation,
-} from "@/lib/screenShareWebRtc";  ended: "הסתיים",
+} from "@/lib/screenShareWebRtc";
+
+const MAX_RECORDING_SECONDS = 30 * 60;
+
+const PEER_STATUS_LABELS = {
+  idle: "ממתין לפתיחת חיבור",
+  waiting: "ממתין לשיתוף מסך",
+  connecting: "מתחבר — ממתין לווידאו",
+  connected: "מחובר — צפייה במסך",
+  disconnected: "החיבור נותק — ניתן לחזור לצפייה",
+  paused: "מושהה — חזרו ללשונית",
+  ended: "הסתיים",
   error: "שגיאת חיבור",
 };
 
@@ -73,12 +90,92 @@ const CLIENT_ENDED_REASONS = new Set(["client_stop", "client_closed"]);
 function isGuestInitiatedEnd(reason) {
   return CLIENT_ENDED_REASONS.has(reason);
 }
+
+function formatRecordingElapsed(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function formatDurationLabel(seconds) {
+  const total = Math.max(0, Math.round(seconds));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  if (m === 0) return `${s} שניות`;
+  if (s === 0) return `${m} דקות`;
+  return `${m} דקות ו-${s} שניות`;
+}
+
+function formatFileSizeMb(bytes) {
+  if (!bytes || bytes <= 0) return "—";
+  const mb = bytes / (1024 * 1024);
+  if (mb < 0.1) return `${Math.round(bytes / 1024)} KB`;
+  return `${mb.toFixed(mb >= 10 ? 0 : 1)} MB`;
+}
+
+function formatRecordingTimestamp(iso) {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString("he-IL", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function pickWebmMimeType() {
+  const candidates = [
+    "video/webm;codecs=vp9",
+    "video/webm;codecs=vp8",
+    "video/webm",
+  ];
+  return candidates.find((t) => MediaRecorder.isTypeSupported(t)) || "";
+}
+
+/**
+ * PeerJS flow (documented):
+ * - Agent opens first: `new Peer(sessionId)` and waits for incoming call
+ * - Customer: `new Peer()` then `peer.call(sessionId, displayStream)`
+ */
+export default function ScreenShareAgentView({
+  sessionId,
+  agentName = "",
+  viewOpen = true,
   onEnded,
   className = "",
 }) {
   const { toast } = useToast();
   const videoRef = useRef(null);
-  const videoContainerRef = useRef(null);  });
+  const videoContainerRef = useRef(null);
+  const peerRef = useRef(null);
+  const callRef = useRef(null);
+  const remoteStreamRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const chunksRef = useRef([]);
+  const recordingTimerRef = useRef(null);
+  const recordingStartedAtRef = useRef(null);
+  const maxDurationWarnedRef = useRef(false);
+  const metadataPersistedRef = useRef(false);
+  const recordingElapsedRef = useRef(0);
+  const autoStartAttemptedRef = useRef(false);
+  const startRecordingRef = useRef(() => {});
+  const sessionEndedRef = useRef(false);
+  const hasRemoteStreamRef = useRef(false);
+  const videoRetryTimerRef = useRef(null);
+  const lastGuestPeerIdRef = useRef(null);
+  const inboundStatsPollStopRef = useRef(null);
+
+  const DEMO_AUTO_START_KEY = "demo-auto-start-recording";
+  const [autoStartRecording, setAutoStartRecording] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const stored = window.localStorage.getItem(DEMO_AUTO_START_KEY);
+    if (stored === null) return true;
+    return stored === "true";
+  });
 
   const [status, setStatus] = useState("idle");
   const [hasRemoteStream, setHasRemoteStream] = useState(false);
@@ -91,7 +188,8 @@ function isGuestInitiatedEnd(reason) {
   const [sessionRecord, setSessionRecord] = useState(() =>
     sessionId ? getSession(sessionId) : null
   );
-  const [storeRevision, setStoreRevision] = useState(0);  const [sessionRecordings, setSessionRecordings] = useState(() =>
+  const [storeRevision, setStoreRevision] = useState(0);
+  const [sessionRecordings, setSessionRecordings] = useState(() =>
     sessionId ? listRecordingsForSession(sessionId) : []
   );
   const [isRecording, setIsRecording] = useState(false);
@@ -104,7 +202,32 @@ function isGuestInitiatedEnd(reason) {
   const [savingBlob, setSavingBlob] = useState(false);
   const [recordingSummary, setRecordingSummary] = useState(null);
   const [cloudSaving, setCloudSaving] = useState(false);
-  const [cloudUploadStatus, setCloudUploadStatus] = useState(null);  const persistRecordingMetadata = useCallback(
+  const [cloudUploadStatus, setCloudUploadStatus] = useState(null);
+
+  const stopRecordingInternal = useCallback((discardBlob = false) => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      try {
+        recorder.stop();
+      } catch {
+        /* ignore */
+      }
+    } else if (discardBlob) {
+      chunksRef.current = [];
+      setIsRecording(false);
+      setRecordingElapsed(0);
+    }
+    if (discardBlob) {
+      setRecordedBlob(null);
+      mediaRecorderRef.current = null;
+    }
+  }, []);
+
+  const persistRecordingMetadata = useCallback(
     (durationSec) => {
       if (!sessionId || !recordingStartedAtRef.current) return null;
       const stoppedAt = new Date().toISOString();
@@ -112,7 +235,14 @@ function isGuestInitiatedEnd(reason) {
       const timestamp = stoppedAt.replace(/[:.]/g, "-");
       const fileName = `screen-${sessionId}-${timestamp}.webm`;
       const hasAudio = (remoteStreamRef.current?.getAudioTracks?.() || []).length > 0;
-      const latestSession = getSession(sessionId);        hasAudio,
+      const latestSession = getSession(sessionId);
+      const entry = appendSessionRecording(sessionId, {
+        startedAt,
+        stoppedAt,
+        durationSec,
+        fileName,
+        consentAt: latestSession?.recordingConsentAt || sessionRecord?.recordingConsentAt,
+        hasAudio,
       });
       setSessionRecordings(listRecordingsForSession(sessionId));
       setLastRecordingMeta(entry);
@@ -370,14 +500,18 @@ function isGuestInitiatedEnd(reason) {
     return "שלחו ללקוח את הקישור — הוא יאשר וישתף מסך";
   })();
 
+  const stopInboundStatsPolling = useCallback(() => {
+    if (inboundStatsPollStopRef.current) {
+      inboundStatsPollStopRef.current();
+      inboundStatsPollStopRef.current = null;
+    }
+  }, []);
+
   const resumeVideoPlayback = useCallback(() => {
     const video = videoRef.current;
     const stream = remoteStreamRef.current;
     if (!video || !stream) return;
-    if (video.srcObject !== stream) {
-      video.srcObject = stream;
-    }
-    video.play().catch(() => {});
+    void playRemoteVideoElement(video, stream, "agent:resume");
   }, []);
 
   const clearVideoRetryTimer = useCallback(() => {
@@ -408,8 +542,7 @@ function isGuestInitiatedEnd(reason) {
       }
       const video = videoRef.current;
       if (video) {
-        video.srcObject = remoteStream;
-        video.play().catch(() => {});
+        void playRemoteVideoElement(video, remoteStream, "agent:bind");
       }
       void describeIcePath(callRef.current?.peerConnection).then((info) => {
         if (!info || sessionEndedRef.current) return;
@@ -551,13 +684,15 @@ function isGuestInitiatedEnd(reason) {
     Boolean(liveSession?.recordingConsentAt);
 
   const recordDisabledReason = (() => {
-    if (!recordingFeaturesEnabled) return null;    if (status !== "connected") {
+    if (!recordingFeaturesEnabled) return null;
+    if (status !== "connected") {
       return "הקלטה זמינה רק לאחר חיבור ושיתוף מסך מהלקוח";
     }
     if (!hasRemoteStream) {
       return "אין זרם וידאו — המתינו להופעת התמונה לפני הקלטה";
     }
-    if (!liveSession?.recordingConsentAt) {      return "הלקוח טרם אישר הקלטה בקישור שיתוף המסך";
+    if (!liveSession?.recordingConsentAt) {
+      return "הלקוח טרם אישר הקלטה בקישור שיתוף המסך";
     }
     return null;
   })();
@@ -641,6 +776,7 @@ function isGuestInitiatedEnd(reason) {
       }
       callRef.current = call;
       let stopWatchReceivers = () => {};
+      let stopPcDebug = () => {};
 
       call.on("stream", (remoteStream) => {
         attachRemoteStream(remoteStream);
@@ -648,6 +784,51 @@ function isGuestInitiatedEnd(reason) {
 
       const pc = call.peerConnection;
       if (pc) {
+        stopInboundStatsPolling();
+        inboundStatsPollStopRef.current = startInboundVideoStatsPolling(
+          pc,
+          {
+            role: "agent",
+            sessionId,
+            shouldStop: () =>
+              sessionEndedRef.current ||
+              (hasRemoteStreamRef.current &&
+                (videoRef.current?.videoWidth ?? 0) > 0),
+            getVideoElement: () => videoRef.current,
+            onSummary: (summary) => {
+              if (sessionEndedRef.current) return;
+              if (summary.diagnosisKey === "codec") {
+                setErrorDetail(
+                  (prev) =>
+                    prev ||
+                    "bytesReceived עולה אך framesDecoded=0 — בעיית Codec; נסו Chrome/Edge"
+                );
+              } else if (summary.diagnosisKey === "element") {
+                setErrorDetail(
+                  (prev) =>
+                    prev ||
+                    "framesDecoded עולה אך המסך שחור — בדקו אלמנט וידאו / CSS (z-index, opacity)"
+                );
+              } else if (
+                summary.diagnosisKey === "not_sent" &&
+                !summary.bytesRising &&
+                summary.bytesReceived === 0
+              ) {
+                setErrorDetail(
+                  (prev) =>
+                    prev ||
+                    "bytesReceived=0 — בעיית Track/SDP; בדקו TURN או בקשו מהלקוח לשתף מסך מחדש"
+                );
+              }
+            },
+          },
+          2000
+        );
+        stopPcDebug = attachPeerConnectionDebugLogging(pc, {
+          role: "agent",
+          sessionId,
+          guestPeerId: call.peer,
+        });
         stopWatchReceivers = watchRemoteVideoFromPeerConnection(
           pc,
           (stream) => {
@@ -688,6 +869,8 @@ function isGuestInitiatedEnd(reason) {
 
       call.on("close", () => {
         stopWatchReceivers();
+        stopPcDebug();
+        stopInboundStatsPolling();
         clearVideoRetryTimer();
         handleStreamDisconnect();
       });
@@ -695,6 +878,8 @@ function isGuestInitiatedEnd(reason) {
       call.on("error", () => {
         if (sessionEndedRef.current) return;
         stopWatchReceivers();
+        stopPcDebug();
+        stopInboundStatsPolling();
         clearVideoRetryTimer();
         handleStreamDisconnect();
         if (sessionEndedRef.current) return;
@@ -738,13 +923,16 @@ function isGuestInitiatedEnd(reason) {
       setReconnecting(false);
       const msg =
         err?.type === "unavailable-id"
-          ? "מזהה הסשן תפוס — לחצו «חזור לצפייה» או סגרו חלונות אחרים"          : err?.message || "שגיאת PeerJS";
+          ? "מזהה הסשן תפוס — לחצו «חזור לצפייה» או סגרו חלונות אחרים"
+          : err?.message || "שגיאת PeerJS";
       setErrorDetail(msg);
     });
 
     return () => {
       clearVideoRetryTimer();
-      stopRecordingInternal(false);      try {
+      stopInboundStatsPolling();
+      stopRecordingInternal(false);
+      try {
         callRef.current?.close();
       } catch {
         /* ignore */
@@ -770,6 +958,7 @@ function isGuestInitiatedEnd(reason) {
     stopRecordingInternal,
     clearVideoRetryTimer,
     scheduleGuestVideoRetries,
+    stopInboundStatsPolling,
   ]);
 
   useEffect(() => {
@@ -782,13 +971,17 @@ function isGuestInitiatedEnd(reason) {
     }
 
     const startPlayback = () => {
-      video.play().catch(() => {});
+      void playRemoteVideoElement(video, stream, "agent:metadata");
     };
 
     video.addEventListener("loadedmetadata", startPlayback);
+    video.addEventListener("canplay", startPlayback);
     if (video.readyState >= 1) startPlayback();
 
-    return () => video.removeEventListener("loadedmetadata", startPlayback);
+    return () => {
+      video.removeEventListener("loadedmetadata", startPlayback);
+      video.removeEventListener("canplay", startPlayback);
+    };
   }, [hasRemoteStream, status]);
 
   useEffect(() => {
@@ -846,6 +1039,8 @@ function isGuestInitiatedEnd(reason) {
     const timer = window.setInterval(() => {
       if (video.videoWidth > 0 && video.videoHeight > 0) {
         setVideoFramesReady(true);
+        stopInboundStatsPolling();
+        void playRemoteVideoElement(video, remoteStreamRef.current, "agent:frames-ready");
         window.clearInterval(timer);
         return;
       }
@@ -861,7 +1056,12 @@ function isGuestInitiatedEnd(reason) {
       }
     }, 500);
     return () => window.clearInterval(timer);
-  }, [hasRemoteStream, viewOpen, requestGuestVideoRecovery]);
+  }, [
+    hasRemoteStream,
+    viewOpen,
+    requestGuestVideoRecovery,
+    stopInboundStatsPolling,
+  ]);
 
   useEffect(() => {
     if (!viewOpen || !hasRemoteStream) return;
@@ -921,7 +1121,8 @@ function isGuestInitiatedEnd(reason) {
   };
 
   const handleStartRecording = () => {
-    if (!recordingFeaturesEnabled || isRecording) return;    if (status !== "connected" || !remoteStreamRef.current) {
+    if (!recordingFeaturesEnabled || isRecording) return;
+    if (status !== "connected" || !remoteStreamRef.current) {
       toast({
         title: "לא ניתן להקליט",
         description: "יש לחכות לחיבור ושיתוף מסך מהלקוח לפני התחלת הקלטה",
@@ -973,7 +1174,8 @@ function isGuestInitiatedEnd(reason) {
     recordingTimerRef.current = setInterval(() => {
       setRecordingElapsed((s) => {
         const next = s + 1;
-        recordingElapsedRef.current = next;        if (next >= MAX_RECORDING_SECONDS && !maxDurationWarnedRef.current) {
+        recordingElapsedRef.current = next;
+        if (next >= MAX_RECORDING_SECONDS && !maxDurationWarnedRef.current) {
           maxDurationWarnedRef.current = true;
           setShowMaxDurationBanner(true);
           toast({
@@ -999,12 +1201,14 @@ function isGuestInitiatedEnd(reason) {
   }, [status]);
 
   useEffect(() => {
-    if (!recordingFeaturesEnabled || !autoStartRecording) return undefined;    if (!canRecord || isRecording) return undefined;
+    if (!recordingFeaturesEnabled || !autoStartRecording) return undefined;
+    if (!canRecord || isRecording) return undefined;
     if (autoStartAttemptedRef.current) return undefined;
     autoStartAttemptedRef.current = true;
     startRecordingRef.current();
     return undefined;
   }, [recordingFeaturesEnabled, autoStartRecording, canRecord, isRecording]);
+
   const handleAutoStartToggle = (event) => {
     const checked = event.target.checked;
     setAutoStartRecording(checked);
@@ -1039,7 +1243,8 @@ function isGuestInitiatedEnd(reason) {
     }
     const meta =
       sessionRecordings.find((r) => r.id === recordingSummary.recordingId) || lastRecordingMeta;
-    await uploadRecordingBlobToCloud(blob, meta, { showToast: true });  };
+    await uploadRecordingBlobToCloud(blob, meta, { showToast: true });
+  };
 
   const resolveBlobForDownload = async (recordingId) => {
     if (recordedBlob && (!recordingId || lastRecordingMeta?.id === recordingId)) {
@@ -1060,7 +1265,8 @@ function isGuestInitiatedEnd(reason) {
       meta =
         listRecordingsForSession(sessionId).find((r) => r.id === lastRecordingMeta?.id) ||
         listRecordingsForSession(sessionId).at(-1) ||
-        lastRecordingMeta;    }
+        lastRecordingMeta;
+    }
     const blob = await resolveBlobForDownload(recordingId || meta?.id);
     if (!blob?.size) {
       toast({
@@ -1173,7 +1379,8 @@ function isGuestInitiatedEnd(reason) {
     ) : status === "ended" ? (
       <WifiOff className="w-4 h-4 text-slate-500" />
     ) : (
-      <Loader2 className="w-4 h-4 animate-spin text-teal-600" />    );
+      <Loader2 className="w-4 h-4 animate-spin text-teal-600" />
+    );
 
   return (
     <div className={`space-y-3 ${className}`}>
@@ -1181,7 +1388,8 @@ function isGuestInitiatedEnd(reason) {
         <div className="flex items-center gap-2">
           {statusIcon}
           <span className="font-medium text-slate-800">{displayStatusLabel}</span>
-          {recordingFeaturesEnabled && isRecording && (            <span
+          {recordingFeaturesEnabled && isRecording && (
+            <span
               className="inline-flex items-center gap-1.5 text-red-700 font-semibold text-xs"
               dir="ltr"
             >
@@ -1210,7 +1418,7 @@ function isGuestInitiatedEnd(reason) {
         onClick={(e) => e.stopPropagation()}
       >
         {hasRemoteStream && !videoFramesReady && status !== "ended" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300 gap-3 z-10 px-4 bg-slate-950/60">
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300 gap-3 z-[2] px-4 bg-slate-950/40 pointer-events-none">
             <Loader2 className="w-8 h-8 animate-spin opacity-70 pointer-events-none" />
             <p className="text-xs text-center leading-relaxed pointer-events-none">
               זרם התקבל — ממתין להופעת התמונה…
@@ -1292,7 +1500,8 @@ function isGuestInitiatedEnd(reason) {
           </div>
         )}
         {recordingFeaturesEnabled && isRecording && (
-          <div className="absolute top-2 left-2 z-30 flex items-center gap-1.5 rounded-full bg-black/70 px-2 py-1 text-xs text-white font-semibold pointer-events-none">            <Circle className="w-2 h-2 fill-red-500 text-red-500 animate-pulse" />
+          <div className="absolute top-2 left-2 z-30 flex items-center gap-1.5 rounded-full bg-black/70 px-2 py-1 text-xs text-white font-semibold pointer-events-none">
+            <Circle className="w-2 h-2 fill-red-500 text-red-500 animate-pulse" />
             <span dir="ltr">{formatRecordingElapsed(recordingElapsed)}</span>
           </div>
         )}
@@ -1317,7 +1526,20 @@ function isGuestInitiatedEnd(reason) {
               {isFullscreen ? "יציאה" : "מסך מלא"}
             </Button>
           )}
-        </div>        <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed">
+        </div>
+        <video
+          id="remoteVideo"
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className="relative z-[1] block w-full h-full min-h-[180px] object-contain bg-black opacity-100 visible pointer-events-none select-none"
+          style={{ display: "block", visibility: "visible", opacity: 1 }}
+        />
+      </div>
+
+      {recordingFeaturesEnabled && showMaxDurationBanner && isRecording && (
+        <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed">
           עברתם 30 דקות הקלטה — מומלץ לעצור. ההקלטה תמשיך עד לחיצה על «עצור הקלטה».
         </p>
       )}
@@ -1331,7 +1553,8 @@ function isGuestInitiatedEnd(reason) {
             <p className="text-[11px] text-red-800 bg-red-50 border border-red-100 rounded-lg px-2 py-1.5 leading-relaxed">
               מקליט כעת — הקובץ יישמר אוטומטית בסיום ההקלטה או הסשן
             </p>
-          )}          {recordDisabledReason && !isRecording && (
+          )}
+          {recordDisabledReason && !isRecording && (
             <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5 leading-relaxed">
               {recordDisabledReason}
             </p>
@@ -1340,7 +1563,64 @@ function isGuestInitiatedEnd(reason) {
             <p className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-lg px-2 py-1.5 leading-relaxed">
               הקלטה אוטומטית פעילה — תתחיל עם חיבור הזרם
             </p>
-          )}          </p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {!isRecording ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                onClick={() => setShowPreflightDialog(true)}
+                disabled={!canRecord}
+                className="gap-1.5"
+              >
+                <Circle className="w-3 h-3 fill-current" />
+                התחל הקלטה
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={handleStopRecording}
+                className="gap-1.5"
+              >
+                <Square className="w-3 h-3" />
+                עצור הקלטה
+              </Button>
+            )}
+            {recordedBlob && !isRecording && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => handleDownloadRecording()}
+                disabled={savingBlob}
+                className="gap-1.5"
+              >
+                <Download className="w-3.5 h-3.5" />
+                הורד
+              </Button>
+            )}
+          </div>
+          <label className="flex items-center gap-2 text-[11px] text-slate-700 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={autoStartRecording}
+              onChange={handleAutoStartToggle}
+              className="rounded border-slate-300"
+            />
+            התחל הקלטה אוטומטית לאחר חיבור (כשהלקוח אישר הקלטה)
+          </label>
+          <p className="text-[10px] text-slate-500 leading-relaxed">
+            {cloudRecordingUploadEnabled()
+              ? "בפרודקשן: הקובץ מועלה אוטומטית לשרת (Supabase Storage) בסיום ההקלטה."
+              : demoModeEnabled
+                ? "הקובץ נשמר ב-IndexedDB בדפדפן הנציג (WebM). «הורד שוב» זמין גם אחרי רענון."
+                : "הקובץ נשמר מקומית ב-IndexedDB (WebM)."}
+            {savingBlob ? " שומר…" : null}
+            {cloudSaving ? ` ${recordingUploadStatusLabel("uploading")}` : null}
+          </p>
 
           {recordingSummary && !isRecording && (
             <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 p-3 space-y-2">
@@ -1360,7 +1640,34 @@ function isGuestInitiatedEnd(reason) {
                 >
                   {recordingUploadStatusLabel(cloudUploadStatus)}
                 </p>
-              ) : null}                {recordingSummary.crmCustomerId && (
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="gap-1 text-xs h-8"
+                  onClick={() => handleDownloadRecording(recordingSummary.recordingId)}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  הורד
+                </Button>
+                {(demoModeEnabled ||
+                  cloudUploadStatus === "failed" ||
+                  !cloudRecordingUploadEnabled()) && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="gap-1 text-xs h-8"
+                    disabled={cloudSaving || savingBlob}
+                    onClick={handleCloudSaveSummary}
+                  >
+                    <CloudUpload className="w-3.5 h-3.5" />
+                    {cloudUploadStatus === "failed" ? "נסה שוב להעלות" : "שמור לענן"}
+                  </Button>
+                )}
+                {recordingSummary.crmCustomerId && (
                   <Link
                     to={`/crm/${recordingSummary.crmCustomerId}`}
                     className="inline-flex items-center gap-1 text-xs h-8 px-3 rounded-md border border-teal-200 bg-white text-teal-800 hover:bg-teal-50 font-medium"
@@ -1408,12 +1715,40 @@ function isGuestInitiatedEnd(reason) {
                       >
                         {recordingUploadStatusLabel(rec.cloudUploadStatus)}
                       </p>
-                    ) : null}        <Dialog open={showPreflightDialog} onOpenChange={setShowPreflightDialog}>
+                    ) : null}
+                    {rec.downloadedAt ? (
+                      <p className="text-[10px] text-emerald-700 mt-0.5">
+                        הורדת הקובץ בוצעה ({formatRecordingTimestamp(rec.downloadedAt)})
+                      </p>
+                    ) : null}
+                    {(blobAvailableIds.has(rec.id) ||
+                      (recordedBlob && lastRecordingMeta?.id === rec.id)) && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="link"
+                        className="h-auto p-0 text-[11px] text-teal-700"
+                        onClick={() => handleDownloadRecording(rec.id)}
+                      >
+                        הורד שוב
+                      </Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {recordingFeaturesEnabled && (
+        <Dialog open={showPreflightDialog} onOpenChange={setShowPreflightDialog}>
           <DialogContent className="sm:max-w-md" dir="rtl">
             <DialogHeader>
               <DialogTitle>בדיקה לפני הקלטה</DialogTitle>
               <DialogDescription>
-                ודאו שכל התנאים מתקיימים לפני תחילת הקלטת המסך.              </DialogDescription>
+                ודאו שכל התנאים מתקיימים לפני תחילת הקלטת המסך.
+              </DialogDescription>
             </DialogHeader>
             <ul className="space-y-2 py-2">
               {preflightItems.map((item) => (
@@ -1464,7 +1799,8 @@ function isGuestInitiatedEnd(reason) {
 
       <p className="text-[11px] text-slate-500 leading-relaxed">
         צפייה בלבד — לחיצה על הווידאו לא מסיימת את הסשן. השתמשו ב«מסך מלא» להגדלה; אם עברתם
-        לחלון אחר — «חזור לצפייה» מחדש את הזרם.      </p>
+        לחלון אחר — «חזור לצפייה» מחדש את הזרם.
+      </p>
 
       <Button
         type="button"

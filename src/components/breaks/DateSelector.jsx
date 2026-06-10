@@ -10,7 +10,8 @@ export default function DateSelector({
   onDateChange,
   variant = "dark",
   readOnly = false,
-}) {  const isLight = variant === "light";
+}) {
+  const isLight = variant === "light";
   const navBtn = isLight
     ? "w-9 h-9 rounded-xl bg-white border border-slate-200 hover:border-indigo-300 text-slate-600 flex items-center justify-center transition-all shadow-sm"
     : "w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white/60 hover:text-white flex items-center justify-center transition-all";
@@ -38,8 +39,6 @@ export default function DateSelector({
     );
   }
 
-=======
->>>>>>> 842dd9e (Initial commit)
   return (
     <div className="flex items-center gap-2">
       <button onClick={() => goTo(1)} className={navBtn}>

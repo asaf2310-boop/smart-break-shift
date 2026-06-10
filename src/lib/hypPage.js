@@ -94,3 +94,4 @@ export function brandHeaderIconClass(className) {
 
 export const usesHypPageChrome = brandVisualEnabled;
 
+

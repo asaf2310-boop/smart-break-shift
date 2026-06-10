@@ -3,7 +3,8 @@ import { useState, useEffect } from "react";
 
 const TOAST_LIMIT = 5;
 const TOAST_REMOVE_DELAY = 400;
-const DEFAULT_TOAST_DURATION = 2000;const ERROR_TOAST_DURATION = 5000;
+const DEFAULT_TOAST_DURATION = 2000;
+const ERROR_TOAST_DURATION = 5000;
 
 const actionTypes = {
   ADD_TOAST: "ADD_TOAST",
@@ -124,6 +125,7 @@ function toast({ duration, variant, dedupeKey, ...props }) {
   if (dedupeKey) {
     dismissToastsByDedupeKey(dedupeKey);
   }
+
   const id = genId();
 
   const update = (props) =>
@@ -145,8 +147,6 @@ function toast({ duration, variant, dedupeKey, ...props }) {
       ...props,
       variant,
       dedupeKey,
-=======
->>>>>>> 842dd9e (Initial commit)
       id,
       open: true,
       onOpenChange: (open) => {

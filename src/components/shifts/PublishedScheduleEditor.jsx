@@ -23,7 +23,8 @@ function AgentCell({
   selectedAgent = null,
   onAgentClick,
   cellHighlighted = false,
-}) {  const [showDropdown, setShowDropdown] = useState(false);
+}) {
+  const [showDropdown, setShowDropdown] = useState(false);
   const ref = useRef(null);
 
   useEffect(() => {
@@ -65,13 +66,15 @@ function AgentCell({
             title={agent}
           >
             {agent}
-          </button>          <button onClick={() => onRemove(agent)} className="hover:text-red-500 transition-colors flex-shrink-0">
+          </button>
+          <button onClick={() => onRemove(agent)} className="hover:text-red-500 transition-colors flex-shrink-0">
             <X className="w-3 h-3" />
           </button>
         </div>
         );
       })}
-      </div>      <div className="relative" ref={ref}>
+      </div>
+      <div className="relative" ref={ref}>
         <button
           onClick={() => setShowDropdown(v => !v)}
           disabled={availableToAdd.length === 0}
@@ -81,7 +84,8 @@ function AgentCell({
           הוסף
         </button>
         {showDropdown && availableToAdd.length > 0 && (
-          <div className="absolute z-50 top-full mt-1 right-0 w-36 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden max-h-48 overflow-y-auto" dir="rtl">            {availableToAdd.map(agent => (
+          <div className="absolute z-50 top-full mt-1 right-0 w-36 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden max-h-48 overflow-y-auto" dir="rtl">
+            {availableToAdd.map(agent => (
               <button
                 key={agent}
                 onClick={() => { onAdd(agent); setShowDropdown(false); }}
@@ -100,6 +104,27 @@ function AgentCell({
 export default function PublishedScheduleEditor({ weekStart }) {
   const [localRegs, setLocalRegs] = useState(null); // null = not loaded yet
   const [selectedAgent, setSelectedAgent] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [sendSmsOnSave, setSendSmsOnSave] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const scheduleGridRef = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (scheduleGridRef.current && !scheduleGridRef.current.contains(e.target)) {
+        setSelectedAgent(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const handleAgentClick = (agent) => {
+    setSelectedAgent((prev) => (prev === agent ? null : agent));
+  };
+
   const weekDays = useMemo(
     () => Array.from({ length: 5 }, (_, i) => addDays(weekStart, i)),
     [weekStart]
@@ -139,16 +164,6 @@ export default function PublishedScheduleEditor({ weekStart }) {
     return localRegs[`${dateStr}|${shiftType}`] || [];
   };
 
-=======
-  const getAllOnDay = (dateStr) => {
-    if (!localRegs) return [];
-    return [
-      ...(localRegs[`${dateStr}|morning`] || []),
-      ...(localRegs[`${dateStr}|evening`] || []),
-    ];
-  };
-
->>>>>>> 842dd9e (Initial commit)
   const handleRemove = (dateStr, shiftType, agent) => {
     const key = `${dateStr}|${shiftType}`;
     setLocalRegs(prev => ({ ...prev, [key]: (prev[key] || []).filter(a => a !== agent) }));
@@ -187,6 +202,7 @@ export default function PublishedScheduleEditor({ weekStart }) {
       dateTo,
       records: savedRecords.length ? savedRecords : records,
     });
+
     const smsResult = await sendScheduleSmsNotifications({
       records,
       weekDays,
@@ -240,12 +256,14 @@ export default function PublishedScheduleEditor({ weekStart }) {
               שבוע {format(weekDays[0], "dd/MM/yyyy")} – {format(weekDays[4], "dd/MM/yyyy")}
             </p>
             <p className="text-[10px] text-slate-400 font-mono mt-0.5" dir="ltr">
-              {dateFrom} – {dateTo}            </p>
+              {dateFrom} – {dateTo}
+            </p>
           </div>
         </div>
       </div>
 
-      <div ref={scheduleGridRef} className="rounded-2xl border border-slate-100 overflow-x-auto mb-4">        {/* Header */}
+      <div ref={scheduleGridRef} className="rounded-2xl border border-slate-100 overflow-x-auto mb-4">
+        {/* Header */}
         <div className="grid grid-cols-6 bg-slate-50 border-b border-slate-100">
           <div className="py-2 px-3 text-xs font-semibold text-slate-400">משמרת</div>
           {weekDays.map((date, i) => (
@@ -260,7 +278,8 @@ export default function PublishedScheduleEditor({ weekStart }) {
           { type: "morning", label: "בוקר", time: "08:00–16:00", Icon: Sun, color: "text-amber-500" },
           { type: "evening", label: "ערב", time: "09:00–17:00", Icon: Moon, color: "text-indigo-500" },
         ].map(shift => (
-          <div key={shift.type} className="grid grid-cols-6 auto-rows-auto items-stretch border-t border-slate-100">            <div className="flex flex-col items-center justify-center gap-0.5 py-3 px-2 border-l border-slate-100">
+          <div key={shift.type} className="grid grid-cols-6 auto-rows-auto items-stretch border-t border-slate-100">
+            <div className="flex flex-col items-center justify-center gap-0.5 py-3 px-2 border-l border-slate-100">
               <shift.Icon className={`w-4 h-4 ${shift.color}`} />
               <span className={`text-xs font-bold ${shift.color}`}>{shift.label}</span>
               <span className="text-xs text-slate-400">{shift.time}</span>
@@ -275,7 +294,8 @@ export default function PublishedScheduleEditor({ weekStart }) {
                   agents={agents}
                   selectedAgent={selectedAgent}
                   onAgentClick={handleAgentClick}
-                  cellHighlighted={cellHighlighted}                  onRemove={(agent) => handleRemove(dateStr, shift.type, agent)}
+                  cellHighlighted={cellHighlighted}
+                  onRemove={(agent) => handleRemove(dateStr, shift.type, agent)}
                   onAdd={(agent) => handleAdd(dateStr, shift.type, agent)}
                 />
               );

@@ -5,7 +5,8 @@ import { ArrowRight, BookOpen } from "lucide-react";
 import KnowledgeChat from "@/components/knowledge/KnowledgeChat";
 import { demoModeEnabled } from "@/api/demoClient";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
-import { hypHeaderIconClass, m3PageClass } from "@/lib/hypPage";import { cn } from "@/lib/utils";
+import { hypHeaderIconClass, m3PageClass } from "@/lib/hypPage";
+import { cn } from "@/lib/utils";
 
 export default function KnowledgePage() {
   const isAdmin = useIsAdmin();
@@ -20,7 +21,8 @@ export default function KnowledgePage() {
         >
           <div className="flex items-center gap-3">
             <div className={hypHeaderIconClass("w-12 h-12 shadow-elevation-2")}>
-              <BookOpen className="w-6 h-6 text-white" />            </div>
+              <BookOpen className="w-6 h-6 text-white" />
+            </div>
             <div>
               <h1 className="m3-headline-small text-xl font-semibold">שאל את הידע</h1>
               <p className="m3-label-medium">בסיס ידע · תשובות ממסמכי הארגון</p>

@@ -4,7 +4,8 @@ import { getAgentNamesList } from "@/constants/scheduling";
 import AgentLogin from "@/components/auth/AgentLogin";
 import HypHomeShell from "@/components/hyp/HypHomeShell";
 import RouteErrorBoundary from "@/components/RouteErrorBoundary";
-import { customerChatEnabled, demoModeEnabled } from "@/api/demoClient";import { isAdminPinConfigured } from "@/hooks/useIsAdmin";
+import { customerChatEnabled, demoModeEnabled } from "@/api/demoClient";
+import { isAdminPinConfigured } from "@/hooks/useIsAdmin";
 import { connectAgentAsAvailable } from "@/lib/agentChatPresence";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { agentLogout } from "@/lib/agentAuth";
@@ -13,7 +14,8 @@ const productionCards = [
   {
     to: "/breaks",
     title: "הפסקות",
-    desc: "הזמנת הפסקת 10 דקות וצהריים להיום",    icon: CalendarClock,
+    desc: "הזמנת הפסקת 10 דקות וצהריים להיום",
+    icon: CalendarClock,
     iconTile: "m3-icon-tile",
   },
   {
@@ -53,6 +55,7 @@ const customerChatCard = {
   icon: MessageCircle,
   iconTile: "m3-icon-tile",
 };
+
 const demoOnlyCards = [
   {
     to: "/crm",
@@ -62,15 +65,6 @@ const demoOnlyCards = [
     iconTile: "m3-icon-tile",
   },
   {
-=======
-    to: "/remote-support",
-    title: "השתלטות מרחוק",
-    desc: "שלב א: צפייה בדפדפן · RustDesk · סשנים",
-    icon: Monitor,
-    iconTile: "m3-icon-tile",
-  },
-  {
->>>>>>> 842dd9e (Initial commit)
     to: "/knowledge",
     title: "בסיס ידע",
     desc: "שאלות ותשובות ממסמכי הארגון",
@@ -88,10 +82,12 @@ const liveCardsWithCustomerChat =
 const homeCards = demoModeEnabled
   ? [...productionCards, ...demoOnlyCards]
   : liveCardsWithCustomerChat;
+
 const showAdminDemoHint =
   (import.meta.env.DEV || demoModeEnabled) && isAdminPinConfigured();
 
-function HomeContent() {  const { displayName, isLoggedIn, refresh } = useAgentSession();
+function HomeContent() {
+  const { displayName, isLoggedIn, refresh } = useAgentSession();
   const agentCount = getAgentNamesList().length;
   const adminPin = String(import.meta.env.VITE_ADMIN_PIN ?? "").trim();
 
@@ -126,5 +122,6 @@ export default function Home() {
   return (
     <RouteErrorBoundary>
       <HomeContent />
-    </RouteErrorBoundary>  );
+    </RouteErrorBoundary>
+  );
 }

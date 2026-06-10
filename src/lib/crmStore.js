@@ -375,8 +375,6 @@ export function getCustomerByPhone(phone) {
   );
 }
 
-=======
->>>>>>> 842dd9e (Initial commit)
 export function createCustomer({ name, phone, email, company, notes }) {
   const store = readStore();
   const now = new Date().toISOString();

@@ -7,6 +7,7 @@ import '@/index.css'
 
 applyAppTitle()
 applyBrandDocumentClasses()
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <App />
 )

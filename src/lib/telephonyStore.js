@@ -11,6 +11,7 @@ import {
   initSipTelephony,
   toggleSipMute,
 } from "@/lib/telephonyProvider";
+
 export const TELEPHONY_STORAGE_KEY = "smart-break-shift-telephony-v1";
 export const TELEPHONY_CHANGE_EVENT = "telephony-store-changed";
 
@@ -141,7 +142,44 @@ export function bindSipTelephonyEvents(remoteAudioEl = null) {
 
 export function isRealSipEnabled() {
   return shouldUseRealSip();
-}let demoTickerId = null;
+}
+
+function makeId(prefix) {
+  return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+}
+
+export const AGENT_TELEPHONY_STATUS = {
+  available: { key: "available", label: "זמין", tone: "emerald" },
+  lunch: { key: "lunch", label: "הפסקת צהריים", tone: "amber" },
+  short_break: { key: "short_break", label: "הפסקת 10", tone: "amber" },
+  comfort: { key: "comfort", label: "נוחיות", tone: "sky" },
+  on_call: { key: "on_call", label: "בשיחה", tone: "rose" },
+  offline: { key: "offline", label: "לא מחובר", tone: "slate" },
+};
+
+const DEMO_STATUS_KEYS = [
+  AGENT_TELEPHONY_STATUS.available.key,
+  AGENT_TELEPHONY_STATUS.lunch.key,
+  AGENT_TELEPHONY_STATUS.short_break.key,
+  AGENT_TELEPHONY_STATUS.comfort.key,
+  AGENT_TELEPHONY_STATUS.offline.key,
+];
+
+const DEMO_QUEUE_PHONES = [
+  { phone: "050-2148871", customer_name: "לקוח בתור" },
+  { phone: "052-9081123", customer_name: "פנייה חוזרת" },
+  { phone: "03-5550198", customer_name: null },
+  { phone: "054-7712044", customer_name: "שירות — חשבון" },
+  { phone: "050-3319022", customer_name: "בירור חשבון" },
+  { phone: "058-4401188", customer_name: null },
+  { phone: "02-6123456", customer_name: "מוקד ראשי" },
+  { phone: "053-7789901", customer_name: "פנייה דחופה" },
+];
+
+const DEMO_MAX_QUEUE = 8;
+const DEMO_MAX_ON_CALL_AGENTS = 8;
+
+let demoTickerId = null;
 let demoOnCallAgents = new Set();
 
 export const TELEPHONY_STATUS_SELECT_OPTIONS = [
@@ -278,7 +316,8 @@ function seedDemoTelephonyDashboard(currentAgentName) {
       id: `queue_seed_${index}`,
       phone: row.phone,
       customer_name: row.customer_name,
-      waiting_seconds: 28 + index * 18,    }));
+      waiting_seconds: 28 + index * 18,
+    }));
     changed = true;
   }
 
@@ -290,7 +329,8 @@ function seedDemoTelephonyDashboard(currentAgentName) {
     centerStats = {
       incoming: 42,
       answered: 31,
-      abandoned: 4,      waiting: queueCalls.length,
+      abandoned: 4,
+      waiting: queueCalls.length,
     };
     changed = true;
   }
@@ -303,7 +343,8 @@ function seedDemoTelephonyDashboard(currentAgentName) {
 
   if (!demoOnCallAgents.size && agents.length) {
     const onCallCount = Math.min(3, agents.length, DEMO_MAX_ON_CALL_AGENTS);
-    demoOnCallAgents = new Set(agents.slice(0, onCallCount));  }
+    demoOnCallAgents = new Set(agents.slice(0, onCallCount));
+  }
 }
 
 function tickDemoTelephonyDashboard() {
@@ -320,7 +361,8 @@ function tickDemoTelephonyDashboard() {
       } else if (demoOnCallAgents.size > 0 && Math.random() < 0.45) {
         const busy = [...demoOnCallAgents];
         demoOnCallAgents.delete(busy[Math.floor(Math.random() * busy.length)]);
-      }    }
+      }
+    }
   }
 
   let queueCalls = data.queueCalls.map((row) => ({
@@ -330,7 +372,8 @@ function tickDemoTelephonyDashboard() {
 
   let centerStats = { ...data.centerStats };
 
-  if (Math.random() < 0.22 && queueCalls.length < DEMO_MAX_QUEUE) {    const template =
+  if (Math.random() < 0.22 && queueCalls.length < DEMO_MAX_QUEUE) {
+    const template =
       DEMO_QUEUE_PHONES[Math.floor(Math.random() * DEMO_QUEUE_PHONES.length)];
     queueCalls.push({
       id: makeId("queue"),
@@ -346,6 +389,7 @@ function tickDemoTelephonyDashboard() {
   }
 
   if (Math.random() < 0.18) centerStats.incoming += 1;
+
   centerStats.waiting = queueCalls.length;
   writePersisted({ queueCalls, centerStats });
 }
@@ -400,6 +444,88 @@ export function getActiveCall() {
 export function getPendingDisposition() {
   return pendingDisposition ? { ...pendingDisposition } : null;
 }
+
+export function listTelephonyCallLogs(limit = 30) {
+  const { callLogs } = readPersisted();
+  return [...callLogs]
+    .sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))
+    .slice(0, limit);
+}
+
+export function isDocked() {
+  return readPersisted().docked;
+}
+
+export function setDocked(docked) {
+  writePersisted({ docked: Boolean(docked) });
+}
+
+function appendCallLog(entry) {
+  const { callLogs } = readPersisted();
+  writePersisted({ callLogs: [entry, ...callLogs].slice(0, 100) });
+}
+
+function setActive(patch) {
+  activeCall = activeCall ? { ...activeCall, ...patch } : { ...patch };
+  emitChange();
+}
+
+function buildTelephonyLogEntry(call, { durationSeconds = 0, answered = true } = {}) {
+  const endedAt = new Date().toISOString();
+  return {
+    id: call.id || makeId("tel"),
+    direction: call.direction,
+    phone: call.phone,
+    status: CALL_STATUS.ended.value,
+    customer_id: call.customer_id || null,
+    customer_name: call.customer_name || null,
+    agent_name: call.agent_name || null,
+    started_at: call.started_at,
+    ended_at: endedAt,
+    duration_seconds: durationSeconds,
+    answered,
+    simulated: call.simulated !== false,
+  };
+}
+
+function applyDemoCallEndSideEffects(call, { answered = true } = {}) {
+  if (!demoModeEnabled) return;
+  if (call.direction === "inbound") {
+    if (answered) bumpCenterStat("answered");
+    else bumpCenterStat("abandoned");
+  }
+  if (call.agent_name) demoOnCallAgents.delete(call.agent_name);
+  syncCenterWaiting();
+}
+
+function defaultDispositionSummary(call) {
+  const dir = call.direction === "inbound" ? "נכנסת" : "יוצאת";
+  if (!call.answered) {
+    return `שיחה ${dir} — לא נענתה (${call.phone})`;
+  }
+  return `שיחה ${dir} (${call.phone})`;
+}
+
+function writeCrmCallFromDisposition(call, { summary = "", referral_topic = null } = {}) {
+  if (!crmDemoAvailable() || !call.customer_id) return;
+  try {
+    const mins = call.answered
+      ? Math.max(1, Math.round((call.duration_seconds || 0) / 60) || 1)
+      : null;
+    createCallLog({
+      customer_id: call.customer_id,
+      call_type: call.direction === "inbound" ? "incoming" : "outgoing",
+      summary: String(summary || "").trim() || defaultDispositionSummary(call),
+      agent_name: call.agent_name || "נציג",
+      duration_minutes: mins,
+      occurred_at: call.connected_at || call.started_at,
+      referral_topic,
+    });
+  } catch {
+    /* CRM unavailable outside demo */
+  }
+}
+
 function finishCall({ durationSeconds = 0, answered = true } = {}) {
   if (!activeCall) return;
   clearPhaseTimer();
@@ -429,6 +555,7 @@ function finishCall({ durationSeconds = 0, answered = true } = {}) {
   const log = buildTelephonyLogEntry(activeCall, { durationSeconds, answered });
   appendCallLog(log);
   applyDemoCallEndSideEffects(activeCall, { answered });
+
   if (
     crmDemoAvailable() &&
     activeCall.customer_id &&
@@ -441,7 +568,8 @@ function finishCall({ durationSeconds = 0, answered = true } = {}) {
     );
   }
 
-  const endedAt = log.ended_at;  setActive({
+  const endedAt = log.ended_at;
+  setActive({
     status: CALL_STATUS.ended.value,
     ended_at: endedAt,
     duration_seconds: durationSeconds,
@@ -472,6 +600,44 @@ export function dismissCallDisposition() {
   pendingDisposition = null;
   emitChange();
 }
+
+function runOutboundPhases() {
+  if (!activeCall || activeCall.direction !== "outbound") return;
+
+  setActive({ status: CALL_STATUS.dialing.value });
+  phaseTimer = setTimeout(() => {
+    if (!activeCall) return;
+    setActive({ status: CALL_STATUS.ringing.value });
+    phaseTimer = setTimeout(() => {
+      if (!activeCall) return;
+      const connectedAt = new Date().toISOString();
+      setActive({
+        status: CALL_STATUS.connected.value,
+        connected_at: connectedAt,
+        muted: false,
+      });
+    }, RING_MS);
+  }, DIAL_MS);
+}
+
+function runInboundPhases() {
+  if (!activeCall || activeCall.direction !== "inbound") return;
+  setActive({ status: CALL_STATUS.ringing.value });
+  phaseTimer = setTimeout(() => {
+    if (!activeCall) return;
+    const connectedAt = new Date().toISOString();
+    setActive({
+      status: CALL_STATUS.connected.value,
+      connected_at: connectedAt,
+      muted: false,
+    });
+  }, RING_MS + CONNECT_AFTER_RING_MS);
+}
+
+/**
+ * Start outbound call — demo simulation or real SIP when configured.
+ */
+export async function startOutboundCall({
   phone,
   agentName,
   customer_id = null,
@@ -525,12 +691,14 @@ export function dismissCallDisposition() {
   }
 
   if (!demoModeEnabled) {
-    throw new Error("שיחות זמינות בדמו או עם SIP מוגדר (VITE_SIP_WS_URL)");  }
+    throw new Error("שיחות זמינות בדמו או עם SIP מוגדר (VITE_SIP_WS_URL)");
+  }
 
   clearPhaseTimer();
   const startedAt = new Date().toISOString();
   bumpCenterStat("incoming");
   demoOnCallAgents.add(agentName || getCurrentAgentNameHint());
+
   activeCall = {
     id: makeId("tel_active"),
     direction: "outbound",
@@ -538,7 +706,8 @@ export function dismissCallDisposition() {
     status: CALL_STATUS.dialing.value,
     customer_id: resolvedCustomerId,
     customer_name: resolvedCustomerName,
-    customer_company: resolvedCustomerCompany,    agent_name: agentName || null,
+    customer_company: resolvedCustomerCompany,
+    agent_name: agentName || null,
     started_at: startedAt,
     connected_at: null,
     ended_at: null,
@@ -577,7 +746,8 @@ export function simulateInboundCall({
   agentName,
   customer_id = null,
   customer_name = null,
-  customer_company = null,} = {}) {
+  customer_company = null,
+} = {}) {
   if (!demoModeEnabled) {
     throw new Error("שיחות מדומות זמינות רק ב-VITE_DEMO_MODE");
   }
@@ -594,6 +764,18 @@ export function simulateInboundCall({
     customer_name,
     customer_company,
   });
+
+  if (demoModeEnabled) {
+    bumpCenterStat("incoming");
+    demoOnCallAgents.add(agentName || getCurrentAgentNameHint());
+  }
+
+  activeCall = {
+    id: makeId("tel_active"),
+    direction: "inbound",
+    phone: normalizedPhone,
+    status: CALL_STATUS.ringing.value,
+    ...customerMeta,
     agent_name: agentName || null,
     started_at: startedAt,
     connected_at: null,
@@ -620,6 +802,7 @@ export async function answerInbound() {
     });
     return getActiveCall();
   }
+
   clearPhaseTimer();
   const connectedAt = new Date().toISOString();
   setActive({
@@ -647,6 +830,7 @@ export async function hangUp() {
     }
     return;
   }
+
   const connectedAt = activeCall.connected_at
     ? new Date(activeCall.connected_at).getTime()
     : null;
@@ -666,6 +850,7 @@ export async function toggleMute() {
     if (result.ok) setActive({ muted: result.muted });
     return Boolean(result.muted);
   }
+
   setActive({ muted: !activeCall.muted });
   return activeCall.muted;
 }
@@ -759,7 +944,20 @@ export function setAgentTelephonyStatus(agentName, statusKey) {
     setAgentTelephonyConnected(false);
     if (shouldUseRealSip()) {
       disconnectSip().finally(() => emitChange());
-    }  if (demoModeEnabled) seedDemoTelephonyDashboard(agentName);
+    }
+  } else {
+    setAgentTelephonyConnected(true);
+  }
+}
+
+export function connectAgentTelephonyAvailable(agentName) {
+  setAgentTelephonyConnected(true);
+  setAgentTelephonyStatus(agentName, AGENT_TELEPHONY_STATUS.available.key);
+  if (shouldUseRealSip()) {
+    bindSipTelephonyEvents();
+    connectSip().finally(() => emitChange());
+  }
+  if (demoModeEnabled) seedDemoTelephonyDashboard(agentName);
 }
 
 export { stopDemoTelephonyTicker };

@@ -17,7 +17,8 @@ export default function TimeSlotCard({
   onCancel,
   isDeleting = false,
   myRegistration = null,
-}) {  const isLunch = breakType === "lunch";
+}) {
+  const isLunch = breakType === "lunch";
   const capacity = Math.max(1, Number(maxPerSlot) || 1);
   const count = registrations.length;
   const isFull = count >= capacity;
@@ -27,6 +28,7 @@ export default function TimeSlotCard({
     !isRegistered &&
     !isDisabled &&
     !isRegistering;
+
   const accentFrom = isLunch ? "from-indigo-500" : "from-purple-500";
   const accentTo = isLunch ? "to-blue-500" : "to-pink-500";
   const accentText = isLunch ? "text-indigo-300" : "text-purple-300";
@@ -42,7 +44,8 @@ export default function TimeSlotCard({
         relative rounded-2xl border p-4 flex flex-col gap-3 transition-all duration-300 h-full
         ${isRegistered
           ? `border-indigo-200 bg-gradient-to-br from-indigo-50 to-purple-50 shadow-md`
-          : isSlotClosed            ? "border-slate-100 bg-slate-50 opacity-50"
+          : isSlotClosed
+            ? "border-slate-100 bg-slate-50 opacity-50"
             : "border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 hover:shadow-sm cursor-pointer"
         }
       `}
@@ -68,7 +71,8 @@ export default function TimeSlotCard({
             <span className="text-xs sm:text-sm text-slate-700 font-semibold break-words">{reg.agent_name}</span>
           </div>
         ))}
-        {!isSlotClosed && (          <div className="flex items-center gap-1.5">
+        {!isSlotClosed && (
+          <div className="flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-full bg-green-400" />
             <span className="text-xs text-green-600 font-medium">
               {count === 0 ? "פנוי" : `עוד ${capacity - count} מקום`}
@@ -102,7 +106,8 @@ export default function TimeSlotCard({
         </div>
       ) : (
         <button
-          type="button"          disabled={!canRegister}
+          type="button"
+          disabled={!canRegister}
           onClick={() => onRegister(slot)}
           className={`
             w-full py-1.5 rounded-xl text-xs font-semibold transition-all duration-200
@@ -116,7 +121,8 @@ export default function TimeSlotCard({
             ? "מעדכן..."
             : isDisabled
               ? "כבר נרשמת"
-              : "הרשמה"}        </button>
+              : "הרשמה"}
+        </button>
       )}
     </motion.div>
   );

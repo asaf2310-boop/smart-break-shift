@@ -7,7 +7,19 @@
     body { font-family: system-ui, sans-serif; margin: 1rem; background: #0f172a; color: #e2e8f0; }
     .row { display: flex; flex-wrap: wrap; gap: 1rem; }
     .panel { flex: 1; min-width: 280px; background: #1e293b; border-radius: 12px; padding: 1rem; }
-    video { width: 100%; max-width: 480px; background: #000; border-radius: 8px; min-height: 180px; }
+    #remoteVideo {
+      width: 100%;
+      max-width: 480px;
+      background: #000;
+      border-radius: 8px;
+      min-height: 180px;
+      display: block;
+      opacity: 1;
+      visibility: visible;
+      object-fit: contain;
+      position: relative;
+      z-index: 1;
+    }
     button { margin: 0.25rem; padding: 0.5rem 0.75rem; cursor: pointer; border-radius: 8px; border: 0; background: #0d9488; color: #fff; }
     #log { white-space: pre-wrap; font-size: 12px; background: #020617; padding: 0.75rem; border-radius: 8px; max-height: 200px; overflow: auto; }
     .ok { color: #4ade80; } .fail { color: #f87171; }
@@ -19,7 +31,7 @@
   <div class="row">
     <div class="panel">
       <h2>נציג</h2>
-      <video id="agentVideo" autoplay playsinline muted></video>
+      <video id="remoteVideo" autoplay playsinline muted></video>
       <div id="agentStatus">ממתין</div>
     </div>
     <div class="panel">
@@ -34,7 +46,7 @@
 
     const SESSION = "qa-ss-" + Math.random().toString(36).slice(2, 8);
     const logEl = document.getElementById("log");
-    const agentVideo = document.getElementById("agentVideo");
+    const remoteVideo = document.getElementById("remoteVideo");
     const agentStatus = document.getElementById("agentStatus");
     const guestStatus = document.getElementById("guestStatus");
 
@@ -129,18 +141,28 @@
         const gotStream = new Promise((resolve, reject) => {
           agentPeer.on("call", (call) => {
             agentCall = call;
+            const playRemote = async (remote) => {
+              remoteVideo.muted = true;
+              remoteVideo.autoplay = true;
+              remoteVideo.playsInline = true;
+              remoteVideo.srcObject = remote;
+              try {
+                await remoteVideo.play();
+              } catch (e) {
+                log("video.play() failed: " + (e?.message || e), false);
+              }
+            };
             call.on("stream", (remote) => {
-              agentVideo.srcObject = remote;
-              agentVideo.play().catch(() => {});
+              void playRemote(remote);
               resolve(remote);
             });
             const pc = call.peerConnection;
             if (pc) {
               pc.addEventListener("track", (ev) => {
+                console.log("[QA] TRACK RECEIVED", ev.track?.kind, ev.streams);
                 if (ev.track?.kind !== "video") return;
                 const s = ev.streams?.[0] || new MediaStream([ev.track]);
-                agentVideo.srcObject = s;
-                agentVideo.play().catch(() => {});
+                void playRemote(s);
                 resolve(s);
               });
             }
@@ -169,7 +191,7 @@
 
         await gotStream;
         log("זרם התקבל אצל הנציג", true);
-        const dims = await waitForVideo(agentVideo);
+        const dims = await waitForVideo(remoteVideo);
         log(`וידאו תקין: ${dims.w}x${dims.h}`, true);
         log("QA PASSED", true);
         agentStatus.textContent = "וידאו פעיל";

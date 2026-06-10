@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, Navigate, useSearchParams } from "react-router-dom";import { motion } from "framer-motion";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
+import { motion } from "framer-motion";
 import {
   ArrowRight,
   CheckCircle2,
@@ -35,6 +36,7 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { hypHeaderIconClass, m3PageClass } from "@/lib/hypPage";
 import { cn } from "@/lib/utils";
+
 function ReferralCard({ referral, variant = "personal" }) {
   const topicClass =
     variant === "department"
@@ -80,6 +82,7 @@ export default function CrmDashboard() {
   const [addInitial, setAddInitial] = useState(null);
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
+
   const refresh = useCallback(() => {
     setOpenReferrals(listOpenReferralsForAgent(agentName));
     setDepartmentQueues(listDepartmentQueuesForAgent(agentName));
@@ -112,6 +115,42 @@ export default function CrmDashboard() {
     }
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams, toast]);
+
+  const searchResults = useMemo(
+    () => searchCustomersByContact(query),
+    [query]
+  );
+
+  const deptOpenCount = useMemo(
+    () => departmentQueues.reduce((sum, q) => sum + q.referrals.length, 0),
+    [departmentQueues]
+  );
+
+  if (!agentName) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (!crmDemoAvailable()) {
+    return (
+      <div className={m3PageClass("flex items-center justify-center p-6")} dir="rtl">
+        <div className="max-w-md text-center m3-card p-8">
+          <Users className="w-12 h-12 mx-auto text-primary mb-4" />
+          <h1 className="m3-title-large text-xl font-medium mb-2">CRM — סביבת דמו</h1>
+          <p className="m3-label-medium mb-6">
+            מודול ה-CRM זמין כרגע עם <code className="text-xs bg-surface-container px-1 rounded-md">VITE_DEMO_MODE=true</code> ונתונים ב-localStorage.
+          </p>
+          <Link to="/" className="text-primary font-medium text-sm hover:underline">
+            חזרה לדף הבית
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const handleAddCustomer = (data) => {
+    const created = createCustomer(data);
+    setAddOpen(false);
+    setAddInitial(null);
     toast({ title: "לקוח נוסף", description: created.name });
     refresh();
   };
@@ -134,7 +173,8 @@ export default function CrmDashboard() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className={cn(hypHeaderIconClass("shadow-elevation-1 mb-3"), !demoModeEnabled && "bg-primary")}>
-                <FolderOpen className={cn("w-6 h-6", demoModeEnabled ? "text-white" : "text-primary-foreground")} />              </div>
+                <FolderOpen className={cn("w-6 h-6", demoModeEnabled ? "text-white" : "text-primary-foreground")} />
+              </div>
               <h1 className="m3-headline-small font-medium">CRM — פניות</h1>
               <p className="m3-label-medium mt-1">
                 שלום, <span className="font-semibold text-foreground">{agentName}</span>
@@ -267,7 +307,8 @@ export default function CrmDashboard() {
           setAddOpen(open);
           if (!open) setAddInitial(null);
         }}
-      >        <DialogContent className="sm:max-w-md rounded-2xl shadow-elevation-3" dir="rtl">
+      >
+        <DialogContent className="sm:max-w-md rounded-2xl shadow-elevation-3" dir="rtl">
           <DialogHeader>
             <DialogTitle>לקוח חדש</DialogTitle>
           </DialogHeader>
@@ -279,7 +320,8 @@ export default function CrmDashboard() {
               setAddInitial(null);
             }}
             submitLabel="הוספה"
-          />        </DialogContent>
+          />
+        </DialogContent>
       </Dialog>
     </div>
   );

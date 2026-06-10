@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";import { Link, useParams, useSearchParams } from "react-router-dom";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import Peer from "peerjs";
 import { motion } from "framer-motion";
 import {
@@ -33,7 +34,12 @@ import { demoModeEnabled } from "@/api/demoClient";
 import { m3PageClass } from "@/lib/hypPage";
 import SessionFileShare from "@/components/remote/SessionFileShare";
 import { getPeerJsOptions } from "@/lib/webrtcConfig";
-import { waitForIceConnected } from "@/lib/screenShareWebRtc";
+import {
+  attachPeerConnectionDebugLogging,
+  ensureOutboundTracksOnPeerConnection,
+  logOutboundVideoTrack,
+  waitForIceConnected,
+} from "@/lib/screenShareWebRtc";
 
 function sleep(ms) {
   return new Promise((resolve) => {
@@ -58,6 +64,7 @@ function parsePeerData(raw) {
   }
   return raw && typeof raw === "object" ? raw : null;
 }
+
 /** אודיו מערכת ב-getDisplayMedia — בדרך כלל Chrome/Edge בדסקטופ */
 function displayMediaSystemAudioSupported() {
   if (typeof navigator === "undefined" || !navigator.mediaDevices?.getDisplayMedia) {
@@ -254,11 +261,18 @@ export default function ScreenShareGuestPage() {
         return false;
       }
       videoTrack.enabled = true;
+      logOutboundVideoTrack(stream, { reason: "before_place_call", sessionId });
       const call = peer.call(sessionId, stream);
       callRef.current = call;
 
+      let stopPcDebug = () => {};
       const pc = call.peerConnection;
       if (pc) {
+        ensureOutboundTracksOnPeerConnection(pc, stream);
+        stopPcDebug = attachPeerConnectionDebugLogging(pc, {
+          role: "guest",
+          sessionId,
+        });
         pc.addEventListener("iceconnectionstatechange", () => {
           if (!sharingRef.current) return;
           if (pc.iceConnectionState === "failed") {
@@ -270,6 +284,7 @@ export default function ScreenShareGuestPage() {
       }
 
       call.on("close", () => {
+        stopPcDebug();
         if (!sharingRef.current) return;
         const latest = resolveGuestSession(sessionId, bootstrapKey);
         if (isAgentEndedSession(latest)) {
@@ -292,6 +307,7 @@ export default function ScreenShareGuestPage() {
       });
 
       call.on("error", () => {
+        stopPcDebug();
         if (!sharingRef.current) return;
         const latest = resolveGuestSession(sessionId, bootstrapKey);
         if (isAgentEndedSession(latest)) {
@@ -440,6 +456,71 @@ export default function ScreenShareGuestPage() {
     isAgentEndedSession,
     handleEndedByAgent,
   ]);
+
+  useEffect(() => {
+    const refresh = () => setSession(resolveGuestSession(sessionId, bootstrapKey));
+    refresh();
+    return subscribeScreenShare(refresh);
+  }, [sessionId, bootstrapKey]);
+
+  useEffect(() => {
+    if (!shared || !sessionId) return undefined;
+    let intervalMs = 1500;
+    let timer;
+    const tick = () => {
+      const latest = resolveGuestSession(sessionId, bootstrapKey);
+      setSession(latest);
+      const nextMs =
+        latest?.recordingConsentAt && latest?.recordingActiveAt ? 500 : 1500;
+      if (nextMs !== intervalMs) {
+        intervalMs = nextMs;
+        clearInterval(timer);
+        timer = setInterval(tick, intervalMs);
+      }
+    };
+    tick();
+    timer = setInterval(tick, intervalMs);
+    return () => clearInterval(timer);
+  }, [shared, sessionId, bootstrapKey]);
+
+  useEffect(() => {
+    return () => {
+      if (sessionId && !endNotifiedRef.current) {
+        endInStore("client_closed");
+      }
+      stopPeerAndStream();
+    };
+  }, [sessionId, endInStore, stopPeerAndStream]);
+
+  useEffect(() => {
+    if (!shared) return undefined;
+    const onVisibility = () => {
+      if (document.hidden) return;
+      if (sharingRef.current && isStreamAlive() && !callRef.current) {
+        reconnectToAgent();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [shared, isStreamAlive, reconnectToAgent]);
+
+  useEffect(() => {
+    if (!sessionId || !shared) return undefined;
+
+    const tryEndOnUnload = () => {
+      notifyAgentSessionEnded("client_closed");
+      endInStore("client_closed");
+    };
+
+    window.addEventListener("beforeunload", tryEndOnUnload);
+    window.addEventListener("pagehide", tryEndOnUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", tryEndOnUnload);
+      window.removeEventListener("pagehide", tryEndOnUnload);
+    };
+  }, [sessionId, shared, endInStore, notifyAgentSessionEnded]);
+
   const handleShareScreen = async () => {
     if (!session || session.status === "ended") return;
     if (!consentChecked) {
@@ -459,17 +540,27 @@ export default function ScreenShareGuestPage() {
 
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
+          cursor: "always",
+          displaySurface: "monitor",
           frameRate: { ideal: 15, max: 30 },
         },
-        audio: includeSystemAudio && systemAudioSupported,
+        audio: includeSystemAudio && systemAudioSupported ? true : false,
       });
+      const displayVideoTrack = stream.getVideoTracks()[0];
+      if (!displayVideoTrack) {
+        throw new Error(
+          "לא התקבל מסלול וידאו משיתוף המסך — בחרו מסך או חלון ונסו שוב"
+        );
+      }
       stream.getVideoTracks().forEach((track) => {
         track.enabled = true;
       });
       streamRef.current = stream;
+      logOutboundVideoTrack(stream, { reason: "after_getDisplayMedia", sessionId });
 
       stream.getVideoTracks()[0]?.addEventListener("ended", () => {
-        endGuestSessionWithNotify("client_stop", { updateUi: true });        setError("שיתוף המסך הופסק מהדפדפן");
+        endGuestSessionWithNotify("client_stop", { updateUi: true });
+        setError("שיתוף המסך הופסק מהדפדפן");
       });
 
       logScreenConsent(session.id);
@@ -481,6 +572,7 @@ export default function ScreenShareGuestPage() {
       const peer = new Peer(getPeerJsOptions());
       peerRef.current = peer;
       bindPeerAgentEndListener(peer);
+
       await new Promise((resolve, reject) => {
         const timeout = setTimeout(
           () => reject(new Error("תם הזמן להתחברות לנציג — ודאו שהנציג פתח את מסך הצפייה")),
@@ -505,7 +597,8 @@ export default function ScreenShareGuestPage() {
       }
       notifyAgentGuestReady(resolveGuestSession(sessionId, bootstrapKey));
       setShared(true);
-      setError("");    } catch (err) {
+      setError("");
+    } catch (err) {
       const name = err?.name || "";
       let message = err?.message || "לא ניתן לשתף מסך";
       if (name === "NotAllowedError") {
@@ -528,7 +621,8 @@ export default function ScreenShareGuestPage() {
   if (!screenShareFeaturesAvailable()) {
     return (
       <div className={m3PageClass("flex items-center justify-center p-6")} dir="rtl">
-        <p className="text-slate-600 text-center">שיתוף מסך אינו פעיל בסביבה זו.</p>      </div>
+        <p className="text-slate-600 text-center">שיתוף מסך אינו פעיל בסביבה זו.</p>
+      </div>
     );
   }
 
@@ -536,7 +630,8 @@ export default function ScreenShareGuestPage() {
     shared && Boolean(session?.recordingConsentAt && session?.recordingActiveAt);
 
   return (
-    <div className={m3PageClass("flex items-center justify-center p-4 relative")} dir="rtl">      {showRecordingWatermark && (
+    <div className={m3PageClass("flex items-center justify-center p-4 relative")} dir="rtl">
+      {showRecordingWatermark && (
         <div
           className="fixed bottom-4 left-4 z-50 pointer-events-none select-none text-sm font-semibold text-slate-800/45 tracking-wide"
           role="status"
@@ -552,7 +647,8 @@ export default function ScreenShareGuestPage() {
       >
         <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-start gap-2 text-amber-950 text-xs leading-relaxed">
           <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
-          <span>{GUEST_INFO_BANNER}</span>        </div>
+          <span>{GUEST_INFO_BANNER}</span>
+        </div>
 
         <div className="p-6 space-y-5">
           <div className="text-center">
@@ -585,7 +681,8 @@ export default function ScreenShareGuestPage() {
                 sessionId={sessionId}
                 uploadedBy="guest"
                 uploaderLabel="לקוח"
-              />              <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" />
+              />
+              <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" />
               <p className="font-semibold text-emerald-800">המסך משותף לנציג</p>
               {session.recordingConsentAt && session.recordingActiveAt && (
                 <div
@@ -635,7 +732,8 @@ export default function ScreenShareGuestPage() {
                 sessionId={sessionId}
                 uploadedBy="guest"
                 uploaderLabel="לקוח"
-              />              <ol className="text-sm text-slate-700 space-y-2 list-decimal list-inside bg-slate-50 rounded-xl p-3 border border-slate-100 leading-relaxed">
+              />
+              <ol className="text-sm text-slate-700 space-y-2 list-decimal list-inside bg-slate-50 rounded-xl p-3 border border-slate-100 leading-relaxed">
                 <li>השתמשו ב-Chrome או Edge (מומלץ)</li>
                 <li>סמנו «אני מאשר שיתוף מסך»</li>
                 <li>אם הנציג עשוי להקליט — סמנו גם «אישור הקלטה» (אופציונלי לצפייה בלבד)</li>
@@ -693,6 +791,11 @@ export default function ScreenShareGuestPage() {
                 </p>
               )}
 
+              <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 leading-relaxed">
+                בחלון הדפדפן בחרו <strong>מסך שלם</strong> או <strong>חלון גלוי</strong> — לא
+                חלון ממוזער או ריק (גורם למסך שחור).
+              </p>
+
               <Button
                 type="button"
                 onClick={handleShareScreen}
@@ -725,8 +828,6 @@ export default function ScreenShareGuestPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-=======
->>>>>>> 842dd9e (Initial commit)
     </div>
   );
 }

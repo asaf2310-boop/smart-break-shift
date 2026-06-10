@@ -29,6 +29,7 @@ export default function MyRegistrations({
       </button>
     );
   };
+
   return (
     <AnimatePresence>
       <motion.div
@@ -39,7 +40,8 @@ export default function MyRegistrations({
       >
         <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-3 text-right">
           ההרשמות שלי{selectedDateLabel ? ` · ${selectedDateLabel}` : ""}
-        </p>        <div className="flex flex-col sm:flex-row gap-3">
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3">
           <AnimatePresence>
             {shortReg && (
               <motion.div
@@ -58,7 +60,8 @@ export default function MyRegistrations({
                     <p className="text-slate-800 font-bold text-sm">{shortReg.time_slot}</p>
                   </div>
                 </div>
-                {cancelButton(shortReg, "short")}              </motion.div>
+                {cancelButton(shortReg, "short")}
+              </motion.div>
             )}
             {lunchReg && (
               <motion.div
@@ -77,7 +80,8 @@ export default function MyRegistrations({
                     <p className="text-slate-800 font-bold text-sm">{lunchReg.time_slot}</p>
                   </div>
                 </div>
-                {cancelButton(lunchReg, "lunch")}              </motion.div>
+                {cancelButton(lunchReg, "lunch")}
+              </motion.div>
             )}
           </AnimatePresence>
         </div>

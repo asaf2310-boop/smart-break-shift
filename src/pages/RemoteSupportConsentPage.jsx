@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";import { motion } from "framer-motion";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+import { motion } from "framer-motion";
 import { CheckCircle2, Monitor, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +14,7 @@ import {
 } from "@/lib/remoteSupportStore";
 import { demoModeEnabled } from "@/api/demoClient";
 import { m3PageClass } from "@/lib/hypPage";
+
 const CUSTOMER_CONSENT_TEXT =
   "אני מאשר/ת לנציג התמיכה לגשת מרחוק למחשב שלי באמצעות RustDesk לצורך טיפול בתקלה שדווחה בשיחה זו.";
 
@@ -28,6 +30,7 @@ export default function RemoteSupportConsentPage() {
     refresh();
     return subscribeRemoteSupport(refresh);
   }, [token, bootstrapKey]);
+
   const alreadyConsented = Boolean(session?.consentAt && session.consentSource === "customer");
 
   const handleConsent = () => {
@@ -40,12 +43,14 @@ export default function RemoteSupportConsentPage() {
   if (!remoteSupportFeaturesAvailable()) {
     return (
       <div className={m3PageClass("flex items-center justify-center p-6")} dir="rtl">
-        <p className="text-slate-600 text-center">מודול תמיכה מרחוק אינו פעיל בסביבה זו.</p>      </div>
+        <p className="text-slate-600 text-center">מודול תמיכה מרחוק אינו פעיל בסביבה זו.</p>
+      </div>
     );
   }
 
   return (
-    <div className={m3PageClass("flex items-center justify-center p-4")} dir="rtl">      <motion.div
+    <div className={m3PageClass("flex items-center justify-center p-4")} dir="rtl">
+      <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md rounded-3xl border border-slate-200 bg-white shadow-xl overflow-hidden"
@@ -56,6 +61,7 @@ export default function RemoteSupportConsentPage() {
             <span>דמו — לפרודקשן: שרת RustDesk עצמי + מדיניות אבטחה</span>
           </div>
         )}
+
         <div className="p-6 space-y-5">
           <div className="text-center">
             <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-100 text-indigo-700 mb-3">

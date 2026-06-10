@@ -12,7 +12,8 @@ import {
   MAX_MORNING_AUTO_ASSIGNMENTS_PER_WEEK,
 } from "@/constants/scheduling";
 import { sendScheduleSmsNotifications } from "@/lib/scheduleSms";
-import { refreshScheduleQueriesAfterPublish } from "@/lib/shiftScheduleQuery";import { useToast } from "@/components/ui/use-toast";
+import { refreshScheduleQueriesAfterPublish } from "@/lib/shiftScheduleQuery";
+import { useToast } from "@/components/ui/use-toast";
 import { demoModeEnabled } from "@/api/demoClient";
 
 // Auto-schedule algorithm:
@@ -20,7 +21,8 @@ import { demoModeEnabled } from "@/api/demoClient";
 // - Auto-assign puts each agent on at most one shift per day (admin may override when editing)
 // - Balance tracked across the week so each agent gets ~equal morning/evening
 // - At most MAX_MORNING_AUTO_ASSIGNMENTS_PER_WEEK morning shifts (08:00–16:00) per agent in one generated week
-// - Evening assignments are not capped by auto-schedule (manual add may differ)// - For holiday eve: only agents who explicitly marked themselves available (not unavailable) appear, under "holiday_eve" key
+// - Evening assignments are not capped by auto-schedule (manual add may differ)
+// - For holiday eve: only agents who explicitly marked themselves available (not unavailable) appear, under "holiday_eve" key
 function buildAutoSchedule(weekDays, unavailabilities, vacationRequests, confirmedAgentNames = new Set()) {
   const schedule = {};
   const agentMorningCount = Object.fromEntries(AGENT_NAMES.map(n => [n, 0]));
@@ -62,7 +64,8 @@ function buildAutoSchedule(weekDays, unavailabilities, vacationRequests, confirm
     // Agents only available for one shift go directly there (morning only if under weekly cap)
     const onlyMorning = AGENT_NAMES.filter(
       n => availMorning.includes(n) && !availEvening.includes(n) && canAssignMorning(n)
-    );    const onlyEvening = AGENT_NAMES.filter(n => !availMorning.includes(n) && availEvening.includes(n));
+    );
+    const onlyEvening = AGENT_NAMES.filter(n => !availMorning.includes(n) && availEvening.includes(n));
     const bothAvail = AGENT_NAMES.filter(n => availMorning.includes(n) && availEvening.includes(n));
 
     const morningAgents = [...onlyMorning];
@@ -82,7 +85,8 @@ function buildAutoSchedule(weekDays, unavailabilities, vacationRequests, confirm
     );
 
     // Sort bothCanMorning: those with most morning excess go to evening, least go to morning
-    const sorted = [...bothCanMorning].sort((a, b) => {      const biasA = agentMorningCount[a] - agentEveningCount[a];
+    const sorted = [...bothCanMorning].sort((a, b) => {
+      const biasA = agentMorningCount[a] - agentEveningCount[a];
       const biasB = agentMorningCount[b] - agentEveningCount[b];
       return biasA - biasB; // ascending: least morning first → send to morning
     });
@@ -183,7 +187,8 @@ function ShiftCell({
   selectedAgent = null,
   onAgentClick,
   cellHighlighted = false,
-}) {  const [showDropdown, setShowDropdown] = useState(false);
+}) {
+  const [showDropdown, setShowDropdown] = useState(false);
   const ref = useRef(null);
 
   useEffect(() => {
@@ -202,7 +207,8 @@ function ShiftCell({
         cellHighlighted ? "ring-2 ring-inset ring-amber-300 bg-amber-50/50" : ""
       }`}
       dir="rtl"
-    >      {agents.length === 0 && (
+    >
+      {agents.length === 0 && (
         <div className="flex items-center justify-center gap-1 text-xs text-red-400 py-1">
           <X className="w-3 h-3" /> אין
         </div>
@@ -230,7 +236,8 @@ function ShiftCell({
               title={agent}
             >
               {agent}
-            </button>            <div className="flex items-center gap-1 flex-shrink-0">
+            </button>
+            <div className="flex items-center gap-1 flex-shrink-0">
               <NotePopover
                 note={notes[`${cellKey}|${agent}`]}
                 onSave={(val) => onNoteChange(cellKey, agent, val)}
@@ -247,7 +254,8 @@ function ShiftCell({
         </div>
         );
       })}
-      </div>      <div className="relative" ref={ref}>
+      </div>
+      <div className="relative" ref={ref}>
         <button
           onClick={() => setShowDropdown(v => !v)}
           disabled={availableToAdd.length === 0}
@@ -278,6 +286,26 @@ export default function AutoScheduleBuilder({ weekStart }) {
   const [assignments, setAssignments] = useState(null); // null = not generated yet
   const [notes, setNotes] = useState({}); // { "cellKey|agentName": "note text" }
   const [selectedAgent, setSelectedAgent] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [sendSmsOnPublish, setSendSmsOnPublish] = useState(true);
+  const { toast } = useToast();
+  const scheduleGridRef = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (scheduleGridRef.current && !scheduleGridRef.current.contains(e.target)) {
+        setSelectedAgent(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const handleAgentClick = (agent) => {
+    setSelectedAgent((prev) => (prev === agent ? null : agent));
+  };
+
   const handleNoteChange = (cellKey, agent, value) => {
     setNotes(prev => {
       const key = `${cellKey}|${agent}`;
@@ -356,6 +384,7 @@ export default function AutoScheduleBuilder({ weekStart }) {
       dateTo,
       records: savedRecords.length ? savedRecords : records,
     });
+
     const smsResult = await sendScheduleSmsNotifications({
       records,
       weekDays,
@@ -434,7 +463,8 @@ export default function AutoScheduleBuilder({ weekStart }) {
       {assignments && (
         <>
           {/* Preview table */}
-          <div ref={scheduleGridRef} className="rounded-2xl border border-slate-100 overflow-x-auto mb-4">            {/* Header */}
+          <div ref={scheduleGridRef} className="rounded-2xl border border-slate-100 overflow-x-auto mb-4">
+            {/* Header */}
             <div className="grid grid-cols-6 bg-slate-50 border-b border-slate-100">
               <div className="py-2 px-3 text-xs font-semibold text-slate-400">משמרת</div>
               {weekDays.map((date, i) => (
@@ -449,7 +479,8 @@ export default function AutoScheduleBuilder({ weekStart }) {
               { type: "morning", label: "בוקר", time: "08:00–16:00", Icon: Sun, color: "text-amber-500" },
               { type: "evening", label: "ערב", time: "09:00–17:00", Icon: Moon, color: "text-indigo-500" },
             ].map(shift => (
-              <div key={shift.type} className="grid grid-cols-6 auto-rows-auto items-stretch border-t border-slate-100">                <div className="flex flex-col items-center justify-center gap-0.5 py-3 px-2 border-l border-slate-100">
+              <div key={shift.type} className="grid grid-cols-6 auto-rows-auto items-stretch border-t border-slate-100">
+                <div className="flex flex-col items-center justify-center gap-0.5 py-3 px-2 border-l border-slate-100">
                   <shift.Icon className={`w-4 h-4 ${shift.color}`} />
                   <span className={`text-xs font-bold ${shift.color}`}>{shift.label}</span>
                   <span className="text-xs text-slate-400">{shift.time}</span>
@@ -465,7 +496,8 @@ export default function AutoScheduleBuilder({ weekStart }) {
                     const availableToAdd = agentsAvailableForCell(agents);
                     const cellHighlighted = selectedAgent && agents.includes(selectedAgent);
                     return (
-                      <div key={dateStr} className="py-2 px-1 flex flex-col gap-1 bg-purple-50/50 row-span-2 self-stretch">                        <div className="text-center text-xs font-bold text-purple-600 mb-0.5">ערב חג</div>
+                      <div key={dateStr} className="py-2 px-1 flex flex-col gap-1 bg-purple-50/50 row-span-2 self-stretch">
+                        <div className="text-center text-xs font-bold text-purple-600 mb-0.5">ערב חג</div>
                         <div className="text-center text-xs text-purple-400 mb-1">09:00–14:00</div>
                         <ShiftCell
                           cellKey={cellKey}
@@ -475,13 +507,50 @@ export default function AutoScheduleBuilder({ weekStart }) {
                           color="purple"
                           selectedAgent={selectedAgent}
                           onAgentClick={handleAgentClick}
-                          cellHighlighted={cellHighlighted}                      cellKey={cellKey}
+                          cellHighlighted={cellHighlighted}
+                          onRemove={(agent) => setAssignments(prev => ({
+                            ...prev,
+                            [cellKey]: prev[cellKey].filter(a => a !== agent)
+                          }))}
+                          onAdd={(agent) => setAssignments(prev => ({
+                            ...prev,
+                            [cellKey]: [...(prev[cellKey] || []), agent]
+                          }))}
+                          onNoteChange={handleNoteChange}
+                        />
+                      </div>
+                    );
+                  }
+                  if (isHolidayEve && shift.type === "evening") {
+                    return <div key={dateStr} className="py-3 px-2 bg-purple-50/30" />;
+                  }
+
+                  const cellKey = `${dateStr}|${shift.type}`;
+                  const agents = assignments[cellKey] || [];
+                  const availableToAdd = agentsAvailableForCell(agents);
+                  const cellHighlighted = selectedAgent && agents.includes(selectedAgent);
+                  return (
+                    <div key={dateStr} className="py-2 px-1 self-stretch">
+                    <ShiftCell
+                      cellKey={cellKey}
                       agents={agents}
                       notes={notes}
                       availableToAdd={availableToAdd}
                       selectedAgent={selectedAgent}
                       onAgentClick={handleAgentClick}
-                      cellHighlighted={cellHighlighted}                  );
+                      cellHighlighted={cellHighlighted}
+                      onRemove={(agent) => setAssignments(prev => ({
+                        ...prev,
+                        [cellKey]: prev[cellKey].filter(a => a !== agent)
+                      }))}
+                      onAdd={(agent) => setAssignments(prev => ({
+                        ...prev,
+                        [cellKey]: [...(prev[cellKey] || []), agent]
+                      }))}
+                      onNoteChange={handleNoteChange}
+                    />
+                    </div>
+                  );
                 })}
               </div>
             ))}

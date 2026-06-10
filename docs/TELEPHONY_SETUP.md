@@ -3,11 +3,8 @@
 מסמך זה מסביר **מה נדרש מכם** כדי לאפשר שיחות נכנסות ויוצאות אמיתיות מהדפדפן.  
 במצב דמו (`VITE_DEMO_MODE=true`) האפליקציה **אינה** מבצעת חיוג לרשת — רק סימולציה ב-`localStorage`.
 
-<<<<<<< HEAD
 > **מרכזייה עצמאית (FreePBX על Hetzner):** מדריך שלב-אחר-שלב — [SELF_HOSTED_PBX.md](./SELF_HOSTED_PBX.md) (VPS, WSS, תור 10 נציגים, Trunk).
 
-=======
->>>>>>> 842dd9e (Initial commit)
 ---
 
 ## מה כבר קיים באפליקציה
@@ -17,12 +14,8 @@
 | `SoftphoneWidget` | וידג'ט צף/מוצמד: לוח חיוג, חיוג, ניתוק, השתקה (דמו), סטטוס שיחה |
 | `telephonyStore.js` | סימולציית שיחות + היסטוריה ב-`localStorage` (דמו בלבד) |
 | CRM | בכרטיס לקוח: **חיוג** ממלא מספר ופותח את הטלפון (דמו) |
-<<<<<<< HEAD
 | `telephonyProvider.js` | WebRTC/SIP בדפדפן (sip.js) — WSS + הרשמה; דמו כשלא מוגדר |
 | `api/sip-token.js` | אישורי SIP מהשרת (Vercel) — לא ב-build של Vite |
-=======
-| `telephonyProvider.js` | Stub לייצור — בודק משתני סביבה, לא מחבר לרשת |
->>>>>>> 842dd9e (Initial commit)
 
 ---
 
@@ -64,7 +57,6 @@
 משתני סביבה לדוגמה (ראו `.env.example`):
 
 ```env
-<<<<<<< HEAD
 # צד-לקוח (Vite)
 VITE_SIP_WS_URL=wss://pbx.example.com:8089/ws
 VITE_SIP_USER=ext101
@@ -81,19 +73,6 @@ SIP_DOMAIN=pbx.example.com
 
 **ספרייה:** `sip.js` (WebRTC + WSS). JsSIP חלופה תקינה; נבחר sip.js בגלל API `SimpleUser`, תחזוקה פעילה ו-TypeScript.
 
-=======
-# SIP (דוגמה — סיסמה בשרת בלבד)
-VITE_SIP_WS_URL=wss://pbx.example.com/ws
-VITE_SIP_USER=ext101
-# VITE_SIP_PASSWORD=  ← לא מומלץ בפרודקשן
-
-# Twilio (מפתחות רגישים בשרת)
-# VITE_TWILIO_ACCOUNT_SID=
-# VITE_TWILIO_API_KEY=
-# VITE_TWILIO_TWIML_APP_SID=
-```
-
->>>>>>> 842dd9e (Initial commit)
 ### 5. אינטגרציה עם CRM
 
 בדמו, בסיום שיחה מחוברת ללקוח — נרשם אוטומטית `crm_call_logs`.  
@@ -118,7 +97,6 @@ flowchart LR
 ```
 
 1. **שלב א'** — דמו ללקוח (`VITE_DEMO_MODE=true`): הדרכה, UI, CRM מדומה.  
-<<<<<<< HEAD
 2. **שלב ב' (Lab)** — VPS + FreePBX + WSS + שלוחות 101–110 — ראו [SELF_HOSTED_PBX.md](./SELF_HOSTED_PBX.md).  
 3. **שלב ג'** — Trunk + DID, CDR/webhooks, TURN, הקלטות.
 
@@ -129,10 +107,6 @@ flowchart LR
 3. `npx vercel dev` — מפעיל גם `/api/sip-token`
 4. **לא** `VITE_DEMO_MODE` — פתחו את האפליקציה, התחברו בווידג'ט, אשרו מיקרופון
 5. שיחה נכנסת → screen pop + מענה; ניתוק → disposition ל-CRM
-=======
-2. **שלב ב'** — סביבת staging עם ספק אמיתי + HTTPS + נציג אחד.  
-3. **שלב ג'** — Token server, הקלטות, דוחות, חיבור Supabase.
->>>>>>> 842dd9e (Initial commit)
 
 ---
 
@@ -152,11 +126,7 @@ flowchart LR
 1. PBX עם WebRTC gateway (WSS).
 2. הרשמת נציגים (extensions).
 3. Trunk לספק קווי / VoIP.
-<<<<<<< HEAD
 4. **sip.js** ממומש ב-`telephonyProvider.js` — הרשמה, חיוג, מענה, השתקה, `<audio>` לשמע מרוחק.
-=======
-4. ספרייה כגון **JsSIP** או **sip.js** — מחוץ ל-scope הנוכחי; `telephonyProvider.js` הוא נקודת התחלה.
->>>>>>> 842dd9e (Initial commit)
 
 ---
 
@@ -188,14 +158,9 @@ flowchart LR
 - `src/components/telephony/SoftphoneWidget.jsx`
 - `src/lib/telephonyStore.js`
 - `src/lib/telephonyProvider.js`
-<<<<<<< HEAD
 - `api/sip-token.js`
 - `src/context/TelephonyContext.jsx`
 
 **עדיין stub / שלבים עתידיים:** Twilio Voice, TURN ייעודי, תור מרכזייה אמיתי, CDR אוטומטי ל-Supabase, הקלטות, Zoiper (לא נדרש — softphone מובנה).
 
-=======
-- `src/context/TelephonyContext.jsx`
-
->>>>>>> 842dd9e (Initial commit)
 לשאלות פנימיות — פנו למפתח האינטגרציה עם פרטי ספק ה-VoIP (SIP URI, WSS URL, מספרי שלוחות).

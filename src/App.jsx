@@ -10,7 +10,32 @@ import AuthRequiredScreen from '@/components/AuthRequiredScreen';
 import AppLoadError from '@/components/AppLoadError';
 import AdminGate from '@/components/admin/AdminGate';
 import DemoGate from '@/components/DemoGate';
-import CustomerChatGate from '@/components/CustomerChatGate';import FloatingKnowledgeWidget from '@/components/knowledge/FloatingKnowledgeWidget';
+import CustomerChatGate from '@/components/CustomerChatGate';
+import Home from './pages/Home';
+import BreakScheduler from './pages/BreakScheduler';
+import AdminDashboard from './pages/AdminDashboard';
+import ShiftScheduler from './pages/ShiftScheduler';
+import AdminShifts from './pages/AdminShifts';
+import AdminUsers from './pages/AdminUsers';
+import ResetPassword from './pages/ResetPassword';
+import LiveDataSync from '@/components/LiveDataSync';
+import FloatingChatWidget from '@/components/chat/FloatingChatWidget';
+import SoftphoneWidget from '@/components/telephony/SoftphoneWidget';
+import { ChatPanelProvider } from '@/context/ChatPanelContext';
+import { TelephonyProvider } from '@/context/TelephonyContext';
+import { FloatingWidgetsLayerProvider } from '@/context/FloatingWidgetsLayerContext';
+import { ChatUnreadProvider } from '@/hooks/useChatUnread';
+import { ScreenShareSessionProvider } from '@/contexts/ScreenShareSessionContext';
+import ChatRoute from './pages/ChatRoute';
+import CustomerChatGuestPage from './pages/CustomerChatGuestPage';
+import AgentCustomerChatPage from './pages/AgentCustomerChatPage';
+import CrmDashboard from './pages/CrmDashboard';
+import CrmCustomerDetail from './pages/CrmCustomerDetail';
+import CrmLookupDeepLink from './pages/CrmLookupDeepLink';
+import KnowledgePage from './pages/KnowledgePage';
+import AdminKnowledge from './pages/AdminKnowledge';
+import AdminCustomerChat from './pages/AdminCustomerChat';
+import FloatingKnowledgeWidget from '@/components/knowledge/FloatingKnowledgeWidget';
 import AdminLocalhostLinksFloating from '@/components/admin/AdminLocalhostLinksFloating';
 import RemoteSupportConsentPage from './pages/RemoteSupportConsentPage';
 import RemoteSupportPage from './pages/RemoteSupportPage';
@@ -28,6 +53,7 @@ import { hasTopAppNav } from '@/lib/appNavPaths';
 import { brandVisualEnabled } from '@/lib/brandShell';
 import { applyHypDemoDocumentClasses, hypDemoAppShellClass } from '@/lib/hypPage';
 import { useEffect } from 'react';
+
 function TopAppNav() {
   const { pathname } = useLocation();
   if (!hasTopAppNav(pathname)) return null;
@@ -46,7 +72,8 @@ const AuthenticatedApp = () => {
       <div className={brandVisualEnabled ? "fixed inset-0 flex items-center justify-center hyp-scheduling-root" : "fixed inset-0 flex items-center justify-center m3-page"}>
         <div
           className={brandVisualEnabled ? "w-10 h-10 hyp-loader" : "w-10 h-10 rounded-full border-[3px] border-primary/20 border-t-primary animate-spin"}
-          style={brandVisualEnabled ? undefined : { boxShadow: "var(--brand-glow-purple)" }}          aria-hidden
+          style={brandVisualEnabled ? undefined : { boxShadow: "var(--brand-glow-purple)" }}
+          aria-hidden
         />
       </div>
     );
@@ -63,7 +90,8 @@ const AuthenticatedApp = () => {
   }
 
   return (
-    <div className={hypDemoAppShellClass()}>      <TopAppNav />
+    <div className={hypDemoAppShellClass()}>
+      <TopAppNav />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/breaks" element={<BreakScheduler />} />
@@ -77,7 +105,8 @@ const AuthenticatedApp = () => {
         <Route path="/crm" element={<DemoGate><CrmDashboard /></DemoGate>} />
         <Route path="/crm/lookup" element={<DemoGate><CrmLookupDeepLink /></DemoGate>} />
         <Route path="/crm/:id" element={<DemoGate><CrmCustomerDetail /></DemoGate>} />
-        <Route path="/remote-support" element={<RemoteSupportPage />} />        <Route
+        <Route path="/remote-support" element={<RemoteSupportPage />} />
+        <Route
           path="/remote-support/recordings/play"
           element={<DemoGate><DemoRecordingPlayPage /></DemoGate>}
         />
@@ -100,14 +129,16 @@ const AuthenticatedApp = () => {
               <DemoRecordingPlayPage backTo="/admin/recordings" />
             </AdminGate>
           }
-        />        <Route path="/reset-password" element={<ResetPassword />} />
+        />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="*" element={<PageNotFound />} />
       </Routes>
       <FloatingChatWidget />
       <FloatingKnowledgeWidget />
       <SoftphoneWidget />
       <AdminLocalhostLinksFloating />
-    </div>  );
+    </div>
+  );
 };
 
 function App() {
@@ -122,7 +153,8 @@ function App() {
                 <ChatUnreadProvider>
                   <ScreenShareSessionProvider>
                     <AuthenticatedApp />
-                  </ScreenShareSessionProvider>                </ChatUnreadProvider>
+                  </ScreenShareSessionProvider>
+                </ChatUnreadProvider>
               </TelephonyProvider>
             </ChatPanelProvider>
           </FloatingWidgetsLayerProvider>

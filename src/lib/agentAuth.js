@@ -51,7 +51,8 @@ function mapSupabaseAgent(row) {
     displayName: row.display_name,
     authUserId: row.auth_user_id,
     needsPasswordSetup: row.needs_password_setup !== false && !row.password_plain,
-    passwordPlain: row.password_plain || null,    active: row.active !== false && !row.deleted_at,
+    passwordPlain: row.password_plain || null,
+    active: row.active !== false && !row.deleted_at,
     blocked: row.blocked === true,
   };
 }
@@ -122,7 +123,8 @@ export function agentHasEmailLogin(agent) {
 }
 
 /** מחזיר רשומה לפי אימייל (כולל חסום/מחוק) */
-export async function resolveAgentByEmail(email) {  const normalized = String(email || "").trim().toLowerCase();
+export async function resolveAgentByEmail(email) {
+  const normalized = String(email || "").trim().toLowerCase();
   if (!normalized) return null;
 
   if (demoModeEnabled) {
@@ -157,7 +159,8 @@ function verifySupabaseAgentPassword(agent, password) {
   return agent.passwordPlain === String(password);
 }
 
-export async function agentLoginWithPassword(email, password) {  const agent = await resolveAgentByEmail(email);
+export async function agentLoginWithPassword(email, password) {
+  const agent = await resolveAgentByEmail(email);
   if (!canAgentAuthenticate(agent)) {
     return credentialsError();
   }
@@ -175,16 +178,14 @@ export async function agentLoginWithPassword(email, password) {  const agent = a
     return { ok: true, session };
   }
 
-  if (!verifySupabaseAgentPassword(agent, password)) {    return credentialsError();
+  if (!verifySupabaseAgentPassword(agent, password)) {
+    return credentialsError();
   }
 
   const session = {
     userId: agent.id,
     email: agent.email,
     displayName: agent.displayName,
-=======
-    authUserId: data.user?.id,
->>>>>>> 842dd9e (Initial commit)
   };
   setAgentSession(session);
   return { ok: true, session };
@@ -192,7 +193,8 @@ export async function agentLoginWithPassword(email, password) {  const agent = a
 
 export async function agentSetupPassword(email, password) {
   if (String(password).length < PASSWORD_MIN_LENGTH) {
-    return { ok: false, message: PASSWORD_MIN_LENGTH_MSG };  }
+    return { ok: false, message: PASSWORD_MIN_LENGTH_MSG };
+  }
 
   const agent = await resolveAgentByEmail(email);
   if (!canAgentAuthenticate(agent)) {
@@ -215,10 +217,12 @@ export async function agentSetupPassword(email, password) {
     password_plain: String(password),
     needs_password_setup: false,
   });
+
   const session = {
     userId: agent.id,
     email: agent.email,
-    displayName: agent.displayName,  };
+    displayName: agent.displayName,
+  };
   setAgentSession(session);
   return { ok: true, session };
 }
@@ -229,7 +233,8 @@ export async function agentRequestPasswordReset(email) {
     if (!canAgentAuthenticate(agent)) {
       return { ok: false, message: "אם האימייל ברשימה, פנה/י למנהל המערכת." };
     }
-    return { ok: true, message: "איפוס סיסמה מתבצע דרך מנהל המערכת בלבד." };  }
+    return { ok: true, message: "איפוס סיסמה מתבצע דרך מנהל המערכת בלבד." };
+  }
 
   const agent = await resolveAgentByEmail(email);
   if (!canAgentAuthenticate(agent)) {

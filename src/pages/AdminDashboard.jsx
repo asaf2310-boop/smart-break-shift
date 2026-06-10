@@ -15,7 +15,8 @@ import {
   LUNCH_BREAK_SLOTS,
 } from "@/constants/scheduling";
 import BackendConfigBanner from "@/components/BackendConfigBanner";
-import { customerChatEnabled, demoModeEnabled } from "@/api/demoClient";import AdminLocalhostLinksPanel from "@/components/admin/AdminLocalhostLinksPanel";
+import { customerChatEnabled, demoModeEnabled } from "@/api/demoClient";
+import AdminLocalhostLinksPanel from "@/components/admin/AdminLocalhostLinksPanel";
 import {
   BreakRegistrationError,
   createBreakRegistration,
@@ -53,7 +54,8 @@ export default function AdminDashboard() {
       createBreakRegistration(dataClient, data, {
         skipDeadlineCheck: true,
         allowNonTodayDate: true,
-      }),    onSuccess: () => {
+      }),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["break-registrations", dateStr] });
       setAddingTo(null);
       setNewName("");
@@ -161,7 +163,18 @@ export default function AdminDashboard() {
           <Link to="/admin/shifts" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">משמרות</Link>
           <Link to="/admin/training" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">הדרכה</Link>
           <Link to="/admin/recordings" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">הקלטות</Link>
-          <Link to="/admin/metrics" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">מדדים</Link>          <div className="text-center">
+          <Link to="/admin/metrics" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">מדדים</Link>
+          {demoModeEnabled && (
+            <Link to="/admin/knowledge" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">
+              ניהול ידע
+            </Link>
+          )}
+          {customerChatEnabled && (
+            <Link to="/admin/customer-chat" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">
+              בוט צ'אט לקוחות
+            </Link>
+          )}
+          <div className="text-center">
             <div className="flex items-center gap-3 justify-center mb-1">
               <div
                 className={hypHeaderIconClass(
@@ -209,8 +222,6 @@ export default function AdminDashboard() {
           </motion.div>
         )}
 
-=======
->>>>>>> 842dd9e (Initial commit)
         {isLoading ? (
           <div className="flex justify-center py-24">
             <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-400 rounded-full animate-spin" />
