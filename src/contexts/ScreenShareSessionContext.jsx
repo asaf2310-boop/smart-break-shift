@@ -46,7 +46,7 @@ export function ScreenShareSessionProvider({ children }) {
         String(s.agentName || "").trim() === String(agentName).trim()
     );
     if (active?.id) {
-      setBackgroundSessionId(active.id);
+      setBackgroundSessionId((prev) => (prev === active.id ? prev : active.id));
       return;
     }
     setBackgroundSessionId((prev) => {
@@ -199,7 +199,6 @@ export function ScreenShareSessionProvider({ children }) {
             )}
             <div className={viewOpen ? "overflow-y-auto p-4" : "w-[320px] h-[180px]"}>
               <ScreenShareAgentView
-                key={backgroundSessionId}
                 sessionId={backgroundSessionId}
                 agentName={agentName}
                 viewOpen={viewOpen}

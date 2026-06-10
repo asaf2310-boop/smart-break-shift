@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import Peer from "peerjs";
 import {
   Check,
   Circle,
@@ -50,6 +49,7 @@ import {
   markGuestStreamConnected,
   markAgentPeerReady,
   clearAgentPeerReady,
+  setAgentPeerId,
   listRecordingsForSession,
   markRecordingDownloaded,
   setRecordingActive,
@@ -58,16 +58,15 @@ import {
   updateRecordingMetadata,
 } from "@/lib/screenShareStore";
 import SessionFileShare from "@/components/remote/SessionFileShare";
-import { getPeerJsOptions, isTurnConfigured } from "@/lib/webrtcConfig";
+import { isTurnConfigured } from "@/lib/webrtcConfig";
 import {
-  beginAgentPeerSession,
-  commitAgentPeer,
-  forceDestroyAgentPeer,
+  openAgentPeer,
+  destroyAgentPeer,
   releaseAgentPeer,
   setAgentPeerActiveCall,
   setAgentPeerRemoteStream,
   waitForAgentPeer,
-} from "@/lib/agentPeerRegistry";
+} from "@/lib/agentPeerManager";
 import {
   answerIncomingCallRecvOnly,
   attachPeerConnectionDebugLogging,
@@ -147,9 +146,9 @@ function pickWebmMimeType() {
 }
 
 /**
- * PeerJS flow (documented):
- * - Agent opens first: `new Peer(sessionId)` and waits for incoming call
- * - Customer: `new Peer()` then `peer.call(sessionId, displayStream)`
+ * PeerJS flow:
+ * - Agent: `new Peer()` (random id) → publish agentPeerId to session + Supabase
+ * - Guest: wait for agentPeerId → `peer.call(agentPeerId, displayStream)`
  */
 export default function ScreenShareAgentView({
   sessionId,
@@ -179,9 +178,8 @@ export default function ScreenShareAgentView({
   const lastGuestPeerIdRef = useRef(null);
   const inboundStatsPollStopRef = useRef(null);
   const noCallTimerRef = useRef(null);
-  const unavailableIdRetriesRef = useRef(0);
   const viewOpenRef = useRef(viewOpen);
-  /** Set true only for explicit reconnect / unavailable-id retry — not on every remount */
+  /** Set true only for explicit reconnect — not on every remount */
   const forcePeerRecreateRef = useRef(false);
 
   const DEMO_AUTO_START_KEY = "demo-auto-start-recording";
@@ -663,7 +661,7 @@ export default function ScreenShareAgentView({
       /* ignore */
     }
     if (sessionId && peerRef.current) {
-      forceDestroyAgentPeer(sessionId, peerRef.current);
+      destroyAgentPeer(sessionId, peerRef.current);
     }
     callRef.current = null;
     peerRef.current = null;
@@ -741,7 +739,7 @@ export default function ScreenShareAgentView({
         noCallTimerRef.current = null;
         if (sessionEndedRef.current || callRef.current) return;
         const latest = getSession(sessionId);
-        const peerId = peer.id || sessionId;
+        const peerId = peer.id;
         if (latest?.consentAt) {
           console.warn(
             "[WebRTC:agent] No incoming call after guest consent",
@@ -789,7 +787,7 @@ export default function ScreenShareAgentView({
     if (forceRecreate) forcePeerRecreateRef.current = false;
 
     if (forceRecreate) {
-      forceDestroyAgentPeer(sessionId);
+      destroyAgentPeer(sessionId);
     }
 
     const resumedSession = getSession(sessionId);
@@ -797,7 +795,7 @@ export default function ScreenShareAgentView({
       resumedSession?.guestStreamConnectedAt || resumedSession?.consentAt
     );
 
-    const { entry, created, reusing } = beginAgentPeerSession(sessionId);
+    const { entry, created, reusing, inFlight } = openAgentPeer(sessionId);
     let peer = entry.peer;
     let disposed = false;
 
@@ -822,7 +820,10 @@ export default function ScreenShareAgentView({
         chunksRef.current = [];
         metadataPersistedRef.current = false;
       }
-      if (activePeer.open && sessionId) markAgentPeerReady(sessionId);
+      if (activePeer.open && sessionId) {
+        setAgentPeerId(sessionId, activePeer.id);
+        markAgentPeerReady(sessionId);
+      }
       handlers.scheduleNoCallWarning(activePeer);
     };
 
@@ -832,7 +833,7 @@ export default function ScreenShareAgentView({
           sessionId,
           connectionEpoch,
           open: peer.open,
-          peerId: peer.id || sessionId,
+          peerId: peer.id,
         });
         applyReuseState(peer);
         return () => {
@@ -843,7 +844,7 @@ export default function ScreenShareAgentView({
           releaseAgentPeer(sessionId, peer);
         };
       }
-      if (entry.creating) {
+      if (entry.creating || inFlight) {
         console.log("[WebRTC:agent] waiting for in-flight Peer", { sessionId });
         void (async () => {
           const waited = await waitForAgentPeer(sessionId);
@@ -851,7 +852,7 @@ export default function ScreenShareAgentView({
           console.log("[WebRTC:agent] reusing in-flight Peer", {
             sessionId,
             open: waited.open,
-            peerId: waited.id || sessionId,
+            peerId: waited.id,
           });
           applyReuseState(waited);
         })();
@@ -882,14 +883,13 @@ export default function ScreenShareAgentView({
     chunksRef.current = [];
     metadataPersistedRef.current = false;
 
-    console.log("[WebRTC:agent] creating Peer", {
+    console.log("[WebRTC:agent] openAgentPeer", {
       sessionId,
       connectionEpoch,
       viewOpen: viewOpenRef.current,
-      expectedGuestCallTarget: sessionId,
+      reusing,
+      created,
     });
-    peer = new Peer(getPeerJsOptions(sessionId));
-    commitAgentPeer(sessionId, peer);
     peerRef.current = peer;
 
     const syncPeerSessionRecord = () => {
@@ -902,16 +902,15 @@ export default function ScreenShareAgentView({
       entry.listenersAttached = true;
 
       peer.on("open", () => {
-        unavailableIdRetriesRef.current = 0;
-        const peerId = peer.id || sessionId;
+        const peerId = peer.id;
         console.log("[WebRTC:agent] peer open", {
           sessionId,
           peerId,
           viewOpen: viewOpenRef.current,
-          matchesSession: peerId === sessionId,
         });
         setReconnecting(false);
-        if (sessionId && peer.open) {
+        if (sessionId && peer.open && peerId) {
+          setAgentPeerId(sessionId, peerId);
           markAgentPeerReady(sessionId);
           syncPeerSessionRecord();
         }
@@ -958,7 +957,7 @@ export default function ScreenShareAgentView({
         peerHandlersRef.current.clearNoCallTimer();
         console.log("[WebRTC:agent] call received", {
           sessionId,
-          agentPeerId: peer.id || sessionId,
+          agentPeerId: peer.id,
           guestPeerId: call.peer,
         });
         if (sessionId) {
@@ -1122,30 +1121,11 @@ export default function ScreenShareAgentView({
           peerHandlersRef.current.handleSessionEndedByGuest();
           return;
         }
-        if (err?.type === "unavailable-id" && unavailableIdRetriesRef.current < 3) {
-          unavailableIdRetriesRef.current += 1;
-          clearAgentPeerReady(sessionId);
-          forceDestroyAgentPeer(sessionId, peer);
-          console.warn(
-            "[WebRTC:agent] unavailable-id — retrying peer registration",
-            { sessionId, attempt: unavailableIdRetriesRef.current }
-          );
-          forcePeerRecreateRef.current = true;
-          window.setTimeout(
-            () => setConnectionEpoch((n) => n + 1),
-            1500 * unavailableIdRetriesRef.current
-          );
-          return;
-        }
         if (sessionId) clearAgentPeerReady(sessionId);
         peerHandlersRef.current.stopRecordingInternal();
         setStatus("error");
         setReconnecting(false);
-        const msg =
-          err?.type === "unavailable-id"
-            ? "מזהה הסשן תפוס — לחצו «חזור לצפייה» או סגרו חלונות אחרים"
-            : err?.message || "שגיאת PeerJS";
-        setErrorDetail(msg);
+        setErrorDetail(err?.message || "שגיאת PeerJS");
       });
     }
 
@@ -1305,11 +1285,12 @@ export default function ScreenShareAgentView({
       /* ignore */
     }
     if (sessionId && peerRef.current) {
-      forceDestroyAgentPeer(sessionId, peerRef.current);
+      destroyAgentPeer(sessionId, peerRef.current);
     }
     callRef.current = null;
     peerRef.current = null;
     setStatus("waiting");
+    clearAgentPeerReady(sessionId);
     forcePeerRecreateRef.current = true;
     setConnectionEpoch((n) => n + 1);
     toast({
@@ -1556,7 +1537,7 @@ export default function ScreenShareAgentView({
         /* ignore */
       }
       if (sessionId && peerRef.current) {
-        forceDestroyAgentPeer(sessionId, peerRef.current);
+        destroyAgentPeer(sessionId, peerRef.current);
       }
       if (sessionId) endSession(sessionId, { endedReason: "agent_ended" });
       setStatus("ended");

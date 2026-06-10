@@ -39,6 +39,7 @@ function mapScreenShareRow(session, recordingCount = null) {
     recording_count: recCount,
     rust_desk_id: null,
     short_code: session.shortCode || null,
+    agent_peer_id: session.agentPeerId || null,
     updated_at: new Date().toISOString(),
   };
 }
@@ -166,7 +167,7 @@ export async function fetchCloudSessionById(sessionId) {
     const { data, error } = await supabase
       .from("support_sessions")
       .select(
-        "id, status, consent_at, recording_consent_at, recording_active_at, updated_at"
+        "id, status, consent_at, recording_consent_at, recording_active_at, agent_peer_id, updated_at"
       )
       .eq("id", sessionId)
       .maybeSingle();

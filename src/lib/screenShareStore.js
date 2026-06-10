@@ -147,11 +147,26 @@ export function markAgentPeerReady(id) {
   });
 }
 
+/** מזהה PeerJS אקראי של הנציג — הלקוח מתקשר אליו (לא ל-sessionId) */
+export function setAgentPeerId(id, peerId) {
+  const pid = String(peerId || "").trim();
+  if (!pid) return getSession(id);
+  const session = getSession(id);
+  if (!session || session.status === "ended") return session;
+  const patch = { agentPeerId: pid };
+  if (!session.agentPeerReadyAt) {
+    patch.agentPeerReadyAt = new Date().toISOString();
+  }
+  if (session.agentPeerId === pid && session.agentPeerReadyAt) return session;
+  return updateSession(id, patch);
+}
+
 /** הנציג סגר/הרס Peer — לא לסמן «מוכן לקישור» עד peer.on('open') מחדש */
 export function clearAgentPeerReady(id) {
   const session = getSession(id);
-  if (!session || session.status === "ended" || !session.agentPeerReadyAt) return session;
-  return updateSession(id, { agentPeerReadyAt: null });
+  if (!session || session.status === "ended") return session;
+  if (!session.agentPeerReadyAt && !session.agentPeerId) return session;
+  return updateSession(id, { agentPeerReadyAt: null, agentPeerId: null });
 }
 
 export const REMOTE_SUPPORT_OPEN_EVENT = "remote-support-open-request";
@@ -322,6 +337,7 @@ export function createScreenSession({
     shortCodeCloudSynced: null,
     agentPeerOpenedAt: null,
     agentPeerReadyAt: null,
+    agentPeerId: null,
     guestStreamConnectedAt: null,
     crmCustomerId: crmCustomerId || null,
     agentName: String(agentName || getStoredAgentName() || "").trim(),
@@ -383,7 +399,7 @@ export function applyGuestPeerSync(id, { consentAt, recordingConsentAt } = {}) {
   return updateSession(id, patch);
 }
 
-/** Production: merge guest consent from Supabase when guest is on another device. */
+/** Production: merge guest consent + agent peer id from Supabase (cross-device). */
 export async function pullSessionFieldsFromCloud(id) {
   if (!id || !cloudSessionSyncEnabled()) return getSession(id);
   const row = await fetchCloudSessionById(id);
@@ -391,12 +407,56 @@ export async function pullSessionFieldsFromCloud(id) {
   const session = getSession(id);
   if (!session || session.status === "ended") return session;
   if (row.status === "ended") return session;
-  return (
-    applyGuestPeerSync(id, {
-      consentAt: row.consent_at || null,
-      recordingConsentAt: row.recording_consent_at || null,
-    }) || session
-  );
+
+  let working = session;
+  const consentPatch = {};
+  if (row.consent_at && !session.consentAt) consentPatch.consentAt = row.consent_at;
+  if (row.recording_consent_at && !session.recordingConsentAt) {
+    consentPatch.recordingConsentAt = row.recording_consent_at;
+  }
+  if (Object.keys(consentPatch).length > 0) {
+    working = applyGuestPeerSync(id, consentPatch) || working;
+  }
+
+  const cloudPeerId = String(row.agent_peer_id || "").trim();
+  if (cloudPeerId && cloudPeerId !== working.agentPeerId) {
+    working = setAgentPeerId(id, cloudPeerId) || working;
+  }
+
+  return working;
+}
+
+function sleepMs(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+/**
+ * Guest waits for agentPeerId in local store + Supabase before peer.call(agentPeerId).
+ * @param {string} id
+ * @param {{ timeoutMs?: number, intervalMs?: number }} [options]
+ */
+export async function waitForAgentPeerId(id, { timeoutMs = 45000, intervalMs = 500 } = {}) {
+  if (!id) return null;
+  const started = Date.now();
+
+  while (Date.now() - started < timeoutMs) {
+    const local = getSession(id);
+    const localPeerId = String(local?.agentPeerId || "").trim();
+    if (localPeerId) return localPeerId;
+
+    if (cloudSessionSyncEnabled()) {
+      await pullSessionFieldsFromCloud(id);
+      const afterCloud = getSession(id);
+      const cloudPeerId = String(afterCloud?.agentPeerId || "").trim();
+      if (cloudPeerId) return cloudPeerId;
+    }
+
+    await sleepMs(intervalMs);
+  }
+
+  return String(getSession(id)?.agentPeerId || "").trim() || null;
 }
 
 /** Poll cloud for guest consent while an agent session is active (cross-device). */
@@ -656,6 +716,7 @@ export function endSession(id, { endedReason = "agent_ended" } = {}) {
     shortCodeCloudSynced: null,
     agentPeerOpenedAt: null,
     agentPeerReadyAt: null,
+    agentPeerId: null,
     guestStreamConnectedAt: null,
   });
 }
@@ -680,6 +741,7 @@ export function endAllActiveScreenSessions({ agentName } = {}) {
       recordingActiveAt: null,
       agentPeerOpenedAt: null,
       agentPeerReadyAt: null,
+      agentPeerId: null,
       guestStreamConnectedAt: null,
     };
     cloudSyncSession(ended);

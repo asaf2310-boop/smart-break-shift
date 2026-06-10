@@ -28,6 +28,7 @@ import {
   resolveGuestSession,
   screenShareFeaturesAvailable,
   subscribeScreenShare,
+  waitForAgentPeerId,
 } from "@/lib/screenShareStore";
 import { GUEST_LINK_ERROR, messageForGuestLinkError } from "@/lib/shortGuestLink";
 import { demoModeEnabled } from "@/api/demoClient";
@@ -175,8 +176,10 @@ export default function ScreenShareGuestPage() {
   const sendPeerDataMessage = useCallback((payload) => {
     const peer = peerRef.current;
     if (!peer || peer.destroyed || !sessionId) return;
+    const agentPeerId = resolveGuestSession(sessionId, bootstrapKey)?.agentPeerId;
+    if (!agentPeerId) return;
     try {
-      const conn = peer.connect(sessionId, { reliable: true });
+      const conn = peer.connect(agentPeerId, { reliable: true });
       const sendAndClose = () => {
         try {
           conn.send(payload);
@@ -206,7 +209,7 @@ export default function ScreenShareGuestPage() {
     } catch {
       /* ignore */
     }
-  }, [sessionId]);
+  }, [sessionId, bootstrapKey]);
 
   const notifyAgentSessionEnded = useCallback(
     (reason) => {
@@ -259,8 +262,13 @@ export default function ScreenShareGuestPage() {
   );
 
   const placeCall = useCallback(
-    (peer, stream) => {
+    (peer, stream, agentPeerId) => {
       if (!sessionId || !stream) return false;
+      const targetPeerId = String(agentPeerId || "").trim();
+      if (!targetPeerId) {
+        setError("ממתין לחיבור הנציג — ודאו שהנציג פתח את מסך הצפייה");
+        return false;
+      }
       const videoTrack = stream.getVideoTracks()[0];
       if (!videoTrack || videoTrack.readyState !== "live") {
         setError("שיתוף המסך לא פעיל — בחרו מסך לשיתוף שוב");
@@ -268,14 +276,12 @@ export default function ScreenShareGuestPage() {
       }
       videoTrack.enabled = true;
       logOutboundVideoTrack(stream, { reason: "before_place_call", sessionId });
-      const agentPeerId = sessionId;
       console.log("[WebRTC:guest] placeCall", {
         sessionId,
-        agentPeerId,
+        agentPeerId: targetPeerId,
         guestPeerId: peer.id || "(pending)",
-        targetMatchesSession: agentPeerId === sessionId,
       });
-      const call = peer.call(agentPeerId, stream);
+      const call = peer.call(targetPeerId, stream);
       if (!call) {
         setError("לא ניתן לפתוח שיחה לנציג — ודאו שהנציג פתח את מסך הצפייה");
         return false;
@@ -315,10 +321,15 @@ export default function ScreenShareGuestPage() {
         }
         setError("החיבור לנציג נותק — מנסה להתחבר מחדש…");
         clearReconnectTimer();
-        reconnectTimerRef.current = setTimeout(() => {
+        reconnectTimerRef.current = setTimeout(async () => {
           reconnectTimerRef.current = null;
-          if (sharingRef.current && isStreamAlive()) {
-            placeCall(peer, stream);
+          if (!sharingRef.current || !isStreamAlive()) return;
+          const latestAgentPeerId = await waitForAgentPeerId(sessionId, {
+            timeoutMs: 15000,
+            intervalMs: 500,
+          });
+          if (latestAgentPeerId) {
+            placeCall(peer, stream, latestAgentPeerId);
           }
         }, 2000);
       });
@@ -338,10 +349,15 @@ export default function ScreenShareGuestPage() {
         }
         setError("החיבור לנציג נותק — מנסה להתחבר מחדש…");
         clearReconnectTimer();
-        reconnectTimerRef.current = setTimeout(() => {
+        reconnectTimerRef.current = setTimeout(async () => {
           reconnectTimerRef.current = null;
-          if (sharingRef.current && isStreamAlive()) {
-            placeCall(peer, stream);
+          if (!sharingRef.current || !isStreamAlive()) return;
+          const latestAgentPeerId = await waitForAgentPeerId(sessionId, {
+            timeoutMs: 15000,
+            intervalMs: 500,
+          });
+          if (latestAgentPeerId) {
+            placeCall(peer, stream, latestAgentPeerId);
           }
         }, 2000);
       });
@@ -370,7 +386,16 @@ export default function ScreenShareGuestPage() {
         }
         callRef.current = null;
 
-        if (!placeCall(peer, stream)) return false;
+        const agentPeerId = await waitForAgentPeerId(sessionId, {
+          timeoutMs: attempt === 1 ? 45000 : 10000,
+          intervalMs: 500,
+        });
+        if (!agentPeerId) {
+          setError("הנציג עדיין לא מוכן — ודאו שהנציג פתח את מסך הצפייה");
+          return false;
+        }
+
+        if (!placeCall(peer, stream, agentPeerId)) return false;
 
         const pc = callRef.current?.peerConnection;
         if (!pc) {
@@ -404,7 +429,7 @@ export default function ScreenShareGuestPage() {
       }
       return false;
     },
-    [placeCall]
+    [sessionId, placeCall]
   );
 
   const bindPeerAgentEndListener = useCallback(
