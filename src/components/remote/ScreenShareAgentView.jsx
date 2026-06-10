@@ -139,8 +139,30 @@ function pickWebmMimeType() {
 
 /** One agent Peer per sessionId on PeerServer — prevents duplicate registration */
 const agentPeerRegistry = new Map();
+/** Deferred destroy — survives React remount / StrictMode double-effect without killing Peer */
+const agentPeerDestroyTimers = new Map();
+
+function cancelDeferredPeerDestroy(sessionId) {
+  const timer = agentPeerDestroyTimers.get(sessionId);
+  if (timer != null) {
+    window.clearTimeout(timer);
+    agentPeerDestroyTimers.delete(sessionId);
+  }
+}
+
+function scheduleDeferredPeerDestroy(sessionId, peer, delayMs = 250) {
+  cancelDeferredPeerDestroy(sessionId);
+  agentPeerDestroyTimers.set(
+    sessionId,
+    window.setTimeout(() => {
+      agentPeerDestroyTimers.delete(sessionId);
+      destroyRegistryPeer(sessionId, peer);
+    }, delayMs)
+  );
+}
 
 function destroyRegistryPeer(sessionId, peer) {
+  cancelDeferredPeerDestroy(sessionId);
   const registered = agentPeerRegistry.get(sessionId);
   if (registered === peer) agentPeerRegistry.delete(sessionId);
   if (!peer || peer.destroyed) return;
@@ -786,6 +808,7 @@ export default function ScreenShareAgentView({
     if (!sessionId) return undefined;
     const handlers = peerHandlersRef.current;
     sessionEndedRef.current = false;
+    cancelDeferredPeerDestroy(sessionId);
 
     const resumedSession = getSession(sessionId);
     const guestAlreadyLinked = Boolean(
@@ -802,11 +825,33 @@ export default function ScreenShareAgentView({
     chunksRef.current = [];
     metadataPersistedRef.current = false;
 
+    const forceRecreate = connectionEpoch > 0;
     const existingPeer = agentPeerRegistry.get(sessionId);
+    if (
+      !forceRecreate &&
+      existingPeer &&
+      !existingPeer.destroyed &&
+      existingPeer.open
+    ) {
+      console.log("[WebRTC:agent] reusing existing open Peer", {
+        sessionId,
+        connectionEpoch,
+        peerId: existingPeer.id || sessionId,
+      });
+      peerRef.current = existingPeer;
+      if (sessionId) markAgentPeerReady(sessionId);
+      handlers.scheduleNoCallWarning(existingPeer);
+      return () => {
+        handlers.clearNoCallTimer();
+        peerRef.current = null;
+      };
+    }
+
     if (existingPeer && !existingPeer.destroyed) {
       console.warn("[WebRTC:agent] destroying stale peer before recreate", {
         sessionId,
         connectionEpoch,
+        forceRecreate,
       });
       destroyRegistryPeer(sessionId, existingPeer);
     }
@@ -1080,13 +1125,14 @@ export default function ScreenShareAgentView({
       } catch {
         /* ignore */
       }
-      destroyRegistryPeer(sessionId, peer);
-      peerRef.current = null;
       callRef.current = null;
+      peerRef.current = null;
       remoteStreamRef.current = null;
       hasRemoteStreamRef.current = false;
       setHasRemoteStream(false);
       if (videoRef.current) videoRef.current.srcObject = null;
+      // Defer destroy so React remount / StrictMode does not unregister Peer ID twice.
+      scheduleDeferredPeerDestroy(sessionId, peer);
     };
   }, [sessionId, connectionEpoch]);
 
