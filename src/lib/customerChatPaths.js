@@ -7,6 +7,19 @@ export function isCustomerChatGuestPath(pathname, search = "") {
   return false;
 }
 
+/** Screen share / remote support guest — no agent chrome or internal chat polling. */
+export function isRemoteSupportGuestPath(pathname) {
+  if (pathname.startsWith("/support/screen/")) return true;
+  if (pathname.startsWith("/support/consent/")) return true;
+  if (pathname.startsWith("/j/")) return true;
+  return false;
+}
+
+/** Public guest flows that should not load agent widgets or Supabase chat tables. */
+export function isGuestChromeHiddenPath(pathname, search = "") {
+  return isCustomerChatGuestPath(pathname, search) || isRemoteSupportGuestPath(pathname);
+}
+
 export function isAgentCustomerChatPath(pathname) {
   return pathname === "/customer-chat";
 }

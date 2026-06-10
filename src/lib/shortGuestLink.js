@@ -49,7 +49,12 @@ export function buildShortGuestUrl(session, { kind = "screen", origin } = {}) {
   const base = (origin || getPublicAppOrigin()).replace(/\/$/, "");
   if (!session?.id) return "";
   if (session.status === "ended") return "";
-  if (session.shortCode && cloudSessionSyncEnabled()) {
+  // Short /j/{code} requires Supabase lookup on the guest device — only after cloud verify.
+  if (
+    session.shortCode &&
+    cloudSessionSyncEnabled() &&
+    session.shortCodeCloudSynced
+  ) {
     return `${base}/j/${session.shortCode}`;
   }
   const token = encodeCompactGuestToken(session, kind);
