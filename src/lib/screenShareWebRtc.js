@@ -165,3 +165,79 @@ export function requestGuestVideoRetry(agentPeer, guestPeerId) {
     at: Date.now(),
   });
 }
+
+/**
+ * @param {RTCPeerConnection | null | undefined} pc
+ * @param {number} [timeoutMs]
+ */
+export function waitForIceConnected(pc, timeoutMs = 20000) {
+  return new Promise((resolve) => {
+    if (!pc) {
+      resolve(false);
+      return;
+    }
+    let settled = false;
+    const finish = (ok) => {
+      if (settled) return;
+      settled = true;
+      pc.removeEventListener("iceconnectionstatechange", onIce);
+      pc.removeEventListener("connectionstatechange", onConn);
+      window.clearTimeout(timer);
+      resolve(ok);
+    };
+    const onIce = () => {
+      const ice = pc.iceConnectionState;
+      if (ice === "connected" || ice === "completed") finish(true);
+      if (ice === "failed") finish(false);
+    };
+    const onConn = () => {
+      if (pc.connectionState === "connected") finish(true);
+      if (pc.connectionState === "failed") finish(false);
+    };
+    onIce();
+    pc.addEventListener("iceconnectionstatechange", onIce);
+    pc.addEventListener("connectionstatechange", onConn);
+    const timer = window.setTimeout(() => finish(false), timeoutMs);
+  });
+}
+
+/**
+ * Answer an incoming screen-share call as receive-only (agent side).
+ * @param {import('peerjs').MediaConnection} call
+ */
+export function answerIncomingCallRecvOnly(call) {
+  try {
+    call.answer();
+  } catch {
+    try {
+      call.answer(new MediaStream());
+    } catch {
+      /* ignore */
+    }
+  }
+  const pc = call.peerConnection;
+  if (!pc) return;
+  try {
+    for (const transceiver of pc.getTransceivers()) {
+      if (transceiver.sender?.track) continue;
+      if (transceiver.direction === "sendrecv") {
+        transceiver.direction = "recvonly";
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * @param {RTCPeerConnection | null | undefined} pc
+ */
+export function tryRestartIce(pc) {
+  if (!pc?.restartIce) return false;
+  try {
+    pc.restartIce();
+    return true;
+  } catch {
+    return false;
+  }
+}

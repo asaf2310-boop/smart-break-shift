@@ -59,8 +59,10 @@ import {
 import SessionFileShare from "@/components/remote/SessionFileShare";
 import { getPeerJsOptions, isTurnConfigured } from "@/lib/webrtcConfig";
 import {
+  answerIncomingCallRecvOnly,
   describeIcePath,
   requestGuestVideoRetry,
+  tryRestartIce,
   watchRemoteVideoFromPeerConnection,
   watchVideoTrackActivation,
 } from "@/lib/screenShareWebRtc";
@@ -459,10 +461,10 @@ export default function ScreenShareAgentView({
       if (tabHidden && status === "connected") return PEER_STATUS_LABELS.paused;
       return PEER_STATUS_LABELS.connected;
     }
-    if (status === "connecting") return PEER_STATUS_LABELS.connecting;
     if (liveSession?.guestStreamConnectedAt) {
       return "לקוח מחובר — ממתין לווידאו";
     }
+    if (status === "connecting") return PEER_STATUS_LABELS.connecting;
     if (liveSession?.consentAt) {
       return "לקוח אישר — ממתין לשיתוף מסך";
     }
@@ -774,9 +776,13 @@ export default function ScreenShareAgentView({
 
       const pc = call.peerConnection;
       if (pc) {
-        stopWatchReceivers = watchRemoteVideoFromPeerConnection(pc, (stream) => {
-          attachRemoteStream(stream);
-        });
+        stopWatchReceivers = watchRemoteVideoFromPeerConnection(
+          pc,
+          (stream) => {
+            attachRemoteStream(stream);
+          },
+          { attempts: 80, intervalMs: 500 }
+        );
 
         const onIceStateChange = () => {
           if (sessionEndedRef.current) return;
@@ -827,13 +833,25 @@ export default function ScreenShareAgentView({
       if (guestPeerId) lastGuestPeerIdRef.current = guestPeerId;
       scheduleGuestVideoRetries(guestPeerId);
 
-      try {
-        call.answer(new MediaStream());
-      } catch {
-        call.answer();
-      }
+      answerIncomingCallRecvOnly(call);
       setStatus("connecting");
       setReconnecting(false);
+
+      if (pc && guestPeerId) {
+        window.setTimeout(() => {
+          if (hasRemoteStreamRef.current || sessionEndedRef.current) return;
+          void describeIcePath(pc).then((info) => {
+            if (hasRemoteStreamRef.current || sessionEndedRef.current) return;
+            if (info?.bytesReceived > 0) return;
+            const ice = pc.iceConnectionState;
+            if (ice === "connected" || ice === "completed") {
+              tryRestartIce(pc);
+            }
+            requestGuestVideoRetry(peerRef.current, guestPeerId);
+            scheduleGuestVideoRetries(guestPeerId);
+          });
+        }, 6000);
+      }
     });
 
     peer.on("error", (err) => {

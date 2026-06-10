@@ -153,8 +153,6 @@ export function getPeerJsOptions(peerId) {
       iceServers: getDefaultIceServers(),
       iceTransportPolicy: getIceTransportPolicy(),
       iceCandidatePoolSize: 10,
-      bundlePolicy: "max-bundle",
-      rtcpMuxPolicy: "require",
     },
   };
 

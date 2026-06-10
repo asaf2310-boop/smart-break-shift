@@ -34,6 +34,13 @@ import { demoModeEnabled } from "@/api/demoClient";
 import { m3PageClass } from "@/lib/hypPage";
 import SessionFileShare from "@/components/remote/SessionFileShare";
 import { getPeerJsOptions } from "@/lib/webrtcConfig";
+import { waitForIceConnected } from "@/lib/screenShareWebRtc";
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
 
 const GUEST_INFO_BANNER = demoModeEnabled
   ? "דמו — שיתוף מסך בדפדפן (צפייה בלבד). מומלץ Chrome או Edge. לפרודקשן: PeerServer עצמי."
@@ -321,6 +328,38 @@ export default function ScreenShareGuestPage() {
     ]
   );
 
+  const connectMediaToAgent = useCallback(
+    async (peer, stream) => {
+      const maxAttempts = 8;
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+          callRef.current?.close();
+        } catch {
+          /* ignore */
+        }
+        callRef.current = null;
+
+        if (!placeCall(peer, stream)) return false;
+
+        const pc = callRef.current?.peerConnection;
+        if (!pc) {
+          if (attempt < maxAttempts) await sleep(1500 * attempt);
+          continue;
+        }
+
+        const iceOk = await waitForIceConnected(pc, 20000);
+        if (iceOk) return true;
+
+        if (attempt < maxAttempts) {
+          setError(`מנסה להתחבר לנציג (ניסיון ${attempt + 1}/${maxAttempts})…`);
+          await sleep(2000 * attempt);
+        }
+      }
+      return false;
+    },
+    [placeCall]
+  );
+
   const bindPeerAgentEndListener = useCallback(
     (peer) => {
       if (!peer) return;
@@ -333,18 +372,12 @@ export default function ScreenShareGuestPage() {
           }
           if (data?.type === "request_video_retry") {
             if (!sharingRef.current || !isStreamAlive()) return;
-            try {
-              callRef.current?.close();
-            } catch {
-              /* ignore */
-            }
-            callRef.current = null;
-            placeCall(peer, streamRef.current);
+            void connectMediaToAgent(peer, streamRef.current);
           }
         });
       });
     },
-    [handleEndedByAgent, isStreamAlive, placeCall]
+    [handleEndedByAgent, isStreamAlive, connectMediaToAgent]
   );
 
   const reconnectToAgent = useCallback(async () => {
@@ -378,14 +411,20 @@ export default function ScreenShareGuestPage() {
       });
     }
 
-    await placeCall(peer, streamRef.current);
+    const connected = await connectMediaToAgent(peer, streamRef.current);
+    if (!connected) {
+      setError(
+        "לא הצלחנו לחבר את שיתוף המסך לנציג — ודאו שהנציג פתח את סשן הצפייה ולחצו «שתף מסך» שוב"
+      );
+      return;
+    }
     notifyAgentGuestReady(resolveGuestSession(sessionId, bootstrapKey));
     setError("");
   }, [
     sessionId,
     bootstrapKey,
     isStreamAlive,
-    placeCall,
+    connectMediaToAgent,
     notifyAgentGuestReady,
     bindPeerAgentEndListener,
   ]);
@@ -527,7 +566,12 @@ export default function ScreenShareGuestPage() {
       });
 
       sharingRef.current = true;
-      await placeCall(peer, stream);
+      const connected = await connectMediaToAgent(peer, stream);
+      if (!connected) {
+        throw new Error(
+          "לא הצלחנו לחבר את שיתוף המסך לנציג — ודאו שהנציג פתח את סשן הצפייה לפני השיתוף"
+        );
+      }
       notifyAgentGuestReady(resolveGuestSession(sessionId, bootstrapKey));
       setShared(true);
       setError("");
