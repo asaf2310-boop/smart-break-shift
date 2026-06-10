@@ -1,7 +1,9 @@
 /**
- * Singleton agent Peer per sessionId — survives React remount / in-flight registration.
- * One Peer registers on PeerServer; remount reuses the same instance instead of recreating.
+ * Singleton agent Peer per sessionId — random PeerJS id, survives React remount.
+ * Guest calls peer.call(agentPeerId) where agentPeerId is published via session store + Supabase.
  */
+import Peer from "peerjs";
+import { getPeerJsOptions } from "@/lib/webrtcConfig";
 
 /** @typedef {{ peer: import('peerjs').Peer | null, creating: boolean, listenersAttached: boolean, activeCall: import('peerjs').MediaConnection | null, remoteStream: MediaStream | null, refCount: number }} AgentPeerEntry */
 
@@ -24,7 +26,7 @@ export function scheduleDeferredPeerDestroy(sessionId, peer, delayMs = 2000) {
     sessionId,
     window.setTimeout(() => {
       destroyTimers.delete(sessionId);
-      forceDestroyAgentPeer(sessionId, peer);
+      destroyAgentPeer(sessionId, peer);
     }, delayMs)
   );
 }
@@ -33,7 +35,7 @@ export function scheduleDeferredPeerDestroy(sessionId, peer, delayMs = 2000) {
  * @param {string} sessionId
  * @param {import('peerjs').Peer} [expectedPeer]
  */
-export function forceDestroyAgentPeer(sessionId, expectedPeer) {
+export function destroyAgentPeer(sessionId, expectedPeer) {
   cancelDeferredPeerDestroy(sessionId);
   const entry = entries.get(sessionId);
   if (!entry) return;
@@ -58,23 +60,22 @@ export function getAgentPeerEntry(sessionId) {
 }
 
 /**
- * Reserve or reuse a peer slot. Sets `creating=true` synchronously so a second
- * React mount cannot call `new Peer(sessionId)` before the first registers.
+ * Open or reuse the agent Peer for a session (random id — no sessionId collision).
  * @param {string} sessionId
- * @returns {{ entry: AgentPeerEntry, created: boolean, reusing: boolean }}
+ * @returns {{ peer: import('peerjs').Peer | null, entry: AgentPeerEntry, reusing: boolean, created: boolean, inFlight?: boolean }}
  */
-export function beginAgentPeerSession(sessionId) {
+export function openAgentPeer(sessionId) {
   cancelDeferredPeerDestroy(sessionId);
   let entry = entries.get(sessionId);
 
   if (entry?.peer && !entry.peer.destroyed) {
     entry.refCount += 1;
-    return { entry, created: false, reusing: true };
+    return { peer: entry.peer, entry, reusing: true, created: false };
   }
 
   if (entry?.creating) {
     entry.refCount += 1;
-    return { entry, created: false, reusing: true };
+    return { peer: entry.peer, entry, reusing: true, created: false, inFlight: true };
   }
 
   entry = {
@@ -86,46 +87,12 @@ export function beginAgentPeerSession(sessionId) {
     refCount: 1,
   };
   entries.set(sessionId, entry);
-  return { entry, created: true, reusing: false };
-}
 
-/**
- * @param {string} sessionId
- * @param {import('peerjs').Peer} peer
- * @returns {AgentPeerEntry}
- */
-export function commitAgentPeer(sessionId, peer) {
-  let entry = entries.get(sessionId);
-  if (!entry) {
-    entry = {
-      peer,
-      creating: false,
-      listenersAttached: false,
-      activeCall: null,
-      remoteStream: null,
-      refCount: 1,
-    };
-    entries.set(sessionId, entry);
-    return entry;
-  }
+  const peer = new Peer(getPeerJsOptions());
   entry.peer = peer;
   entry.creating = false;
-  return entry;
-}
 
-/** @deprecated use beginAgentPeerSession */
-export function acquireAgentPeer(sessionId) {
-  const { entry, created, reusing } = beginAgentPeerSession(sessionId);
-  return {
-    peer: entry.peer,
-    entry,
-    created: created && !reusing,
-  };
-}
-
-/** @deprecated use commitAgentPeer */
-export function registerAgentPeer(sessionId, peer) {
-  return commitAgentPeer(sessionId, peer);
+  return { peer, entry, reusing: false, created: true };
 }
 
 /**
