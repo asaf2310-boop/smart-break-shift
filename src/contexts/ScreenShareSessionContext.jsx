@@ -11,7 +11,7 @@ import { Minimize2, MonitorPlay, X } from "lucide-react";
 import { remoteSupportEnabled } from "@/api/demoClient";
 import { getStoredAgentName } from "@/constants/scheduling";
 import { Button } from "@/components/ui/button";
-import { toast } from "@/components/ui/use-toast";
+import { dismissToastsByDedupeKey, toast } from "@/components/ui/use-toast";
 import ScreenShareAgentView from "@/components/remote/ScreenShareAgentView";
 import {
   REMOTE_SUPPORT_OPEN_EVENT,
@@ -70,7 +70,26 @@ export function ScreenShareSessionProvider({ children }) {
   useEffect(() => {
     if (!remoteSupportEnabled || !agentName) return undefined;
 
+    const dismissGuestStreamToast = (sessionId) => {
+      if (!sessionId) return;
+      dismissToastsByDedupeKey(`guest-stream-${sessionId}`);
+      notifiedRef.current.delete(`${sessionId}:stream`);
+    };
+
     const checkGuestConnected = () => {
+      for (const key of [...notifiedRef.current]) {
+        const sessionId = key.replace(/:stream$/, "");
+        const s = getSession(sessionId);
+        if (
+          !s ||
+          s.status === "ended" ||
+          !s.guestStreamConnectedAt ||
+          String(s.agentName || "").trim() !== String(agentName).trim()
+        ) {
+          dismissGuestStreamToast(sessionId);
+        }
+      }
+
       const sessions = listSessions().filter(
         (s) =>
           s.status === "active" &&
@@ -119,6 +138,7 @@ export function ScreenShareSessionProvider({ children }) {
   const handleEnded = useCallback((sessionId) => {
     setBackgroundSessionId((prev) => (prev === sessionId ? null : prev));
     setViewOpen(false);
+    dismissToastsByDedupeKey(`guest-stream-${sessionId}`);
     notifiedRef.current.delete(`${sessionId}:stream`);
   }, []);
 

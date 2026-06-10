@@ -6,7 +6,7 @@ import { syncScreenShareSessionToCloudAwait } from "@/lib/supportSessionsSync";
 import {
   buildRecordingStoragePath,
   cloudRecordingUploadEnabled,
-  isStorageBucketMissingError,
+  formatRecordingStorageError,
   SCREEN_RECORDINGS_BUCKET,
   upsertCloudRecordingMeta,
 } from "@/lib/screenRecordingsSync";
@@ -103,9 +103,22 @@ export async function uploadRecordingToCloud(blob, meta = {}, options = {}) {
 
   if (session) {
     const recCount = (session.recordings || []).length;
-    await syncScreenShareSessionToCloudAwait(session, {
+    const syncResult = await syncScreenShareSessionToCloudAwait(session, {
       recordingCount: Math.max(recCount, 1),
     });
+    if (!syncResult.ok) {
+      const message =
+        syncResult.error?.includes("support_sessions") ||
+        syncResult.error?.includes("does not exist")
+          ? "טבלת support_sessions חסרה — הריצו supabase/support_sessions.sql"
+          : syncResult.error || "לא ניתן לסנכרן את הסשן לפני העלאה";
+      updateRecordingMetadata(sessionId, recordingId, {
+        cloudUploadStatus: "failed",
+        cloudUploadError: message,
+      });
+      onStatus?.("failed");
+      return { ok: false, message, uploadStatus: "failed" };
+    }
   }
 
   const patchUploading = {
@@ -142,10 +155,7 @@ export async function uploadRecordingToCloud(blob, meta = {}, options = {}) {
     });
 
   if (uploadError) {
-    const bucketMissing = isStorageBucketMissingError(uploadError);
-    const message = bucketMissing
-      ? `bucket «${SCREEN_RECORDINGS_BUCKET}» לא קיים — הריצו supabase/screen_recordings_storage.sql`
-      : uploadError.message || "שגיאה בהעלאה ל-Storage";
+    const message = formatRecordingStorageError(uploadError);
 
     updateRecordingMetadata(sessionId, recordingId, {
       cloudUploadStatus: "failed",
