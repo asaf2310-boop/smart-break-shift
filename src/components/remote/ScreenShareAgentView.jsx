@@ -60,6 +60,7 @@ import SessionFileShare from "@/components/remote/SessionFileShare";
 import { getPeerJsOptions, isTurnConfigured } from "@/lib/webrtcConfig";
 import {
   describeIcePath,
+  requestGuestVideoRetry,
   watchRemoteVideoFromPeerConnection,
   watchVideoTrackActivation,
 } from "@/lib/screenShareWebRtc";
@@ -158,6 +159,8 @@ export default function ScreenShareAgentView({
   const autoStartAttemptedRef = useRef(false);
   const startRecordingRef = useRef(() => {});
   const sessionEndedRef = useRef(false);
+  const hasRemoteStreamRef = useRef(false);
+  const videoRetryTimerRef = useRef(null);
 
   const DEMO_AUTO_START_KEY = "demo-auto-start-recording";
   const [autoStartRecording, setAutoStartRecording] = useState(() => {
@@ -473,9 +476,18 @@ export default function ScreenShareAgentView({
     video.play().catch(() => {});
   }, []);
 
+  const clearVideoRetryTimer = useCallback(() => {
+    if (videoRetryTimerRef.current) {
+      window.clearInterval(videoRetryTimerRef.current);
+      videoRetryTimerRef.current = null;
+    }
+  }, []);
+
   const bindRemoteStreamToVideo = useCallback(
     (remoteStream) => {
       remoteStreamRef.current = remoteStream;
+      hasRemoteStreamRef.current = true;
+      clearVideoRetryTimer();
       setHasRemoteStream(true);
       setStatus("connected");
       setTabHidden(false);
@@ -503,7 +515,7 @@ export default function ScreenShareAgentView({
         }
       });
     },
-    [sessionId]
+    [sessionId, clearVideoRetryTimer]
   );
 
   const attachRemoteStream = useCallback(
@@ -526,9 +538,44 @@ export default function ScreenShareAgentView({
   );
 
   const clearRemoteVideo = useCallback(() => {
+    hasRemoteStreamRef.current = false;
     setHasRemoteStream(false);
     if (videoRef.current) videoRef.current.srcObject = null;
   }, []);
+
+  const scheduleGuestVideoRetries = useCallback(
+    (guestPeerId) => {
+      clearVideoRetryTimer();
+      if (!guestPeerId) return;
+      let attempts = 0;
+      videoRetryTimerRef.current = window.setInterval(() => {
+        if (sessionEndedRef.current || hasRemoteStreamRef.current) {
+          clearVideoRetryTimer();
+          return;
+        }
+        attempts += 1;
+        if (attempts > 8) {
+          clearVideoRetryTimer();
+          void describeIcePath(callRef.current?.peerConnection).then((info) => {
+            if (hasRemoteStreamRef.current || sessionEndedRef.current) return;
+            const turnHint = isTurnConfigured()
+              ? "בדקו ש-VITE_TURN_* ב-Vercel נכונים ושבוצע Redeploy"
+              : "הגדירו TURN ב-Vercel (Metered) לרשתות שונות";
+            const bytesHint =
+              info && info.bytesReceived === 0
+                ? " אין תעבורת וידאו — "
+                : " ";
+            setErrorDetail(
+              `לא התקבלה תמונה מהלקוח.${bytesHint}${turnHint}. בקשו מהלקוח לשתף שוב.`
+            );
+          });
+          return;
+        }
+        requestGuestVideoRetry(peerRef.current, guestPeerId);
+      }, 3500);
+    },
+    [clearVideoRetryTimer]
+  );
 
   const handleSessionEndedByGuest = useCallback(() => {
     sessionEndedRef.current = true;
@@ -606,6 +653,8 @@ export default function ScreenShareAgentView({
 
     setStatus("waiting");
     setHasRemoteStream(false);
+    hasRemoteStreamRef.current = false;
+    clearVideoRetryTimer();
     setErrorDetail("");
     setRecordedBlob(null);
     setTabHidden(false);
@@ -696,18 +745,27 @@ export default function ScreenShareAgentView({
 
       call.on("close", () => {
         stopWatchReceivers();
+        clearVideoRetryTimer();
         handleStreamDisconnect();
       });
 
       call.on("error", () => {
         if (sessionEndedRef.current) return;
         stopWatchReceivers();
+        clearVideoRetryTimer();
         handleStreamDisconnect();
         if (sessionEndedRef.current) return;
         setErrorDetail("השיחה נותקה — לחצו «חזור לצפייה»");
       });
 
-      call.answer();
+      const guestPeerId = call.peer;
+      scheduleGuestVideoRetries(guestPeerId);
+
+      try {
+        call.answer(new MediaStream());
+      } catch {
+        call.answer();
+      }
       setStatus("connecting");
       setReconnecting(false);
     });
@@ -730,6 +788,7 @@ export default function ScreenShareAgentView({
     });
 
     return () => {
+      clearVideoRetryTimer();
       stopRecordingInternal(false);
       try {
         callRef.current?.close();
@@ -744,6 +803,7 @@ export default function ScreenShareAgentView({
       peerRef.current = null;
       callRef.current = null;
       remoteStreamRef.current = null;
+      hasRemoteStreamRef.current = false;
       setHasRemoteStream(false);
       if (videoRef.current) videoRef.current.srcObject = null;
     };
@@ -754,6 +814,8 @@ export default function ScreenShareAgentView({
     handleStreamDisconnect,
     handleSessionEndedByGuest,
     stopRecordingInternal,
+    clearVideoRetryTimer,
+    scheduleGuestVideoRetries,
   ]);
 
   useEffect(() => {

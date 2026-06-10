@@ -233,21 +233,6 @@ export default function ScreenShareGuestPage() {
     [endGuestSession]
   );
 
-  const bindPeerAgentEndListener = useCallback(
-    (peer) => {
-      if (!peer) return;
-      peer.on("connection", (conn) => {
-        conn.on("data", (raw) => {
-          const data = parsePeerData(raw);
-          if (data?.type === "session_ended_by_agent") {
-            handleEndedByAgent(data.message);
-          }
-        });
-      });
-    },
-    [handleEndedByAgent]
-  );
-
   const isAgentEndedSession = useCallback(
     (sessionSnapshot) =>
       sessionSnapshot?.status === "ended" &&
@@ -334,6 +319,32 @@ export default function ScreenShareGuestPage() {
       isAgentEndedSession,
       handleEndedByAgent,
     ]
+  );
+
+  const bindPeerAgentEndListener = useCallback(
+    (peer) => {
+      if (!peer) return;
+      peer.on("connection", (conn) => {
+        conn.on("data", (raw) => {
+          const data = parsePeerData(raw);
+          if (data?.type === "session_ended_by_agent") {
+            handleEndedByAgent(data.message);
+            return;
+          }
+          if (data?.type === "request_video_retry") {
+            if (!sharingRef.current || !isStreamAlive()) return;
+            try {
+              callRef.current?.close();
+            } catch {
+              /* ignore */
+            }
+            callRef.current = null;
+            placeCall(peer, streamRef.current);
+          }
+        });
+      });
+    },
+    [handleEndedByAgent, isStreamAlive, placeCall]
   );
 
   const reconnectToAgent = useCallback(async () => {
