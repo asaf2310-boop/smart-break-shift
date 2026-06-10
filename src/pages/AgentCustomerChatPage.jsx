@@ -47,6 +47,7 @@ function SessionListItem({ session, active, onSelect, action }) {
         <p className="m3-label-large truncate">{session.guest_name || "אורח"}</p>
         <p className="text-xs text-on-surface-variant">
           {getSessionStatusLabel(session.status)}
+          {session.merchant_ref ? ` · מסוף/ח.פ: ${session.merchant_ref}` : ""}
           {session.assigned_agent ? ` · ${session.assigned_agent}` : ""}
         </p>
       </button>
@@ -280,6 +281,7 @@ export default function AgentCustomerChatPage() {
                   <p className="m3-label-large truncate">{selectedSession.guest_name}</p>
                   <p className="text-xs text-on-surface-variant">
                     {getSessionStatusLabel(selectedSession.status)}
+                    {selectedSession.merchant_ref ? ` · מסוף/ח.פ: ${selectedSession.merchant_ref}` : ""}
                   </p>
                 </div>
                 {selectedSession.status === "active" && selectedSession.assigned_agent === agentName && (
@@ -291,6 +293,7 @@ export default function AgentCustomerChatPage() {
               <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
                 {messages.map((msg) => {
                   const isAgent = msg.sender_type === "agent";
+                  const isBot = msg.sender_type === "bot";
                   const isSystem = msg.sender_type === "system";
                   if (isSystem) {
                     return (
@@ -299,17 +302,28 @@ export default function AgentCustomerChatPage() {
                       </p>
                     );
                   }
+                  if (isBot) {
+                    return (
+                      <div key={msg.id} className="flex justify-center">
+                        <div className="customer-chat-bubble customer-chat-bubble--staff max-w-[85%] rounded-2xl px-3 py-2 text-sm">
+                          <span className="customer-chat-bubble__badge">בוט</span>
+                          <p className="whitespace-pre-wrap break-words">{msg.body}</p>
+                          <p className="customer-chat-bubble__time">{formatTime(msg.created_at)}</p>
+                        </div>
+                      </div>
+                    );
+                  }
                   return (
                     <div key={msg.id} className={`flex ${isAgent ? "justify-start" : "justify-end"}`}>
                       <div
-                        className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
+                        className={`customer-chat-bubble max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
                           isAgent
-                            ? "bg-primary text-on-primary rounded-br-md"
-                            : "bg-surface-container-high rounded-bl-md"
+                            ? "customer-chat-bubble--staff rounded-br-md"
+                            : "customer-chat-bubble--guest rounded-bl-md"
                         }`}
                       >
                         <p className="whitespace-pre-wrap break-words">{msg.body}</p>
-                        <p className="text-[10px] mt-1 opacity-70">{formatTime(msg.created_at)}</p>
+                        <p className="customer-chat-bubble__time">{formatTime(msg.created_at)}</p>
                       </div>
                     </div>
                   );

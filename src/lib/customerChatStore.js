@@ -1,6 +1,7 @@
 import { demoModeEnabled } from "@/api/demoClient";
 import { getChatEntities } from "@/api/localChatStore";
 import { CHAT_STATUS } from "@/lib/agentChatPresence";
+import { getBotMessagesForNewSession } from "@/lib/customerChatBotConfig";
 
 export const CUSTOMER_CHAT_STORAGE_KEY = "smart-break-shift-customer-chat-v1";
 export const CUSTOMER_CHAT_CHANGE_EVENT = "customer-chat-changed";
@@ -159,6 +160,7 @@ export function createGuestSession({ guestName } = {}) {
     id: makeId("cs"),
     token: makeToken(),
     guest_name: name,
+    merchant_ref: null,
     status: SESSION_STATUS.waiting,
     assigned_agent: null,
     created_at: now,
@@ -166,6 +168,14 @@ export function createGuestSession({ guestName } = {}) {
     closed_at: null,
   };
   store.sessions.push(session);
+  for (const body of getBotMessagesForNewSession()) {
+    appendMessage(store, {
+      sessionId: session.id,
+      senderType: "bot",
+      senderName: "בוט",
+      body,
+    });
+  }
   appendMessage(store, {
     sessionId: session.id,
     senderType: "system",
@@ -187,7 +197,11 @@ export function sendGuestMessage(token, body) {
     body,
   });
   if (!message) return null;
-  touchSession(store, session.id);
+  const patch = {};
+  if (!session.merchant_ref && message.body) {
+    patch.merchant_ref = message.body;
+  }
+  touchSession(store, session.id, patch);
   writeStore(store);
   return message;
 }

@@ -29,6 +29,7 @@ import {
   screenShareFeaturesAvailable,
   subscribeScreenShare,
 } from "@/lib/screenShareStore";
+import { GUEST_LINK_ERROR, messageForGuestLinkError } from "@/lib/shortGuestLink";
 import { demoModeEnabled } from "@/api/demoClient";
 import { m3PageClass } from "@/lib/hypPage";
 
@@ -558,7 +559,11 @@ export default function ScreenShareGuestPage() {
           {!session ? (
             <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 rounded-xl p-3 border border-red-100">
               <AlertCircle className="w-5 h-5 shrink-0" />
-              <p>קישור לא תקין או שפג תוקפו. בקשו מהנציג קישור חדש.</p>
+              <p>
+                {bootstrapKey
+                  ? messageForGuestLinkError(GUEST_LINK_ERROR.EXPIRED)
+                  : messageForGuestLinkError(GUEST_LINK_ERROR.NOT_FOUND)}
+              </p>
             </div>
           ) : session.status === "ended" ? (
             <div className="text-center space-y-2">

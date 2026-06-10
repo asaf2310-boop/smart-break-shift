@@ -15,7 +15,11 @@ import {
   simulatedReasonForDemoSendDisabled,
 } from "@/lib/emailSimulatedReason";
 import { getStoredAgentName } from "@/constants/scheduling";
-import { syncScreenShareSessionToCloud } from "@/lib/supportSessionsSync";
+import {
+  cloudSessionSyncEnabled,
+  syncScreenShareSessionToCloud,
+  syncScreenShareSessionToCloudAwait,
+} from "@/lib/supportSessionsSync";
 import { buildShortGuestUrl } from "@/lib/shortGuestLink";
 import {
   decodeGuestBootstrapPayload,
@@ -117,9 +121,18 @@ export function getPublicAppOrigin() {
 
 export function isGuestSessionExpired(session) {
   if (!session?.createdAt) return true;
+  if (session.status === "ended") return false;
+  // Production: active sessions stay valid until the agent ends them.
+  if (cloudSessionSyncEnabled()) return false;
   const created = new Date(session.createdAt).getTime();
   if (Number.isNaN(created)) return true;
   return Date.now() - created > DEMO_GUEST_SESSION_TTL_MS;
+}
+
+/** Await cloud row before sharing /j/ short links (external devices resolve via Supabase). */
+export async function ensureGuestLinkReady(session) {
+  if (!session?.id || !cloudSessionSyncEnabled()) return { ok: true };
+  return syncScreenShareSessionToCloudAwait(session);
 }
 
 /**

@@ -164,9 +164,14 @@ export default function AdminDashboard() {
           <Link to="/admin/training" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">הדרכה</Link>
           <Link to="/admin/recordings" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">הקלטות</Link>
           {demoModeEnabled && (
-            <Link to="/admin/knowledge" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">
-              ניהול ידע
-            </Link>
+            <>
+              <Link to="/admin/knowledge" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">
+                ניהול ידע
+              </Link>
+              <Link to="/admin/customer-chat" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">
+                בוט צ'אט לקוחות
+              </Link>
+            </>
           )}
           <div className="text-center">
             <div className="flex items-center gap-3 justify-center mb-1">

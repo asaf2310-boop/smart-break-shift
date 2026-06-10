@@ -1764,6 +1764,47 @@ body,
   }
 }
 
+/* Customer chat — light readable bubbles (agent / bot) */
+.customer-chat-bubble {
+  direction: rtl;
+  unicode-bidi: plaintext;
+}
+
+.customer-chat-bubble--staff {
+  background-color: rgb(219 234 254 / 0.92);
+  color: #1e293b;
+  border: 1px solid rgb(147 197 253 / 0.55);
+}
+
+.customer-chat-bubble--guest {
+  background-color: rgb(241 245 249 / 0.95);
+  color: #1e293b;
+  border: 1px solid rgb(226 232 240 / 0.9);
+}
+
+.customer-chat-bubble__badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  background-color: rgb(191 219 254 / 0.7);
+  color: #1d4ed8;
+  border-radius: 9999px;
+  padding: 2px 8px;
+  margin-bottom: 4px;
+}
+
+.customer-chat-bubble__time {
+  font-size: 10px;
+  margin-top: 4px;
+  color: #64748b;
+}
+
+html.app-hyp-demo .customer-chat-bubble--staff {
+  background-color: rgb(219 234 254 / 0.95);
+  color: var(--hyp-text-primary, #1e293b);
+  border-color: rgb(147 197 253 / 0.5);
+}
+
 /* Knowledge base chat — RTL / mixed-script message bubbles */
 .knowledge-chat-message,
 .chat-message {

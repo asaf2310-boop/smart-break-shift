@@ -11,6 +11,7 @@ import {
   buildScreenShareMailtoUrl,
   createScreenSession,
   DEMO_SCREEN_SHARE_EMAIL_MESSAGE,
+  ensureGuestLinkReady,
   endSession,
   getLastEmailLogForSession,
   getSession,
@@ -177,6 +178,7 @@ export default function ScreenSharePanel({
         logSessionStart(created);
       }
 
+      await ensureGuestLinkReady(activeSession);
       const url = buildScreenShareGuestUrl(activeSession);
       await sendGuestLinkEmail(activeSession, url);
     } catch (err) {
@@ -221,7 +223,9 @@ export default function ScreenSharePanel({
     }
     setResending(true);
     try {
-      await sendGuestLinkEmail(session, guestUrl);
+      await ensureGuestLinkReady(session);
+      const url = buildScreenShareGuestUrl(session);
+      await sendGuestLinkEmail(session, url);
       setEmailLogRevision((n) => n + 1);
     } catch (err) {
       setEmailLogRevision((n) => n + 1);
@@ -238,16 +242,20 @@ export default function ScreenSharePanel({
   };
 
   const handleCopyLink = async () => {
-    if (!guestUrl) return;
+    if (!session?.id) return;
     try {
-      await navigator.clipboard.writeText(guestUrl);
+      await ensureGuestLinkReady(session);
+      const url = buildScreenShareGuestUrl(session);
+      if (!url) return;
+      await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
       toast({ title: "הועתק", description: "קישור הלקוח הועתק" });
     } catch {
+      const url = buildScreenShareGuestUrl(session);
       toast({
         title: "לא הועתק",
-        description: guestUrl,
+        description: url || guestUrl,
         variant: "destructive",
       });
     }

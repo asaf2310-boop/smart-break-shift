@@ -32,6 +32,7 @@ import CrmCustomerDetail from './pages/CrmCustomerDetail';
 import CrmLookupDeepLink from './pages/CrmLookupDeepLink';
 import KnowledgePage from './pages/KnowledgePage';
 import AdminKnowledge from './pages/AdminKnowledge';
+import AdminCustomerChat from './pages/AdminCustomerChat';
 import FloatingKnowledgeWidget from '@/components/knowledge/FloatingKnowledgeWidget';
 import AdminLocalhostLinksFloating from '@/components/admin/AdminLocalhostLinksFloating';
 import RemoteSupportConsentPage from './pages/RemoteSupportConsentPage';
@@ -108,6 +109,7 @@ const AuthenticatedApp = () => {
         <Route path="/knowledge" element={<DemoGate><KnowledgePage /></DemoGate>} />
         <Route path="/admin" element={<AdminGate><AdminDashboard /></AdminGate>} />
         <Route path="/admin/knowledge" element={<DemoGate><AdminGate><AdminKnowledge /></AdminGate></DemoGate>} />
+        <Route path="/admin/customer-chat" element={<DemoGate><AdminGate><AdminCustomerChat /></AdminGate></DemoGate>} />
         <Route path="/admin/shifts" element={<AdminGate><AdminShifts /></AdminGate>} />
         <Route path="/admin/users" element={<AdminGate><AdminUsers /></AdminGate>} />
         <Route path="/admin/training" element={<AdminGate><AdminTraining /></AdminGate>} />

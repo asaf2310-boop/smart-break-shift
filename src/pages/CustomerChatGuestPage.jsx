@@ -170,6 +170,7 @@ export default function CustomerChatGuestPage() {
         <div className="max-w-lg mx-auto space-y-3">
           {messages.map((msg) => {
             const isGuest = msg.sender_type === "guest";
+            const isBot = msg.sender_type === "bot";
             const isSystem = msg.sender_type === "system";
             if (isSystem) {
               return (
@@ -178,23 +179,34 @@ export default function CustomerChatGuestPage() {
                 </p>
               );
             }
+            if (isBot) {
+              return (
+                <div key={msg.id} className="flex justify-end">
+                  <div className="customer-chat-bubble customer-chat-bubble--staff max-w-[85%] rounded-2xl rounded-bl-md px-3 py-2 text-sm">
+                    <span className="customer-chat-bubble__badge">בוט</span>
+                    <p className="whitespace-pre-wrap break-words">{msg.body}</p>
+                    <p className="customer-chat-bubble__time">{formatTime(msg.created_at)}</p>
+                  </div>
+                </div>
+              );
+            }
             return (
               <div
                 key={msg.id}
                 className={`flex ${isGuest ? "justify-start" : "justify-end"}`}
               >
                 <div
-                  className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
+                  className={`customer-chat-bubble max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
                     isGuest
-                      ? "bg-surface-container-high text-on-surface rounded-br-md"
-                      : "bg-primary text-on-primary rounded-bl-md"
+                      ? "customer-chat-bubble--guest rounded-br-md"
+                      : "customer-chat-bubble--staff rounded-bl-md"
                   }`}
                 >
                   {!isGuest && msg.sender_name && (
                     <p className="text-[10px] opacity-80 mb-0.5">{msg.sender_name}</p>
                   )}
                   <p className="whitespace-pre-wrap break-words">{msg.body}</p>
-                  <p className={`text-[10px] mt-1 ${isGuest ? "text-on-surface-variant" : "opacity-70"}`}>
+                  <p className="customer-chat-bubble__time">
                     {formatTime(msg.created_at)}
                   </p>
                 </div>

@@ -9,6 +9,7 @@ const ADMIN_DEV_ROUTES_CORE = [
 
 const ADMIN_DEV_ROUTES_DEMO = [
   { path: "/admin/knowledge", label: "ניהול ידע" },
+  { path: "/admin/customer-chat", label: "בוט צ'אט לקוחות" },
   { path: "/chat/guest", label: "צ'אט לקוח (אורח)" },
   { path: "/customer-chat", label: "צ'אט לקוחות (נציג)" },
 ];
