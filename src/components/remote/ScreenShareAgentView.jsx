@@ -60,6 +60,15 @@ import {
 import SessionFileShare from "@/components/remote/SessionFileShare";
 import { getPeerJsOptions, isTurnConfigured } from "@/lib/webrtcConfig";
 import {
+  beginAgentPeerSession,
+  commitAgentPeer,
+  forceDestroyAgentPeer,
+  releaseAgentPeer,
+  setAgentPeerActiveCall,
+  setAgentPeerRemoteStream,
+  waitForAgentPeer,
+} from "@/lib/agentPeerRegistry";
+import {
   answerIncomingCallRecvOnly,
   attachPeerConnectionDebugLogging,
   describeIcePath,
@@ -137,42 +146,6 @@ function pickWebmMimeType() {
   return candidates.find((t) => MediaRecorder.isTypeSupported(t)) || "";
 }
 
-/** One agent Peer per sessionId on PeerServer — prevents duplicate registration */
-const agentPeerRegistry = new Map();
-/** Deferred destroy — survives React remount / StrictMode double-effect without killing Peer */
-const agentPeerDestroyTimers = new Map();
-
-function cancelDeferredPeerDestroy(sessionId) {
-  const timer = agentPeerDestroyTimers.get(sessionId);
-  if (timer != null) {
-    window.clearTimeout(timer);
-    agentPeerDestroyTimers.delete(sessionId);
-  }
-}
-
-function scheduleDeferredPeerDestroy(sessionId, peer, delayMs = 250) {
-  cancelDeferredPeerDestroy(sessionId);
-  agentPeerDestroyTimers.set(
-    sessionId,
-    window.setTimeout(() => {
-      agentPeerDestroyTimers.delete(sessionId);
-      destroyRegistryPeer(sessionId, peer);
-    }, delayMs)
-  );
-}
-
-function destroyRegistryPeer(sessionId, peer) {
-  cancelDeferredPeerDestroy(sessionId);
-  const registered = agentPeerRegistry.get(sessionId);
-  if (registered === peer) agentPeerRegistry.delete(sessionId);
-  if (!peer || peer.destroyed) return;
-  try {
-    peer.destroy();
-  } catch {
-    /* ignore */
-  }
-}
-
 /**
  * PeerJS flow (documented):
  * - Agent opens first: `new Peer(sessionId)` and waits for incoming call
@@ -208,6 +181,8 @@ export default function ScreenShareAgentView({
   const noCallTimerRef = useRef(null);
   const unavailableIdRetriesRef = useRef(0);
   const viewOpenRef = useRef(viewOpen);
+  /** Set true only for explicit reconnect / unavailable-id retry — not on every remount */
+  const forcePeerRecreateRef = useRef(false);
 
   const DEMO_AUTO_START_KEY = "demo-auto-start-recording";
   const [autoStartRecording, setAutoStartRecording] = useState(() => {
@@ -579,6 +554,7 @@ export default function ScreenShareAgentView({
       setErrorDetail("");
       setReconnecting(false);
       if (sessionId) {
+        setAgentPeerRemoteStream(sessionId, remoteStream);
         markGuestStreamConnected(sessionId);
         const latest = getSession(sessionId);
         if (latest && !latest.consentAt) {
@@ -687,7 +663,7 @@ export default function ScreenShareAgentView({
       /* ignore */
     }
     if (sessionId && peerRef.current) {
-      destroyRegistryPeer(sessionId, peerRef.current);
+      forceDestroyAgentPeer(sessionId, peerRef.current);
     }
     callRef.current = null;
     peerRef.current = null;
@@ -808,12 +784,93 @@ export default function ScreenShareAgentView({
     if (!sessionId) return undefined;
     const handlers = peerHandlersRef.current;
     sessionEndedRef.current = false;
-    cancelDeferredPeerDestroy(sessionId);
+
+    const forceRecreate = forcePeerRecreateRef.current;
+    if (forceRecreate) forcePeerRecreateRef.current = false;
+
+    if (forceRecreate) {
+      forceDestroyAgentPeer(sessionId);
+    }
 
     const resumedSession = getSession(sessionId);
     const guestAlreadyLinked = Boolean(
       resumedSession?.guestStreamConnectedAt || resumedSession?.consentAt
     );
+
+    const { entry, created, reusing } = beginAgentPeerSession(sessionId);
+    let peer = entry.peer;
+    let disposed = false;
+
+    const applyReuseState = (activePeer) => {
+      peerRef.current = activePeer;
+      if (entry.activeCall) callRef.current = entry.activeCall;
+      if (entry.remoteStream) {
+        remoteStreamRef.current = entry.remoteStream;
+        hasRemoteStreamRef.current = true;
+        setHasRemoteStream(true);
+        setStatus("connected");
+        setErrorDetail("");
+        handlers.clearVideoRetryTimer();
+      } else {
+        setStatus(guestAlreadyLinked ? "connecting" : "waiting");
+        setHasRemoteStream(false);
+        hasRemoteStreamRef.current = false;
+        handlers.clearVideoRetryTimer();
+        setErrorDetail("");
+        setRecordedBlob(null);
+        setTabHidden(false);
+        chunksRef.current = [];
+        metadataPersistedRef.current = false;
+      }
+      if (activePeer.open && sessionId) markAgentPeerReady(sessionId);
+      handlers.scheduleNoCallWarning(activePeer);
+    };
+
+    if (reusing) {
+      if (peer && !peer.destroyed) {
+        console.log("[WebRTC:agent] reusing existing Peer", {
+          sessionId,
+          connectionEpoch,
+          open: peer.open,
+          peerId: peer.id || sessionId,
+        });
+        applyReuseState(peer);
+        return () => {
+          disposed = true;
+          handlers.clearNoCallTimer();
+          peerRef.current = null;
+          callRef.current = null;
+          releaseAgentPeer(sessionId, peer);
+        };
+      }
+      if (entry.creating) {
+        console.log("[WebRTC:agent] waiting for in-flight Peer", { sessionId });
+        void (async () => {
+          const waited = await waitForAgentPeer(sessionId);
+          if (disposed || !waited || sessionEndedRef.current) return;
+          console.log("[WebRTC:agent] reusing in-flight Peer", {
+            sessionId,
+            open: waited.open,
+            peerId: waited.id || sessionId,
+          });
+          applyReuseState(waited);
+        })();
+        return () => {
+          disposed = true;
+          handlers.clearNoCallTimer();
+          peerRef.current = null;
+          callRef.current = null;
+          releaseAgentPeer(sessionId, entry.peer);
+        };
+      }
+    }
+
+    if (!created) {
+      return () => {
+        disposed = true;
+        releaseAgentPeer(sessionId, entry.peer);
+      };
+    }
 
     setStatus(guestAlreadyLinked ? "connecting" : "waiting");
     setHasRemoteStream(false);
@@ -825,45 +882,14 @@ export default function ScreenShareAgentView({
     chunksRef.current = [];
     metadataPersistedRef.current = false;
 
-    const forceRecreate = connectionEpoch > 0;
-    const existingPeer = agentPeerRegistry.get(sessionId);
-    if (
-      !forceRecreate &&
-      existingPeer &&
-      !existingPeer.destroyed &&
-      existingPeer.open
-    ) {
-      console.log("[WebRTC:agent] reusing existing open Peer", {
-        sessionId,
-        connectionEpoch,
-        peerId: existingPeer.id || sessionId,
-      });
-      peerRef.current = existingPeer;
-      if (sessionId) markAgentPeerReady(sessionId);
-      handlers.scheduleNoCallWarning(existingPeer);
-      return () => {
-        handlers.clearNoCallTimer();
-        peerRef.current = null;
-      };
-    }
-
-    if (existingPeer && !existingPeer.destroyed) {
-      console.warn("[WebRTC:agent] destroying stale peer before recreate", {
-        sessionId,
-        connectionEpoch,
-        forceRecreate,
-      });
-      destroyRegistryPeer(sessionId, existingPeer);
-    }
-
     console.log("[WebRTC:agent] creating Peer", {
       sessionId,
       connectionEpoch,
       viewOpen: viewOpenRef.current,
       expectedGuestCallTarget: sessionId,
     });
-    const peer = new Peer(getPeerJsOptions(sessionId));
-    agentPeerRegistry.set(sessionId, peer);
+    peer = new Peer(getPeerJsOptions(sessionId));
+    commitAgentPeer(sessionId, peer);
     peerRef.current = peer;
 
     const syncPeerSessionRecord = () => {
@@ -872,267 +898,265 @@ export default function ScreenShareAgentView({
       setStoreRevision((n) => n + 1);
     };
 
-    peer.on("open", () => {
-      unavailableIdRetriesRef.current = 0;
-      const peerId = peer.id || sessionId;
-      console.log("[WebRTC:agent] peer open", {
-        sessionId,
-        peerId,
-        viewOpen: viewOpenRef.current,
-        matchesSession: peerId === sessionId,
-      });
-      setReconnecting(false);
-      if (sessionId && peer.open) {
-        markAgentPeerReady(sessionId);
-        syncPeerSessionRecord();
-      }
-      handlers.scheduleNoCallWarning(peer);
-      setStatus((prev) => {
-        if (prev === "ended") return prev;
-        const latest = sessionId ? getSession(sessionId) : null;
-        if (latest?.guestStreamConnectedAt) return "connecting";
-        return "waiting";
-      });
-    });
+    if (!entry.listenersAttached) {
+      entry.listenersAttached = true;
 
-    peer.on("connection", (conn) => {
-      conn.on("data", (raw) => {
-        if (sessionEndedRef.current) return;
-        let data = raw;
-        if (typeof raw === "string") {
-          try {
-            data = JSON.parse(raw);
-          } catch {
-            return;
-          }
-        }
-        if (data?.type === "guest_ready") {
-          if (sessionId) {
-            markAgentPeerReady(sessionId);
-            applyGuestPeerSync(sessionId, {
-              consentAt: data.consentAt,
-              recordingConsentAt: data.recordingConsentAt,
-            });
-            syncPeerSessionRecord();
-          }
-          setStatus((prev) => (prev === "ended" ? prev : "connecting"));
-          return;
-        }
-        if (data?.type !== "guest_end") return;
-        const reason = data.reason || "client_stop";
-        endSession(sessionId, { endedReason: reason });
-        handlers.handleSessionEndedByGuest();
-      });
-    });
-
-    peer.on("call", (call) => {
-      handlers.clearNoCallTimer();
-      console.log("[WebRTC:agent] call received", {
-        sessionId,
-        agentPeerId: peer.id || sessionId,
-        guestPeerId: call.peer,
-      });
-      if (sessionId) {
-        markAgentPeerReady(sessionId);
-        const latest = getSession(sessionId);
-        if (latest && !latest.consentAt) {
-          applyGuestPeerSync(sessionId, { consentAt: new Date().toISOString() });
-        }
-        syncPeerSessionRecord();
-      }
-      callRef.current = call;
-      let stopWatchReceivers = () => {};
-      let stopPcDebug = () => {};
-
-      call.on("stream", (remoteStream) => {
-        handlers.attachRemoteStream(remoteStream);
-      });
-
-      const pc = call.peerConnection;
-      if (pc) {
-        handlers.stopInboundStatsPolling();
-        inboundStatsPollStopRef.current = startInboundVideoStatsPolling(
-          pc,
-          {
-            role: "agent",
-            sessionId,
-            shouldStop: () =>
-              sessionEndedRef.current ||
-              (hasRemoteStreamRef.current &&
-                (videoRef.current?.videoWidth ?? 0) > 0),
-            getVideoElement: () => videoRef.current,
-            onSummary: (summary) => {
-              if (sessionEndedRef.current) return;
-              if (summary.diagnosisKey === "codec") {
-                setErrorDetail(
-                  (prev) =>
-                    prev ||
-                    "bytesReceived עולה אך framesDecoded=0 — בעיית Codec; נסו Chrome/Edge"
-                );
-              } else if (summary.diagnosisKey === "element") {
-                setErrorDetail(
-                  (prev) =>
-                    prev ||
-                    "framesDecoded עולה אך המסך שחור — בדקו אלמנט וידאו / CSS (z-index, opacity)"
-                );
-              } else if (
-                summary.diagnosisKey === "not_sent" &&
-                !summary.bytesRising &&
-                summary.bytesReceived === 0
-              ) {
-                setErrorDetail(
-                  (prev) =>
-                    prev ||
-                    "bytesReceived=0 — בעיית Track/SDP; בדקו TURN או בקשו מהלקוח לשתף מסך מחדש"
-                );
-              }
-            },
-          },
-          2000
-        );
-        stopPcDebug = attachPeerConnectionDebugLogging(pc, {
-          role: "agent",
+      peer.on("open", () => {
+        unavailableIdRetriesRef.current = 0;
+        const peerId = peer.id || sessionId;
+        console.log("[WebRTC:agent] peer open", {
           sessionId,
-          guestPeerId: call.peer,
+          peerId,
+          viewOpen: viewOpenRef.current,
+          matchesSession: peerId === sessionId,
         });
-        stopWatchReceivers = watchRemoteVideoFromPeerConnection(
-          pc,
-          (stream) => {
-            handlers.attachRemoteStream(stream);
-          },
-          { attempts: 80, intervalMs: 500 }
-        );
+        setReconnecting(false);
+        if (sessionId && peer.open) {
+          markAgentPeerReady(sessionId);
+          syncPeerSessionRecord();
+        }
+        peerHandlersRef.current.scheduleNoCallWarning(peer);
+        setStatus((prev) => {
+          if (prev === "ended") return prev;
+          const latest = sessionId ? getSession(sessionId) : null;
+          if (latest?.guestStreamConnectedAt) return "connecting";
+          return "waiting";
+        });
+      });
 
-        const onIceStateChange = () => {
+      peer.on("connection", (conn) => {
+        conn.on("data", (raw) => {
           if (sessionEndedRef.current) return;
-          const ice = pc.iceConnectionState;
-          if (ice === "connected" || ice === "completed") {
+          let data = raw;
+          if (typeof raw === "string") {
+            try {
+              data = JSON.parse(raw);
+            } catch {
+              return;
+            }
+          }
+          if (data?.type === "guest_ready") {
+            if (sessionId) {
+              markAgentPeerReady(sessionId);
+              applyGuestPeerSync(sessionId, {
+                consentAt: data.consentAt,
+                recordingConsentAt: data.recordingConsentAt,
+              });
+              syncPeerSessionRecord();
+            }
             setStatus((prev) => (prev === "ended" ? prev : "connecting"));
             return;
           }
-          if (ice === "disconnected") {
-            setErrorDetail("חיבור הרשת נותק זמנית — ממתין לשחזור…");
-            return;
-          }
-          if (ice === "failed") {
-            setStatus("error");
-            setErrorDetail(
-              isTurnConfigured()
-                ? "חיבור WebRTC נכשל — ודאו ש-VITE_TURN_* נכונים ושבוצע Redeploy ב-Vercel"
-                : "חיבור WebRTC נכשל — הגדירו TURN (VITE_TURN_URL) לרשתות שונות"
-            );
-          }
-        };
-        pc.addEventListener("iceconnectionstatechange", onIceStateChange);
-        pc.addEventListener("connectionstatechange", () => {
-          if (sessionEndedRef.current) return;
-          if (pc.connectionState === "failed") {
-            setStatus("error");
-            setErrorDetail("חיבור המדיה נכשל — לחצו «חזור לצפייה» או בקשו מהלקוח לשתף שוב");
-          }
+          if (data?.type !== "guest_end") return;
+          const reason = data.reason || "client_stop";
+          endSession(sessionId, { endedReason: reason });
+          peerHandlersRef.current.handleSessionEndedByGuest();
         });
-      }
-
-      call.on("close", () => {
-        stopWatchReceivers();
-        stopPcDebug();
-        handlers.stopInboundStatsPolling();
-        handlers.clearVideoRetryTimer();
-        handlers.handleStreamDisconnect();
       });
 
-      call.on("error", () => {
-        if (sessionEndedRef.current) return;
-        stopWatchReceivers();
-        stopPcDebug();
-        handlers.stopInboundStatsPolling();
-        handlers.clearVideoRetryTimer();
-        handlers.handleStreamDisconnect();
-        if (sessionEndedRef.current) return;
-        setErrorDetail("השיחה נותקה — לחצו «חזור לצפייה»");
-      });
+      peer.on("call", (call) => {
+        peerHandlersRef.current.clearNoCallTimer();
+        console.log("[WebRTC:agent] call received", {
+          sessionId,
+          agentPeerId: peer.id || sessionId,
+          guestPeerId: call.peer,
+        });
+        if (sessionId) {
+          markAgentPeerReady(sessionId);
+          setAgentPeerActiveCall(sessionId, call);
+          const latest = getSession(sessionId);
+          if (latest && !latest.consentAt) {
+            applyGuestPeerSync(sessionId, { consentAt: new Date().toISOString() });
+          }
+          syncPeerSessionRecord();
+        }
+        callRef.current = call;
+        let stopWatchReceivers = () => {};
+        let stopPcDebug = () => {};
 
-      const guestPeerId = call.peer;
-      if (guestPeerId) lastGuestPeerIdRef.current = guestPeerId;
-      handlers.scheduleGuestVideoRetries(guestPeerId);
+        call.on("stream", (remoteStream) => {
+          peerHandlersRef.current.attachRemoteStream(remoteStream);
+        });
 
-      answerIncomingCallRecvOnly(call);
-      setStatus("connecting");
-      setReconnecting(false);
+        const pc = call.peerConnection;
+        if (pc) {
+          peerHandlersRef.current.stopInboundStatsPolling();
+          inboundStatsPollStopRef.current = startInboundVideoStatsPolling(
+            pc,
+            {
+              role: "agent",
+              sessionId,
+              shouldStop: () =>
+                sessionEndedRef.current ||
+                (hasRemoteStreamRef.current &&
+                  (videoRef.current?.videoWidth ?? 0) > 0),
+              getVideoElement: () => videoRef.current,
+              onSummary: (summary) => {
+                if (sessionEndedRef.current) return;
+                if (summary.diagnosisKey === "codec") {
+                  setErrorDetail(
+                    (prev) =>
+                      prev ||
+                      "bytesReceived עולה אך framesDecoded=0 — בעיית Codec; נסו Chrome/Edge"
+                  );
+                } else if (summary.diagnosisKey === "element") {
+                  setErrorDetail(
+                    (prev) =>
+                      prev ||
+                      "framesDecoded עולה אך המסך שחור — בדקו אלמנט וידאו / CSS (z-index, opacity)"
+                  );
+                } else if (
+                  summary.diagnosisKey === "not_sent" &&
+                  !summary.bytesRising &&
+                  summary.bytesReceived === 0
+                ) {
+                  setErrorDetail(
+                    (prev) =>
+                      prev ||
+                      "bytesReceived=0 — בעיית Track/SDP; בדקו TURN או בקשו מהלקוח לשתף מסך מחדש"
+                  );
+                }
+              },
+            },
+            2000
+          );
+          stopPcDebug = attachPeerConnectionDebugLogging(pc, {
+            role: "agent",
+            sessionId,
+            guestPeerId: call.peer,
+          });
+          stopWatchReceivers = watchRemoteVideoFromPeerConnection(
+            pc,
+            (stream) => {
+              peerHandlersRef.current.attachRemoteStream(stream);
+            },
+            { attempts: 80, intervalMs: 500 }
+          );
 
-      if (pc && guestPeerId) {
-        window.setTimeout(() => {
-          if (hasRemoteStreamRef.current || sessionEndedRef.current) return;
-          void describeIcePath(pc).then((info) => {
-            if (hasRemoteStreamRef.current || sessionEndedRef.current) return;
-            if (info?.bytesReceived > 0) return;
+          const onIceStateChange = () => {
+            if (sessionEndedRef.current) return;
             const ice = pc.iceConnectionState;
             if (ice === "connected" || ice === "completed") {
-              tryRestartIce(pc);
+              setStatus((prev) => (prev === "ended" ? prev : "connecting"));
+              return;
             }
-            requestGuestVideoRetry(peerRef.current, guestPeerId);
-            handlers.scheduleGuestVideoRetries(guestPeerId);
+            if (ice === "disconnected") {
+              setErrorDetail("חיבור הרשת נותק זמנית — ממתין לשחזור…");
+              return;
+            }
+            if (ice === "failed") {
+              setStatus("error");
+              setErrorDetail(
+                isTurnConfigured()
+                  ? "חיבור WebRTC נכשל — ודאו ש-VITE_TURN_* נכונים ושבוצע Redeploy ב-Vercel"
+                  : "חיבור WebRTC נכשל — הגדירו TURN (VITE_TURN_URL) לרשתות שונות"
+              );
+            }
+          };
+          pc.addEventListener("iceconnectionstatechange", onIceStateChange);
+          pc.addEventListener("connectionstatechange", () => {
+            if (sessionEndedRef.current) return;
+            if (pc.connectionState === "failed") {
+              setStatus("error");
+              setErrorDetail("חיבור המדיה נכשל — לחצו «חזור לצפייה» או בקשו מהלקוח לשתף שוב");
+            }
           });
-        }, 6000);
-      }
-    });
+        }
 
-    peer.on("error", (err) => {
-      console.error("[WebRTC:agent] peer error", {
-        sessionId,
-        type: err?.type,
-        message: err?.message,
-        viewOpen: viewOpenRef.current,
+        call.on("close", () => {
+          stopWatchReceivers();
+          stopPcDebug();
+          peerHandlersRef.current.stopInboundStatsPolling();
+          peerHandlersRef.current.clearVideoRetryTimer();
+          if (sessionId) setAgentPeerActiveCall(sessionId, null);
+          peerHandlersRef.current.handleStreamDisconnect();
+        });
+
+        call.on("error", () => {
+          if (sessionEndedRef.current) return;
+          stopWatchReceivers();
+          stopPcDebug();
+          peerHandlersRef.current.stopInboundStatsPolling();
+          peerHandlersRef.current.clearVideoRetryTimer();
+          if (sessionId) setAgentPeerActiveCall(sessionId, null);
+          peerHandlersRef.current.handleStreamDisconnect();
+          if (sessionEndedRef.current) return;
+          setErrorDetail("השיחה נותקה — לחצו «חזור לצפייה»");
+        });
+
+        const guestPeerId = call.peer;
+        if (guestPeerId) lastGuestPeerIdRef.current = guestPeerId;
+        peerHandlersRef.current.scheduleGuestVideoRetries(guestPeerId);
+
+        answerIncomingCallRecvOnly(call);
+        setStatus("connecting");
+        setReconnecting(false);
+
+        if (pc && guestPeerId) {
+          window.setTimeout(() => {
+            if (hasRemoteStreamRef.current || sessionEndedRef.current) return;
+            void describeIcePath(pc).then((info) => {
+              if (hasRemoteStreamRef.current || sessionEndedRef.current) return;
+              if (info?.bytesReceived > 0) return;
+              const ice = pc.iceConnectionState;
+              if (ice === "connected" || ice === "completed") {
+                tryRestartIce(pc);
+              }
+              requestGuestVideoRetry(peerRef.current, guestPeerId);
+              peerHandlersRef.current.scheduleGuestVideoRetries(guestPeerId);
+            });
+          }, 6000);
+        }
       });
-      if (sessionEndedRef.current) return;
-      const latest = getSession(sessionId);
-      if (latest?.status === "ended" && isGuestInitiatedEnd(latest?.endedReason)) {
-        handlers.handleSessionEndedByGuest();
-        return;
-      }
-      if (err?.type === "unavailable-id" && unavailableIdRetriesRef.current < 3) {
-        unavailableIdRetriesRef.current += 1;
-        clearAgentPeerReady(sessionId);
-        console.warn(
-          "[WebRTC:agent] unavailable-id — retrying peer registration",
-          { sessionId, attempt: unavailableIdRetriesRef.current }
-        );
-        window.setTimeout(
-          () => setConnectionEpoch((n) => n + 1),
-          1500 * unavailableIdRetriesRef.current
-        );
-        return;
-      }
-      if (sessionId) clearAgentPeerReady(sessionId);
-      handlers.stopRecordingInternal();
-      setStatus("error");
-      setReconnecting(false);
-      const msg =
-        err?.type === "unavailable-id"
-          ? "מזהה הסשן תפוס — לחצו «חזור לצפייה» או סגרו חלונות אחרים"
-          : err?.message || "שגיאת PeerJS";
-      setErrorDetail(msg);
-    });
+
+      peer.on("error", (err) => {
+        console.error("[WebRTC:agent] peer error", {
+          sessionId,
+          type: err?.type,
+          message: err?.message,
+          viewOpen: viewOpenRef.current,
+        });
+        if (sessionEndedRef.current) return;
+        const latest = getSession(sessionId);
+        if (latest?.status === "ended" && isGuestInitiatedEnd(latest?.endedReason)) {
+          peerHandlersRef.current.handleSessionEndedByGuest();
+          return;
+        }
+        if (err?.type === "unavailable-id" && unavailableIdRetriesRef.current < 3) {
+          unavailableIdRetriesRef.current += 1;
+          clearAgentPeerReady(sessionId);
+          forceDestroyAgentPeer(sessionId, peer);
+          console.warn(
+            "[WebRTC:agent] unavailable-id — retrying peer registration",
+            { sessionId, attempt: unavailableIdRetriesRef.current }
+          );
+          forcePeerRecreateRef.current = true;
+          window.setTimeout(
+            () => setConnectionEpoch((n) => n + 1),
+            1500 * unavailableIdRetriesRef.current
+          );
+          return;
+        }
+        if (sessionId) clearAgentPeerReady(sessionId);
+        peerHandlersRef.current.stopRecordingInternal();
+        setStatus("error");
+        setReconnecting(false);
+        const msg =
+          err?.type === "unavailable-id"
+            ? "מזהה הסשן תפוס — לחצו «חזור לצפייה» או סגרו חלונות אחרים"
+            : err?.message || "שגיאת PeerJS";
+        setErrorDetail(msg);
+      });
+    }
 
     return () => {
+      disposed = true;
       handlers.clearNoCallTimer();
-      if (sessionId) clearAgentPeerReady(sessionId);
       handlers.clearVideoRetryTimer();
       handlers.stopInboundStatsPolling();
-      handlers.stopRecordingInternal(false);
-      try {
-        callRef.current?.close();
-      } catch {
-        /* ignore */
-      }
-      callRef.current = null;
       peerRef.current = null;
-      remoteStreamRef.current = null;
-      hasRemoteStreamRef.current = false;
-      setHasRemoteStream(false);
-      if (videoRef.current) videoRef.current.srcObject = null;
-      // Defer destroy so React remount / StrictMode does not unregister Peer ID twice.
-      scheduleDeferredPeerDestroy(sessionId, peer);
+      callRef.current = null;
+      releaseAgentPeer(sessionId, peer);
     };
   }, [sessionId, connectionEpoch]);
 
@@ -1281,11 +1305,12 @@ export default function ScreenShareAgentView({
       /* ignore */
     }
     if (sessionId && peerRef.current) {
-      destroyRegistryPeer(sessionId, peerRef.current);
+      forceDestroyAgentPeer(sessionId, peerRef.current);
     }
     callRef.current = null;
     peerRef.current = null;
     setStatus("waiting");
+    forcePeerRecreateRef.current = true;
     setConnectionEpoch((n) => n + 1);
     toast({
       title: "מתחבר מחדש",
@@ -1531,7 +1556,7 @@ export default function ScreenShareAgentView({
         /* ignore */
       }
       if (sessionId && peerRef.current) {
-        destroyRegistryPeer(sessionId, peerRef.current);
+        forceDestroyAgentPeer(sessionId, peerRef.current);
       }
       if (sessionId) endSession(sessionId, { endedReason: "agent_ended" });
       setStatus("ended");
