@@ -17,6 +17,7 @@ import {
   REMOTE_SUPPORT_OPEN_EVENT,
   getSession,
   listSessions,
+  startSessionCloudPoll,
   subscribeScreenShare,
 } from "@/lib/screenShareStore";
 
@@ -59,6 +60,11 @@ export function ScreenShareSessionProvider({ children }) {
     syncBackgroundSession();
     return subscribeScreenShare(syncBackgroundSession);
   }, [syncBackgroundSession]);
+
+  useEffect(() => {
+    if (!remoteSupportEnabled || !backgroundSessionId) return undefined;
+    return startSessionCloudPoll(backgroundSessionId);
+  }, [backgroundSessionId]);
 
   useEffect(() => {
     if (!remoteSupportEnabled || !agentName) return undefined;

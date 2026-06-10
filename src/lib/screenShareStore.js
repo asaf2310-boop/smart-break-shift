@@ -18,6 +18,7 @@ import { getStoredAgentName } from "@/constants/scheduling";
 import { agentOwnsBreakRegistration } from "@/lib/breakCapacity";
 import {
   cloudSessionSyncEnabled,
+  fetchCloudSessionById,
   syncScreenShareSessionToCloud,
   syncScreenShareSessionToCloudAwait,
 } from "@/lib/supportSessionsSync";
@@ -373,6 +374,35 @@ export function applyGuestPeerSync(id, { consentAt, recordingConsentAt } = {}) {
   }
   if (Object.keys(patch).length === 0) return session;
   return updateSession(id, patch);
+}
+
+/** Production: merge guest consent from Supabase when guest is on another device. */
+export async function pullSessionFieldsFromCloud(id) {
+  if (!id || !cloudSessionSyncEnabled()) return getSession(id);
+  const row = await fetchCloudSessionById(id);
+  if (!row) return getSession(id);
+  const session = getSession(id);
+  if (!session || session.status === "ended") return session;
+  if (row.status === "ended") return session;
+  return (
+    applyGuestPeerSync(id, {
+      consentAt: row.consent_at || null,
+      recordingConsentAt: row.recording_consent_at || null,
+    }) || session
+  );
+}
+
+/** Poll cloud for guest consent while an agent session is active (cross-device). */
+export function startSessionCloudPoll(id, intervalMs = 2500) {
+  if (!id || !cloudSessionSyncEnabled() || typeof window === "undefined") {
+    return () => {};
+  }
+  const tick = () => {
+    void pullSessionFieldsFromCloud(id);
+  };
+  tick();
+  const timer = window.setInterval(tick, intervalMs);
+  return () => window.clearInterval(timer);
 }
 
 /** נציג התחיל הקלטה — מוצג לאורח (דמו) */

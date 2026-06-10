@@ -159,6 +159,28 @@ export function mapCloudRowToFlatSession(row, cloudRecordingsBySession = null) {
   };
 }
 
+/** Fetch one session row for cross-device guest→agent sync (consent, status). */
+export async function fetchCloudSessionById(sessionId) {
+  if (!cloudSessionSyncEnabled() || !sessionId) return null;
+  try {
+    const { data, error } = await supabase
+      .from("support_sessions")
+      .select(
+        "id, status, consent_at, recording_consent_at, recording_active_at, updated_at"
+      )
+      .eq("id", sessionId)
+      .maybeSingle();
+    if (error) {
+      console.warn("[supportSessionsSync] fetch session failed", error.message);
+      return null;
+    }
+    return data || null;
+  } catch (err) {
+    console.warn("[supportSessionsSync] fetch session error", err);
+    return null;
+  }
+}
+
 /** Fetch recent sessions from Supabase for admin views. */
 export async function fetchCloudSupportSessions(limit = 500) {
   if (!cloudSessionSyncEnabled()) return [];

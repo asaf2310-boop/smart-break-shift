@@ -772,6 +772,10 @@ export default function ScreenShareAgentView({
     peer.on("call", (call) => {
       if (sessionId) {
         markAgentPeerReady(sessionId);
+        const latest = getSession(sessionId);
+        if (latest && !latest.consentAt) {
+          applyGuestPeerSync(sessionId, { consentAt: new Date().toISOString() });
+        }
         syncPeerSessionRecord();
       }
       callRef.current = call;
