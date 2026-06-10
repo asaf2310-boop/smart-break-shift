@@ -33,6 +33,7 @@ function mapScreenShareRow(session, recordingCount = null) {
     status: session.status === "ended" ? "ended" : "active",
     created_at: toIso(session.createdAt) || new Date().toISOString(),
     ended_at: toIso(session.endedAt),
+    ended_reason: session.endedReason || null,
     consent_at: toIso(session.consentAt),
     recording_consent_at: toIso(session.recordingConsentAt),
     recording_active_at: toIso(session.recordingActiveAt),
@@ -54,6 +55,7 @@ function mapRustDeskRow(session) {
     status: session.status === "ended" ? "ended" : "active",
     created_at: toIso(session.createdAt) || new Date().toISOString(),
     ended_at: toIso(session.endedAt),
+    ended_reason: session.endedReason || null,
     consent_at: toIso(session.consentAt),
     recording_consent_at: null,
     recording_active_at: null,
@@ -167,7 +169,7 @@ export async function fetchCloudSessionById(sessionId) {
     const { data, error } = await supabase
       .from("support_sessions")
       .select(
-        "id, status, consent_at, recording_consent_at, recording_active_at, agent_peer_id, updated_at"
+        "id, status, ended_at, ended_reason, consent_at, recording_consent_at, recording_active_at, agent_peer_id, updated_at"
       )
       .eq("id", sessionId)
       .maybeSingle();

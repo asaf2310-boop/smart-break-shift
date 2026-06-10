@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import Peer from "peerjs";
 import { motion } from "framer-motion";
 import {
@@ -12,29 +12,27 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
   logRecordingConsent,
   logScreenConsent,
   GUEST_BOOTSTRAP_QUERY_KEY,
   endSession,
   resolveGuestSession,
   screenShareFeaturesAvailable,
+  startSessionCloudPoll,
   subscribeScreenShare,
   waitForAgentPeerId,
 } from "@/lib/screenShareStore";
+import { cloudSessionSyncEnabled } from "@/lib/supportSessionsSync";
+import {
+  isGuestInitiatedEnd,
+  SESSION_END_REASON,
+} from "@/lib/screenShareSessionEnd";
 import { GUEST_LINK_ERROR, messageForGuestLinkError } from "@/lib/shortGuestLink";
 import { demoModeEnabled } from "@/api/demoClient";
 import { CLOUD_RECORDING_RETENTION_DAYS } from "@/lib/screenRecordingsSync";
 import { m3PageClass } from "@/lib/hypPage";
 import SessionFileShare from "@/components/remote/SessionFileShare";
+import SessionSupportChat from "@/components/remote/SessionSupportChat";
 import { getPeerJsOptions } from "@/lib/webrtcConfig";
 import {
   acquireDisplayMediaStream,
@@ -56,7 +54,7 @@ const GUEST_INFO_BANNER = demoModeEnabled
   : "שיתוף מסך בדפדפן (צפייה בלבד). מומלץ Chrome או Edge.";
 
 const AGENT_ENDED_MESSAGE = "הנציג סיים את הסשן";
-const AGENT_ENDED_REASON = "agent_ended";
+const AGENT_ENDED_REASON = SESSION_END_REASON.AGENT;
 
 function parsePeerData(raw) {
   if (typeof raw === "string") {
@@ -99,8 +97,6 @@ export default function ScreenShareGuestPage() {
   const sharingRef = useRef(false);
   const endNotifiedRef = useRef(false);
   const agentEndedHandledRef = useRef(false);
-  const [showAgentEndedDialog, setShowAgentEndedDialog] = useState(false);
-  const [agentEndedMessage, setAgentEndedMessage] = useState(AGENT_ENDED_MESSAGE);
 
   useEffect(() => {
     sharingRef.current = sharing;
@@ -244,23 +240,16 @@ export default function ScreenShareGuestPage() {
     [notifyAgentSessionEnded, endGuestSession]
   );
 
-  const handleEndedByAgent = useCallback(
-    (message = AGENT_ENDED_MESSAGE) => {
-      if (agentEndedHandledRef.current) return;
-      agentEndedHandledRef.current = true;
-      endGuestSession(AGENT_ENDED_REASON, { updateUi: true });
-      setAgentEndedMessage(message || AGENT_ENDED_MESSAGE);
-      setShowAgentEndedDialog(true);
-    },
-    [endGuestSession]
-  );
+  const handleEndedByAgent = useCallback(() => {
+    if (agentEndedHandledRef.current) return;
+    agentEndedHandledRef.current = true;
+    endGuestSession(AGENT_ENDED_REASON, { updateUi: true });
+  }, [endGuestSession]);
 
-  const isAgentEndedSession = useCallback(
-    (sessionSnapshot) =>
-      sessionSnapshot?.status === "ended" &&
-      sessionSnapshot?.endedReason === AGENT_ENDED_REASON,
-    []
-  );
+  const isRemoteEndedSession = useCallback((sessionSnapshot) => {
+    if (sessionSnapshot?.status !== "ended") return false;
+    return !isGuestInitiatedEnd(sessionSnapshot?.endedReason);
+  }, []);
 
   const placeCall = useCallback(
     (peer, stream, agentPeerId) => {
@@ -504,17 +493,20 @@ export default function ScreenShareGuestPage() {
 
   useEffect(() => {
     if (!sessionId || agentEndedHandledRef.current) return;
-    if (!isAgentEndedSession(session)) return;
-    if (!(shared || sharingRef.current)) return;
+    if (!isRemoteEndedSession(session)) return;
     handleEndedByAgent();
   }, [
     sessionId,
     session?.status,
     session?.endedReason,
-    shared,
-    isAgentEndedSession,
+    isRemoteEndedSession,
     handleEndedByAgent,
   ]);
+
+  useEffect(() => {
+    if (!sessionId || !cloudSessionSyncEnabled()) return undefined;
+    return startSessionCloudPoll(sessionId);
+  }, [sessionId]);
 
   useEffect(() => {
     const refresh = () => setSession(resolveGuestSession(sessionId, bootstrapKey));
@@ -703,19 +695,23 @@ export default function ScreenShareGuestPage() {
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md rounded-3xl border border-slate-200 bg-white shadow-xl overflow-hidden"
       >
-        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-start gap-2 text-amber-950 text-xs leading-relaxed">
-          <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
-          <span>{GUEST_INFO_BANNER}</span>
-        </div>
+        {session?.status !== "ended" ? (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-start gap-2 text-amber-950 text-xs leading-relaxed">
+            <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>{GUEST_INFO_BANNER}</span>
+          </div>
+        ) : null}
 
         <div className="p-6 space-y-5">
-          <div className="text-center">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-teal-100 text-teal-700 mb-3">
-              <Monitor className="w-7 h-7" />
+          {session?.status !== "ended" ? (
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-teal-100 text-teal-700 mb-3">
+                <Monitor className="w-7 h-7" />
+              </div>
+              <h1 className="text-xl font-extrabold text-slate-800">שיתוף מסך לתמיכה</h1>
+              <p className="text-sm text-slate-500 mt-1">צפייה בלבד — ללא שליטה בעכבר</p>
             </div>
-            <h1 className="text-xl font-extrabold text-slate-800">שיתוף מסך לתמיכה</h1>
-            <p className="text-sm text-slate-500 mt-1">צפייה בלבד — ללא שליטה בעכבר</p>
-          </div>
+          ) : null}
 
           {!session ? (
             <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 rounded-xl p-3 border border-red-100">
@@ -727,11 +723,23 @@ export default function ScreenShareGuestPage() {
               </p>
             </div>
           ) : session.status === "ended" ? (
-            <div className="text-center space-y-2">
-              {session.endedReason === AGENT_ENDED_REASON && (
-                <p className="text-sm font-semibold text-slate-800">{AGENT_ENDED_MESSAGE}</p>
+            <div className="text-center space-y-4 py-6">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-slate-100 text-slate-500 mx-auto">
+                <Monitor className="w-8 h-8" />
+              </div>
+              <h2 className="text-xl font-bold text-slate-800">הסשן הסתיים</h2>
+              {isRemoteEndedSession(session) ? (
+                <p className="text-sm text-slate-600 leading-relaxed">{AGENT_ENDED_MESSAGE}</p>
+              ) : isGuestInitiatedEnd(session.endedReason) ? (
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  סיימתם את שיתוף המסך. אין צורך בפעולה נוספת.
+                </p>
+              ) : (
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  סשן שיתוף המסך הסתיים. אין צורך בפעולה נוספת.
+                </p>
               )}
-              <p className="text-sm text-slate-600">סשן שיתוף המסך הסתיים.</p>
+              <p className="text-xs text-slate-400">ניתן לסגור את הדפדפן.</p>
             </div>
           ) : shared ? (
             <div className="text-center space-y-3">
@@ -868,28 +876,18 @@ export default function ScreenShareGuestPage() {
               </Button>
             </>
           )}
-
-          <p className="text-center">
-            <Link to="/" className="text-xs text-teal-600 hover:underline">
-              חזרה לדף הבית
-            </Link>
-          </p>
         </div>
       </motion.div>
 
-      <AlertDialog open={showAgentEndedDialog} onOpenChange={setShowAgentEndedDialog}>
-        <AlertDialogContent dir="rtl" className="text-right">
-          <AlertDialogHeader>
-            <AlertDialogTitle>סשן הצפייה הסתיים</AlertDialogTitle>
-            <AlertDialogDescription>{agentEndedMessage}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="sm:justify-start">
-            <AlertDialogAction onClick={() => setShowAgentEndedDialog(false)}>
-              הבנתי
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {session?.consentAt && session.status !== "ended" ? (
+        <SessionSupportChat
+          sessionId={sessionId}
+          senderType="guest"
+          agentDisplayName={session.agentName}
+          autoOpen
+          className="fixed bottom-4 right-4 z-40 w-[min(300px,calc(100vw-2rem))]"
+        />
+      ) : null}
     </div>
   );
 }

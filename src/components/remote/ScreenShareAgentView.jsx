@@ -42,6 +42,11 @@ import {
   uploadRecordingToCloud,
 } from "@/lib/recordingUpload";
 import {
+  isGuestInitiatedEnd,
+  SCREEN_SHARE_AGENT_END_EVENT,
+  SESSION_END_REASON,
+} from "@/lib/screenShareSessionEnd";
+import {
   appendSessionRecording,
   applyGuestPeerSync,
   endSession,
@@ -58,6 +63,7 @@ import {
   updateRecordingMetadata,
 } from "@/lib/screenShareStore";
 import SessionFileShare from "@/components/remote/SessionFileShare";
+import SessionSupportChat from "@/components/remote/SessionSupportChat";
 import { isTurnConfigured } from "@/lib/webrtcConfig";
 import {
   openAgentPeer,
@@ -94,11 +100,6 @@ const PEER_STATUS_LABELS = {
 
 const GUEST_ENDED_LABEL = "לקוח סגר את הסשן";
 const AGENT_ENDED_PEER_MESSAGE = "הנציג סיים את הסשן";
-const CLIENT_ENDED_REASONS = new Set(["client_stop", "client_closed"]);
-
-function isGuestInitiatedEnd(reason) {
-  return CLIENT_ENDED_REASONS.has(reason);
-}
 
 function formatRecordingElapsed(seconds) {
   const m = Math.floor(seconds / 60);
@@ -649,6 +650,7 @@ export default function ScreenShareAgentView({
   );
 
   const handleSessionEndedByGuest = useCallback(() => {
+    if (sessionEndedRef.current) return;
     sessionEndedRef.current = true;
     if (sessionId && mediaRecorderRef.current) setRecordingStopped(sessionId);
     stopRecordingInternal();
@@ -668,7 +670,11 @@ export default function ScreenShareAgentView({
     setStatus("ended");
     remoteStreamRef.current = null;
     clearRemoteVideo();
-  }, [sessionId, stopRecordingInternal, clearRemoteVideo]);
+    toast({
+      title: "הלקוח סיים את הסשן",
+      description: "שיתוף המסך הופסק — הסשן נסגר",
+    });
+  }, [sessionId, stopRecordingInternal, clearRemoteVideo, toast]);
 
   const handleStreamDisconnect = useCallback(() => {
     if (sessionEndedRef.current) return;
@@ -1522,6 +1528,17 @@ export default function ScreenShareAgentView({
     }
   }, []);
 
+  useEffect(() => {
+    if (!sessionId) return undefined;
+    const onAgentEndRequest = (event) => {
+      const requestedId = event?.detail?.sessionId;
+      if (!requestedId || requestedId !== sessionId || sessionEndedRef.current) return;
+      notifyGuestSessionEnded();
+    };
+    window.addEventListener(SCREEN_SHARE_AGENT_END_EVENT, onAgentEndRequest);
+    return () => window.removeEventListener(SCREEN_SHARE_AGENT_END_EVENT, onAgentEndRequest);
+  }, [sessionId, notifyGuestSessionEnded]);
+
   const handleEnd = () => {
     sessionEndedRef.current = true;
     if (isRecording && sessionId) setRecordingStopped(sessionId);
@@ -1539,7 +1556,9 @@ export default function ScreenShareAgentView({
       if (sessionId && peerRef.current) {
         destroyAgentPeer(sessionId, peerRef.current);
       }
-      if (sessionId) endSession(sessionId, { endedReason: "agent_ended" });
+      if (sessionId) {
+        endSession(sessionId, { endedReason: SESSION_END_REASON.AGENT });
+      }
       setStatus("ended");
       remoteStreamRef.current = null;
       if (videoRef.current) videoRef.current.srcObject = null;
@@ -1970,6 +1989,16 @@ export default function ScreenShareAgentView({
           </DialogContent>
         </Dialog>
       )}
+
+      {liveSession?.consentAt && status !== "ended" ? (
+        <SessionSupportChat
+          sessionId={sessionId}
+          senderType="agent"
+          agentDisplayName={agentName || sessionRecord?.agentName || ""}
+          disabled={status === "ended"}
+          autoOpen
+        />
+      ) : null}
 
       <SessionFileShare
         sessionId={sessionId}

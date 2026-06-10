@@ -23,6 +23,7 @@ import {
   syncScreenShareSessionToCloudAwait,
 } from "@/lib/supportSessionsSync";
 import { buildShortGuestUrl, waitForShortCodeInCloud } from "@/lib/shortGuestLink";
+import { requestAgentEndGuestNotify } from "@/lib/screenShareSessionEnd";
 import {
   decodeGuestBootstrapPayload,
   encodeGuestBootstrapPayload,
@@ -399,14 +400,38 @@ export function applyGuestPeerSync(id, { consentAt, recordingConsentAt } = {}) {
   return updateSession(id, patch);
 }
 
-/** Production: merge guest consent + agent peer id from Supabase (cross-device). */
+function sessionEndPatchFromCloud(row) {
+  if (!row || row.status !== "ended") return null;
+  return {
+    status: "ended",
+    endedAt: row.ended_at || new Date().toISOString(),
+    endedReason: row.ended_reason || "agent_ended",
+    recordingActiveAt: null,
+    shortCode: null,
+    shortCodeCloudSynced: null,
+    agentPeerOpenedAt: null,
+    agentPeerReadyAt: null,
+    agentPeerId: null,
+    guestStreamConnectedAt: null,
+  };
+}
+
+/** Production: merge guest consent, peer id, וסיום סשן מ-Supabase (cross-device). */
 export async function pullSessionFieldsFromCloud(id) {
   if (!id || !cloudSessionSyncEnabled()) return getSession(id);
   const row = await fetchCloudSessionById(id);
   if (!row) return getSession(id);
   const session = getSession(id);
-  if (!session || session.status === "ended") return session;
-  if (row.status === "ended") return session;
+  if (!session) return session;
+
+  if (row.status === "ended") {
+    if (session.status === "ended") return session;
+    const endPatch = sessionEndPatchFromCloud(row);
+    if (endPatch) return updateSession(id, endPatch);
+    return session;
+  }
+
+  if (session.status === "ended") return session;
 
   let working = session;
   const consentPatch = {};
@@ -719,6 +744,13 @@ export function endSession(id, { endedReason = "agent_ended" } = {}) {
     agentPeerId: null,
     guestStreamConnectedAt: null,
   });
+}
+
+/** נציג מסיים — מודיע ללקוח (Peer) ואז מסיים + מסנכרן לענן */
+export function endAgentScreenShareSession(id, { endedReason = "agent_ended" } = {}) {
+  if (!id) return null;
+  requestAgentEndGuestNotify(id, { endedReason });
+  return endSession(id, { endedReason });
 }
 
 /** סוגר את כל סשני שיתוף המסך הפעילים של הנציג (או כולם אם ללא agentName) */

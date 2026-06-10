@@ -9,7 +9,7 @@ import {
   buildScreenShareGuestUrl,
   createScreenSession,
   ensureGuestLinkReady,
-  endSession,
+  endAgentScreenShareSession,
   getActiveScreenSessionForAgent,
   getSession,
   listSessionsForCustomer,
@@ -25,7 +25,8 @@ export default function ScreenSharePanel({
   onSessionActiveChange,
 }) {
   const { toast } = useToast();
-  const { openSessionView, backgroundSessionId } = useScreenShareSession();
+  const { ensureBackgroundSession, openSessionView, backgroundSessionId } =
+    useScreenShareSession();
   const [session, setSession] = useState(null);
   const [manualCopied, setManualCopied] = useState(false);
   const [opening, setOpening] = useState(false);
@@ -177,10 +178,10 @@ export default function ScreenSharePanel({
       setSession(opened);
       setGuestLinkUrl("");
       autoCopySessionRef.current = null;
-      openSessionView(opened.id);
+      ensureBackgroundSession(opened.id);
       toast({
         title: "סשן נפתח",
-        description: "ממתינים לחיבור — הקישור יופיע להעתקה",
+        description: "ממתינים לחיבור — הקישור יופיע להעתקה. לחצו «פתח צפייה» כשתרצו לראות את המסך",
       });
     } finally {
       setOpening(false);
@@ -287,7 +288,7 @@ export default function ScreenSharePanel({
   };
 
   const handleEndSession = useCallback(() => {
-    if (session?.id) endSession(session.id);
+    if (session?.id) endAgentScreenShareSession(session.id);
     setSession(null);
     setGuestLinkUrl("");
     autoCopySessionRef.current = null;
@@ -340,9 +341,12 @@ export default function ScreenSharePanel({
             guestLinkShareable ? (
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
                 <p className="text-sm font-medium text-teal-900">קישור קצר מוכן ללקוח</p>
-                {session?.shortCode ? (
-                  <p className="text-xs text-slate-500 font-mono" dir="ltr">
-                    …/j/{session.shortCode}
+                {guestLinkUrl ? (
+                  <p
+                    className="text-xs text-slate-600 font-mono break-all whitespace-normal w-full text-left leading-relaxed select-all"
+                    dir="ltr"
+                  >
+                    {guestLinkUrl}
                   </p>
                 ) : null}
                 <Button
@@ -391,7 +395,7 @@ export default function ScreenSharePanel({
             </p>
             <Button
               type="button"
-              onClick={() => openSessionView(session.id)}
+              onClick={() => openSessionView(session.id, { openPanel: false })}
               className="w-full gap-2 bg-teal-600 hover:bg-teal-700"
             >
               <MonitorPlay className="w-4 h-4" />

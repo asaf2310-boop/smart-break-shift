@@ -31,7 +31,7 @@ import {
   buildRustDeskDeepLink,
   buildRustDeskMailtoUrl,
   createSession,
-  endSession,
+  endAgentScreenShareSession,
   formatConnectionDetails,
   getSession,
   listSessions as listRustDeskSessions,
@@ -320,7 +320,7 @@ export default function RemoteSupportPanel({
   };
 
   const handleEndSession = () => {
-    if (session?.id) endSession(session.id);
+    if (session?.id) endAgentScreenShareSession(session.id);
     toast({ title: "הסתיים", description: "הסשן נסגר וסיסמה הוסרה מהאחסון המקומי" });
     setOpen(false);
   };
