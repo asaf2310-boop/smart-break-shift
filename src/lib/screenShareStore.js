@@ -15,6 +15,7 @@ import {
   simulatedReasonForDemoSendDisabled,
 } from "@/lib/emailSimulatedReason";
 import { getStoredAgentName } from "@/constants/scheduling";
+import { agentOwnsBreakRegistration } from "@/lib/breakCapacity";
 import {
   cloudSessionSyncEnabled,
   syncScreenShareSessionToCloud,
@@ -582,6 +583,41 @@ export function endSession(id, { endedReason = "agent_ended" } = {}) {
     endedReason: endedReason || null,
     shortCode: null,
   });
+}
+
+/** סוגר את כל סשני שיתוף המסך הפעילים של הנציג (או כולם אם ללא agentName) */
+export function endAllActiveScreenSessions({ agentName } = {}) {
+  const now = new Date().toISOString();
+  let closed = 0;
+  const sessions = readSessions().map((s) => {
+    if (s.status !== "active") return s;
+    if (agentName && !agentOwnsBreakRegistration({ agent_name: s.agentName }, agentName)) {
+      return s;
+    }
+    closed += 1;
+    const ended = {
+      ...s,
+      status: "ended",
+      endedAt: now,
+      endedReason: "agent_ended",
+      shortCode: null,
+      recordingActiveAt: null,
+    };
+    cloudSyncSession(ended);
+    return ended;
+  });
+  writeSessions(sessions);
+  return closed;
+}
+
+/** סשני צפייה של הנציג — ממוינים מהחדש לישן */
+export function listScreenSessionsForAgent(agentName, { limit } = {}) {
+  const name = String(agentName || "").trim();
+  const filtered = listSessions().filter((s) =>
+    name ? agentOwnsBreakRegistration({ agent_name: s.agentName }, name) : true
+  );
+  if (typeof limit === "number" && limit > 0) return filtered.slice(0, limit);
+  return filtered;
 }
 
 /**

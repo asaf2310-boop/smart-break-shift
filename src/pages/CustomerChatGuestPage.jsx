@@ -69,9 +69,11 @@ export default function CustomerChatGuestPage() {
 
   const handleStart = async (e) => {
     e.preventDefault();
+    const trimmedName = guestName.trim();
+    if (!trimmedName) return;
     setStarting(true);
     try {
-      const created = createGuestSession({ guestName });
+      const created = createGuestSession({ guestName: trimmedName });
       setToken(created.token);
       persistGuestToken(created.token);
       setSession(created);
@@ -98,11 +100,7 @@ export default function CustomerChatGuestPage() {
   };
 
   const shellClass = m3PageClass("min-h-screen flex flex-col");
-  const infoBanner = demoModeEnabled
-    ? "דמו — צ'אט לקוחות. הנתונים נשמרים בדפדפן בלבד."
-    : customerChatEnabled
-      ? "צ'אט שירות — בדיקות בסביבת ניהול מוקד (נתונים בדפדפן זה)"
-      : "צ'אט עם נציג שירות";
+  const infoBanner = "צ'אט שירות ותמיכה של HYP";
 
   if (!token || !session) {
     return (
@@ -121,7 +119,7 @@ export default function CustomerChatGuestPage() {
             <form onSubmit={handleStart} className="space-y-4">
               <div>
                 <label htmlFor="guest-name" className="m3-label-large block mb-1.5">
-                  שם (אופציונלי)
+                  מהו שמך?
                 </label>
                 <Input
                   id="guest-name"
@@ -130,9 +128,14 @@ export default function CustomerChatGuestPage() {
                   placeholder="איך לפנות אליך?"
                   className="text-right"
                   autoComplete="name"
+                  required
                 />
               </div>
-              <Button type="submit" className="w-full" disabled={starting}>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={starting || !guestName.trim()}
+              >
                 {starting ? "פותח שיחה…" : "התחל צ'אט"}
               </Button>
             </form>
