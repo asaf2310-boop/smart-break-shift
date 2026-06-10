@@ -2,7 +2,6 @@ import React from "react";
 import { motion } from "framer-motion";
 import { Coffee, UtensilsCrossed } from "lucide-react";
 import TimeSlotCard from "./TimeSlotCard";
-<<<<<<< HEAD
 import { agentOwnsBreakRegistration } from "@/lib/breakCapacity";
 
 export default function BreakSection({
@@ -23,19 +22,7 @@ export default function BreakSection({
 }) {
   const isLunch = type === "lunch";
   const userRegsForType = registrations.filter((r) =>
-    agentOwnsBreakRegistration(r, agentName)
-=======
-import { normalizeAgentName } from "@/lib/breakCapacity";
-
-export default function BreakSection({
-  type, title, subtitle, slots, registrations, onRegister, userRegistration, agentName, maxPerSlot, registrationDisabled = false
-}) {
-  const isLunch = type === "lunch";
-  const normalizedAgent = normalizeAgentName(agentName);
-  const userRegsForType = registrations.filter(
-    (r) => normalizeAgentName(r.agent_name) === normalizedAgent
->>>>>>> 842dd9e (Initial commit)
-  );
+    agentOwnsBreakRegistration(r, agentName)  );
   const hasRegistered = userRegsForType.length > 0 || !!userRegistration;
 
   return (
@@ -93,26 +80,16 @@ export default function BreakSection({
               onRegister={onRegister}
               isRegistered={isRegistered}
               isDisabled={hasRegistered && !isRegistered}
-<<<<<<< HEAD
               isRegistering={registeringSlot === slot}
               registrationClosed={registrationClosed}
               maxPerSlot={maxPerSlot}
               canCancel={canCancel}
               onCancel={onCancel}
               isDeleting={isDeleting}
-              myRegistration={userRegsForType.find((r) => r.time_slot === slot) || null}
-=======
-              registrationDisabled={registrationDisabled}
-              maxPerSlot={maxPerSlot}
->>>>>>> 842dd9e (Initial commit)
-            />
+              myRegistration={userRegsForType.find((r) => r.time_slot === slot) || null}            />
           );
         })}
       </div>
     </motion.div>
   );
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> 842dd9e (Initial commit)

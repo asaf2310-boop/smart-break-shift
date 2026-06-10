@@ -8,15 +8,10 @@ import {
   Download,
   FolderOpen,
   Loader2,
-<<<<<<< HEAD
   Maximize2,
   Minimize2,
   Monitor,
-  RefreshCw,
-=======
-  Monitor,
->>>>>>> 842dd9e (Initial commit)
-  Square,
+  RefreshCw,  Square,
   Wifi,
   WifiOff,
   X,
@@ -31,21 +26,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
-<<<<<<< HEAD
 import { demoModeEnabled, remoteSupportEnabled } from "@/api/demoClient";
 
-const recordingFeaturesEnabled = remoteSupportEnabled;
-=======
-import { demoModeEnabled } from "@/api/demoClient";
->>>>>>> 842dd9e (Initial commit)
-import { createCallLog } from "@/lib/crmStore";
+const recordingFeaturesEnabled = remoteSupportEnabled;import { createCallLog } from "@/lib/crmStore";
 import {
   downloadRecordingBlob,
   getRecordingBlob,
   hasRecordingBlob,
   saveRecordingBlob,
 } from "@/lib/demoRecordingStorage";
-<<<<<<< HEAD
 import {
   cloudRecordingUploadEnabled,
   recordingUploadStatusLabel,
@@ -57,22 +46,13 @@ import {
   endSession,
   getSession,
   markGuestStreamConnected,
-  markAgentPeerReady,
-=======
-import { uploadRecordingToCloud } from "@/lib/recordingUpload";
-import {
-  appendSessionRecording,
-  endSession,
-  getSession,
->>>>>>> 842dd9e (Initial commit)
-  listRecordingsForSession,
+  markAgentPeerReady,  listRecordingsForSession,
   markRecordingDownloaded,
   setRecordingActive,
   setRecordingStopped,
   subscribeScreenShare,
   updateRecordingMetadata,
 } from "@/lib/screenShareStore";
-<<<<<<< HEAD
 import SessionFileShare from "@/components/remote/SessionFileShare";
 import { getPeerJsOptions, isTurnConfigured } from "@/lib/webrtcConfig";
 import {
@@ -82,28 +62,10 @@ import {
   tryRestartIce,
   watchRemoteVideoFromPeerConnection,
   watchVideoTrackActivation,
-} from "@/lib/screenShareWebRtc";
-=======
->>>>>>> 842dd9e (Initial commit)
-
-const MAX_RECORDING_SECONDS = 30 * 60;
-
-const PEER_STATUS_LABELS = {
-  idle: "ממתין לפתיחת חיבור",
-  waiting: "ממתין לשיתוף מסך",
-<<<<<<< HEAD
-  connecting: "מתחבר — ממתין לווידאו",
-  connected: "מחובר — צפייה במסך",
-  disconnected: "החיבור נותק — ניתן לחזור לצפייה",
-  paused: "מושהה — חזרו ללשונית",
-=======
-  connected: "מחובר — צפייה במסך",
->>>>>>> 842dd9e (Initial commit)
-  ended: "הסתיים",
+} from "@/lib/screenShareWebRtc";  ended: "הסתיים",
   error: "שגיאת חיבור",
 };
 
-<<<<<<< HEAD
 const GUEST_ENDED_LABEL = "לקוח סגר את הסשן";
 const AGENT_ENDED_PEER_MESSAGE = "הנציג סיים את הסשן";
 const CLIENT_ENDED_REASONS = new Set(["client_stop", "client_closed"]);
@@ -111,113 +73,15 @@ const CLIENT_ENDED_REASONS = new Set(["client_stop", "client_closed"]);
 function isGuestInitiatedEnd(reason) {
   return CLIENT_ENDED_REASONS.has(reason);
 }
-
-=======
->>>>>>> 842dd9e (Initial commit)
-function formatRecordingElapsed(seconds) {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
-
-function formatDurationLabel(seconds) {
-  const total = Math.max(0, Math.round(seconds));
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  if (m === 0) return `${s} שניות`;
-  if (s === 0) return `${m} דקות`;
-  return `${m} דקות ו-${s} שניות`;
-}
-
-function formatFileSizeMb(bytes) {
-  if (!bytes || bytes <= 0) return "—";
-  const mb = bytes / (1024 * 1024);
-  if (mb < 0.1) return `${Math.round(bytes / 1024)} KB`;
-  return `${mb.toFixed(mb >= 10 ? 0 : 1)} MB`;
-}
-
-function formatRecordingTimestamp(iso) {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString("he-IL", {
-      day: "2-digit",
-      month: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}
-
-function pickWebmMimeType() {
-  const candidates = [
-    "video/webm;codecs=vp9",
-    "video/webm;codecs=vp8",
-    "video/webm",
-  ];
-  return candidates.find((t) => MediaRecorder.isTypeSupported(t)) || "";
-}
-
-/**
- * PeerJS flow (documented):
- * - Agent opens first: `new Peer(sessionId)` and waits for incoming call
- * - Customer: `new Peer()` then `peer.call(sessionId, displayStream)`
- */
-export default function ScreenShareAgentView({
-  sessionId,
-  agentName = "",
-<<<<<<< HEAD
-  viewOpen = true,
-=======
->>>>>>> 842dd9e (Initial commit)
   onEnded,
   className = "",
 }) {
   const { toast } = useToast();
   const videoRef = useRef(null);
-<<<<<<< HEAD
-  const videoContainerRef = useRef(null);
-=======
->>>>>>> 842dd9e (Initial commit)
-  const peerRef = useRef(null);
-  const callRef = useRef(null);
-  const remoteStreamRef = useRef(null);
-  const mediaRecorderRef = useRef(null);
-  const chunksRef = useRef([]);
-  const recordingTimerRef = useRef(null);
-  const recordingStartedAtRef = useRef(null);
-  const maxDurationWarnedRef = useRef(false);
-  const metadataPersistedRef = useRef(false);
-<<<<<<< HEAD
-  const recordingElapsedRef = useRef(0);
-  const autoStartAttemptedRef = useRef(false);
-  const startRecordingRef = useRef(() => {});
-  const sessionEndedRef = useRef(false);
-  const hasRemoteStreamRef = useRef(false);
-  const videoRetryTimerRef = useRef(null);
-  const lastGuestPeerIdRef = useRef(null);
-
-  const DEMO_AUTO_START_KEY = "demo-auto-start-recording";
-  const [autoStartRecording, setAutoStartRecording] = useState(() => {
-    if (typeof window === "undefined") return true;
-    const stored = window.localStorage.getItem(DEMO_AUTO_START_KEY);
-    if (stored === null) return true;
-    return stored === "true";
-=======
-  const autoStartAttemptedRef = useRef(false);
-  const startRecordingRef = useRef(() => {});
-
-  const DEMO_AUTO_START_KEY = "demo-auto-start-recording";
-  const [autoStartRecording, setAutoStartRecording] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem(DEMO_AUTO_START_KEY) === "true";
->>>>>>> 842dd9e (Initial commit)
-  });
+  const videoContainerRef = useRef(null);  });
 
   const [status, setStatus] = useState("idle");
   const [hasRemoteStream, setHasRemoteStream] = useState(false);
-<<<<<<< HEAD
   const [videoFramesReady, setVideoFramesReady] = useState(false);
   const [errorDetail, setErrorDetail] = useState("");
   const [connectionEpoch, setConnectionEpoch] = useState(0);
@@ -227,14 +91,7 @@ export default function ScreenShareAgentView({
   const [sessionRecord, setSessionRecord] = useState(() =>
     sessionId ? getSession(sessionId) : null
   );
-  const [storeRevision, setStoreRevision] = useState(0);
-=======
-  const [errorDetail, setErrorDetail] = useState("");
-  const [sessionRecord, setSessionRecord] = useState(() =>
-    sessionId ? getSession(sessionId) : null
-  );
->>>>>>> 842dd9e (Initial commit)
-  const [sessionRecordings, setSessionRecordings] = useState(() =>
+  const [storeRevision, setStoreRevision] = useState(0);  const [sessionRecordings, setSessionRecordings] = useState(() =>
     sessionId ? listRecordingsForSession(sessionId) : []
   );
   const [isRecording, setIsRecording] = useState(false);
@@ -247,73 +104,7 @@ export default function ScreenShareAgentView({
   const [savingBlob, setSavingBlob] = useState(false);
   const [recordingSummary, setRecordingSummary] = useState(null);
   const [cloudSaving, setCloudSaving] = useState(false);
-<<<<<<< HEAD
-  const [cloudUploadStatus, setCloudUploadStatus] = useState(null);
-=======
->>>>>>> 842dd9e (Initial commit)
-
-  const stopRecordingInternal = useCallback((discardBlob = false) => {
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    }
-    const recorder = mediaRecorderRef.current;
-    if (recorder && recorder.state !== "inactive") {
-      try {
-        recorder.stop();
-      } catch {
-        /* ignore */
-      }
-    } else if (discardBlob) {
-      chunksRef.current = [];
-      setIsRecording(false);
-      setRecordingElapsed(0);
-    }
-    if (discardBlob) {
-      setRecordedBlob(null);
-      mediaRecorderRef.current = null;
-    }
-  }, []);
-
-<<<<<<< HEAD
-=======
-  const finalizeRecordingBlob = useCallback(() => {
-    const blob = new Blob(chunksRef.current, { type: "video/webm" });
-    chunksRef.current = [];
-    mediaRecorderRef.current = null;
-    setIsRecording(false);
-    if (blob.size > 0) {
-      setRecordedBlob(blob);
-    }
-  }, []);
-
-  const refreshSessionData = useCallback(async () => {
-    if (!sessionId) return;
-    setSessionRecord(getSession(sessionId));
-    const recs = listRecordingsForSession(sessionId);
-    setSessionRecordings(recs);
-    if (!demoModeEnabled) return;
-    const available = new Set();
-    await Promise.all(
-      recs.map(async (rec) => {
-        if (await hasRecordingBlob(sessionId, rec.id)) {
-          available.add(rec.id);
-        }
-      })
-    );
-    setBlobAvailableIds(available);
-  }, [sessionId]);
-
-  useEffect(() => {
-    if (!sessionId) return undefined;
-    refreshSessionData();
-    return subscribeScreenShare(() => {
-      refreshSessionData();
-    });
-  }, [sessionId, refreshSessionData]);
-
->>>>>>> 842dd9e (Initial commit)
-  const persistRecordingMetadata = useCallback(
+  const [cloudUploadStatus, setCloudUploadStatus] = useState(null);  const persistRecordingMetadata = useCallback(
     (durationSec) => {
       if (!sessionId || !recordingStartedAtRef.current) return null;
       const stoppedAt = new Date().toISOString();
@@ -321,21 +112,7 @@ export default function ScreenShareAgentView({
       const timestamp = stoppedAt.replace(/[:.]/g, "-");
       const fileName = `screen-${sessionId}-${timestamp}.webm`;
       const hasAudio = (remoteStreamRef.current?.getAudioTracks?.() || []).length > 0;
-<<<<<<< HEAD
-      const latestSession = getSession(sessionId);
-=======
->>>>>>> 842dd9e (Initial commit)
-      const entry = appendSessionRecording(sessionId, {
-        startedAt,
-        stoppedAt,
-        durationSec,
-        fileName,
-<<<<<<< HEAD
-        consentAt: latestSession?.recordingConsentAt || sessionRecord?.recordingConsentAt,
-=======
-        consentAt: sessionRecord?.recordingConsentAt,
->>>>>>> 842dd9e (Initial commit)
-        hasAudio,
+      const latestSession = getSession(sessionId);        hasAudio,
       });
       setSessionRecordings(listRecordingsForSession(sessionId));
       setLastRecordingMeta(entry);
@@ -361,7 +138,6 @@ export default function ScreenShareAgentView({
     [sessionId, sessionRecord, agentName]
   );
 
-<<<<<<< HEAD
   const resolveRecordingDurationSec = useCallback(() => {
     if (recordingStartedAtRef.current) {
       const started = new Date(recordingStartedAtRef.current).getTime();
@@ -775,44 +551,19 @@ export default function ScreenShareAgentView({
     Boolean(liveSession?.recordingConsentAt);
 
   const recordDisabledReason = (() => {
-    if (!recordingFeaturesEnabled) return null;
-=======
-  const displayStatusLabel = (() => {
-    if (status === "connected") return PEER_STATUS_LABELS.connected;
-    if (status === "ended") return PEER_STATUS_LABELS.ended;
-    if (status === "error") return PEER_STATUS_LABELS.error;
-    if (!sessionRecord?.consentAt) return "ממתין לאישור הלקוח בקישור";
-    return PEER_STATUS_LABELS[status] || status;
-  })();
-
-  const canRecord =
-    demoModeEnabled &&
-    status === "connected" &&
-    hasRemoteStream &&
-    Boolean(sessionRecord?.recordingConsentAt);
-
-  const recordDisabledReason = (() => {
-    if (!demoModeEnabled) return null;
->>>>>>> 842dd9e (Initial commit)
-    if (status !== "connected") {
+    if (!recordingFeaturesEnabled) return null;    if (status !== "connected") {
       return "הקלטה זמינה רק לאחר חיבור ושיתוף מסך מהלקוח";
     }
     if (!hasRemoteStream) {
       return "אין זרם וידאו — המתינו להופעת התמונה לפני הקלטה";
     }
-<<<<<<< HEAD
-    if (!liveSession?.recordingConsentAt) {
-=======
-    if (!sessionRecord?.recordingConsentAt) {
->>>>>>> 842dd9e (Initial commit)
-      return "הלקוח טרם אישר הקלטה בקישור שיתוף המסך";
+    if (!liveSession?.recordingConsentAt) {      return "הלקוח טרם אישר הקלטה בקישור שיתוף המסך";
     }
     return null;
   })();
 
   useEffect(() => {
     if (!sessionId) return undefined;
-<<<<<<< HEAD
     sessionEndedRef.current = false;
 
     const resumedSession = getSession(sessionId);
@@ -987,76 +738,13 @@ export default function ScreenShareAgentView({
       setReconnecting(false);
       const msg =
         err?.type === "unavailable-id"
-          ? "מזהה הסשן תפוס — לחצו «חזור לצפייה» או סגרו חלונות אחרים"
-=======
-
-    setStatus("waiting");
-    setHasRemoteStream(false);
-    setErrorDetail("");
-    setRecordedBlob(null);
-    chunksRef.current = [];
-    metadataPersistedRef.current = false;
-
-    const peer = new Peer(sessionId, {
-      debug: 0,
-    });
-    peerRef.current = peer;
-
-    peer.on("open", () => {
-      setStatus("waiting");
-    });
-
-    peer.on("call", (call) => {
-      callRef.current = call;
-      call.answer();
-      setStatus("connected");
-
-      call.on("stream", (remoteStream) => {
-        remoteStreamRef.current = remoteStream;
-        setHasRemoteStream(true);
-        if (videoRef.current) {
-          videoRef.current.srcObject = remoteStream;
-        }
-      });
-
-      call.on("close", () => {
-        if (sessionId && mediaRecorderRef.current) setRecordingStopped(sessionId);
-        stopRecordingInternal();
-        setStatus("ended");
-        setHasRemoteStream(false);
-        remoteStreamRef.current = null;
-        if (videoRef.current) videoRef.current.srcObject = null;
-      });
-
-      call.on("error", () => {
-        if (sessionId && mediaRecorderRef.current) setRecordingStopped(sessionId);
-        stopRecordingInternal();
-        setStatus("error");
-        setErrorDetail("השיחה נותקה");
-        setHasRemoteStream(false);
-        remoteStreamRef.current = null;
-      });
-    });
-
-    peer.on("error", (err) => {
-      stopRecordingInternal();
-      setStatus("error");
-      const msg =
-        err?.type === "unavailable-id"
-          ? "מזהה הסשן תפוס — סגרו חלונות אחרים או צרו סשן חדש"
->>>>>>> 842dd9e (Initial commit)
-          : err?.message || "שגיאת PeerJS";
+          ? "מזהה הסשן תפוס — לחצו «חזור לצפייה» או סגרו חלונות אחרים"          : err?.message || "שגיאת PeerJS";
       setErrorDetail(msg);
     });
 
     return () => {
-<<<<<<< HEAD
       clearVideoRetryTimer();
-      stopRecordingInternal(false);
-=======
-      stopRecordingInternal(true);
->>>>>>> 842dd9e (Initial commit)
-      try {
+      stopRecordingInternal(false);      try {
         callRef.current?.close();
       } catch {
         /* ignore */
@@ -1069,7 +757,6 @@ export default function ScreenShareAgentView({
       peerRef.current = null;
       callRef.current = null;
       remoteStreamRef.current = null;
-<<<<<<< HEAD
       hasRemoteStreamRef.current = false;
       setHasRemoteStream(false);
       if (videoRef.current) videoRef.current.srcObject = null;
@@ -1234,17 +921,7 @@ export default function ScreenShareAgentView({
   };
 
   const handleStartRecording = () => {
-    if (!recordingFeaturesEnabled || isRecording) return;
-=======
-      setHasRemoteStream(false);
-      if (videoRef.current) videoRef.current.srcObject = null;
-    };
-  }, [sessionId, stopRecordingInternal]);
-
-  const handleStartRecording = () => {
-    if (!demoModeEnabled || isRecording) return;
->>>>>>> 842dd9e (Initial commit)
-    if (status !== "connected" || !remoteStreamRef.current) {
+    if (!recordingFeaturesEnabled || isRecording) return;    if (status !== "connected" || !remoteStreamRef.current) {
       toast({
         title: "לא ניתן להקליט",
         description: "יש לחכות לחיבור ושיתוף מסך מהלקוח לפני התחלת הקלטה",
@@ -1292,18 +969,11 @@ export default function ScreenShareAgentView({
     recorder.start(1000);
     setIsRecording(true);
     setRecordingElapsed(0);
-<<<<<<< HEAD
     recordingElapsedRef.current = 0;
     recordingTimerRef.current = setInterval(() => {
       setRecordingElapsed((s) => {
         const next = s + 1;
-        recordingElapsedRef.current = next;
-=======
-    recordingTimerRef.current = setInterval(() => {
-      setRecordingElapsed((s) => {
-        const next = s + 1;
->>>>>>> 842dd9e (Initial commit)
-        if (next >= MAX_RECORDING_SECONDS && !maxDurationWarnedRef.current) {
+        recordingElapsedRef.current = next;        if (next >= MAX_RECORDING_SECONDS && !maxDurationWarnedRef.current) {
           maxDurationWarnedRef.current = true;
           setShowMaxDurationBanner(true);
           toast({
@@ -1329,22 +999,12 @@ export default function ScreenShareAgentView({
   }, [status]);
 
   useEffect(() => {
-<<<<<<< HEAD
-    if (!recordingFeaturesEnabled || !autoStartRecording) return undefined;
-=======
-    if (!demoModeEnabled || !autoStartRecording) return undefined;
->>>>>>> 842dd9e (Initial commit)
-    if (!canRecord || isRecording) return undefined;
+    if (!recordingFeaturesEnabled || !autoStartRecording) return undefined;    if (!canRecord || isRecording) return undefined;
     if (autoStartAttemptedRef.current) return undefined;
     autoStartAttemptedRef.current = true;
     startRecordingRef.current();
     return undefined;
-<<<<<<< HEAD
   }, [recordingFeaturesEnabled, autoStartRecording, canRecord, isRecording]);
-=======
-  }, [demoModeEnabled, autoStartRecording, canRecord, isRecording]);
->>>>>>> 842dd9e (Initial commit)
-
   const handleAutoStartToggle = (event) => {
     const checked = event.target.checked;
     setAutoStartRecording(checked);
@@ -1364,7 +1024,6 @@ export default function ScreenShareAgentView({
     stopRecordingInternal();
   };
 
-<<<<<<< HEAD
   const handleCloudSaveSummary = async () => {
     if (!sessionId || !recordingSummary?.recordingId) return;
     const blob = await resolveBlobForDownload(recordingSummary.recordingId);
@@ -1380,107 +1039,7 @@ export default function ScreenShareAgentView({
     }
     const meta =
       sessionRecordings.find((r) => r.id === recordingSummary.recordingId) || lastRecordingMeta;
-    await uploadRecordingBlobToCloud(blob, meta, { showToast: true });
-=======
-  useEffect(() => {
-    if (isRecording || !recordedBlob || recordingElapsed <= 0) return;
-    if (metadataPersistedRef.current) return;
-    metadataPersistedRef.current = true;
-    const entry = persistRecordingMetadata(recordingElapsed);
-    if (!demoModeEnabled || !sessionId || !entry?.id) return;
-
-    let cancelled = false;
-    setSavingBlob(true);
-    saveRecordingBlob({
-      sessionId,
-      recordingId: entry.id,
-      blob: recordedBlob,
-      meta: { fileName: entry.fileName, fileSizeBytes: recordedBlob.size },
-    })
-      .then(() => {
-        if (cancelled) return;
-        updateRecordingMetadata(sessionId, entry.id, {
-          fileSizeBytes: recordedBlob.size,
-        });
-        setBlobAvailableIds((prev) => new Set(prev).add(entry.id));
-        const summary = {
-          recordingId: entry.id,
-          durationSec: recordingElapsed,
-          fileSizeBytes: recordedBlob.size,
-          crmCustomerId: sessionRecord?.crmCustomerId || entry.crmCustomerId,
-        };
-        setRecordingSummary(summary);
-        toast({
-          title: `הקלטה נשמרה — ${formatDurationLabel(recordingElapsed)}, ${formatFileSizeMb(recordedBlob.size)}`,
-          description: "ניתן להוריד, לשמור לענן (דמו) או לפתוח את תיק הלקוח",
-        });
-      })
-      .catch(() => {
-        if (!cancelled) {
-          toast({
-            title: "שמירה מקומית",
-            description: "לא ניתן לשמור ב-IndexedDB — ההורדה המיידית עדיין זמינה",
-            variant: "destructive",
-          });
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setSavingBlob(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    recordedBlob,
-    isRecording,
-    recordingElapsed,
-    persistRecordingMetadata,
-    sessionId,
-    sessionRecord,
-    toast,
-  ]);
-
-  const handleCloudSaveSummary = async () => {
-    if (!sessionId || !recordingSummary?.recordingId) return;
-    setCloudSaving(true);
-    try {
-      const blob = await resolveBlobForDownload(recordingSummary.recordingId);
-      if (!blob?.size) {
-        toast({
-          title: "אין קובץ",
-          description: "ההקלטה לא נשמרה ב-IndexedDB",
-          variant: "destructive",
-        });
-        return;
-      }
-      const meta = sessionRecordings.find((r) => r.id === recordingSummary.recordingId);
-      const result = await uploadRecordingToCloud(blob, {
-        sessionId,
-        recordingId: recordingSummary.recordingId,
-        fileName: meta?.fileName,
-      });
-      if (result.ok) {
-        toast({ title: "נשמר בדמו (ענן מדומה)", description: result.message });
-        refreshSessionData();
-      } else {
-        toast({
-          title: "העלאה לענן",
-          description: result.message,
-          variant: "destructive",
-        });
-      }
-    } catch (err) {
-      toast({
-        title: "שגיאה",
-        description: err?.message || "נסו שוב",
-        variant: "destructive",
-      });
-    } finally {
-      setCloudSaving(false);
-    }
->>>>>>> 842dd9e (Initial commit)
-  };
+    await uploadRecordingBlobToCloud(blob, meta, { showToast: true });  };
 
   const resolveBlobForDownload = async (recordingId) => {
     if (recordedBlob && (!recordingId || lastRecordingMeta?.id === recordingId)) {
@@ -1496,19 +1055,12 @@ export default function ScreenShareAgentView({
     if (recordingId) {
       meta = sessionRecordings.find((r) => r.id === recordingId) || meta;
     }
-<<<<<<< HEAD
     if (!meta && recordedBlob && !metadataPersistedRef.current) {
       await flushRecordingSave(recordedBlob);
       meta =
         listRecordingsForSession(sessionId).find((r) => r.id === lastRecordingMeta?.id) ||
         listRecordingsForSession(sessionId).at(-1) ||
-        lastRecordingMeta;
-=======
-    if (!meta && recordedBlob && recordingElapsed > 0 && !metadataPersistedRef.current) {
-      metadataPersistedRef.current = true;
-      meta = persistRecordingMetadata(recordingElapsed);
->>>>>>> 842dd9e (Initial commit)
-    }
+        lastRecordingMeta;    }
     const blob = await resolveBlobForDownload(recordingId || meta?.id);
     if (!blob?.size) {
       toast({
@@ -1549,7 +1101,6 @@ export default function ScreenShareAgentView({
     handleStartRecording();
   };
 
-<<<<<<< HEAD
   const notifyGuestSessionEnded = useCallback(() => {
     const peer = peerRef.current;
     const guestPeerId = callRef.current?.peer;
@@ -1622,33 +1173,7 @@ export default function ScreenShareAgentView({
     ) : status === "ended" ? (
       <WifiOff className="w-4 h-4 text-slate-500" />
     ) : (
-      <Loader2 className="w-4 h-4 animate-spin text-teal-600" />
-=======
-  const handleEnd = () => {
-    if (isRecording && sessionId) setRecordingStopped(sessionId);
-    stopRecordingInternal();
-    try {
-      callRef.current?.close();
-      peerRef.current?.destroy();
-    } catch {
-      /* ignore */
-    }
-    if (sessionId) endSession(sessionId);
-    setStatus("ended");
-    remoteStreamRef.current = null;
-    if (videoRef.current) videoRef.current.srcObject = null;
-    onEnded?.();
-  };
-
-  const statusIcon =
-    status === "connected" ? (
-      <Wifi className="w-4 h-4 text-emerald-600" />
-    ) : status === "error" ? (
-      <WifiOff className="w-4 h-4 text-red-600" />
-    ) : (
-      <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
->>>>>>> 842dd9e (Initial commit)
-    );
+      <Loader2 className="w-4 h-4 animate-spin text-teal-600" />    );
 
   return (
     <div className={`space-y-3 ${className}`}>
@@ -1656,12 +1181,7 @@ export default function ScreenShareAgentView({
         <div className="flex items-center gap-2">
           {statusIcon}
           <span className="font-medium text-slate-800">{displayStatusLabel}</span>
-<<<<<<< HEAD
-          {recordingFeaturesEnabled && isRecording && (
-=======
-          {demoModeEnabled && isRecording && (
->>>>>>> 842dd9e (Initial commit)
-            <span
+          {recordingFeaturesEnabled && isRecording && (            <span
               className="inline-flex items-center gap-1.5 text-red-700 font-semibold text-xs"
               dir="ltr"
             >
@@ -1681,7 +1201,6 @@ export default function ScreenShareAgentView({
         </p>
       )}
 
-<<<<<<< HEAD
       <div
         ref={videoContainerRef}
         className={`relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-700 ${
@@ -1773,27 +1292,10 @@ export default function ScreenShareAgentView({
           </div>
         )}
         {recordingFeaturesEnabled && isRecording && (
-          <div className="absolute top-2 left-2 z-30 flex items-center gap-1.5 rounded-full bg-black/70 px-2 py-1 text-xs text-white font-semibold pointer-events-none">
-=======
-      <div className="relative rounded-xl overflow-hidden bg-slate-900 aspect-video border border-slate-700">
-        {status !== "connected" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-2 z-10">
-            <Monitor className="w-10 h-10 opacity-50" />
-            <p className="text-xs text-center px-4">
-              {!sessionRecord?.consentAt
-                ? "ממתין שהלקוח יאשר בקישור וישתף מסך"
-                : "השאירו דף זה פתוח — הווידאו יופיע כשהלקוח ישתף מסך"}
-            </p>
-          </div>
-        )}
-        {demoModeEnabled && isRecording && (
-          <div className="absolute top-2 left-2 z-20 flex items-center gap-1.5 rounded-full bg-black/70 px-2 py-1 text-xs text-white font-semibold">
->>>>>>> 842dd9e (Initial commit)
-            <Circle className="w-2 h-2 fill-red-500 text-red-500 animate-pulse" />
+          <div className="absolute top-2 left-2 z-30 flex items-center gap-1.5 rounded-full bg-black/70 px-2 py-1 text-xs text-white font-semibold pointer-events-none">            <Circle className="w-2 h-2 fill-red-500 text-red-500 animate-pulse" />
             <span dir="ltr">{formatRecordingElapsed(recordingElapsed)}</span>
           </div>
         )}
-<<<<<<< HEAD
         <div className="absolute top-2 right-2 z-30 flex gap-1.5">
           {(status === "connected" || hasRemoteStream) && (
             <Button
@@ -1815,33 +1317,11 @@ export default function ScreenShareAgentView({
               {isFullscreen ? "יציאה" : "מסך מלא"}
             </Button>
           )}
-        </div>
-=======
->>>>>>> 842dd9e (Initial commit)
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-<<<<<<< HEAD
-          className="relative z-0 w-full h-full min-h-[180px] object-contain bg-black pointer-events-none select-none"
-        />
-      </div>
-
-      {recordingFeaturesEnabled && showMaxDurationBanner && isRecording && (
-=======
-          className="w-full h-full object-contain"
-        />
-      </div>
-
-      {demoModeEnabled && showMaxDurationBanner && isRecording && (
->>>>>>> 842dd9e (Initial commit)
-        <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed">
+        </div>        <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed">
           עברתם 30 דקות הקלטה — מומלץ לעצור. ההקלטה תמשיך עד לחיצה על «עצור הקלטה».
         </p>
       )}
 
-<<<<<<< HEAD
       {recordingFeaturesEnabled && (
         <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
           <p className="text-xs font-semibold text-slate-700">
@@ -1851,87 +1331,16 @@ export default function ScreenShareAgentView({
             <p className="text-[11px] text-red-800 bg-red-50 border border-red-100 rounded-lg px-2 py-1.5 leading-relaxed">
               מקליט כעת — הקובץ יישמר אוטומטית בסיום ההקלטה או הסשן
             </p>
-          )}
-=======
-      {demoModeEnabled && (
-        <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
-          <p className="text-xs font-semibold text-slate-700">הקלטת מסך (דמו)</p>
->>>>>>> 842dd9e (Initial commit)
-          {recordDisabledReason && !isRecording && (
+          )}          {recordDisabledReason && !isRecording && (
             <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5 leading-relaxed">
               {recordDisabledReason}
             </p>
           )}
-<<<<<<< HEAD
           {autoStartRecording && canRecord && !isRecording && !recordedBlob && (
             <p className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-lg px-2 py-1.5 leading-relaxed">
               הקלטה אוטומטית פעילה — תתחיל עם חיבור הזרם
             </p>
-          )}
-=======
->>>>>>> 842dd9e (Initial commit)
-          <div className="flex flex-wrap gap-2">
-            {!isRecording ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="destructive"
-                onClick={() => setShowPreflightDialog(true)}
-                disabled={!canRecord}
-                className="gap-1.5"
-              >
-                <Circle className="w-3 h-3 fill-current" />
-                התחל הקלטה
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                onClick={handleStopRecording}
-                className="gap-1.5"
-              >
-                <Square className="w-3 h-3" />
-                עצור הקלטה
-              </Button>
-            )}
-            {recordedBlob && !isRecording && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => handleDownloadRecording()}
-                disabled={savingBlob}
-                className="gap-1.5"
-              >
-                <Download className="w-3.5 h-3.5" />
-                הורד
-              </Button>
-            )}
-          </div>
-          <label className="flex items-center gap-2 text-[11px] text-slate-700 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={autoStartRecording}
-              onChange={handleAutoStartToggle}
-              className="rounded border-slate-300"
-            />
-            התחל הקלטה אוטומטית לאחר חיבור (כשהלקוח אישר הקלטה)
-          </label>
-          <p className="text-[10px] text-slate-500 leading-relaxed">
-<<<<<<< HEAD
-            {cloudRecordingUploadEnabled()
-              ? "בפרודקשן: הקובץ מועלה אוטומטית לשרת (Supabase Storage) בסיום ההקלטה."
-              : demoModeEnabled
-                ? "הקובץ נשמר ב-IndexedDB בדפדפן הנציג (WebM). «הורד שוב» זמין גם אחרי רענון."
-                : "הקובץ נשמר מקומית ב-IndexedDB (WebM)."}
-            {savingBlob ? " שומר…" : null}
-            {cloudSaving ? ` ${recordingUploadStatusLabel("uploading")}` : null}
-=======
-            הקובץ נשמר ב-IndexedDB בדפדפן הנציג (WebM, דמו). «הורד שוב» זמין גם אחרי רענון.
-            {savingBlob ? " שומר…" : null}
->>>>>>> 842dd9e (Initial commit)
-          </p>
+          )}          </p>
 
           {recordingSummary && !isRecording && (
             <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 p-3 space-y-2">
@@ -1939,7 +1348,6 @@ export default function ScreenShareAgentView({
                 הקלטה נשמרה — {formatDurationLabel(recordingSummary.durationSec)},{" "}
                 {formatFileSizeMb(recordingSummary.fileSizeBytes)}
               </p>
-<<<<<<< HEAD
               {cloudUploadStatus ? (
                 <p
                   className={`text-[11px] rounded px-2 py-1 border ${
@@ -1952,50 +1360,7 @@ export default function ScreenShareAgentView({
                 >
                   {recordingUploadStatusLabel(cloudUploadStatus)}
                 </p>
-              ) : null}
-=======
->>>>>>> 842dd9e (Initial commit)
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="gap-1 text-xs h-8"
-                  onClick={() => handleDownloadRecording(recordingSummary.recordingId)}
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  הורד
-                </Button>
-<<<<<<< HEAD
-                {(demoModeEnabled ||
-                  cloudUploadStatus === "failed" ||
-                  !cloudRecordingUploadEnabled()) && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    className="gap-1 text-xs h-8"
-                    disabled={cloudSaving || savingBlob}
-                    onClick={handleCloudSaveSummary}
-                  >
-                    <CloudUpload className="w-3.5 h-3.5" />
-                    {cloudUploadStatus === "failed" ? "נסה שוב להעלות" : "שמור לענן"}
-                  </Button>
-                )}
-=======
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  className="gap-1 text-xs h-8"
-                  disabled={cloudSaving || savingBlob}
-                  onClick={handleCloudSaveSummary}
-                >
-                  <CloudUpload className="w-3.5 h-3.5" />
-                  שמור לענן
-                </Button>
->>>>>>> 842dd9e (Initial commit)
-                {recordingSummary.crmCustomerId && (
+              ) : null}                {recordingSummary.crmCustomerId && (
                   <Link
                     to={`/crm/${recordingSummary.crmCustomerId}`}
                     className="inline-flex items-center gap-1 text-xs h-8 px-3 rounded-md border border-teal-200 bg-white text-teal-800 hover:bg-teal-50 font-medium"
@@ -2031,7 +1396,6 @@ export default function ScreenShareAgentView({
                     </span>
                     <span className="text-slate-400 mx-1">·</span>
                     <span>{formatRecordingTimestamp(rec.stoppedAt || rec.startedAt)}</span>
-<<<<<<< HEAD
                     {rec.cloudUploadStatus ? (
                       <p
                         className={`text-[10px] mt-0.5 ${
@@ -2044,50 +1408,12 @@ export default function ScreenShareAgentView({
                       >
                         {recordingUploadStatusLabel(rec.cloudUploadStatus)}
                       </p>
-                    ) : null}
-=======
->>>>>>> 842dd9e (Initial commit)
-                    {rec.downloadedAt ? (
-                      <p className="text-[10px] text-emerald-700 mt-0.5">
-                        הורדת הקובץ בוצעה ({formatRecordingTimestamp(rec.downloadedAt)})
-                      </p>
-                    ) : null}
-                    {(blobAvailableIds.has(rec.id) ||
-                      (recordedBlob && lastRecordingMeta?.id === rec.id)) && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="link"
-                        className="h-auto p-0 text-[11px] text-teal-700"
-                        onClick={() => handleDownloadRecording(rec.id)}
-                      >
-                        הורד שוב
-                      </Button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
-
-<<<<<<< HEAD
-      {recordingFeaturesEnabled && (
-=======
-      {demoModeEnabled && (
->>>>>>> 842dd9e (Initial commit)
-        <Dialog open={showPreflightDialog} onOpenChange={setShowPreflightDialog}>
+                    ) : null}        <Dialog open={showPreflightDialog} onOpenChange={setShowPreflightDialog}>
           <DialogContent className="sm:max-w-md" dir="rtl">
             <DialogHeader>
               <DialogTitle>בדיקה לפני הקלטה</DialogTitle>
               <DialogDescription>
-<<<<<<< HEAD
-                ודאו שכל התנאים מתקיימים לפני תחילת הקלטת המסך.
-=======
-                ודאו שכל התנאים מתקיימים לפני תחילת הקלטת המסך (דמו).
->>>>>>> 842dd9e (Initial commit)
-              </DialogDescription>
+                ודאו שכל התנאים מתקיימים לפני תחילת הקלטת המסך.              </DialogDescription>
             </DialogHeader>
             <ul className="space-y-2 py-2">
               {preflightItems.map((item) => (
@@ -2129,7 +1455,6 @@ export default function ScreenShareAgentView({
         </Dialog>
       )}
 
-<<<<<<< HEAD
       <SessionFileShare
         sessionId={sessionId}
         uploadedBy="agent"
@@ -2139,13 +1464,7 @@ export default function ScreenShareAgentView({
 
       <p className="text-[11px] text-slate-500 leading-relaxed">
         צפייה בלבד — לחיצה על הווידאו לא מסיימת את הסשן. השתמשו ב«מסך מלא» להגדלה; אם עברתם
-        לחלון אחר — «חזור לצפייה» מחדש את הזרם.
-=======
-      <p className="text-[11px] text-slate-500 leading-relaxed">
-        צפייה בלבד — אין שליטה בעכבר. דמו: PeerServer ציבורי; לפרודקשן יש לארח PeerServer
-        עצמי או Supabase Realtime.
->>>>>>> 842dd9e (Initial commit)
-      </p>
+        לחלון אחר — «חזור לצפייה» מחדש את הזרם.      </p>
 
       <Button
         type="button"

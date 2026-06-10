@@ -9,20 +9,13 @@ import DateSelector from "../components/breaks/DateSelector";
 import { Link } from "react-router-dom";
 import BreakSettingsPanel from "../components/admin/BreakSettingsPanel";
 import ChatBrandingPanel from "../components/admin/ChatBrandingPanel";
-<<<<<<< HEAD
 import {
   BREAK_REGISTRATION_OVERRIDE_MESSAGE,
   SHORT_BREAK_SLOTS,
   LUNCH_BREAK_SLOTS,
 } from "@/constants/scheduling";
 import BackendConfigBanner from "@/components/BackendConfigBanner";
-import { customerChatEnabled, demoModeEnabled } from "@/api/demoClient";
-=======
-import { SHORT_BREAK_SLOTS, LUNCH_BREAK_SLOTS } from "@/constants/scheduling";
-import BackendConfigBanner from "@/components/BackendConfigBanner";
-import { demoModeEnabled } from "@/api/demoClient";
->>>>>>> 842dd9e (Initial commit)
-import AdminLocalhostLinksPanel from "@/components/admin/AdminLocalhostLinksPanel";
+import { customerChatEnabled, demoModeEnabled } from "@/api/demoClient";import AdminLocalhostLinksPanel from "@/components/admin/AdminLocalhostLinksPanel";
 import {
   BreakRegistrationError,
   createBreakRegistration,
@@ -56,16 +49,11 @@ export default function AdminDashboard() {
   const limits = getBreakLimits(settings);
 
   const createMutation = useMutation({
-<<<<<<< HEAD
     mutationFn: (data) =>
       createBreakRegistration(dataClient, data, {
         skipDeadlineCheck: true,
         allowNonTodayDate: true,
-      }),
-=======
-    mutationFn: (data) => createBreakRegistration(dataClient, data),
->>>>>>> 842dd9e (Initial commit)
-    onSuccess: () => {
+      }),    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["break-registrations", dateStr] });
       setAddingTo(null);
       setNewName("");
@@ -172,25 +160,8 @@ export default function AdminDashboard() {
           <Link to="/admin/users" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">נציגים</Link>
           <Link to="/admin/shifts" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">משמרות</Link>
           <Link to="/admin/training" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">הדרכה</Link>
-<<<<<<< HEAD
           <Link to="/admin/recordings" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">הקלטות</Link>
-          <Link to="/admin/metrics" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">מדדים</Link>
-=======
->>>>>>> 842dd9e (Initial commit)
-          {demoModeEnabled && (
-            <Link to="/admin/knowledge" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">
-              ניהול ידע
-            </Link>
-          )}
-<<<<<<< HEAD
-          {customerChatEnabled && (
-            <Link to="/admin/customer-chat" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">
-              בוט צ'אט לקוחות
-            </Link>
-          )}
-=======
->>>>>>> 842dd9e (Initial commit)
-          <div className="text-center">
+          <Link to="/admin/metrics" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">מדדים</Link>          <div className="text-center">
             <div className="flex items-center gap-3 justify-center mb-1">
               <div
                 className={hypHeaderIconClass(
@@ -228,7 +199,6 @@ export default function AdminDashboard() {
           <BreakSettingsPanel selectedDate={selectedDate} />
         </div>
 
-<<<<<<< HEAD
         {settings?.registration_override_open && (
           <motion.div
             initial={{ opacity: 0, y: -8 }}

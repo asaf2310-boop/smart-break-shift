@@ -352,7 +352,6 @@ export function getCustomerById(id) {
   return readStore().customers.find((c) => c.id === id) || null;
 }
 
-<<<<<<< HEAD
 /** נרמול מספר ישראלי לחיפוש — מסיר מקפים/רווחים, ממיר +972/972 ל-0 */
 export function normalizePhoneForLookup(phone) {
   if (!phone) return "";

@@ -1,38 +1,18 @@
 import React from "react";
 import { cn } from "@/lib/utils";
-<<<<<<< HEAD
 
 /** Entry hero — subtitle only (no logo). */
 export default function BrandEntryBlock({
   onDark = false,
   subtitle = "מערכת מוקד",
   className,
-}) {
-=======
-import BrandLogo from "@/components/brand/BrandLogo";
-
-/** Entry hero — home: full bright PNG; `variant="login"`: subtitle only (no logo). */
-export default function BrandEntryBlock({
-  onDark = false,
-  variant = "full",
-  size,
-  subtitle = "מערכת מוקד",
-  className,
-  hideLogo = false,
-}) {
-  const isLogin = variant === "login" || hideLogo;
-  const logoVariant = variant;
-  const logoSize = size ?? (onDark ? "hero" : "xl");
-
->>>>>>> 842dd9e (Initial commit)
-  return (
+}) {  return (
     <div
       className={cn(
         "flex w-full flex-col items-center justify-center text-center gap-3 px-2",
         className,
       )}
     >
-<<<<<<< HEAD
 =======
       {!isLogin ? (
         <BrandLogo

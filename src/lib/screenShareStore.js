@@ -1,13 +1,8 @@
-<<<<<<< HEAD
 import {
   demoModeEnabled,
   demoSendRealEmailEnabled,
   remoteSupportEnabled,
-} from "@/api/demoClient";
-=======
-import { demoModeEnabled, demoSendRealEmailEnabled } from "@/api/demoClient";
->>>>>>> 842dd9e (Initial commit)
-import { cleanEnvValue } from "@/api/supabase";
+} from "@/api/demoClient";import { cleanEnvValue } from "@/api/supabase";
 import {
   escapeHtml,
   logEmailDelivery,
@@ -18,7 +13,6 @@ import {
   simulatedReasonForApiResult,
   simulatedReasonForDemoSendDisabled,
 } from "@/lib/emailSimulatedReason";
-<<<<<<< HEAD
 import { getStoredAgentName } from "@/constants/scheduling";
 import { agentOwnsBreakRegistration } from "@/lib/breakCapacity";
 import {
@@ -35,18 +29,6 @@ import {
 } from "@/lib/guestLinkCodec";
 
 export { GUEST_BOOTSTRAP_QUERY_KEY, encodeGuestBootstrapPayload, decodeGuestBootstrapPayload };
-=======
->>>>>>> 842dd9e (Initial commit)
-
-export const SCREEN_SHARE_STORAGE_KEY = "smart-break-shift-screen-share-v1";
-export const SCREEN_SHARE_CHANGE_EVENT = "screen-share-changed";
-/** דמו: תוקף קישור אורח — 72 שעות מיצירת הסשן (לא מחיקה אוטומטית מ-localStorage) */
-export const DEMO_GUEST_SESSION_TTL_MS = 72 * 60 * 60 * 1000;
-<<<<<<< HEAD
-=======
-export const GUEST_BOOTSTRAP_QUERY_KEY = "b";
->>>>>>> 842dd9e (Initial commit)
-
 const EMAIL_SUBJECT_SCREEN =
   "שיתוף מסך לתמיכה טכנית (צפייה בלבד) — באישורך";
 
@@ -54,20 +36,11 @@ export const DEMO_SCREEN_SHARE_EMAIL_MESSAGE =
   "בדמו: הקישור מוכן — העתיקו את הקישור למטה או פתחו mailto";
 
 function makeId(prefix) {
-<<<<<<< HEAD
   return `${prefix}${generateShortCode(8)}`;
 }
 
 function readStore() {
-  if (!remoteSupportEnabled || typeof window === "undefined") {
-=======
-  return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
-}
-
-function readStore() {
-  if (!demoModeEnabled || typeof window === "undefined") {
->>>>>>> 842dd9e (Initial commit)
-    return { sessions: [], emailLogs: [], recordings: [] };
+  if (!remoteSupportEnabled || typeof window === "undefined") {    return { sessions: [], emailLogs: [], recordings: [] };
   }
   try {
     const raw = localStorage.getItem(SCREEN_SHARE_STORAGE_KEY);
@@ -88,12 +61,7 @@ function readSessions() {
 }
 
 function writeStore({ sessions, emailLogs, recordings }) {
-<<<<<<< HEAD
-  if (!remoteSupportEnabled || typeof window === "undefined") return;
-=======
-  if (!demoModeEnabled || typeof window === "undefined") return;
->>>>>>> 842dd9e (Initial commit)
-  const current = readStore();
+  if (!remoteSupportEnabled || typeof window === "undefined") return;  const current = readStore();
   localStorage.setItem(
     SCREEN_SHARE_STORAGE_KEY,
     JSON.stringify({
@@ -109,7 +77,6 @@ function writeSessions(sessions) {
   writeStore({ sessions });
 }
 
-<<<<<<< HEAD
 function cloudSyncSession(session, options) {
   if (session) syncScreenShareSessionToCloud(session, options);
 }
@@ -121,23 +88,12 @@ export function screenShareDemoAvailable() {
 
 /** צפייה בדפדפן — זמין בפרודקשן (ברירת מחדל) ובדמו */
 export function screenShareFeaturesAvailable() {
-  return remoteSupportEnabled;
-=======
-export function screenShareDemoAvailable() {
-  return demoModeEnabled;
-}
-
-/** alias — אותה דרישת דמו כמו remoteSupport */
-export function screenShareFeaturesAvailable() {
-  return demoModeEnabled;
->>>>>>> 842dd9e (Initial commit)
-}
+  return remoteSupportEnabled;}
 
 export function getSession(id) {
   return readSessions().find((s) => s.id === id) || null;
 }
 
-<<<<<<< HEAD
 export function getSessionByShortCode(shortCode) {
   const code = String(shortCode || "").trim();
   if (!code) return null;
@@ -192,86 +148,11 @@ export function markGuestStreamConnected(id) {
     guestStreamConnectedAt: new Date().toISOString(),
   });
 }
-
-=======
->>>>>>> 842dd9e (Initial commit)
-/** כתובת ציבורית לקישורים במייל — VITE_APP_URL או origin; מ-localhost מעדיף env */
-export function getPublicAppOrigin() {
-  const fromEnv = cleanEnvValue(import.meta.env.VITE_APP_URL)?.replace(/\/$/, "") || "";
-  if (typeof window === "undefined") return fromEnv;
-  const origin = window.location.origin;
-  const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(origin);
-  if (isLocal && fromEnv) return fromEnv;
-  return fromEnv || origin;
-}
-
-<<<<<<< HEAD
-export function isGuestSessionExpired(session) {
-  if (!session?.createdAt) return true;
-  if (session.status === "ended") return false;
-  // Production: active sessions stay valid until the agent ends them.
-  if (cloudSessionSyncEnabled()) return false;
-=======
-function toBase64Url(str) {
-  if (typeof btoa === "undefined") return "";
-  const bytes = new TextEncoder().encode(str);
-  let binary = "";
-  bytes.forEach((b) => {
-    binary += String.fromCharCode(b);
-  });
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function fromBase64Url(encoded) {
-  if (!encoded || typeof atob === "undefined") return null;
-  try {
-    const padded = encoded.replace(/-/g, "+").replace(/_/g, "/");
-    const padLen = (4 - (padded.length % 4)) % 4;
-    const binary = atob(padded + "=".repeat(padLen));
-    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
-    return new TextDecoder().decode(bytes);
-  } catch {
-    return null;
-  }
-}
-
-function encodeGuestBootstrapPayload(session) {
-  if (!session?.id || !session.createdAt) return "";
-  const payload = {
-    c: session.createdAt,
-    a: String(session.agentName || "").slice(0, 120),
-    e: String(session.customerEmail || "").slice(0, 200),
-    r: session.crmCustomerId || null,
-  };
-  return toBase64Url(JSON.stringify(payload));
-}
-
-function decodeGuestBootstrapPayload(encoded) {
-  const json = fromBase64Url(encoded);
-  if (!json) return null;
-  try {
-    const parsed = JSON.parse(json);
-    if (!parsed?.c || Number.isNaN(new Date(parsed.c).getTime())) return null;
-    return {
-      createdAt: parsed.c,
-      agentName: String(parsed.a || "").slice(0, 120),
-      customerEmail: String(parsed.e || "").slice(0, 200),
-      crmCustomerId: parsed.r || null,
-    };
-  } catch {
-    return null;
-  }
-}
-
-export function isGuestSessionExpired(session) {
-  if (!session?.createdAt) return true;
->>>>>>> 842dd9e (Initial commit)
   const created = new Date(session.createdAt).getTime();
   if (Number.isNaN(created)) return true;
   return Date.now() - created > DEMO_GUEST_SESSION_TTL_MS;
 }
 
-<<<<<<< HEAD
 export const GUEST_LINK_CLOUD_PENDING_MESSAGE =
   "הסנכרון לענן עדיין בתהליך — אם הלקוח לא מצליח לפתוח את הקישור, נסו שוב בעוד רגע";
 
@@ -317,24 +198,11 @@ export async function ensureGuestLinkReady(session) {
   };
 }
 
-=======
->>>>>>> 842dd9e (Initial commit)
-/**
- * דמו: יוצר סשן ב-localStorage של האורח מפרמטר bootstrap ב-URL (מכשיר/דפדפן אחר).
- */
-export function bootstrapGuestSessionFromUrl(sessionId, bootstrapParam) {
-<<<<<<< HEAD
-  if (!remoteSupportEnabled || !sessionId || !bootstrapParam) return null;
-=======
-  if (!demoModeEnabled || !sessionId || !bootstrapParam) return null;
->>>>>>> 842dd9e (Initial commit)
-
   const payload = decodeGuestBootstrapPayload(bootstrapParam);
   if (!payload) return null;
 
   const existing = getSession(sessionId);
   if (existing) {
-<<<<<<< HEAD
 =======
     if (existing.status === "ended") return existing;
 >>>>>>> 842dd9e (Initial commit)
@@ -355,72 +223,7 @@ export function bootstrapGuestSessionFromUrl(sessionId, bootstrapParam) {
     recordings: [],
     emailSentAt: null,
     endedAt: null,
-<<<<<<< HEAD
-    endedReason: null,
-=======
->>>>>>> 842dd9e (Initial commit)
-  };
-
-  if (isGuestSessionExpired(session)) return null;
-
-  writeSessions([...readSessions(), session]);
-  return session;
-}
-
-/**
- * מחזיר סשן לאורח: localStorage → bootstrap מ-URL → בדיקת תוקף.
- * @param {string} sessionId
- * @param {URLSearchParams|string|null} searchParamsOrBootstrap
- */
-export function resolveGuestSession(sessionId, searchParamsOrBootstrap = null) {
-  if (!sessionId) return null;
-
-  let bootstrapParam = null;
-  if (typeof searchParamsOrBootstrap === "string") {
-    bootstrapParam = searchParamsOrBootstrap;
-  } else if (searchParamsOrBootstrap?.get) {
-    bootstrapParam = searchParamsOrBootstrap.get(GUEST_BOOTSTRAP_QUERY_KEY);
-  }
-
-  let session = getSession(sessionId);
-  if (!session && bootstrapParam) {
-    session = bootstrapGuestSessionFromUrl(sessionId, bootstrapParam);
-  }
-
-  if (!session) return null;
-  if (session.status !== "ended" && isGuestSessionExpired(session)) return null;
-  return session;
-}
-
-export function listSessions() {
-  return readSessions().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-}
-
-export function listSessionsForCustomer(crmCustomerId) {
-  return listSessions().filter((s) => s.crmCustomerId === crmCustomerId);
-}
-
-export function createScreenSession({
-  crmCustomerId,
-  agentName,
-  customerEmail = "",
-} = {}) {
-  const now = new Date().toISOString();
-  const id = makeId("ss");
-  const session = {
-    id,
-<<<<<<< HEAD
-    shortCode: null,
-    agentPeerOpenedAt: null,
-    agentPeerReadyAt: null,
-    guestStreamConnectedAt: null,
-    crmCustomerId: crmCustomerId || null,
-    agentName: String(agentName || getStoredAgentName() || "").trim(),
-=======
-    crmCustomerId: crmCustomerId || null,
-    agentName: String(agentName || "").trim(),
->>>>>>> 842dd9e (Initial commit)
-    customerEmail: String(customerEmail || "").trim(),
+    endedReason: null,    customerEmail: String(customerEmail || "").trim(),
     status: "active",
     createdAt: now,
     consentAt: null,
@@ -430,18 +233,11 @@ export function createScreenSession({
     recordings: [],
     emailSentAt: null,
     endedAt: null,
-<<<<<<< HEAD
     endedReason: null,
   };
   const sessions = [...readSessions(), session];
   writeSessions(sessions);
-  cloudSyncSession(session);
-=======
-  };
-  const sessions = [...readSessions(), session];
-  writeSessions(sessions);
->>>>>>> 842dd9e (Initial commit)
-  return session;
+  cloudSyncSession(session);  return session;
 }
 
 export function updateSession(id, patch) {
@@ -452,45 +248,7 @@ export function updateSession(id, patch) {
     return updated;
   });
   writeSessions(sessions);
-<<<<<<< HEAD
-  if (updated) cloudSyncSession(updated);
-=======
->>>>>>> 842dd9e (Initial commit)
-  return updated;
-}
-
-export function logScreenConsent(id) {
-  const now = new Date().toISOString();
-  return updateSession(id, { consentAt: now, status: "active" });
-}
-
-/** אישור הקלטת מסך (דמו) — נפרד מאישור צפייה */
-export function logRecordingConsent(id) {
-  const now = new Date().toISOString();
-  return updateSession(id, { recordingConsentAt: now });
-}
-
-<<<<<<< HEAD
-/**
- * סנכרון מצב מהאורח (PeerJS) ל-localStorage של הנציג — מכשירים נפרדים.
- * מעדכן רק שדות שחסרים אצל הנציג (לא דורס ערכים קיימים).
- */
-export function applyGuestPeerSync(id, { consentAt, recordingConsentAt } = {}) {
-  if (!id) return null;
-  const session = getSession(id);
-  if (!session) return null;
-  const patch = {};
-  if (consentAt && !session.consentAt) patch.consentAt = consentAt;
-  if (recordingConsentAt && !session.recordingConsentAt) {
-    patch.recordingConsentAt = recordingConsentAt;
-  }
-  if (Object.keys(patch).length === 0) return session;
-  return updateSession(id, patch);
-}
-
-=======
->>>>>>> 842dd9e (Initial commit)
-/** נציג התחיל הקלטה — מוצג לאורח (דמו) */
+  if (updated) cloudSyncSession(updated);/** נציג התחיל הקלטה — מוצג לאורח (דמו) */
 export function setRecordingActive(id) {
   const now = new Date().toISOString();
   return updateSession(id, { recordingActiveAt: now });
@@ -624,119 +382,13 @@ export function appendSessionRecording(sessionId, meta) {
     ),
     recordings: [...store.recordings, entry],
   });
-<<<<<<< HEAD
   cloudSyncSession(getSession(sessionId), {
     recordingCount: sessionRecordings.length,
-  });
-=======
->>>>>>> 842dd9e (Initial commit)
-  return entry;
-}
-
-export function markRecordingDownloaded(sessionId, recordingId) {
-  const now = new Date().toISOString();
-  return updateRecordingMetadata(sessionId, recordingId, { downloadedAt: now });
-}
-
-/** עדכון שדות מטא-דאטה להקלטה (דמו) */
-export function updateRecordingMetadata(sessionId, recordingId, patch) {
-  if (!sessionId || !recordingId || !patch) return null;
-  const store = readStore();
-  const patchRecording = (r) =>
-    r.sessionId === sessionId && r.id === recordingId ? { ...r, ...patch } : r;
-  const sessions = store.sessions.map((s) => {
-    if (s.id !== sessionId) return s;
-    return {
-      ...s,
-      recordings: (s.recordings || []).map(patchRecording),
-    };
-  });
-  const recordings = store.recordings.map(patchRecording);
-  writeStore({ sessions, recordings });
-  return getSession(sessionId);
-}
-
-/**
- * ייצוא יומן אודיט הקלטות (דמו) — ללא וידאו, רק הסכמות ומטא-דאטה.
- */
-export function buildDemoRecordingAuditExport() {
-  if (!demoModeEnabled) {
-    return { exportedAt: new Date().toISOString(), demoMode: false, sessions: [], recordings: [] };
-  }
-  const store = readStore();
-  const allRecordings = listAllRecordings();
-  const sessions = listSessions().map((s) => ({
-    sessionId: s.id,
-    status: s.status,
-    createdAt: s.createdAt,
-    endedAt: s.endedAt,
-    screenConsentAt: s.consentAt,
-    recordingConsentAt: s.recordingConsentAt,
-    recordingActiveAt: s.recordingActiveAt,
-    recordingStoppedAt: s.recordingStoppedAt,
-    agentName: s.agentName,
-    customerEmail: s.customerEmail,
-    crmCustomerId: s.crmCustomerId,
-    recordings: (s.recordings || []).map((r) => ({
-      recordingId: r.id,
-      startedAt: r.startedAt,
-      stoppedAt: r.stoppedAt,
-      durationSec: r.durationSec,
-      fileName: r.fileName,
-      consentAt: r.consentAt,
-      downloadedAt: r.downloadedAt,
-      fileSizeBytes: r.fileSizeBytes ?? null,
-      hasAudio: r.hasAudio ?? null,
-      demoCloudSaved: r.demoCloudSaved ?? null,
-      demoCloudSavedAt: r.demoCloudSavedAt ?? null,
-      demoCloudPath: r.demoCloudPath ?? null,
-    })),
-  }));
-  return {
-    exportedAt: new Date().toISOString(),
-    demoMode: true,
-    note: "ייצוא דמו — ללא קבצי וידאו. הסכמות ומטא-דאטה בלבד.",
-    sessions,
-    recordings: allRecordings.map((r) => ({
-      recordingId: r.id,
-      sessionId: r.sessionId,
-      startedAt: r.startedAt,
-      stoppedAt: r.stoppedAt,
-      durationSec: r.durationSec,
-      fileName: r.fileName,
-      screenConsentAt: getSession(r.sessionId)?.consentAt ?? null,
-      recordingConsentAt: r.consentAt,
-      downloadedAt: r.downloadedAt,
-      fileSizeBytes: r.fileSizeBytes ?? null,
-      hasAudio: r.hasAudio ?? null,
-      agentName: r.agentName,
-      customerEmail: r.customerEmail,
-      crmCustomerId: r.crmCustomerId,
-      demoCloudSaved: r.demoCloudSaved ?? null,
-      demoCloudSavedAt: r.demoCloudSavedAt ?? null,
-      demoCloudPath: r.demoCloudPath ?? null,
-    })),
-    emailLogs: store.emailLogs.map((log) => ({
-      id: log.id,
-      sessionId: log.sessionId,
-      to: log.to,
-      sentAt: log.sentAt,
-      status: log.status,
-    })),
-  };
-}
-
-<<<<<<< HEAD
-export function endSession(id, { endedReason = "agent_ended" } = {}) {
-=======
-export function endSession(id) {
->>>>>>> 842dd9e (Initial commit)
-  const now = new Date().toISOString();
+  });  const now = new Date().toISOString();
   return updateSession(id, {
     status: "ended",
     endedAt: now,
     recordingActiveAt: null,
-<<<<<<< HEAD
     endedReason: endedReason || null,
     shortCode: null,
     agentPeerOpenedAt: null,
@@ -782,27 +434,14 @@ export function listScreenSessionsForAgent(agentName, { limit } = {}) {
   if (typeof limit === "number" && limit > 0) return filtered.slice(0, limit);
   return filtered;
 }
-
-=======
-  });
-}
-
->>>>>>> 842dd9e (Initial commit)
 /**
  * @param {string|{ id: string, createdAt?: string, agentName?: string, customerEmail?: string, crmCustomerId?: string|null }} sessionOrId
  * @param {string} [origin] — ברירת מחדל getPublicAppOrigin()
  */
-export function buildScreenShareGuestUrl(sessionOrId, origin) {
-<<<<<<< HEAD
-=======
-  const base = (origin || getPublicAppOrigin()).replace(/\/$/, "");
-  let sessionId;
->>>>>>> 842dd9e (Initial commit)
-  let session = null;
+export function buildScreenShareGuestUrl(sessionOrId, origin) {  let session = null;
 
   if (sessionOrId && typeof sessionOrId === "object" && sessionOrId.id) {
     session = sessionOrId;
-<<<<<<< HEAD
   } else {
     const sessionId = String(sessionOrId || "").trim();
     session = sessionId ? getSession(sessionId) : null;
@@ -815,27 +454,7 @@ export function buildScreenShareGuestUrl(sessionOrId, origin) {
     return `${base}/support/screen/${encodeURIComponent(session.id)}`;
   }
 
-  return buildShortGuestUrl(session, { kind: "screen", origin });
-=======
-    sessionId = session.id;
-  } else {
-    sessionId = String(sessionOrId || "").trim();
-    session = sessionId ? getSession(sessionId) : null;
-  }
-
-  if (!sessionId) return "";
-
-  const path = `${base}/support/screen/${encodeURIComponent(sessionId)}`;
-  if (!demoModeEnabled || !session?.createdAt) return path;
-
-  const bootstrap = encodeGuestBootstrapPayload(session);
-  if (!bootstrap) return path;
-
-  const params = new URLSearchParams();
-  params.set(GUEST_BOOTSTRAP_QUERY_KEY, bootstrap);
-  return `${path}?${params.toString()}`;
->>>>>>> 842dd9e (Initial commit)
-}
+  return buildShortGuestUrl(session, { kind: "screen", origin });}
 
 export function buildScreenShareEmailBody({
   customerName,
@@ -1105,7 +724,6 @@ export function subscribeScreenShare(callback) {
   if (typeof window === "undefined") return () => {};
   const handler = () => callback();
   window.addEventListener(SCREEN_SHARE_CHANGE_EVENT, handler);
-<<<<<<< HEAD
   // Cross-tab sync: localStorage write triggers `storage` events in other tabs.
   const onStorage = (e) => {
     if (!e) return;
@@ -1116,8 +734,4 @@ export function subscribeScreenShare(callback) {
   return () => {
     window.removeEventListener(SCREEN_SHARE_CHANGE_EVENT, handler);
     window.removeEventListener("storage", onStorage);
-  };
-=======
-  return () => window.removeEventListener(SCREEN_SHARE_CHANGE_EVENT, handler);
->>>>>>> 842dd9e (Initial commit)
-}
+  };}

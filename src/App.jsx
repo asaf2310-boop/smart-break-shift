@@ -10,48 +10,11 @@ import AuthRequiredScreen from '@/components/AuthRequiredScreen';
 import AppLoadError from '@/components/AppLoadError';
 import AdminGate from '@/components/admin/AdminGate';
 import DemoGate from '@/components/DemoGate';
-<<<<<<< HEAD
-import CustomerChatGate from '@/components/CustomerChatGate';
-=======
->>>>>>> 842dd9e (Initial commit)
-import Home from './pages/Home';
-import BreakScheduler from './pages/BreakScheduler';
-import AdminDashboard from './pages/AdminDashboard';
-import ShiftScheduler from './pages/ShiftScheduler';
-import AdminShifts from './pages/AdminShifts';
-import AdminUsers from './pages/AdminUsers';
-import ResetPassword from './pages/ResetPassword';
-import LiveDataSync from '@/components/LiveDataSync';
-import FloatingChatWidget from '@/components/chat/FloatingChatWidget';
-import SoftphoneWidget from '@/components/telephony/SoftphoneWidget';
-import { ChatPanelProvider } from '@/context/ChatPanelContext';
-import { TelephonyProvider } from '@/context/TelephonyContext';
-import { FloatingWidgetsLayerProvider } from '@/context/FloatingWidgetsLayerContext';
-import { ChatUnreadProvider } from '@/hooks/useChatUnread';
-<<<<<<< HEAD
-import { ScreenShareSessionProvider } from '@/contexts/ScreenShareSessionContext';
-import ChatRoute from './pages/ChatRoute';
-import CustomerChatGuestPage from './pages/CustomerChatGuestPage';
-import AgentCustomerChatPage from './pages/AgentCustomerChatPage';
-import CrmDashboard from './pages/CrmDashboard';
-import CrmCustomerDetail from './pages/CrmCustomerDetail';
-import CrmLookupDeepLink from './pages/CrmLookupDeepLink';
-import KnowledgePage from './pages/KnowledgePage';
-import AdminKnowledge from './pages/AdminKnowledge';
-import AdminCustomerChat from './pages/AdminCustomerChat';
-=======
-import ChatDeepLink from './pages/ChatDeepLink';
-import CrmDashboard from './pages/CrmDashboard';
-import CrmCustomerDetail from './pages/CrmCustomerDetail';
-import KnowledgePage from './pages/KnowledgePage';
-import AdminKnowledge from './pages/AdminKnowledge';
->>>>>>> 842dd9e (Initial commit)
-import FloatingKnowledgeWidget from '@/components/knowledge/FloatingKnowledgeWidget';
+import CustomerChatGate from '@/components/CustomerChatGate';import FloatingKnowledgeWidget from '@/components/knowledge/FloatingKnowledgeWidget';
 import AdminLocalhostLinksFloating from '@/components/admin/AdminLocalhostLinksFloating';
 import RemoteSupportConsentPage from './pages/RemoteSupportConsentPage';
 import RemoteSupportPage from './pages/RemoteSupportPage';
 import ScreenShareGuestPage from './pages/ScreenShareGuestPage';
-<<<<<<< HEAD
 import GuestJoinRedirectPage from './pages/GuestJoinRedirectPage';
 import DemoRecordingPlayPage from './pages/DemoRecordingPlayPage';
 import TrainingPage from './pages/TrainingPage';
@@ -65,15 +28,6 @@ import { hasTopAppNav } from '@/lib/appNavPaths';
 import { brandVisualEnabled } from '@/lib/brandShell';
 import { applyHypDemoDocumentClasses, hypDemoAppShellClass } from '@/lib/hypPage';
 import { useEffect } from 'react';
-=======
-import DemoRecordingPlayPage from './pages/DemoRecordingPlayPage';
-import TrainingPage from './pages/TrainingPage';
-import AdminTraining from './pages/AdminTraining';
-import RouteErrorBoundary from '@/components/RouteErrorBoundary';
-import { hasTopAppNav } from '@/lib/appNavPaths';
-import { demoModeEnabled } from '@/api/demoClient';
->>>>>>> 842dd9e (Initial commit)
-
 function TopAppNav() {
   const { pathname } = useLocation();
   if (!hasTopAppNav(pathname)) return null;
@@ -83,7 +37,6 @@ function TopAppNav() {
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
 
-<<<<<<< HEAD
   useEffect(() => {
     applyHypDemoDocumentClasses();
   }, []);
@@ -93,16 +46,7 @@ const AuthenticatedApp = () => {
       <div className={brandVisualEnabled ? "fixed inset-0 flex items-center justify-center hyp-scheduling-root" : "fixed inset-0 flex items-center justify-center m3-page"}>
         <div
           className={brandVisualEnabled ? "w-10 h-10 hyp-loader" : "w-10 h-10 rounded-full border-[3px] border-primary/20 border-t-primary animate-spin"}
-          style={brandVisualEnabled ? undefined : { boxShadow: "var(--brand-glow-purple)" }}
-=======
-  if (isLoadingPublicSettings || isLoadingAuth) {
-    return (
-      <div className={demoModeEnabled ? "fixed inset-0 flex items-center justify-center hyp-scheduling-root" : "fixed inset-0 flex items-center justify-center m3-page"}>
-        <div
-          className={demoModeEnabled ? "w-10 h-10 hyp-loader" : "w-10 h-10 rounded-full border-[3px] border-primary/20 border-t-primary animate-spin"}
-          style={demoModeEnabled ? undefined : { boxShadow: "var(--brand-glow-purple)" }}
->>>>>>> 842dd9e (Initial commit)
-          aria-hidden
+          style={brandVisualEnabled ? undefined : { boxShadow: "var(--brand-glow-purple)" }}          aria-hidden
         />
       </div>
     );
@@ -119,18 +63,12 @@ const AuthenticatedApp = () => {
   }
 
   return (
-<<<<<<< HEAD
-    <div className={hypDemoAppShellClass()}>
-=======
-    <>
->>>>>>> 842dd9e (Initial commit)
-      <TopAppNav />
+    <div className={hypDemoAppShellClass()}>      <TopAppNav />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/breaks" element={<BreakScheduler />} />
         <Route path="/shifts" element={<RouteErrorBoundary><ShiftScheduler /></RouteErrorBoundary>} />
         <Route path="/training" element={<TrainingPage />} />
-<<<<<<< HEAD
         <Route path="/metrics" element={<AgentMetricsPage />} />
         <Route path="/metrics/ranking" element={<AgentMetricsRankingPage />} />
         <Route path="/chat/guest" element={<CustomerChatGate><CustomerChatGuestPage /></CustomerChatGate>} />
@@ -139,18 +77,10 @@ const AuthenticatedApp = () => {
         <Route path="/crm" element={<DemoGate><CrmDashboard /></DemoGate>} />
         <Route path="/crm/lookup" element={<DemoGate><CrmLookupDeepLink /></DemoGate>} />
         <Route path="/crm/:id" element={<DemoGate><CrmCustomerDetail /></DemoGate>} />
-        <Route path="/remote-support" element={<RemoteSupportPage />} />
-=======
-        <Route path="/chat" element={<ChatDeepLink />} />
-        <Route path="/crm" element={<DemoGate><CrmDashboard /></DemoGate>} />
-        <Route path="/crm/:id" element={<DemoGate><CrmCustomerDetail /></DemoGate>} />
-        <Route path="/remote-support" element={<DemoGate><RemoteSupportPage /></DemoGate>} />
->>>>>>> 842dd9e (Initial commit)
-        <Route
+        <Route path="/remote-support" element={<RemoteSupportPage />} />        <Route
           path="/remote-support/recordings/play"
           element={<DemoGate><DemoRecordingPlayPage /></DemoGate>}
         />
-<<<<<<< HEAD
         <Route path="/j/:token" element={<GuestJoinRedirectPage />} />
         <Route path="/support/consent/:token" element={<RemoteSupportConsentPage />} />
         <Route path="/support/screen/:sessionId" element={<ScreenShareGuestPage />} />
@@ -170,30 +100,14 @@ const AuthenticatedApp = () => {
               <DemoRecordingPlayPage backTo="/admin/recordings" />
             </AdminGate>
           }
-        />
-=======
-        <Route path="/support/consent/:token" element={<DemoGate><RemoteSupportConsentPage /></DemoGate>} />
-        <Route path="/support/screen/:sessionId" element={<DemoGate><ScreenShareGuestPage /></DemoGate>} />
-        <Route path="/knowledge" element={<DemoGate><KnowledgePage /></DemoGate>} />
-        <Route path="/admin" element={<AdminGate><AdminDashboard /></AdminGate>} />
-        <Route path="/admin/knowledge" element={<DemoGate><AdminGate><AdminKnowledge /></AdminGate></DemoGate>} />
-        <Route path="/admin/shifts" element={<AdminGate><AdminShifts /></AdminGate>} />
-        <Route path="/admin/users" element={<AdminGate><AdminUsers /></AdminGate>} />
-        <Route path="/admin/training" element={<AdminGate><AdminTraining /></AdminGate>} />
->>>>>>> 842dd9e (Initial commit)
-        <Route path="/reset-password" element={<ResetPassword />} />
+        />        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="*" element={<PageNotFound />} />
       </Routes>
       <FloatingChatWidget />
       <FloatingKnowledgeWidget />
       <SoftphoneWidget />
       <AdminLocalhostLinksFloating />
-<<<<<<< HEAD
-    </div>
-=======
-    </>
->>>>>>> 842dd9e (Initial commit)
-  );
+    </div>  );
 };
 
 function App() {
@@ -206,14 +120,9 @@ function App() {
             <ChatPanelProvider>
               <TelephonyProvider>
                 <ChatUnreadProvider>
-<<<<<<< HEAD
                   <ScreenShareSessionProvider>
                     <AuthenticatedApp />
-                  </ScreenShareSessionProvider>
-=======
-                  <AuthenticatedApp />
->>>>>>> 842dd9e (Initial commit)
-                </ChatUnreadProvider>
+                  </ScreenShareSessionProvider>                </ChatUnreadProvider>
               </TelephonyProvider>
             </ChatPanelProvider>
           </FloatingWidgetsLayerProvider>

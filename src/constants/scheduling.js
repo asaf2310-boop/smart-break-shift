@@ -1,14 +1,10 @@
-import { addDays, format } from "date-fns";
+import { addDays, format, isAfter } from "date-fns";
 import { demoModeEnabled } from "@/api/demoClient";
 import { listDemoAppUsers } from "@/lib/appUsersStore";
 import { getAgentSession } from "@/lib/agentAuth";
 import { clearAdminSession, isAdminSessionActive } from "@/hooks/useIsAdmin";
 
-<<<<<<< HEAD
 export const REAL_AGENT_NAMES = [
-=======
-const REAL_AGENT_NAMES = [
->>>>>>> 842dd9e (Initial commit)
   "רחלה מנשה",
   "שרון שפיר",
   "תהילה קיפרווסר",
@@ -90,37 +86,69 @@ export function getWeekStart(date) {
   return d;
 }
 
-<<<<<<< HEAD
 /** Sunday week start for Israel's calendar day (DST-safe). */
 export function getWeekStartIsrael(now = new Date()) {
   return getWeekStart(parseDateStrLocal(getIsraelDateStr(now)));
 }
 
-=======
->>>>>>> 842dd9e (Initial commit)
 export function getWeekDays(weekStart) {
   return Array.from({ length: 5 }, (_, i) => addDays(weekStart, i));
 }
 
-<<<<<<< HEAD
 /** Sunday start of the work week where admins publish agent shifts (calendar week + 7). */
 export function getPublishedScheduleWeekStart(now = new Date()) {
   return addDays(getWeekStartIsrael(now), 7);
 }
 
-=======
->>>>>>> 842dd9e (Initial commit)
-/** דד-ליין אילוצים: רביעי 16:00 */
-export function getConstraintsDeadline(weekStart) {
-  const wednesday = addDays(weekStart, 3);
+/** דד-ליין אילוצים: רביעי 16:00 (שבוע ההגשה — השבוע שלפני שבוע האילוצים) */
+export function getConstraintsDeadline(submissionWeekStart) {
+  const wednesday = addDays(submissionWeekStart, 3);
   wednesday.setHours(16, 0, 0, 0);
   return wednesday;
+}
+
+/** שבוע ההגשה לפי שבוע האילוצים (יום ראשון של שבוע היעד) */
+export function getConstraintsSubmissionWeekStart(constraintsWeekStart) {
+  return addDays(constraintsWeekStart, -7);
+}
+
+export const CONSTRAINTS_SUBMISSION_OVERRIDE_MESSAGE =
+  "הגשת אילוצים פתוחה באופן ידני על ידי המנהל — ניתן לערוך גם לאחר הדד-ליין הרגיל.";
+
+export function getConstraintsDeadlineExtendedMessage(deadlineLabel) {
+  return `הגשת אילוצים הורחבה עד ${deadlineLabel} על ידי המנהל.`;
+}
+
+/**
+ * @param {object|null|undefined} weekSettings — ConstraintsWeekSettings row
+ * @returns {Date} effective deadline (may be later than default when extended)
+ */
+export function getEffectiveConstraintsDeadline(submissionWeekStart, weekSettings) {
+  const defaultDeadline = getConstraintsDeadline(submissionWeekStart);
+  const extendedRaw = weekSettings?.deadline_extended_until;
+  if (extendedRaw) {
+    const extended = new Date(extendedRaw);
+    if (!Number.isNaN(extended.getTime()) && extended > defaultDeadline) {
+      return extended;
+    }
+  }
+  return defaultDeadline;
+}
+
+/** true when agents cannot submit/edit constraints (unless admin opened override). */
+export function isConstraintsSubmissionClosed(
+  submissionWeekStart,
+  weekSettings,
+  now = new Date()
+) {
+  if (weekSettings?.submission_override_open) return false;
+  const deadline = getEffectiveConstraintsDeadline(submissionWeekStart, weekSettings);
+  return isAfter(now, deadline);
 }
 
 export function formatDateStr(date) {
   return format(date, "yyyy-MM-dd");
 }
-<<<<<<< HEAD
 
 /** מועד אחרון לרישום/ביטול הפסקות — כל יום עד 10:00 שעון ישראל */
 export const BREAK_REGISTRATION_TIMEZONE = "Asia/Jerusalem";
@@ -247,5 +275,3 @@ export function canMarkMorningUnavailable(records, dateFrom, dateTo, dateStr) {
     MAX_MORNING_UNAVAILABLE_DAYS_PER_WEEK
   );
 }
-=======
->>>>>>> 842dd9e (Initial commit)

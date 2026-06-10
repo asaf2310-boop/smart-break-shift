@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { format, addDays, subDays } from "date-fns";
 import { motion } from "framer-motion";
-<<<<<<< HEAD
 import { ShieldCheck, ChevronRight, ChevronLeft, Check, Palmtree, X, Sun, Moon, MessageSquare } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { dataClient } from "@/api/client";
@@ -16,28 +15,21 @@ import {
   parseDateStrLocal,
   formatDateStr,
 } from "@/constants/scheduling";
-=======
-import { ShieldCheck, ChevronRight, ChevronLeft, Check, Palmtree, X, Sun, Moon } from "lucide-react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { dataClient } from "@/api/client";
-import { Link } from "react-router-dom";
-import { AGENT_NAMES, HOLIDAY_EVE_DATES, WEEKDAY_LABELS, getWeekDays } from "@/constants/scheduling";
->>>>>>> 842dd9e (Initial commit)
 import AutoScheduleBuilder from "../components/shifts/AutoScheduleBuilder";
 import PublishedScheduleEditor from "../components/shifts/PublishedScheduleEditor";
 import VacationApprovalPanel from "../components/admin/VacationApprovalPanel";
 import BackendConfigBanner from "@/components/BackendConfigBanner";
 import { getLiveQueryOptions } from "@/lib/liveQuery";
 import ScheduleSmsLog from "@/components/admin/ScheduleSmsLog";
+import ConstraintsDeadlinePanel from "@/components/admin/ConstraintsDeadlinePanel";
 import HypPageLayout from "@/components/hyp/HypPageLayout";
 import { hypHeaderIconClass } from "@/lib/hypPage";
 
 const SHIFTS = [
-  { type: "morning", label: "משמרת בוקר", time: "08:00 – 16:00", icon: Sun, gradient: "from-amber-400 to-orange-500", bg: "bg-amber-50/50" },
-  { type: "evening", label: "משמרת ערב", time: "09:00 – 17:00", icon: Moon, gradient: "from-indigo-400 to-purple-500", bg: "bg-indigo-50/50" },
+  { type: "morning", label: "??????? ??????", time: "08:00 ??? 16:00", icon: Sun, gradient: "from-amber-400 to-orange-500", bg: "bg-amber-50/50" },
+  { type: "evening", label: "??????? ????", time: "09:00 ??? 17:00", icon: Moon, gradient: "from-indigo-400 to-purple-500", bg: "bg-indigo-50/50" },
 ];
 
-<<<<<<< HEAD
 export default function AdminShifts() {
   const [selectedDate, setSelectedDate] = useState(() => getTodayIsraelDate());
   const [activeTab, setActiveTab] = useState("current"); // "current" | "next"
@@ -45,19 +37,6 @@ export default function AdminShifts() {
   const calendarWeekStart = getWeekStartIsrael();
   const adminWeekOffset =
     Math.round((weekStart.getTime() - calendarWeekStart.getTime()) / (7 * 24 * 60 * 60 * 1000));
-=======
-function getWeekStart(date) {
-  const d = new Date(date);
-  d.setDate(d.getDate() - d.getDay());
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-export default function AdminShifts() {
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [activeTab, setActiveTab] = useState("current"); // "current" | "next"
-  const weekStart = getWeekStart(selectedDate);
->>>>>>> 842dd9e (Initial commit)
 
   const weekDays = useMemo(() => getWeekDays(weekStart), [weekStart]);
 
@@ -66,7 +45,7 @@ export default function AdminShifts() {
         <BackendConfigBanner />
         {/* Header */}
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between mb-8">
-          <Link to="/admin" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">← הפסקות</Link>
+          <Link to="/admin" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">??? ????????</Link>
           <div className="text-center">
             <div className="flex items-center gap-3 justify-center mb-1">
               <div
@@ -76,7 +55,7 @@ export default function AdminShifts() {
               >
                 <ShieldCheck className="w-5 h-5 text-white" />
               </div>
-              <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">ניהול משמרות</h1>
+              <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">????????? ?????????</h1>
             </div>
           </div>
           <div className="w-24" />
@@ -90,11 +69,7 @@ export default function AdminShifts() {
           <input
             type="date"
             value={format(selectedDate, "yyyy-MM-dd")}
-<<<<<<< HEAD
             onChange={(e) => setSelectedDate(parseDateStrLocal(e.target.value))}
-=======
-            onChange={e => setSelectedDate(new Date(e.target.value))}
->>>>>>> 842dd9e (Initial commit)
             className="text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl px-4 py-2 shadow-sm outline-none focus:border-indigo-400"
           />
           <button onClick={() => setSelectedDate(d => addDays(d, 7))} className="w-9 h-9 rounded-xl bg-white border border-slate-200 hover:border-indigo-300 flex items-center justify-center transition-all shadow-sm">
@@ -102,20 +77,17 @@ export default function AdminShifts() {
           </button>
         </div>
 
-<<<<<<< HEAD
         <p className="text-center text-[11px] text-slate-500 mb-2 font-mono" dir="ltr">
-          weekStart={formatDateStr(weekStart)} · current {formatDateStr(weekDays[0])}–{formatDateStr(weekDays[4])} · next {formatDateStr(addDays(weekStart, 7))}–{formatDateStr(addDays(weekStart, 11))}
+          weekStart={formatDateStr(weekStart)} � current {formatDateStr(weekDays[0])}???{formatDateStr(weekDays[4])} � next {formatDateStr(addDays(weekStart, 7))}???{formatDateStr(addDays(weekStart, 11))}
         </p>
 
         {adminWeekOffset !== 0 && (
           <p className="text-center text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2 mb-4">
-            צופים בשבוע {adminWeekOffset > 0 ? "עתידי" : "קודם"} ({format(weekDays[0], "dd/MM/yyyy")}–{format(weekDays[4], "dd/MM/yyyy")}).
-            לפרסום 7–11.6: השאירו תאריך היום ובחרו «שיבוץ שבוע הבא» — לא «שיבוץ נוכחי» (31/05–04/06).
+            ??????? ???????? {adminWeekOffset > 0 ? "????????" : "??????"} ({format(weekDays[0], "dd/MM/yyyy")}???{format(weekDays[4], "dd/MM/yyyy")}).
+            ???????? 7???11.6: ????????? ??????? ??????? ????????? �???????? ?????? ?????� ??? ??? �???????? ?????????� (31/05???04/06).
           </p>
         )}
 
-=======
->>>>>>> 842dd9e (Initial commit)
         {/* Tabs */}
         <div className="flex justify-center gap-2 mb-6">
           <button
@@ -126,13 +98,10 @@ export default function AdminShifts() {
                 : "bg-white border border-slate-200 text-slate-600 hover:border-emerald-300"
             }`}
           >
-            שיבוץ נוכחי
-<<<<<<< HEAD
+            ???????? ?????????
             <span className="block text-[10px] font-normal opacity-90 mt-0.5">
-              {format(weekDays[0], "dd/MM")}–{format(weekDays[4], "dd/MM")}
+              {format(weekDays[0], "dd/MM")}???{format(weekDays[4], "dd/MM")}
             </span>
-=======
->>>>>>> 842dd9e (Initial commit)
           </button>
           <button
             onClick={() => setActiveTab("next")}
@@ -142,13 +111,10 @@ export default function AdminShifts() {
                 : "bg-white border border-slate-200 text-slate-600 hover:border-cyan-300"
             }`}
           >
-            שיבוץ שבוע הבא
-<<<<<<< HEAD
+            ???????? ?????? ?????
             <span className="block text-[10px] font-normal opacity-90 mt-0.5">
-              {format(addDays(weekStart, 7), "dd/MM")}–{format(addDays(weekStart, 11), "dd/MM")}
+              {format(addDays(weekStart, 7), "dd/MM")}???{format(addDays(weekStart, 11), "dd/MM")}
             </span>
-=======
->>>>>>> 842dd9e (Initial commit)
           </button>
         </div>
 
@@ -238,6 +204,8 @@ function ConstraintsView({ weekStart }) {
 
   return (
     <>
+    <ConstraintsDeadlinePanel constraintsWeekStart={weekStart} />
+
     {/* Submission status panel */}
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
       className="rounded-3xl overflow-hidden border border-slate-200 bg-white shadow-lg shadow-slate-200/60 mb-4">
@@ -247,12 +215,12 @@ function ConstraintsView({ weekStart }) {
             <Check className="w-4 h-4 text-white" />
           </div>
           <div>
-            <h2 className="font-bold text-slate-800">סטטוס הגשת אילוצים</h2>
-            <p className="text-xs text-slate-400">שבוע הבא · {nextWeekStart}</p>
+            <h2 className="font-bold text-slate-800">???????? ?????? ???????????</h2>
+            <p className="text-xs text-slate-400">?????? ????? � {nextWeekStart}</p>
           </div>
         </div>
         <div className="text-sm font-bold text-slate-700">
-          {submittedCount}/{AGENT_NAMES.length} הגישו
+          {submittedCount}/{AGENT_NAMES.length} ?????????
         </div>
       </div>
       <div className="p-4 flex flex-wrap gap-2">
@@ -269,7 +237,7 @@ function ConstraintsView({ weekStart }) {
             }`}>
               {allAvailable ? <Check className="w-3 h-3" /> : confirmed ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
               {agent}
-              {allAvailable && <span className="opacity-60 font-normal">זמין</span>}
+              {allAvailable && <span className="opacity-60 font-normal">????????</span>}
             </div>
           );
         })}
@@ -277,8 +245,8 @@ function ConstraintsView({ weekStart }) {
     </motion.div>
 
     {[
-      { type: "morning", label: "משמרת בוקר", time: "08:00–16:00", icon: Sun, gradient: "from-amber-400 to-orange-500", bg: "bg-amber-50/50" },
-      { type: "evening", label: "משמרת ערב", time: "09:00–17:00", icon: Moon, gradient: "from-indigo-400 to-purple-500", bg: "bg-indigo-50/50" },
+      { type: "morning", label: "??????? ??????", time: "08:00???16:00", icon: Sun, gradient: "from-amber-400 to-orange-500", bg: "bg-amber-50/50" },
+      { type: "evening", label: "??????? ????", time: "09:00???17:00", icon: Moon, gradient: "from-indigo-400 to-purple-500", bg: "bg-indigo-50/50" },
     ].map(shift => {
       const ShiftIcon = shift.icon;
       return (
@@ -290,7 +258,7 @@ function ConstraintsView({ weekStart }) {
             </div>
             <div>
               <h2 className="font-bold text-slate-800">{shift.label}</h2>
-              <p className="text-xs text-slate-400">{shift.time} · אי-זמינות לשבוע הבא</p>
+              <p className="text-xs text-slate-400">{shift.time} � ???-?????????? ???????? ?????</p>
             </div>
           </div>
           <div className="p-4 grid grid-cols-5 gap-3">
@@ -312,11 +280,7 @@ function ConstraintsView({ weekStart }) {
                   .map(v => ({ name: v.agent_name, type: "vac_approved", note: v.note })),
                 ...vacAgents.filter(v => v.status !== "approved")
                   .filter(v => !unavailAgents.find(u => u.agent_name === v.agent_name) && !approvedVacAgents.find(a => a.agent_name === v.agent_name))
-<<<<<<< HEAD
                   .map(v => ({ name: v.agent_name, type: "vac_" + v.status, note: v.note })),
-=======
-                  .map(v => ({ name: v.agent_name, type: "vac_" + v.status })),
->>>>>>> 842dd9e (Initial commit)
               ].filter(item => {
                 if (seenNames.has(item.name)) return false;
                 seenNames.add(item.name);
@@ -339,7 +303,7 @@ function ConstraintsView({ weekStart }) {
                   {allFree ? (
                     <div className="flex items-center justify-center py-1 gap-1">
                       <Check className="w-3 h-3 text-green-500" />
-                      <span className="text-xs text-green-600 font-semibold">הכל זמין</span>
+                      <span className="text-xs text-green-600 font-semibold">?????? ????????</span>
                     </div>
                   ) : (
                     <div className="flex flex-col gap-1">
@@ -368,7 +332,6 @@ function ConstraintsView({ weekStart }) {
                           icon = <Palmtree className="w-2.5 h-2.5 flex-shrink-0" />;
                         }
                         return (
-<<<<<<< HEAD
                           <div
                             key={item.name}
                             title={item.note ? `${item.name}: ${item.note}` : item.name}
@@ -385,15 +348,6 @@ function ConstraintsView({ weekStart }) {
                               <span className="text-[11px] text-indigo-700/90 bg-indigo-50/80 rounded-md px-1 py-0.5 mt-0.5 leading-snug line-clamp-2">
                                 {item.note}
                               </span>
-=======
-                          <div key={item.name} className={`flex flex-col px-1.5 py-1 rounded-lg border text-xs font-medium ${bg} ${textColor}`}>
-                            <div className="flex items-center gap-1">
-                              {icon}
-                              <span className="truncate">{item.name}</span>
-                            </div>
-                            {item.note && (
-                              <span className="text-xs opacity-70 mt-0.5 leading-tight">{item.note}</span>
->>>>>>> 842dd9e (Initial commit)
                             )}
                           </div>
                         );

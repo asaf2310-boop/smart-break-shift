@@ -1,60 +1,45 @@
-<<<<<<< HEAD
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-=======
-import React, { useState, useMemo, useEffect } from "react";
-import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
->>>>>>> 842dd9e (Initial commit)
-import { format, addDays, isAfter } from "date-fns";
+import { format, addDays } from "date-fns";
 import { useToast } from "@/components/ui/use-toast";
 import { motion } from "framer-motion";
 import {
   CalendarDays, LogOut, Sun, Moon, Palmtree, X, Check,
   MessageSquare, Lock, Pencil, SendHorizonal, CalendarClock
 } from "lucide-react";
-<<<<<<< HEAD
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-=======
->>>>>>> 842dd9e (Initial commit)
 import {
   HOLIDAY_EVE_DATES,
   WEEKDAY_LABELS,
   getStoredAgentName,
-<<<<<<< HEAD
   getWeekStartIsrael,
   getWeekDays,
   getIsraelDateStr,
   getConstraintsDeadline,
+  getConstraintsSubmissionWeekStart,
+  getEffectiveConstraintsDeadline,
+  isConstraintsSubmissionClosed,
+  getConstraintsDeadlineExtendedMessage,
+  CONSTRAINTS_SUBMISSION_OVERRIDE_MESSAGE,
+  formatDateStr,
   canMarkMorningUnavailable,
   countMorningUnavailableDays,
   MAX_MORNING_UNAVAILABLE_DAYS_PER_WEEK,
   MORNING_UNAVAILABLE_LIMIT_MESSAGE,
-=======
-  getWeekStart,
-  getWeekDays,
-  getConstraintsDeadline,
->>>>>>> 842dd9e (Initial commit)
 } from "@/constants/scheduling";
 import AgentLogin from "@/components/auth/AgentLogin";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { connectAgentAsAvailable } from "@/lib/agentChatPresence";
-<<<<<<< HEAD
 import { getLiveQueryOptions, LIVE_REFETCH_INTERVAL_MS } from "@/lib/liveQuery";
-=======
-import { getLiveQueryOptions } from "@/lib/liveQuery";
->>>>>>> 842dd9e (Initial commit)
 import {
   fetchWeekShiftRegistrations,
   readCachedSchedule,
   writeCachedSchedule,
-<<<<<<< HEAD
   readLastPublishedScheduleWeek,
   LAST_PUBLISHED_SCHEDULE_KEY,
   clearAllScheduleCaches,
   filterRegistrationsForWeek,
   resolveAgentSchedulePanels,
-=======
->>>>>>> 842dd9e (Initial commit)
 } from "@/lib/shiftScheduleQuery";
 import WeeklySchedulePanel from "@/components/shifts/WeeklySchedulePanel";
 import BackendConfigBanner from "@/components/BackendConfigBanner";
@@ -69,12 +54,9 @@ export default function ShiftScheduler() {
   const [noteDialog, setNoteDialog] = useState(null); // { date, type: "unavailable"|"vacation_request" }
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState("schedule"); // "constraints" | "schedule"
-<<<<<<< HEAD
   const [lastPublishedFocus, setLastPublishedFocus] = useState(() =>
     readLastPublishedScheduleWeek()
   );
-=======
->>>>>>> 842dd9e (Initial commit)
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -85,7 +67,6 @@ export default function ShiftScheduler() {
   }, []);
 
   const now = new Date();
-<<<<<<< HEAD
   const israelTodayKey = getIsraelDateStr(now);
   const thisWeekStart = useMemo(() => getWeekStartIsrael(now), [israelTodayKey]);
   const nextWeekStart = useMemo(() => addDays(thisWeekStart, 7), [thisWeekStart]);
@@ -94,22 +75,12 @@ export default function ShiftScheduler() {
   const currentWeekDays = useMemo(() => getWeekDays(thisWeekStart), [thisWeekStart.getTime()]);
   const scheduleDays = useMemo(() => getWeekDays(nextWeekStart), [nextWeekStart.getTime()]);
   const constraintsDays = useMemo(() => getWeekDays(constraintsWeekStart), [constraintsWeekStart.getTime()]);
-=======
-  const thisWeekStart = getWeekStart(now);
-  const nextWeekStart = addDays(thisWeekStart, 7);
-
-  const constraintsWeekStart = nextWeekStart;
-  const currentWeekDays = useMemo(() => getWeekDays(thisWeekStart), [thisWeekStart]);
-  const scheduleDays = useMemo(() => getWeekDays(nextWeekStart), [nextWeekStart]);
-  const constraintsDays = useMemo(() => getWeekDays(constraintsWeekStart), [constraintsWeekStart]);
->>>>>>> 842dd9e (Initial commit)
 
   const currentDateFrom = format(currentWeekDays[0], "yyyy-MM-dd");
   const currentDateTo = format(currentWeekDays[4], "yyyy-MM-dd");
   const scheduleDateFrom = format(scheduleDays[0], "yyyy-MM-dd");
   const scheduleDateTo = format(scheduleDays[4], "yyyy-MM-dd");
 
-<<<<<<< HEAD
   useEffect(() => {
     clearAllScheduleCaches();
     setLastPublishedFocus(readLastPublishedScheduleWeek());
@@ -129,8 +100,6 @@ export default function ShiftScheduler() {
     };
   }, []);
 
-=======
->>>>>>> 842dd9e (Initial commit)
   const weekScheduleQueryOptions = (dateFrom, dateTo, weekDays) => ({
     queryKey: ["shift-registrations", dateFrom, dateTo],
     queryFn: async () => {
@@ -138,12 +107,7 @@ export default function ShiftScheduler() {
       writeCachedSchedule(dateFrom, dateTo, rows);
       return rows;
     },
-<<<<<<< HEAD
     placeholderData: () => readCachedSchedule(dateFrom, dateTo),
-=======
-    initialData: () => readCachedSchedule(dateFrom, dateTo),
-    placeholderData: keepPreviousData,
->>>>>>> 842dd9e (Initial commit)
     refetchOnMount: "always",
     enabled: !!agentName,
     throwOnError: false,
@@ -158,14 +122,11 @@ export default function ShiftScheduler() {
     error: currentWeekErrorObj,
   } = useQuery(weekScheduleQueryOptions(currentDateFrom, currentDateTo, currentWeekDays));
 
-<<<<<<< HEAD
   const currentWeekRegistrationsFiltered = useMemo(
     () => filterRegistrationsForWeek(currentWeekRegistrations, currentDateFrom, currentDateTo),
     [currentWeekRegistrations, currentDateFrom, currentDateTo]
   );
 
-=======
->>>>>>> 842dd9e (Initial commit)
   const {
     data: scheduleRegistrations = [],
     isLoading: loadingSchedule,
@@ -174,7 +135,6 @@ export default function ShiftScheduler() {
     error: scheduleErrorObj,
   } = useQuery(weekScheduleQueryOptions(scheduleDateFrom, scheduleDateTo, scheduleDays));
 
-<<<<<<< HEAD
   const scheduleRegistrationsFiltered = useMemo(
     () => filterRegistrationsForWeek(scheduleRegistrations, scheduleDateFrom, scheduleDateTo),
     [scheduleRegistrations, scheduleDateFrom, scheduleDateTo]
@@ -234,15 +194,35 @@ export default function ShiftScheduler() {
     lastPublishedFocus,
   ]);
 
-=======
->>>>>>> 842dd9e (Initial commit)
-  const deadline = getConstraintsDeadline(thisWeekStart);
-  const isPastDeadline = isAfter(now, deadline);
+  const constraintsWeekStartStr = formatDateStr(constraintsWeekStart);
+
+  const { data: constraintsWeekSettingsList = [] } = useQuery({
+    queryKey: ["constraints-week-settings", constraintsWeekStartStr],
+    queryFn: () =>
+      dataClient.entities.ConstraintsWeekSettings.filter({
+        week_start: constraintsWeekStartStr,
+      }),
+    enabled: !!agentName,
+    ...getLiveQueryOptions(),
+  });
+
+  const constraintsWeekSettings = constraintsWeekSettingsList[0] || null;
+  const submissionWeekStart = getConstraintsSubmissionWeekStart(constraintsWeekStart);
+  const deadline = getEffectiveConstraintsDeadline(submissionWeekStart, constraintsWeekSettings);
+  const isPastDeadline = isConstraintsSubmissionClosed(
+    submissionWeekStart,
+    constraintsWeekSettings,
+    now
+  );
+  const constraintsOverrideOpen = constraintsWeekSettings?.submission_override_open === true;
+  const hasExtendedDeadline =
+    !constraintsOverrideOpen &&
+    Boolean(constraintsWeekSettings?.deadline_extended_until) &&
+    deadline > getConstraintsDeadline(submissionWeekStart);
 
   const constraintsDateFrom = format(constraintsDays[0], "yyyy-MM-dd");
   const constraintsDateTo = format(constraintsDays[4], "yyyy-MM-dd");
 
-<<<<<<< HEAD
   const unavailQueryKey = useMemo(
     () => ["shift-unavailabilities", constraintsDateFrom, constraintsDateTo, agentName],
     [constraintsDateFrom, constraintsDateTo, agentName]
@@ -274,15 +254,6 @@ export default function ShiftScheduler() {
       });
     },
   };
-=======
-  // Fetch unavailabilities for constraints week (single query)
-  const { data: unavailabilities = [], isLoading: loadingUnavail } = useQuery({
-    queryKey: ["shift-unavailabilities", constraintsDateFrom, constraintsDateTo, agentName],
-    queryFn: () => dataClient.entities.ShiftUnavailability.filter({ agent_name: agentName }),
-    enabled: !!agentName,
-    ...getLiveQueryOptions(),
-  });
->>>>>>> 842dd9e (Initial commit)
 
   // Fetch vacation requests for constraints week (single query)
   const { data: vacationRequests = [] } = useQuery({
@@ -307,8 +278,6 @@ export default function ShiftScheduler() {
 
   const getVacationRequest = (date) =>
     vacationRequests.find(r => r.date === format(date, "yyyy-MM-dd") && r.date >= constraintsDateFrom && r.date <= constraintsDateTo);
-
-  const constraintsWeekStartStr = format(constraintsWeekStart, "yyyy-MM-dd");
 
   // Fetch confirmation for the constraints week
   const { data: confirmations = [], isLoading: loadingConfirm } = useQuery({
@@ -348,7 +317,6 @@ export default function ShiftScheduler() {
 
   const createMutation = useMutation({
     mutationFn: (data) => dataClient.entities.ShiftUnavailability.create(data),
-<<<<<<< HEAD
     ...unavailMutationOpts,
     onMutate: async (data) => {
       const ctx = await unavailMutationOpts.onMutate(data);
@@ -383,14 +351,10 @@ export default function ShiftScheduler() {
         )
       );
     },
-=======
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["shift-unavailabilities", constraintsDateFrom, constraintsDateTo, agentName] }),
->>>>>>> 842dd9e (Initial commit)
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => dataClient.entities.ShiftUnavailability.update(id, data),
-<<<<<<< HEAD
     ...unavailMutationOpts,
     onMutate: async ({ id, data }) => {
       const ctx = await unavailMutationOpts.onMutate({ id, data });
@@ -436,14 +400,6 @@ export default function ShiftScheduler() {
     ...getLiveQueryOptions({
       refetchInterval: isUnavailMutating ? false : LIVE_REFETCH_INTERVAL_MS,
     }),
-=======
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["shift-unavailabilities", constraintsDateFrom, constraintsDateTo, agentName] }),
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id) => dataClient.entities.ShiftUnavailability.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["shift-unavailabilities", constraintsDateFrom, constraintsDateTo, agentName] }),
->>>>>>> 842dd9e (Initial commit)
   });
 
   const handleLogout = async () => {
@@ -457,7 +413,6 @@ export default function ShiftScheduler() {
   const getDayRecord = (date, shiftType) =>
     unavailabilities.find(r => r.date === format(date, "yyyy-MM-dd") && r.shift_type === shiftType);
 
-<<<<<<< HEAD
   const morningUnavailableCount = useMemo(
     () => countMorningUnavailableDays(unavailabilities, constraintsDateFrom, constraintsDateTo),
     [unavailabilities, constraintsDateFrom, constraintsDateTo]
@@ -482,8 +437,6 @@ export default function ShiftScheduler() {
     return true;
   };
 
-=======
->>>>>>> 842dd9e (Initial commit)
   const handleDayClick = (date, newReason, shiftType) => {
     const dateStr = format(date, "yyyy-MM-dd");
     // Find ALL records for this date+shiftType (to handle any existing duplicates)
@@ -495,7 +448,6 @@ export default function ShiftScheduler() {
       allRecords.slice(1).forEach(r => deleteMutation.mutate(r.id));
     }
 
-<<<<<<< HEAD
     const markingMorningUnavailable =
       shiftType === "morning" &&
       newReason === "unavailable" &&
@@ -505,8 +457,6 @@ export default function ShiftScheduler() {
       return;
     }
 
-=======
->>>>>>> 842dd9e (Initial commit)
     if (!existing) {
       createMutation.mutate({ agent_name: agentName, date: dateStr, shift_type: shiftType, reason: newReason });
     } else if (existing.reason === newReason) {
@@ -520,16 +470,10 @@ export default function ShiftScheduler() {
     const dateStr = format(noteDialog.date, "yyyy-MM-dd");
     if (noteDialog.type === "vacation_request") {
       createVacationMutation.mutate({ agent_name: agentName, date: dateStr, note, status: "pending" });
-<<<<<<< HEAD
-=======
-    } else {
-      createMutation.mutate({ agent_name: agentName, date: dateStr, shift_type: noteDialog.shiftType, reason: "unavailable", note });
->>>>>>> 842dd9e (Initial commit)
     }
     setNoteDialog(null);
   };
 
-<<<<<<< HEAD
   const handleConstraintNoteSave = (date, shiftType, note) => {
     const dateStr = format(date, "yyyy-MM-dd");
     const trimmed = String(note ?? "").trim();
@@ -560,8 +504,6 @@ export default function ShiftScheduler() {
     }
   };
 
-=======
->>>>>>> 842dd9e (Initial commit)
   if (!agentName) {
     return (
       <AgentLogin
@@ -578,11 +520,6 @@ export default function ShiftScheduler() {
   }
 
   const constraintsWeekLabel = `${format(constraintsDays[0], "dd/MM")} – ${format(constraintsDays[4], "dd/MM/yyyy")}`;
-<<<<<<< HEAD
-=======
-  const currentWeekLabel = `${format(currentWeekDays[0], "dd/MM")} – ${format(currentWeekDays[4], "dd/MM/yyyy")}`;
-  const scheduleWeekLabel = `${format(scheduleDays[0], "dd/MM")} – ${format(scheduleDays[4], "dd/MM/yyyy")}`;
->>>>>>> 842dd9e (Initial commit)
   const deadlineLabel = format(deadline, "dd/MM בשעה HH:mm");
 
   return (
@@ -666,7 +603,13 @@ export default function ShiftScheduler() {
             )}
           </div>
 
-
+          {(constraintsOverrideOpen || hasExtendedDeadline) && !isPastDeadline && (
+            <div className="mx-4 mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-800 leading-relaxed text-center">
+              {constraintsOverrideOpen
+                ? CONSTRAINTS_SUBMISSION_OVERRIDE_MESSAGE
+                : getConstraintsDeadlineExtendedMessage(format(deadline, "dd/MM בשעה HH:mm"))}
+            </div>
+          )}
 
           {/* Confirmed banner */}
           {isConfirmed && !isPastDeadline && (
@@ -704,7 +647,6 @@ export default function ShiftScheduler() {
                 <span className="w-4 h-4 rounded border-2 border-orange-300 bg-white inline-block" />
                 חופש (לחץ לבקשה)
               </div>
-<<<<<<< HEAD
               <div className="flex items-center gap-2 text-xs text-slate-500">
                 <MessageSquare className="w-3.5 h-3.5 text-indigo-500 fill-indigo-200" />
                 הערה לתא (בועה)
@@ -718,8 +660,6 @@ export default function ShiftScheduler() {
                   </span>
                 )}
               </div>
-=======
->>>>>>> 842dd9e (Initial commit)
             </div>
           )}
 
@@ -735,13 +675,9 @@ export default function ShiftScheduler() {
                     weekDays={constraintsDays}
                     getDayRecord={getDayRecord}
                     onMark={handleDayClick}
-<<<<<<< HEAD
                     onNoteSave={handleConstraintNoteSave}
                     noteSaving={updateMutation.isPending || createMutation.isPending}
                     locked={isPastDeadline || (isConfirmed && !isEditing)}
-=======
-                    locked={isPastDeadline}
->>>>>>> 842dd9e (Initial commit)
                     holidayEveDates={HOLIDAY_EVE_DATES}
                   />
                 </div>
@@ -845,7 +781,6 @@ export default function ShiftScheduler() {
         {activeTab === "schedule" && (
           <div className="space-y-6">
             <BackendConfigBanner />
-<<<<<<< HEAD
             <p className="text-center text-xs text-slate-500 px-4">
               מוצג שיבוץ שבוע העבודה ({scheduleDateFrom}–{scheduleDateTo}, א׳–ה׳ ישראל). לא לוח 31/05–04/06 — זה שבוע קלנדרי אחר.
             </p>
@@ -869,39 +804,6 @@ export default function ShiftScheduler() {
             ))}
           </div>
         )}
-=======
-            <WeeklySchedulePanel
-              title="שיבוץ השבוע"
-              weekLabel={currentWeekLabel}
-              scheduleDays={currentWeekDays}
-              scheduleRegistrations={currentWeekRegistrations}
-              agentName={agentName}
-              isLoading={loadingCurrentWeek}
-              isFetching={fetchingCurrentWeek}
-              isError={currentWeekError}
-              error={currentWeekErrorObj}
-              emptyTitle="השיבוץ לשבוע הנוכחי טרם פורסם"
-              emptyHint="המנהל יפרסם בלוח «משמרות» → «שיבוץ נוכחי»"
-              accent="emerald"
-            />
-            <WeeklySchedulePanel
-              title="שיבוץ שבוע הבא"
-              weekLabel={scheduleWeekLabel}
-              scheduleDays={scheduleDays}
-              scheduleRegistrations={scheduleRegistrations}
-              agentName={agentName}
-              isLoading={loadingSchedule}
-              isFetching={fetchingSchedule}
-              isError={scheduleError}
-              error={scheduleErrorObj}
-              emptyTitle="השיבוץ לשבוע הבא טרם פורסם"
-              emptyHint="המנהל יפרסם בלוח «משמרות» → «שיבוץ שבוע הבא»"
-              accent="amber"
-            />
-          </div>
-        )}
-      </div>
->>>>>>> 842dd9e (Initial commit)
 
       {noteDialog && (
         <NoteDialog
@@ -967,7 +869,6 @@ function NoteDialog({ onSubmit, onCancel, type }) {
   );
 }
 
-<<<<<<< HEAD
 function ConstraintNotePopover({ record, date, shiftType, locked, onSave, saving }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
@@ -1044,9 +945,6 @@ function ConstraintNotePopover({ record, date, shiftType, locked, onSave, saving
 }
 
 function ShiftCell({ date, shiftType, getDayRecord, onMark, onNoteSave, noteSaving, locked }) {
-=======
-function ShiftCell({ date, shiftType, getDayRecord, onMark, locked }) {
->>>>>>> 842dd9e (Initial commit)
   const record = getDayRecord(date, shiftType);
   const isUnavailable = record?.reason === "unavailable";
   const isVacation = record?.reason === "vacation";
@@ -1076,7 +974,6 @@ function ShiftCell({ date, shiftType, getDayRecord, onMark, locked }) {
   }
 
   return (
-<<<<<<< HEAD
     <div className="relative px-1 py-2 flex flex-col items-center justify-center gap-1">
       {onNoteSave && (
         <ConstraintNotePopover
@@ -1088,9 +985,6 @@ function ShiftCell({ date, shiftType, getDayRecord, onMark, locked }) {
           saving={noteSaving}
         />
       )}
-=======
-    <div className="px-1 py-2 flex flex-col items-center justify-center gap-1">
->>>>>>> 842dd9e (Initial commit)
       <button
         onClick={() => !locked && btnAction()}
         disabled={locked}
@@ -1102,24 +996,17 @@ function ShiftCell({ date, shiftType, getDayRecord, onMark, locked }) {
         {btnIcon}
         <span className={`text-xs font-bold leading-none ${btnTextColor}`}>{btnLabel}</span>
         {!locked && <span className="text-xs text-slate-400 leading-none">לחץ לשינוי</span>}
-<<<<<<< HEAD
         {record?.note?.trim() && (
           <span className="text-[10px] text-indigo-600 font-medium leading-tight max-w-full truncate px-1" title={record.note}>
             {record.note}
           </span>
         )}
-=======
->>>>>>> 842dd9e (Initial commit)
       </button>
     </div>
   );
 }
 
-<<<<<<< HEAD
 function CombinedShiftGrid({ weekDays, getDayRecord, onMark, onNoteSave, noteSaving, locked, holidayEveDates = [] }) {
-=======
-function CombinedShiftGrid({ weekDays, getDayRecord, onMark, locked, holidayEveDates = [] }) {
->>>>>>> 842dd9e (Initial commit)
   return (
     <table className="w-full border-collapse" style={{ tableLayout: "fixed" }}>
       <colgroup>
@@ -1166,11 +1053,7 @@ function CombinedShiftGrid({ weekDays, getDayRecord, onMark, locked, holidayEveD
             }
             return (
               <td key={dateStr} className="px-1 py-0 align-middle">
-<<<<<<< HEAD
                 <ShiftCell date={date} shiftType="morning" getDayRecord={getDayRecord} onMark={onMark} onNoteSave={onNoteSave} noteSaving={noteSaving} locked={locked} />
-=======
-                <ShiftCell date={date} shiftType="morning" getDayRecord={getDayRecord} onMark={onMark} locked={locked} />
->>>>>>> 842dd9e (Initial commit)
               </td>
             );
           })}
@@ -1191,11 +1074,7 @@ function CombinedShiftGrid({ weekDays, getDayRecord, onMark, locked, holidayEveD
             if (isHolidayEve) return null;
             return (
               <td key={dateStr} className="px-1 py-0 align-middle">
-<<<<<<< HEAD
                 <ShiftCell date={date} shiftType="evening" getDayRecord={getDayRecord} onMark={onMark} onNoteSave={onNoteSave} noteSaving={noteSaving} locked={locked} />
-=======
-                <ShiftCell date={date} shiftType="evening" getDayRecord={getDayRecord} onMark={onMark} locked={locked} />
->>>>>>> 842dd9e (Initial commit)
               </td>
             );
           })}

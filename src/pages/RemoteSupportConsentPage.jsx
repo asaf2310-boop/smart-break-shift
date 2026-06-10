@@ -1,14 +1,8 @@
 import React, { useEffect, useState } from "react";
-<<<<<<< HEAD
-import { Link, useParams, useSearchParams } from "react-router-dom";
-=======
-import { Link, useParams } from "react-router-dom";
->>>>>>> 842dd9e (Initial commit)
-import { motion } from "framer-motion";
+import { Link, useParams, useSearchParams } from "react-router-dom";import { motion } from "framer-motion";
 import { CheckCircle2, Monitor, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-<<<<<<< HEAD
   GUEST_BOOTSTRAP_QUERY_KEY,
 } from "@/lib/screenShareStore";
 import {
@@ -19,20 +13,11 @@ import {
 } from "@/lib/remoteSupportStore";
 import { demoModeEnabled } from "@/api/demoClient";
 import { m3PageClass } from "@/lib/hypPage";
-=======
-  getSessionByToken,
-  logConsent,
-  remoteSupportDemoAvailable,
-  subscribeRemoteSupport,
-} from "@/lib/remoteSupportStore";
->>>>>>> 842dd9e (Initial commit)
-
 const CUSTOMER_CONSENT_TEXT =
   "אני מאשר/ת לנציג התמיכה לגשת מרחוק למחשב שלי באמצעות RustDesk לצורך טיפול בתקלה שדווחה בשיחה זו.";
 
 export default function RemoteSupportConsentPage() {
   const { token } = useParams();
-<<<<<<< HEAD
   const [searchParams] = useSearchParams();
   const bootstrapKey = searchParams.get(GUEST_BOOTSTRAP_QUERY_KEY);
   const [session, setSession] = useState(() => resolveConsentSession(token, bootstrapKey));
@@ -43,72 +28,34 @@ export default function RemoteSupportConsentPage() {
     refresh();
     return subscribeRemoteSupport(refresh);
   }, [token, bootstrapKey]);
-=======
-  const [session, setSession] = useState(() => getSessionByToken(token));
-  const [done, setDone] = useState(false);
-
-  useEffect(() => {
-    const refresh = () => setSession(getSessionByToken(token));
-    refresh();
-    return subscribeRemoteSupport(refresh);
-  }, [token]);
->>>>>>> 842dd9e (Initial commit)
-
   const alreadyConsented = Boolean(session?.consentAt && session.consentSource === "customer");
 
   const handleConsent = () => {
     if (!session) return;
     logConsent(session.id, { consentText: CUSTOMER_CONSENT_TEXT, source: "customer" });
     setDone(true);
-<<<<<<< HEAD
     setSession(resolveConsentSession(token, bootstrapKey));
   };
 
   if (!remoteSupportFeaturesAvailable()) {
     return (
       <div className={m3PageClass("flex items-center justify-center p-6")} dir="rtl">
-        <p className="text-slate-600 text-center">מודול תמיכה מרחוק אינו פעיל בסביבה זו.</p>
-=======
-    setSession(getSessionByToken(token));
-  };
-
-  if (!remoteSupportDemoAvailable()) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50" dir="rtl">
-        <p className="text-slate-600 text-center">דף אישור זמין במצב דמו בלבד.</p>
->>>>>>> 842dd9e (Initial commit)
-      </div>
+        <p className="text-slate-600 text-center">מודול תמיכה מרחוק אינו פעיל בסביבה זו.</p>      </div>
     );
   }
 
   return (
-<<<<<<< HEAD
-    <div className={m3PageClass("flex items-center justify-center p-4")} dir="rtl">
-=======
-    <div
-      className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-violet-50 flex items-center justify-center p-4"
-      dir="rtl"
-    >
->>>>>>> 842dd9e (Initial commit)
-      <motion.div
+    <div className={m3PageClass("flex items-center justify-center p-4")} dir="rtl">      <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md rounded-3xl border border-slate-200 bg-white shadow-xl overflow-hidden"
       >
-<<<<<<< HEAD
         {demoModeEnabled && (
           <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-start gap-2 text-amber-950 text-xs">
             <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
             <span>דמו — לפרודקשן: שרת RustDesk עצמי + מדיניות אבטחה</span>
           </div>
         )}
-=======
-        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-start gap-2 text-amber-950 text-xs">
-          <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
-          <span>דמו — לפרודקשן: שרת RustDesk עצמי + מדיניות אבטחה</span>
-        </div>
->>>>>>> 842dd9e (Initial commit)
-
         <div className="p-6 space-y-5">
           <div className="text-center">
             <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-100 text-indigo-700 mb-3">
