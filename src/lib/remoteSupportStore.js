@@ -27,7 +27,7 @@ import {
   syncRustDeskSessionToCloud,
   syncRustDeskSessionToCloudAwait,
 } from "@/lib/supportSessionsSync";
-import { buildShortGuestUrl } from "@/lib/shortGuestLink";
+import { buildShortGuestUrl, waitForShortCodeInCloud } from "@/lib/shortGuestLink";
 import { generateShortCode } from "@/lib/guestLinkCodec";
 
 export const REMOTE_SUPPORT_STORAGE_KEY = "smart-break-shift-remote-support-v1";
@@ -247,7 +247,23 @@ export function resolveConsentSession(sessionId, bootstrapParam = null) {
 
 export async function ensureConsentLinkReady(session) {
   if (!session?.id || !cloudSessionSyncEnabled()) return { ok: true };
-  return syncRustDeskSessionToCloudAwait(session);
+
+  let workingSession = session;
+  if (!workingSession.shortCode) {
+    const updated = updateSession(workingSession.id, { shortCode: generateShortCode(6) });
+    if (updated) workingSession = updated;
+  }
+  if (!workingSession.shortCode) {
+    return { ok: false, error: "missing short code" };
+  }
+
+  const syncResult = await syncRustDeskSessionToCloudAwait(workingSession);
+  if (!syncResult.ok) return syncResult;
+
+  const ready = await waitForShortCodeInCloud(workingSession.shortCode);
+  return ready
+    ? { ok: true, session: workingSession }
+    : { ok: false, error: "short code not synced to cloud" };
 }
 
 export function buildConsentUrl(sessionIdOrSession, origin) {

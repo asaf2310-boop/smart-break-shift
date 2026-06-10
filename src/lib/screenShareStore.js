@@ -20,7 +20,7 @@ import {
   syncScreenShareSessionToCloud,
   syncScreenShareSessionToCloudAwait,
 } from "@/lib/supportSessionsSync";
-import { buildShortGuestUrl } from "@/lib/shortGuestLink";
+import { buildShortGuestUrl, waitForShortCodeInCloud } from "@/lib/shortGuestLink";
 import {
   decodeGuestBootstrapPayload,
   encodeGuestBootstrapPayload,
@@ -132,7 +132,23 @@ export function isGuestSessionExpired(session) {
 /** Await cloud row before sharing /j/ short links (external devices resolve via Supabase). */
 export async function ensureGuestLinkReady(session) {
   if (!session?.id || !cloudSessionSyncEnabled()) return { ok: true };
-  return syncScreenShareSessionToCloudAwait(session);
+
+  let workingSession = session;
+  if (!workingSession.shortCode) {
+    const updated = updateSession(workingSession.id, { shortCode: generateShortCode(6) });
+    if (updated) workingSession = updated;
+  }
+  if (!workingSession.shortCode) {
+    return { ok: false, error: "missing short code" };
+  }
+
+  const syncResult = await syncScreenShareSessionToCloudAwait(workingSession);
+  if (!syncResult.ok) return syncResult;
+
+  const ready = await waitForShortCodeInCloud(workingSession.shortCode);
+  return ready
+    ? { ok: true, session: workingSession }
+    : { ok: false, error: "short code not synced to cloud" };
 }
 
 /**

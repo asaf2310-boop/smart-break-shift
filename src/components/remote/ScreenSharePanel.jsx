@@ -178,9 +178,22 @@ export default function ScreenSharePanel({
         logSessionStart(created);
       }
 
-      await ensureGuestLinkReady(activeSession);
-      const url = buildScreenShareGuestUrl(activeSession);
-      await sendGuestLinkEmail(activeSession, url);
+      const ready = await ensureGuestLinkReady(activeSession);
+      if (!ready.ok) {
+        toast({
+          title: "הקישור לא מוכן",
+          description:
+            ready.error === "short code not synced to cloud"
+              ? "הסנכרון לענן לא הושלם — נסו שוב בעוד רגע"
+              : "לא ניתן ליצור קישור קצר — בדקו חיבור ל-Supabase",
+          variant: "destructive",
+        });
+        return;
+      }
+      const linkedSession = ready.session || activeSession;
+      if (linkedSession !== activeSession) setSession(linkedSession);
+      const url = buildScreenShareGuestUrl(linkedSession);
+      await sendGuestLinkEmail(linkedSession, url);
     } catch (err) {
       setEmailLogRevision((n) => n + 1);
       const rateLimited = err.status === 429;
@@ -223,9 +236,19 @@ export default function ScreenSharePanel({
     }
     setResending(true);
     try {
-      await ensureGuestLinkReady(session);
-      const url = buildScreenShareGuestUrl(session);
-      await sendGuestLinkEmail(session, url);
+      const ready = await ensureGuestLinkReady(session);
+      if (!ready.ok) {
+        toast({
+          title: "הקישור לא מוכן",
+          description: "לא ניתן לשלוח קישור — נסו שוב בעוד רגע",
+          variant: "destructive",
+        });
+        return;
+      }
+      const linkedSession = ready.session || session;
+      if (linkedSession !== session) setSession(linkedSession);
+      const url = buildScreenShareGuestUrl(linkedSession);
+      await sendGuestLinkEmail(linkedSession, url);
       setEmailLogRevision((n) => n + 1);
     } catch (err) {
       setEmailLogRevision((n) => n + 1);
@@ -244,8 +267,18 @@ export default function ScreenSharePanel({
   const handleCopyLink = async () => {
     if (!session?.id) return;
     try {
-      await ensureGuestLinkReady(session);
-      const url = buildScreenShareGuestUrl(session);
+      const ready = await ensureGuestLinkReady(session);
+      if (!ready.ok) {
+        toast({
+          title: "הקישור לא מוכן",
+          description: "לא ניתן להעתיק קישור — נסו שוב בעוד רגע",
+          variant: "destructive",
+        });
+        return;
+      }
+      const linkedSession = ready.session || session;
+      if (linkedSession !== session) setSession(linkedSession);
+      const url = buildScreenShareGuestUrl(linkedSession);
       if (!url) return;
       await navigator.clipboard.writeText(url);
       setCopied(true);

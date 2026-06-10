@@ -4,7 +4,7 @@ import { getAgentNamesList } from "@/constants/scheduling";
 import AgentLogin from "@/components/auth/AgentLogin";
 import HypHomeShell from "@/components/hyp/HypHomeShell";
 import RouteErrorBoundary from "@/components/RouteErrorBoundary";
-import { demoModeEnabled } from "@/api/demoClient";
+import { customerChatEnabled, demoModeEnabled } from "@/api/demoClient";
 import { isAdminPinConfigured } from "@/hooks/useIsAdmin";
 import { connectAgentAsAvailable } from "@/lib/agentChatPresence";
 import { useAgentSession } from "@/hooks/useAgentSession";
@@ -41,6 +41,14 @@ const productionCards = [
   },
 ];
 
+const customerChatCard = {
+  to: "/customer-chat",
+  title: "צ'אט לקוחות",
+  desc: "תור המתנה, קבלת שיחות ומענה ללקוחות",
+  icon: MessageCircle,
+  iconTile: "m3-icon-tile",
+};
+
 const demoOnlyCards = [
   {
     to: "/crm",
@@ -56,18 +64,17 @@ const demoOnlyCards = [
     icon: BookOpen,
     iconTile: "m3-icon-tile",
   },
-  {
-    to: "/customer-chat",
-    title: "צ'אט לקוחות",
-    desc: "תור המתנה, קבלת שיחות ומענה ללקוחות",
-    icon: MessageCircle,
-    iconTile: "m3-icon-tile",
-  },
+  customerChatCard,
 ];
+
+const liveCardsWithCustomerChat =
+  customerChatEnabled && !demoModeEnabled
+    ? [...productionCards, customerChatCard]
+    : productionCards;
 
 const homeCards = demoModeEnabled
   ? [...productionCards, ...demoOnlyCards]
-  : productionCards;
+  : liveCardsWithCustomerChat;
 
 const showAdminDemoHint =
   (import.meta.env.DEV || demoModeEnabled) && isAdminPinConfigured();

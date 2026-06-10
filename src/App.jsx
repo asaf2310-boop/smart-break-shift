@@ -10,6 +10,7 @@ import AuthRequiredScreen from '@/components/AuthRequiredScreen';
 import AppLoadError from '@/components/AppLoadError';
 import AdminGate from '@/components/admin/AdminGate';
 import DemoGate from '@/components/DemoGate';
+import CustomerChatGate from '@/components/CustomerChatGate';
 import Home from './pages/Home';
 import BreakScheduler from './pages/BreakScheduler';
 import AdminDashboard from './pages/AdminDashboard';
@@ -92,9 +93,9 @@ const AuthenticatedApp = () => {
         <Route path="/breaks" element={<BreakScheduler />} />
         <Route path="/shifts" element={<RouteErrorBoundary><ShiftScheduler /></RouteErrorBoundary>} />
         <Route path="/training" element={<TrainingPage />} />
-        <Route path="/chat/guest" element={<CustomerChatGuestPage />} />
+        <Route path="/chat/guest" element={<CustomerChatGate><CustomerChatGuestPage /></CustomerChatGate>} />
         <Route path="/chat" element={<ChatRoute />} />
-        <Route path="/customer-chat" element={<DemoGate><AgentCustomerChatPage /></DemoGate>} />
+        <Route path="/customer-chat" element={<CustomerChatGate><AgentCustomerChatPage /></CustomerChatGate>} />
         <Route path="/crm" element={<DemoGate><CrmDashboard /></DemoGate>} />
         <Route path="/crm/lookup" element={<DemoGate><CrmLookupDeepLink /></DemoGate>} />
         <Route path="/crm/:id" element={<DemoGate><CrmCustomerDetail /></DemoGate>} />
@@ -109,7 +110,7 @@ const AuthenticatedApp = () => {
         <Route path="/knowledge" element={<DemoGate><KnowledgePage /></DemoGate>} />
         <Route path="/admin" element={<AdminGate><AdminDashboard /></AdminGate>} />
         <Route path="/admin/knowledge" element={<DemoGate><AdminGate><AdminKnowledge /></AdminGate></DemoGate>} />
-        <Route path="/admin/customer-chat" element={<DemoGate><AdminGate><AdminCustomerChat /></AdminGate></DemoGate>} />
+        <Route path="/admin/customer-chat" element={<CustomerChatGate><AdminGate><AdminCustomerChat /></AdminGate></CustomerChatGate>} />
         <Route path="/admin/shifts" element={<AdminGate><AdminShifts /></AdminGate>} />
         <Route path="/admin/users" element={<AdminGate><AdminUsers /></AdminGate>} />
         <Route path="/admin/training" element={<AdminGate><AdminTraining /></AdminGate>} />

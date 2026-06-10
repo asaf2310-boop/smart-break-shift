@@ -114,7 +114,7 @@ export default function CustomerChatBotAdmin() {
         <div className="flex-1 min-w-[12rem]">
           <h2 className="text-lg font-extrabold text-slate-800">הודעות בוט — צ'אט לקוחות</h2>
           <p className="text-sm text-slate-500 mt-1">
-            עריכת ההודעות האוטומטיות שנשלחות ללקוח לפני חיבור לנציג. השינויים נשמרים בדפדפן (דמו).
+            עריכת ההודעות האוטומטיות — נשלחות ללקוח אחת־אחת עם אפקט הקלדה (כמו ווטסאפ). השינויים נשמרים בדפדפן (דמו).
           </p>
         </div>
       </div>

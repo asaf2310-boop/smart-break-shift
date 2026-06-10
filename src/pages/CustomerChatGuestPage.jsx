@@ -1,10 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { MessageCircle, Send } from "lucide-react";
-import { demoModeEnabled } from "@/api/demoClient";
+import { customerChatEnabled, demoModeEnabled } from "@/api/demoClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { m3PageClass } from "@/lib/hypPage";
+import CustomerChatTypingIndicator from "@/components/customer-chat/CustomerChatTypingIndicator";
+import { useGuestBotConversation } from "@/hooks/useGuestBotConversation";
+import { getCustomerChatBotConfig } from "@/lib/customerChatBotConfig";
+import { isIntroBotFlowComplete } from "@/lib/customerChatBotFlow";
 import {
   buildGuestChatUrl,
   closeSession,
@@ -36,6 +40,7 @@ export default function CustomerChatGuestPage() {
   const [draft, setDraft] = useState("");
   const [starting, setStarting] = useState(false);
   const bottomRef = useRef(null);
+  const { isBotTyping } = useGuestBotConversation(session);
 
   const refresh = useCallback(() => {
     if (!token) return;
@@ -60,7 +65,7 @@ export default function CustomerChatGuestPage() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]);
+  }, [messages.length, isBotTyping]);
 
   const handleStart = async (e) => {
     e.preventDefault();
@@ -93,9 +98,11 @@ export default function CustomerChatGuestPage() {
   };
 
   const shellClass = m3PageClass("min-h-screen flex flex-col");
-  const demoBanner = demoModeEnabled
+  const infoBanner = demoModeEnabled
     ? "דמו — צ'אט לקוחות. הנתונים נשמרים בדפדפן בלבד."
-    : "צ'אט עם נציג שירות";
+    : customerChatEnabled
+      ? "צ'אט שירות — בדיקות בסביבת ניהול מוקד (נתונים בדפדפן זה)"
+      : "צ'אט עם נציג שירות";
 
   if (!token || !session) {
     return (
@@ -108,7 +115,7 @@ export default function CustomerChatGuestPage() {
               </div>
               <div>
                 <h1 className="m3-headline-small">צ'אט עם נציג</h1>
-                <p className="m3-label-medium text-on-surface-variant text-sm">{demoBanner}</p>
+                <p className="m3-label-medium text-on-surface-variant text-sm">{infoBanner}</p>
               </div>
             </div>
             <form onSubmit={handleStart} className="space-y-4">
@@ -137,6 +144,18 @@ export default function CustomerChatGuestPage() {
 
   const canSend = session.status !== "closed";
   const statusLabel = getSessionStatusLabel(session.status);
+  const introComplete = isIntroBotFlowComplete(session.id);
+  const needsMerchantRef =
+    introComplete &&
+    !session.merchant_ref &&
+    getCustomerChatBotConfig().beforeAgent.length > 0;
+  const inputPlaceholder = !introComplete || isBotTyping
+    ? "ממתין להודעה מהבוט…"
+    : needsMerchantRef
+      ? "הזינו מספר מסוף או ח.פ…"
+      : session.status === "waiting"
+        ? "כתבו הודעה בזמן ההמתנה…"
+        : "הודעה לנציג…";
 
   return (
     <div className={shellClass} dir="rtl">
@@ -161,8 +180,8 @@ export default function CustomerChatGuestPage() {
             {statusLabel}
           </span>
         </div>
-        {demoModeEnabled && (
-          <p className="max-w-lg mx-auto text-[10px] text-on-surface-variant mt-1">{demoBanner}</p>
+        {(demoModeEnabled || customerChatEnabled) && (
+          <p className="max-w-lg mx-auto text-[10px] text-on-surface-variant mt-1">{infoBanner}</p>
         )}
       </header>
 
@@ -213,6 +232,7 @@ export default function CustomerChatGuestPage() {
               </div>
             );
           })}
+          {isBotTyping && <CustomerChatTypingIndicator />}
           <div ref={bottomRef} />
         </div>
       </main>
@@ -224,11 +244,17 @@ export default function CustomerChatGuestPage() {
               <Input
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                placeholder={session.status === "waiting" ? "כתבו הודעה בזמן ההמתנה…" : "הודעה לנציג…"}
+                placeholder={inputPlaceholder}
                 className="flex-1 text-right"
                 autoComplete="off"
+                disabled={isBotTyping}
               />
-              <Button type="submit" size="icon" disabled={!draft.trim()} aria-label="שליחה">
+              <Button
+                type="submit"
+                size="icon"
+                disabled={!draft.trim() || isBotTyping}
+                aria-label="שליחה"
+              >
                 <Send className="w-4 h-4" />
               </Button>
             </form>

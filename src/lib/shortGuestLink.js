@@ -48,12 +48,8 @@ export { generateShortCode, encodeGuestBootstrapPayload, GUEST_BOOTSTRAP_QUERY_K
 export function buildShortGuestUrl(session, { kind = "screen", origin } = {}) {
   const base = (origin || getPublicAppOrigin()).replace(/\/$/, "");
   if (!session?.id) return "";
-  const bootstrap = encodeGuestBootstrapPayload(session, kind);
   if (session.shortCode && cloudSessionSyncEnabled()) {
-    const path = `${base}/j/${session.shortCode}`;
-    return bootstrap
-      ? `${path}?${GUEST_BOOTSTRAP_QUERY_KEY}=${encodeURIComponent(bootstrap)}`
-      : path;
+    return `${base}/j/${session.shortCode}`;
   }
   const token = encodeCompactGuestToken(session, kind);
   return token ? `${base}/j/${token}` : "";
@@ -168,6 +164,9 @@ export function resolveGuestFromToken(
   };
 }
 
+const SHORT_CODE_LOOKUP_ATTEMPTS = 4;
+const SHORT_CODE_LOOKUP_BASE_DELAY_MS = 350;
+
 async function fetchGuestSessionByShortCodeOnce(shortCode) {
   const { data, error } = await supabase
     .from("support_sessions")
@@ -193,14 +192,30 @@ async function fetchGuestSessionByShortCodeOnce(shortCode) {
   };
 }
 
+async function lookupShortCodeWithRetries(shortCode, { attempts = SHORT_CODE_LOOKUP_ATTEMPTS } = {}) {
+  for (let i = 0; i < attempts; i += 1) {
+    const result = await fetchGuestSessionByShortCodeOnce(shortCode);
+    if (result.row || result.error) return result;
+    if (i < attempts - 1) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, SHORT_CODE_LOOKUP_BASE_DELAY_MS * (i + 1))
+      );
+    }
+  }
+  return { row: null, error: null };
+}
+
+/** Verify short_code is readable from Supabase before sharing a /j/ link. */
+export async function waitForShortCodeInCloud(shortCode) {
+  if (!cloudSessionSyncEnabled() || !shortCode) return true;
+  const result = await lookupShortCodeWithRetries(shortCode);
+  return Boolean(result.row);
+}
+
 export async function fetchGuestSessionByShortCode(shortCode) {
   if (!cloudSessionSyncEnabled() || !shortCode) return null;
   try {
-    let result = await fetchGuestSessionByShortCodeOnce(shortCode);
-    if (!result.row && !result.error) {
-      await new Promise((resolve) => setTimeout(resolve, 450));
-      result = await fetchGuestSessionByShortCodeOnce(shortCode);
-    }
+    const result = await lookupShortCodeWithRetries(shortCode);
     return result.row;
   } catch (err) {
     console.warn("[shortGuestLink] short_code fetch error", err);

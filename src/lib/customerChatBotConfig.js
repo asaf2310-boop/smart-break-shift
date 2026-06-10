@@ -14,8 +14,8 @@ export const BOT_MESSAGE_PHASES = {
   },
   afterBeforeAgent: {
     key: "afterBeforeAgent",
-    label: "לאחר השאלות — לפני נציג",
-    description: "הודעה שנשלחת אחרי שלב השאלות, לפני שהנציג מתחבר",
+    label: "לאחר תשובת הלקוח — לפני נציג",
+    description: "הודעות שנשלחות אחרי שהלקוח ענה (למשל מספר מסוף), לפני חיבור הנציג",
   },
 };
 
@@ -110,18 +110,23 @@ export function resetCustomerChatBotConfig() {
   return config;
 }
 
-/** Ordered bot bodies for new guest sessions */
-export function getBotMessagesForNewSession() {
-  const config = readRaw();
-  return [
-    ...config.sessionStart,
-    ...config.beforeAgent,
-    ...config.afterBeforeAgent,
-  ].filter((body) => String(body || "").trim());
+function filterBodies(list) {
+  return (list || []).map((body) => String(body || "").trim()).filter(Boolean);
 }
 
-/** @deprecated use getBotMessagesForNewSession */
-export const BOT_WELCOME_MESSAGES = DEFAULT_BOT_CONFIG.sessionStart.concat(
-  DEFAULT_BOT_CONFIG.beforeAgent,
-  DEFAULT_BOT_CONFIG.afterBeforeAgent
-);
+/** Welcome + pre-agent questions (sent on session start, one by one) */
+export function getBotIntroMessages() {
+  const config = readRaw();
+  return filterBodies([...config.sessionStart, ...config.beforeAgent]);
+}
+
+/** Sent after the guest replies with terminal / ח.פ. */
+export function getBotAfterMerchantMessages() {
+  const config = readRaw();
+  return filterBodies(config.afterBeforeAgent);
+}
+
+/** @deprecated use getBotIntroMessages / getBotAfterMerchantMessages */
+export function getBotMessagesForNewSession() {
+  return [...getBotIntroMessages(), ...getBotAfterMerchantMessages()];
+}

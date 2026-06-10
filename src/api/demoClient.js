@@ -8,6 +8,7 @@ import { demoModeEnabled } from "./demoMode";
 
 export { demoModeEnabled } from "./demoMode";
 export { remoteSupportEnabled } from "./remoteSupportMode";
+export { customerChatEnabled } from "./customerChatMode";
 
 export const DEMO_STORE_KEY = "smart-break-shift-demo-store-v1";
 

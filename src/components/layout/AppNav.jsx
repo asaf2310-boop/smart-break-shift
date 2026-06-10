@@ -2,7 +2,7 @@ import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { BookOpen, CalendarClock, CalendarDays, Contact, Film, GraduationCap, Home, MessageCircle, Monitor, ShieldCheck } from "lucide-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
-import { demoModeEnabled } from "@/api/demoClient";
+import { customerChatEnabled, demoModeEnabled } from "@/api/demoClient";
 import { brandVisualEnabled } from "@/lib/brandShell";
 
 /** גובה שורת הניווט העליונה — משמש גם ל-FloatingChatWidget */
@@ -69,6 +69,12 @@ export default function AppNav() {
             <Monitor className="w-4 h-4" />
             השתלטות מרחוק
           </Link>
+          {customerChatEnabled && !demoModeEnabled && (
+            <Link to="/customer-chat" className={tabClass(isCustomerChat)}>
+              <MessageCircle className="w-4 h-4" />
+              צ&apos;אט לקוחות
+            </Link>
+          )}
           {demoModeEnabled && (
             <>
               <Link to="/crm" className={tabClass(isCrm)}>
@@ -110,6 +116,12 @@ export default function AppNav() {
                 <Link to="/admin/knowledge" className={tabClass(location.pathname === "/admin/knowledge")}>
                   <BookOpen className="w-4 h-4" />
                   ניהול ידע
+                </Link>
+              )}
+              {customerChatEnabled && (
+                <Link to="/admin/customer-chat" className={tabClass(location.pathname === "/admin/customer-chat")}>
+                  <MessageCircle className="w-4 h-4" />
+                  בוט צ&apos;אט
                 </Link>
               )}
             </>

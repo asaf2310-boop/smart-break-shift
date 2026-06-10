@@ -240,9 +240,19 @@ export default function RemoteSupportPanel({
         });
       }
 
-      await ensureConsentLinkReady(created);
-      const consentUrlForEmail = buildConsentUrl(created);
-      await sendRustDeskLinkEmail(consentUrlForEmail, created.id);
+      const ready = await ensureConsentLinkReady(created);
+      if (!ready.ok) {
+        toast({
+          title: "הקישור לא מוכן",
+          description: "לא ניתן לשלוח קישור אישור — נסו שוב בעוד רגע",
+          variant: "destructive",
+        });
+        return;
+      }
+      const linkedSession = ready.session || created;
+      if (linkedSession !== created) setSession(linkedSession);
+      const consentUrlForEmail = buildConsentUrl(linkedSession);
+      await sendRustDeskLinkEmail(consentUrlForEmail, linkedSession.id);
       setStep(3);
     } catch (err) {
       const rateLimited = err.status === 429;

@@ -1,7 +1,6 @@
-import { demoModeEnabled } from "@/api/demoClient";
+import { customerChatEnabled } from "@/api/customerChatMode";
 import { getChatEntities } from "@/api/localChatStore";
 import { CHAT_STATUS } from "@/lib/agentChatPresence";
-import { getBotMessagesForNewSession } from "@/lib/customerChatBotConfig";
 
 export const CUSTOMER_CHAT_STORAGE_KEY = "smart-break-shift-customer-chat-v1";
 export const CUSTOMER_CHAT_CHANGE_EVENT = "customer-chat-changed";
@@ -40,8 +39,13 @@ function writeStore(store) {
   window.dispatchEvent(new CustomEvent(CUSTOMER_CHAT_CHANGE_EVENT));
 }
 
+export function isCustomerChatModuleEnabled() {
+  return customerChatEnabled;
+}
+
+/** @deprecated use isCustomerChatModuleEnabled */
 export function customerChatDemoAvailable() {
-  return demoModeEnabled;
+  return customerChatEnabled;
 }
 
 export function subscribeCustomerChatStore(callback) {
@@ -126,6 +130,10 @@ export function listMessages(sessionId) {
     .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 }
 
+export function listBotMessages(sessionId) {
+  return listMessages(sessionId).filter((m) => m.sender_type === "bot");
+}
+
 function appendMessage(store, { sessionId, senderType, senderName, body }) {
   const message = {
     id: makeId("cm"),
@@ -168,22 +176,44 @@ export function createGuestSession({ guestName } = {}) {
     closed_at: null,
   };
   store.sessions.push(session);
-  for (const body of getBotMessagesForNewSession()) {
-    appendMessage(store, {
-      sessionId: session.id,
-      senderType: "bot",
-      senderName: "בוט",
-      body,
-    });
-  }
-  appendMessage(store, {
-    sessionId: session.id,
-    senderType: "system",
-    senderName: null,
-    body: `${name} הצטרף/ה לצ'אט — ממתין/ה לנציג`,
-  });
   writeStore(store);
   return session;
+}
+
+export function appendBotMessage(sessionId, body) {
+  const store = readStore();
+  const session = store.sessions.find((s) => s.id === sessionId);
+  if (!session || session.status === SESSION_STATUS.closed) return null;
+  const message = appendMessage(store, {
+    sessionId,
+    senderType: "bot",
+    senderName: "בוט",
+    body,
+  });
+  if (!message) return null;
+  touchSession(store, sessionId);
+  writeStore(store);
+  return message;
+}
+
+export function appendGuestJoinedSystemMessage(sessionId) {
+  const store = readStore();
+  const session = store.sessions.find((s) => s.id === sessionId);
+  if (!session) return null;
+  const already = store.messages.some(
+    (m) => m.session_id === sessionId && m.sender_type === "system" && m.body.includes("הצטרף")
+  );
+  if (already) return null;
+  const message = appendMessage(store, {
+    sessionId,
+    senderType: "system",
+    senderName: null,
+    body: `${session.guest_name} הצטרף/ה לצ'אט — ממתין/ה לנציג`,
+  });
+  if (!message) return null;
+  touchSession(store, sessionId);
+  writeStore(store);
+  return message;
 }
 
 export function sendGuestMessage(token, body) {
