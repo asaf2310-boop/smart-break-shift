@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Loader2, AlertCircle } from "lucide-react";
 import { m3PageClass } from "@/lib/hypPage";
 import {
@@ -13,11 +13,15 @@ import {
 } from "@/lib/remoteSupportStore";
 import {
   buildFullGuestPath,
+  GUEST_BOOTSTRAP_QUERY_KEY,
+  GUEST_LINK_ERROR,
+  messageForGuestLinkError,
   resolveGuestFromTokenAsync,
 } from "@/lib/shortGuestLink";
 
 export default function GuestJoinRedirectPage() {
   const { token } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [error, setError] = useState("");
 
@@ -26,7 +30,7 @@ export default function GuestJoinRedirectPage() {
 
     const run = async () => {
       if (!token) {
-        setError("קישור לא תקין");
+        setError(messageForGuestLinkError(GUEST_LINK_ERROR.INVALID));
         return;
       }
 
@@ -35,12 +39,18 @@ export default function GuestJoinRedirectPage() {
         bootstrapConsent: bootstrapConsentSessionFromUrl,
         getScreenByShortCode,
         getConsentByShortCode,
+        urlBootstrap: searchParams.get(GUEST_BOOTSTRAP_QUERY_KEY),
       });
 
       if (cancelled) return;
 
+      if (resolved?.error) {
+        setError(messageForGuestLinkError(resolved.error));
+        return;
+      }
+
       if (!resolved?.sessionId || !resolved.kind) {
-        setError("קישור לא תקין או שפג תוקפו. בקשו מהנציג קישור חדש.");
+        setError(messageForGuestLinkError(GUEST_LINK_ERROR.NOT_FOUND));
         return;
       }
 
@@ -52,7 +62,7 @@ export default function GuestJoinRedirectPage() {
     return () => {
       cancelled = true;
     };
-  }, [token, navigate]);
+  }, [token, navigate, searchParams]);
 
   if (error) {
     return (

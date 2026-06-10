@@ -4,6 +4,7 @@ import {
   encodeCompactGuestToken,
   decodeCompactGuestToken,
   encodeGuestBootstrapPayload,
+  decodeGuestBootstrapPayload,
   GUEST_BOOTSTRAP_QUERY_KEY,
 } from "@/lib/guestLinkCodec";
 
@@ -18,6 +19,26 @@ function getPublicAppOrigin() {
 
 /** @typedef {'screen' | 'consent'} GuestLinkKind */
 
+export const GUEST_LINK_ERROR = {
+  INVALID: "invalid",
+  NOT_FOUND: "not_found",
+  EXPIRED: "expired",
+  ENDED: "ended",
+};
+
+export function messageForGuestLinkError(code) {
+  switch (code) {
+    case GUEST_LINK_ERROR.ENDED:
+      return "סשן התמיכה הסתיים. בקשו מהנציג קישור חדש לסשן פעיל.";
+    case GUEST_LINK_ERROR.NOT_FOUND:
+      return "קישור לא נמצא. ודאו שהעתקתם את הקישור המלא או בקשו קישור חדש מהנציג.";
+    case GUEST_LINK_ERROR.EXPIRED:
+      return "פג תוקף הקישור. בקשו מהנציג קישור חדש.";
+    default:
+      return "קישור לא תקין. בקשו מהנציג קישור חדש.";
+  }
+}
+
 export { generateShortCode, encodeGuestBootstrapPayload, GUEST_BOOTSTRAP_QUERY_KEY } from "@/lib/guestLinkCodec";
 
 /**
@@ -27,8 +48,12 @@ export { generateShortCode, encodeGuestBootstrapPayload, GUEST_BOOTSTRAP_QUERY_K
 export function buildShortGuestUrl(session, { kind = "screen", origin } = {}) {
   const base = (origin || getPublicAppOrigin()).replace(/\/$/, "");
   if (!session?.id) return "";
+  const bootstrap = encodeGuestBootstrapPayload(session, kind);
   if (session.shortCode && cloudSessionSyncEnabled()) {
-    return `${base}/j/${session.shortCode}`;
+    const path = `${base}/j/${session.shortCode}`;
+    return bootstrap
+      ? `${path}?${GUEST_BOOTSTRAP_QUERY_KEY}=${encodeURIComponent(bootstrap)}`
+      : path;
   }
   const token = encodeCompactGuestToken(session, kind);
   return token ? `${base}/j/${token}` : "";
@@ -56,15 +81,36 @@ function bootstrapPayloadFromDecoded(decoded) {
     agentName: decoded.agentName,
     customerEmail: decoded.customerEmail,
     crmCustomerId: decoded.crmCustomerId,
-  });
+  }, decoded.kind);
+}
+
+function resolveFromUrlBootstrap(urlBootstrap, { bootstrapScreen, bootstrapConsent } = {}) {
+  const payload = decodeGuestBootstrapPayload(urlBootstrap);
+  if (!payload?.sessionId || !payload.createdAt) return null;
+
+  const kind = payload.kind || "screen";
+  const bootstrap = urlBootstrap;
+
+  if (kind === "consent") {
+    bootstrapConsent?.(payload.sessionId, bootstrap);
+  } else {
+    bootstrapScreen?.(payload.sessionId, bootstrap);
+  }
+
+  return {
+    kind,
+    sessionId: payload.sessionId,
+    bootstrap,
+    pendingCloud: false,
+  };
 }
 
 export function resolveGuestFromToken(
   token,
-  { bootstrapScreen, bootstrapConsent, getScreenByShortCode, getConsentByShortCode } = {}
+  { bootstrapScreen, bootstrapConsent, getScreenByShortCode, getConsentByShortCode, urlBootstrap } = {}
 ) {
   const trimmed = String(token || "").trim();
-  if (!trimmed) return null;
+  if (!trimmed) return { error: GUEST_LINK_ERROR.INVALID };
 
   if (looksLikeShortCode(trimmed)) {
     const screen = getScreenByShortCode?.(trimmed);
@@ -72,7 +118,7 @@ export function resolveGuestFromToken(
       return {
         kind: "screen",
         sessionId: screen.id,
-        bootstrap: encodeGuestBootstrapPayload(screen),
+        bootstrap: encodeGuestBootstrapPayload(screen, "screen"),
       };
     }
     const consent = getConsentByShortCode?.(trimmed);
@@ -80,20 +126,32 @@ export function resolveGuestFromToken(
       return {
         kind: "consent",
         sessionId: consent.id,
-        bootstrap: encodeGuestBootstrapPayload({
-          id: consent.id,
-          createdAt: consent.createdAt,
-          agentName: consent.agentName,
-          customerEmail: consent.customerEmail,
-          crmCustomerId: consent.crmCustomerId,
-        }),
+        bootstrap: encodeGuestBootstrapPayload(
+          {
+            id: consent.id,
+            createdAt: consent.createdAt,
+            agentName: consent.agentName,
+            customerEmail: consent.customerEmail,
+            crmCustomerId: consent.crmCustomerId,
+          },
+          "consent"
+        ),
       };
     }
+
+    if (urlBootstrap) {
+      const fromBootstrap = resolveFromUrlBootstrap(urlBootstrap, {
+        bootstrapScreen,
+        bootstrapConsent,
+      });
+      if (fromBootstrap) return fromBootstrap;
+    }
+
     return { kind: null, sessionId: null, bootstrap: null, pendingCloud: true, shortCode: trimmed };
   }
 
   const decoded = decodeCompactGuestToken(trimmed);
-  if (!decoded) return null;
+  if (!decoded) return { error: GUEST_LINK_ERROR.INVALID };
 
   const bootstrap = bootstrapPayloadFromDecoded(decoded);
   if (decoded.kind === "consent") {
@@ -110,16 +168,19 @@ export function resolveGuestFromToken(
   };
 }
 
-export async function fetchGuestSessionByShortCode(shortCode) {
-  if (!cloudSessionSyncEnabled() || !shortCode) return null;
-  try {
-    const { data, error } = await supabase
-      .from("support_sessions")
-      .select("id, session_type, created_at, agent_name, customer_email, crm_customer_id, status")
-      .eq("short_code", shortCode)
-      .maybeSingle();
-    if (error || !data?.id) return null;
-    return {
+async function fetchGuestSessionByShortCodeOnce(shortCode) {
+  const { data, error } = await supabase
+    .from("support_sessions")
+    .select("id, session_type, created_at, agent_name, customer_email, crm_customer_id, status")
+    .eq("short_code", shortCode)
+    .maybeSingle();
+  if (error) {
+    console.warn("[shortGuestLink] short_code lookup failed", error.message);
+    return { row: null, error: error.message };
+  }
+  if (!data?.id) return { row: null, error: null };
+  return {
+    row: {
       sessionId: data.id,
       kind: data.session_type === "rustdesk" ? "consent" : "screen",
       createdAt: data.created_at,
@@ -127,45 +188,86 @@ export async function fetchGuestSessionByShortCode(shortCode) {
       customerEmail: data.customer_email || "",
       crmCustomerId: data.crm_customer_id || null,
       status: data.status,
-    };
-  } catch {
+    },
+    error: null,
+  };
+}
+
+export async function fetchGuestSessionByShortCode(shortCode) {
+  if (!cloudSessionSyncEnabled() || !shortCode) return null;
+  try {
+    let result = await fetchGuestSessionByShortCodeOnce(shortCode);
+    if (!result.row && !result.error) {
+      await new Promise((resolve) => setTimeout(resolve, 450));
+      result = await fetchGuestSessionByShortCodeOnce(shortCode);
+    }
+    return result.row;
+  } catch (err) {
+    console.warn("[shortGuestLink] short_code fetch error", err);
     return null;
   }
 }
 
 export async function resolveGuestFromTokenAsync(
   token,
-  { bootstrapScreen, bootstrapConsent, getScreenByShortCode, getConsentByShortCode } = {}
+  {
+    bootstrapScreen,
+    bootstrapConsent,
+    getScreenByShortCode,
+    getConsentByShortCode,
+    urlBootstrap,
+  } = {}
 ) {
   const local = resolveGuestFromToken(token, {
     bootstrapScreen,
     bootstrapConsent,
     getScreenByShortCode,
     getConsentByShortCode,
+    urlBootstrap,
   });
+
+  if (local?.error) return local;
   if (!local?.pendingCloud) return local;
 
   const cloud = await fetchGuestSessionByShortCode(local.shortCode);
-  if (!cloud) return null;
 
-  const bootstrap = encodeGuestBootstrapPayload({
-    id: cloud.sessionId,
-    createdAt: cloud.createdAt,
-    agentName: cloud.agentName,
-    customerEmail: cloud.customerEmail,
-    crmCustomerId: cloud.crmCustomerId,
-  });
-
-  if (cloud.kind === "consent") {
-    bootstrapConsent?.(cloud.sessionId, bootstrap);
-  } else {
-    bootstrapScreen?.(cloud.sessionId, bootstrap);
+  if (cloud?.status === "ended") {
+    return { error: GUEST_LINK_ERROR.ENDED, sessionId: cloud.sessionId, kind: cloud.kind };
   }
 
-  return {
-    kind: cloud.kind,
-    sessionId: cloud.sessionId,
-    bootstrap,
-    pendingCloud: false,
-  };
+  if (cloud) {
+    const bootstrap = encodeGuestBootstrapPayload(
+      {
+        id: cloud.sessionId,
+        createdAt: cloud.createdAt,
+        agentName: cloud.agentName,
+        customerEmail: cloud.customerEmail,
+        crmCustomerId: cloud.crmCustomerId,
+      },
+      cloud.kind
+    );
+
+    if (cloud.kind === "consent") {
+      bootstrapConsent?.(cloud.sessionId, bootstrap);
+    } else {
+      bootstrapScreen?.(cloud.sessionId, bootstrap);
+    }
+
+    return {
+      kind: cloud.kind,
+      sessionId: cloud.sessionId,
+      bootstrap,
+      pendingCloud: false,
+    };
+  }
+
+  if (urlBootstrap) {
+    const fromBootstrap = resolveFromUrlBootstrap(urlBootstrap, {
+      bootstrapScreen,
+      bootstrapConsent,
+    });
+    if (fromBootstrap) return fromBootstrap;
+  }
+
+  return { error: GUEST_LINK_ERROR.NOT_FOUND };
 }

@@ -22,7 +22,11 @@ import {
   simulatedReasonForDemoSendDisabled,
 } from "@/lib/emailSimulatedReason";
 import { getStoredAgentName } from "@/constants/scheduling";
-import { syncRustDeskSessionToCloud } from "@/lib/supportSessionsSync";
+import {
+  cloudSessionSyncEnabled,
+  syncRustDeskSessionToCloud,
+  syncRustDeskSessionToCloudAwait,
+} from "@/lib/supportSessionsSync";
 import { buildShortGuestUrl } from "@/lib/shortGuestLink";
 import { generateShortCode } from "@/lib/guestLinkCodec";
 
@@ -239,6 +243,11 @@ export function resolveConsentSession(sessionId, bootstrapParam = null) {
   if (!session) return null;
   if (session.status !== "ended" && isGuestSessionExpired(session)) return null;
   return session;
+}
+
+export async function ensureConsentLinkReady(session) {
+  if (!session?.id || !cloudSessionSyncEnabled()) return { ok: true };
+  return syncRustDeskSessionToCloudAwait(session);
 }
 
 export function buildConsentUrl(sessionIdOrSession, origin) {

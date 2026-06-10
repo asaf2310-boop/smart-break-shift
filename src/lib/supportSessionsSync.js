@@ -100,6 +100,17 @@ export function syncRustDeskSessionToCloud(session) {
     });
 }
 
+export async function syncRustDeskSessionToCloudAwait(session) {
+  if (!cloudSessionSyncEnabled() || !session?.id) return { ok: true };
+  const row = mapRustDeskRow(session);
+  const { error } = await supabase.from("support_sessions").upsert(row, { onConflict: "id" });
+  if (error) {
+    console.warn("[supportSessionsSync] rustdesk upsert failed", error.message);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
+
 export function mapCloudRowToFlatSession(row, cloudRecordingsBySession = null) {
   const sessionType =
     row.session_type === SESSION_TYPE_RUSTDESK

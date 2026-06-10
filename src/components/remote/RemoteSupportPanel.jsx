@@ -27,6 +27,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { createCallLog, createEmailLog, getCustomerById } from "@/lib/crmStore";
 import {
   buildConsentUrl,
+  ensureConsentLinkReady,
   buildRustDeskDeepLink,
   buildRustDeskMailtoUrl,
   createSession,
@@ -239,6 +240,7 @@ export default function RemoteSupportPanel({
         });
       }
 
+      await ensureConsentLinkReady(created);
       const consentUrlForEmail = buildConsentUrl(created);
       await sendRustDeskLinkEmail(consentUrlForEmail, created.id);
       setStep(3);

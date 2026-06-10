@@ -33,13 +33,15 @@ function fromBase64Url(encoded) {
   }
 }
 
-export function encodeGuestBootstrapPayload(session) {
+export function encodeGuestBootstrapPayload(session, kind = "screen") {
   if (!session?.id || !session.createdAt) return "";
   const payload = {
+    i: session.id,
     c: session.createdAt,
     a: String(session.agentName || "").slice(0, 120),
     e: String(session.customerEmail || "").slice(0, 200),
     r: session.crmCustomerId || null,
+    k: kind === "consent" ? "c" : "s",
   };
   return toBase64Url(JSON.stringify(payload));
 }
@@ -51,6 +53,8 @@ export function decodeGuestBootstrapPayload(encoded) {
     const parsed = JSON.parse(json);
     if (!parsed?.c || Number.isNaN(new Date(parsed.c).getTime())) return null;
     return {
+      sessionId: parsed.i ? String(parsed.i) : null,
+      kind: parsed.k === "c" ? "consent" : "screen",
       createdAt: parsed.c,
       agentName: String(parsed.a || "").slice(0, 120),
       customerEmail: String(parsed.e || "").slice(0, 200),
