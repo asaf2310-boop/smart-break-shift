@@ -30,6 +30,7 @@ const TABLE_QUERY_PREFIXES = {
     "all-confirmations",
     "confirmations-builder",
   ],
+  constraints_week_settings: ["constraints-week-settings"],
   chat_messages: ["chat-messages"],
   chat_presence: ["chat-presence"],
   chat_settings: ["chat-branding"],

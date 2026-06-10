@@ -109,6 +109,7 @@ const ENTITY_TABLES = {
   ShiftUnavailability: "shift_unavailabilities",
   VacationRequest: "vacation_requests",
   ConstraintConfirmation: "constraint_confirmations",
+  ConstraintsWeekSettings: "constraints_week_settings",
   ChatMessage: "chat_messages",
   ChatPresence: "chat_presence",
   ChatSettings: "chat_settings",

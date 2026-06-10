@@ -1,10 +1,10 @@
 import React from "react";
-import { BookOpen, CalendarClock, CalendarDays, Contact, GraduationCap, Monitor } from "lucide-react";
+import { BarChart3, BookOpen, CalendarClock, CalendarDays, Contact, GraduationCap, MessageCircle, Monitor } from "lucide-react";
 import { getAgentNamesList } from "@/constants/scheduling";
 import AgentLogin from "@/components/auth/AgentLogin";
 import HypHomeShell from "@/components/hyp/HypHomeShell";
 import RouteErrorBoundary from "@/components/RouteErrorBoundary";
-import { demoModeEnabled } from "@/api/demoClient";
+import { customerChatEnabled, demoModeEnabled } from "@/api/demoClient";
 import { isAdminPinConfigured } from "@/hooks/useIsAdmin";
 import { connectAgentAsAvailable } from "@/lib/agentChatPresence";
 import { useAgentSession } from "@/hooks/useAgentSession";
@@ -32,7 +32,29 @@ const productionCards = [
     icon: GraduationCap,
     iconTile: "m3-icon-tile",
   },
+  {
+    to: "/metrics",
+    title: "מדדים",
+    desc: "טבלת כל הנציגים וציון משוקלל",
+    icon: BarChart3,
+    iconTile: "m3-icon-tile",
+  },
+  {
+    to: "/remote-support",
+    title: "השתלטות מרחוק",
+    desc: "צפייה בדפדפן · RustDesk · אישור ותיעוד",
+    icon: Monitor,
+    iconTile: "m3-icon-tile",
+  },
 ];
+
+const customerChatCard = {
+  to: "/customer-chat",
+  title: "צ'אט לקוחות",
+  desc: "תור המתנה, קבלת שיחות ומענה ללקוחות",
+  icon: MessageCircle,
+  iconTile: "m3-icon-tile",
+};
 
 const demoOnlyCards = [
   {
@@ -43,24 +65,23 @@ const demoOnlyCards = [
     iconTile: "m3-icon-tile",
   },
   {
-    to: "/remote-support",
-    title: "השתלטות מרחוק",
-    desc: "שלב א: צפייה בדפדפן · RustDesk · סשנים",
-    icon: Monitor,
-    iconTile: "m3-icon-tile",
-  },
-  {
     to: "/knowledge",
     title: "בסיס ידע",
     desc: "שאלות ותשובות ממסמכי הארגון",
     icon: BookOpen,
     iconTile: "m3-icon-tile",
   },
+  customerChatCard,
 ];
+
+const liveCardsWithCustomerChat =
+  customerChatEnabled && !demoModeEnabled
+    ? [...productionCards, customerChatCard]
+    : productionCards;
 
 const homeCards = demoModeEnabled
   ? [...productionCards, ...demoOnlyCards]
-  : productionCards;
+  : liveCardsWithCustomerChat;
 
 const showAdminDemoHint =
   (import.meta.env.DEV || demoModeEnabled) && isAdminPinConfigured();

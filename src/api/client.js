@@ -21,6 +21,7 @@ function createMissingBackendClient() {
       ShiftUnavailability: entity,
       VacationRequest: entity,
       ConstraintConfirmation: entity,
+      ConstraintsWeekSettings: entity,
       ChatMessage: entity,
       ChatPresence: entity,
       ChatSettings: entity,

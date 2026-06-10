@@ -27,16 +27,27 @@ import { useToast } from "@/components/ui/use-toast";
 import { createCallLog, createEmailLog, getCustomerById } from "@/lib/crmStore";
 import {
   buildConsentUrl,
+  ensureConsentLinkReady,
   buildRustDeskDeepLink,
   buildRustDeskMailtoUrl,
   createSession,
   endSession,
   formatConnectionDetails,
   getSession,
+  listSessions as listRustDeskSessions,
   remoteSupportFeaturesAvailable,
   sendRustDeskDownloadEmail,
   subscribeRemoteSupport,
 } from "@/lib/remoteSupportStore";
+import {
+  cloudSessionSyncEnabled,
+  syncRustDeskSessionToCloud,
+  syncScreenShareSessionToCloud,
+} from "@/lib/supportSessionsSync";
+import {
+  listSessions as listScreenShareSessions,
+  REMOTE_SUPPORT_OPEN_EVENT,
+} from "@/lib/screenShareStore";
 
 const PANEL_DEMO_BANNER =
   "דמו — בחרו למטה: שלב א צפייה בדפדפן (ללא התקנה) או שליטה מלאה ב-RustDesk.";
@@ -72,6 +83,7 @@ export default function RemoteSupportPanel({
   const [emailTo, setEmailTo] = useState("");
   const [sendingRustDeskEmail, setSendingRustDeskEmail] = useState(false);
   const [startingRustDeskSession, setStartingRustDeskSession] = useState(false);
+  const [screenSessionActive, setScreenSessionActive] = useState(false);
 
   const defaultCustomerEmail = useMemo(() => {
     if (customerEmailProp) return String(customerEmailProp).trim();
@@ -97,6 +109,25 @@ export default function RemoteSupportPanel({
   }, [open, defaultCustomerEmail]);
 
   useEffect(() => {
+    const onOpenRequest = () => {
+      setOpen(true);
+      setSupportMode("screen");
+    };
+    window.addEventListener(REMOTE_SUPPORT_OPEN_EVENT, onOpenRequest);
+    return () => window.removeEventListener(REMOTE_SUPPORT_OPEN_EVENT, onOpenRequest);
+  }, []);
+
+  useEffect(() => {
+    if (!open || !cloudSessionSyncEnabled()) return;
+    for (const session of listScreenShareSessions()) {
+      syncScreenShareSessionToCloud(session);
+    }
+    for (const session of listRustDeskSessions()) {
+      syncRustDeskSessionToCloud(session);
+    }
+  }, [open]);
+
+  useEffect(() => {
     if (!session?.id) return undefined;
     const refresh = () => {
       const latest = getSession(session.id);
@@ -108,8 +139,8 @@ export default function RemoteSupportPanel({
 
   const consentUrl = useMemo(() => {
     if (!session?.id) return "";
-    return buildConsentUrl(session.id);
-  }, [session?.id]);
+    return buildConsentUrl(session);
+  }, [session]);
 
   const deepLink = useMemo(
     () => buildRustDeskDeepLink(rustDeskId, password),
@@ -201,6 +232,7 @@ export default function RemoteSupportPanel({
         agentName,
         rustDeskId: normalizedId,
         password,
+        customerEmail: emailTo,
       });
       setSession(created);
       setRustDeskId(normalizedId);
@@ -216,8 +248,34 @@ export default function RemoteSupportPanel({
         });
       }
 
-      const consentUrlForEmail = buildConsentUrl(created.id);
-      await sendRustDeskLinkEmail(consentUrlForEmail, created.id);
+      const ready = await ensureConsentLinkReady(created);
+      if (!ready.ok) {
+        toast({
+          title: "הקישור לא מוכן",
+          description: "לא ניתן לשלוח קישור אישור — נסו שוב",
+          variant: "destructive",
+        });
+        return;
+      }
+      const linkedSession = ready.session || created;
+      if (linkedSession !== created) setSession(linkedSession);
+      const consentUrlForEmail = buildConsentUrl(linkedSession);
+      if (!consentUrlForEmail) {
+        toast({
+          title: "הקישור לא מוכן",
+          description: "לא ניתן לשלוח קישור אישור — נסו שוב",
+          variant: "destructive",
+        });
+        return;
+      }
+      await sendRustDeskLinkEmail(consentUrlForEmail, linkedSession.id);
+      if (!ready.cloudSynced) {
+        toast({
+          title: "הקישור נשלח",
+          description:
+            "הסנכרון לענן עדיין בתהליך — אם הלקוח לא מצליח לפתוח את הקישור, נסו שוב בעוד רגע",
+        });
+      }
       setStep(3);
     } catch (err) {
       const rateLimited = err.status === 429;
@@ -410,7 +468,14 @@ export default function RemoteSupportPanel({
       </Button>
 
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="sm:max-w-lg rounded-2xl gap-0 p-0 overflow-hidden" dir="rtl">
+        <DialogContent
+          className={`rounded-2xl gap-0 p-0 overflow-hidden ${
+            supportMode === "screen"
+              ? "sm:max-w-3xl max-h-[95vh] overflow-y-auto"
+              : "sm:max-w-lg"
+          }`}
+          dir="rtl"
+        >
           <div className="bg-violet-50 border-b border-violet-200 px-4 py-2 flex items-start gap-2 text-violet-950 text-xs leading-relaxed">
             <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-violet-700" />
             <span>{PANEL_DEMO_BANNER}</span>
@@ -469,6 +534,7 @@ export default function RemoteSupportPanel({
                   customerName={customerName}
                   customerEmail={customerEmailProp}
                   hideEmailStatusBanner={hideEmailStatusBanner}
+                  onSessionActiveChange={setScreenSessionActive}
                 />
               </TabsContent>
 

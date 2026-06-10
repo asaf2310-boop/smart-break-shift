@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { format, addDays, isAfter } from "date-fns";
+import { format, addDays } from "date-fns";
 import { useToast } from "@/components/ui/use-toast";
 import { motion } from "framer-motion";
 import {
@@ -16,6 +16,12 @@ import {
   getWeekDays,
   getIsraelDateStr,
   getConstraintsDeadline,
+  getConstraintsSubmissionWeekStart,
+  getEffectiveConstraintsDeadline,
+  isConstraintsSubmissionClosed,
+  getConstraintsDeadlineExtendedMessage,
+  CONSTRAINTS_SUBMISSION_OVERRIDE_MESSAGE,
+  formatDateStr,
   canMarkMorningUnavailable,
   countMorningUnavailableDays,
   MAX_MORNING_UNAVAILABLE_DAYS_PER_WEEK,
@@ -188,8 +194,31 @@ export default function ShiftScheduler() {
     lastPublishedFocus,
   ]);
 
-  const deadline = getConstraintsDeadline(thisWeekStart);
-  const isPastDeadline = isAfter(now, deadline);
+  const constraintsWeekStartStr = formatDateStr(constraintsWeekStart);
+
+  const { data: constraintsWeekSettingsList = [] } = useQuery({
+    queryKey: ["constraints-week-settings", constraintsWeekStartStr],
+    queryFn: () =>
+      dataClient.entities.ConstraintsWeekSettings.filter({
+        week_start: constraintsWeekStartStr,
+      }),
+    enabled: !!agentName,
+    ...getLiveQueryOptions(),
+  });
+
+  const constraintsWeekSettings = constraintsWeekSettingsList[0] || null;
+  const submissionWeekStart = getConstraintsSubmissionWeekStart(constraintsWeekStart);
+  const deadline = getEffectiveConstraintsDeadline(submissionWeekStart, constraintsWeekSettings);
+  const isPastDeadline = isConstraintsSubmissionClosed(
+    submissionWeekStart,
+    constraintsWeekSettings,
+    now
+  );
+  const constraintsOverrideOpen = constraintsWeekSettings?.submission_override_open === true;
+  const hasExtendedDeadline =
+    !constraintsOverrideOpen &&
+    Boolean(constraintsWeekSettings?.deadline_extended_until) &&
+    deadline > getConstraintsDeadline(submissionWeekStart);
 
   const constraintsDateFrom = format(constraintsDays[0], "yyyy-MM-dd");
   const constraintsDateTo = format(constraintsDays[4], "yyyy-MM-dd");
@@ -576,7 +605,13 @@ export default function ShiftScheduler() {
             )}
           </div>
 
-
+          {(constraintsOverrideOpen || hasExtendedDeadline) && !isPastDeadline && (
+            <div className="mx-4 mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-800 leading-relaxed text-center">
+              {constraintsOverrideOpen
+                ? CONSTRAINTS_SUBMISSION_OVERRIDE_MESSAGE
+                : getConstraintsDeadlineExtendedMessage(format(deadline, "dd/MM בשעה HH:mm"))}
+            </div>
+          )}
 
           {/* Confirmed banner */}
           {isConfirmed && !isPastDeadline && (

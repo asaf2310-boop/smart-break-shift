@@ -1,8 +1,8 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { BookOpen, CalendarClock, CalendarDays, Contact, GraduationCap, Home, Monitor, ShieldCheck } from "lucide-react";
+import { BarChart3, BookOpen, CalendarClock, CalendarDays, Contact, Film, GraduationCap, Home, MessageCircle, Monitor, ShieldCheck } from "lucide-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
-import { demoModeEnabled } from "@/api/demoClient";
+import { customerChatEnabled, demoModeEnabled } from "@/api/demoClient";
 import { brandVisualEnabled } from "@/lib/brandShell";
 
 /** גובה שורת הניווט העליונה — משמש גם ל-FloatingChatWidget */
@@ -14,9 +14,12 @@ export default function AppNav() {
   const isBreaks = location.pathname === "/breaks";
   const isShifts = location.pathname === "/shifts";
   const isTraining = location.pathname === "/training";
+  const isMetrics =
+    location.pathname === "/metrics" || location.pathname.startsWith("/metrics/");
   const isCrm = location.pathname.startsWith("/crm");
   const isKnowledge = location.pathname.startsWith("/knowledge");
   const isRemoteSupport = location.pathname.startsWith("/remote-support");
+  const isCustomerChat = location.pathname.startsWith("/customer-chat");
 
   const useBrandNav = brandVisualEnabled;
 
@@ -64,19 +67,33 @@ export default function AppNav() {
             <GraduationCap className="w-4 h-4" />
             הדרכה
           </Link>
+          <Link to="/metrics" className={tabClass(isMetrics)}>
+            <BarChart3 className="w-4 h-4" />
+            מדדים
+          </Link>
+          <Link to="/remote-support" className={tabClass(isRemoteSupport)}>
+            <Monitor className="w-4 h-4" />
+            השתלטות מרחוק
+          </Link>
+          {customerChatEnabled && !demoModeEnabled && (
+            <Link to="/customer-chat" className={tabClass(isCustomerChat)}>
+              <MessageCircle className="w-4 h-4" />
+              צ&apos;אט לקוחות
+            </Link>
+          )}
           {demoModeEnabled && (
             <>
               <Link to="/crm" className={tabClass(isCrm)}>
                 <Contact className="w-4 h-4" />
                 CRM
               </Link>
-              <Link to="/remote-support" className={tabClass(isRemoteSupport)}>
-                <Monitor className="w-4 h-4" />
-                השתלטות מרחוק
-              </Link>
               <Link to="/knowledge" className={tabClass(isKnowledge)}>
                 <BookOpen className="w-4 h-4" />
                 בסיס ידע
+              </Link>
+              <Link to="/customer-chat" className={tabClass(isCustomerChat)}>
+                <MessageCircle className="w-4 h-4" />
+                צ&apos;אט
               </Link>
             </>
           )}
@@ -94,10 +111,30 @@ export default function AppNav() {
                 <ShieldCheck className="w-4 h-4" />
                 נציגים
               </Link>
+              <Link
+                to="/admin/recordings"
+                className={tabClass(location.pathname.startsWith("/admin/recordings"))}
+              >
+                <Film className="w-4 h-4" />
+                הקלטות
+              </Link>
+              <Link
+                to="/admin/metrics"
+                className={tabClass(location.pathname.startsWith("/admin/metrics"))}
+              >
+                <BarChart3 className="w-4 h-4" />
+                מדדים
+              </Link>
               {demoModeEnabled && (
                 <Link to="/admin/knowledge" className={tabClass(location.pathname === "/admin/knowledge")}>
                   <BookOpen className="w-4 h-4" />
                   ניהול ידע
+                </Link>
+              )}
+              {customerChatEnabled && (
+                <Link to="/admin/customer-chat" className={tabClass(location.pathname === "/admin/customer-chat")}>
+                  <MessageCircle className="w-4 h-4" />
+                  בוט צ&apos;אט
                 </Link>
               )}
             </>

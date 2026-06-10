@@ -58,6 +58,9 @@ export default function SessionEmailStatus({ log, sessionEmailSentAt }) {
         {simulatedHint ? (
           <p className="text-[11px] opacity-95 leading-snug">{simulatedHint}</p>
         ) : null}
+        {status === "failed" && log?.errorMessage ? (
+          <p className="text-[11px] opacity-95 leading-snug">{log.errorMessage}</p>
+        ) : null}
       </div>
     </div>
   );

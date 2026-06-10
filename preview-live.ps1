@@ -2,7 +2,8 @@
 # Run: powershell -ExecutionPolicy Bypass -File .\preview-live.ps1
 #      powershell -ExecutionPolicy Bypass -File .\preview-live.ps1 -AllowMissingSupabase
 param(
-    [switch]$AllowMissingSupabase
+    [switch]$AllowMissingSupabase,
+    [switch]$WithCustomerChat
 )
 
 $ErrorActionPreference = "Stop"
@@ -24,6 +25,28 @@ function Remove-EnvLocalKey {
     )
     $pattern = "^\s*$([regex]::Escape($Key))\s*="
     return ,@($Lines | Where-Object { $_ -notmatch $pattern })
+}
+
+function Set-EnvLocalKey {
+    param(
+        [string[]]$Lines,
+        [string]$Key,
+        [string]$Value
+    )
+    $escaped = [regex]::Escape($Key)
+    $updated = $false
+    $next = @($Lines | ForEach-Object {
+        if ($_ -match "^\s*$escaped\s*=") {
+            $updated = $true
+            "$Key=$Value"
+        } else {
+            $_
+        }
+    })
+    if (-not $updated) {
+        $next += "$Key=$Value"
+    }
+    return ,$next
 }
 
 function Test-SupabaseInEnvText {
@@ -78,6 +101,11 @@ if (-not (Test-Path $envFile)) {
     $envLines = @(Get-Content $envFile -Encoding utf8)
     $envLines = Remove-EnvLocalKey $envLines "VITE_DEMO_MODE"
     $envLines = Remove-EnvLocalKey $envLines "VITE_ADMIN_PIN"
+    if ($WithCustomerChat) {
+        $envLines = Set-EnvLocalKey $envLines "VITE_CUSTOMER_CHAT_ENABLED" "true"
+    } else {
+        $envLines = Remove-EnvLocalKey $envLines "VITE_CUSTOMER_CHAT_ENABLED"
+    }
     $utf8NoBom = New-Object System.Text.UTF8Encoding $false
     [System.IO.File]::WriteAllLines($envFile, $envLines, $utf8NoBom)
 }
@@ -91,6 +119,11 @@ if ($hadDemo -or $hadPin) {
     if ($hadPin) { Write-Host "Removed VITE_ADMIN_PIN from .env.local - /admin has no PIN." }
 } else {
     Write-Host ".env.local: no VITE_DEMO_MODE, no VITE_ADMIN_PIN (live mode)."
+}
+if ($WithCustomerChat) {
+    Write-Host "Customer chat: VITE_CUSTOMER_CHAT_ENABLED=true (bot + agent queue in live mode)."
+} else {
+    Write-Host "Customer chat: off (re-run with -WithCustomerChat to test /chat/guest and /customer-chat)."
 }
 Write-Host "If dev server is already running, stop it (Ctrl+C) and run this script again."
 Write-Host "For demo mode again: preview-shell.ps1"

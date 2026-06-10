@@ -23,9 +23,22 @@
 ```powershell
 # .env.local לפי .env.live.example — Supabase URL + anon key
 .\preview-live.ps1
+
+# צ'אט לקוחות + בוט (בלי דמו):
+.\preview-live.ps1 -WithCustomerChat
 ```
 
 לא משתמשים ב-`preview-shell.ps1` לבדיקת פרודקשן (זה דמו).
+
+### בדיקת צ'אט לקוחות בלייב
+
+1. `.\preview-live.ps1 -WithCustomerChat` (או `VITE_CUSTOMER_CHAT_ENABLED=true` ב-`.env.local`)
+2. עצור והפעל מחדש את השרת אם שינית env ידנית
+3. **נציג:** התחברות רגילה → כרטיס **צ'אט לקוחות** או `/customer-chat`
+4. **מנהל:** `/admin/customer-chat` — עריכת הודעות הבוט
+5. **לקוח:** `/chat/guest` (קישור מהמסך נציג) — בדפדפן נפרד / מצב פרטי
+
+> נתוני הצ'אט נשמרים ב-localStorage של הדפדפן (שלב בדיקות). שני דפדפנים שונים = לקוח ונציג.
 
 ### בדיקת `/admin` בלי PIN (כמו פרודקשן)
 
@@ -59,6 +72,7 @@
 
 - פרויקט: **smart-break-shift**
 - Production: `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY`
+- תמיכה מרחוק (אופציונלי): `VITE_APP_URL`, `RESEND_API_KEY`, `EMAIL_FROM` — ראו `docs/REMOTE_SUPPORT.md`
 - **אין** `VITE_DEMO_MODE=true` ב-Production
 - אחרי שינוי env — **Redeploy** (build חדש)
 - מומלץ: deploy ידני / לא auto-deploy מכל push (ראו `docs/DEMO_VS_PRODUCTION.md`)
@@ -78,7 +92,7 @@
    - `/admin` — כניסה ישירה ללא PIN (באנר צהוב זמני)
 
 2. **Build ו-Vercel:**
-   - [ ] `.\preview-live.ps1` — 2 כרטיסים בלבד (הפסקות + משמרות), בלי CRM/ידע/דמו
+   - [ ] `.\preview-live.ps1` — 4 כרטיסים (הפסקות, משמרות, הדרכה, השתלטות מרחוק), בלי CRM/ידע/דמו
    - [ ] `.\scripts\verify-prod-build.ps1` — עבר
 - [ ] Vercel פרודקשן: אין `VITE_DEMO_MODE=true`
 - [ ] Supabase מוגדר ב-Production
@@ -89,9 +103,10 @@
 ## אימות אחרי deploy
 
 1. כניסה: **אימייל וסיסמה** (לא סיסמת דמו קבועה; אין טאב "שם נציג")
-2. דף הבית: **2 כרטיסים** בלבד
+2. דף הבית: **4 כרטיסים** (הפסקות, משמרות, הדרכה, השתלטות מרחוק)
 3. אין לוגו קבוע / באנר "דמו פעיל"
-4. ניווט: בלי CRM / remote-support / knowledge
+4. ניווט: **השתלטות מרחוק** פעיל; בלי CRM / knowledge
+5. `/remote-support`, `/support/consent/:token`, `/support/screen/:sessionId` — נגישים (ללא DemoGate)
 
 ---
 

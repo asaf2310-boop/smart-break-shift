@@ -21,6 +21,7 @@ import VacationApprovalPanel from "../components/admin/VacationApprovalPanel";
 import BackendConfigBanner from "@/components/BackendConfigBanner";
 import { getLiveQueryOptions } from "@/lib/liveQuery";
 import ScheduleSmsLog from "@/components/admin/ScheduleSmsLog";
+import ConstraintsDeadlinePanel from "@/components/admin/ConstraintsDeadlinePanel";
 import HypPageLayout from "@/components/hyp/HypPageLayout";
 import { hypHeaderIconClass } from "@/lib/hypPage";
 
@@ -203,6 +204,8 @@ function ConstraintsView({ weekStart }) {
 
   return (
     <>
+    <ConstraintsDeadlinePanel constraintsWeekStart={weekStart} />
+
     {/* Submission status panel */}
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
       className="rounded-3xl overflow-hidden border border-slate-200 bg-white shadow-lg shadow-slate-200/60 mb-4">

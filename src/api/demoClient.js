@@ -7,6 +7,8 @@ import {
 import { demoModeEnabled } from "./demoMode";
 
 export { demoModeEnabled } from "./demoMode";
+export { remoteSupportEnabled } from "./remoteSupportMode";
+export { customerChatEnabled } from "./customerChatMode";
 
 export const DEMO_STORE_KEY = "smart-break-shift-demo-store-v1";
 
@@ -51,6 +53,7 @@ const ENTITY_KEYS = {
   ShiftUnavailability: "shiftUnavailabilities",
   VacationRequest: "vacationRequests",
   ConstraintConfirmation: "constraintConfirmations",
+  ConstraintsWeekSettings: "constraintsWeekSettings",
   ChatMessage: "chatMessages",
   ChatPresence: "chatPresence",
 };
@@ -126,6 +129,7 @@ function createSeedStore() {
       { id: makeId("confirm"), agent_name: "נציג 01", week_start: formatDate(nextWeekStart), confirmed_at: new Date().toISOString() },
       { id: makeId("confirm"), agent_name: "נציג 02", week_start: formatDate(nextWeekStart), confirmed_at: new Date().toISOString() },
     ],
+    constraintsWeekSettings: [],
     chatMessages: [
       {
         id: makeId("chat"),
@@ -165,6 +169,10 @@ function readStore() {
     const store = JSON.parse(raw);
     const seed = createSeedStore();
     let changed = false;
+    if (!store.constraintsWeekSettings) {
+      store.constraintsWeekSettings = seed.constraintsWeekSettings;
+      changed = true;
+    }
     if (!store.chatMessages?.length) {
       store.chatMessages = seed.chatMessages;
       changed = true;

@@ -1,10 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArrowRight, Loader2 } from "lucide-react";
-import { demoModeEnabled } from "@/api/demoClient";
+import { demoModeEnabled, remoteSupportEnabled } from "@/api/demoClient";
 import { getRecordingBlob } from "@/lib/demoRecordingStorage";
+import { recordingUploadStatusLabel } from "@/lib/recordingUpload";
 import { m3PageClass } from "@/lib/hypPage";
-import { findRecordingByPlayId } from "@/lib/screenShareStore";
+import {
+  cloudRecordingUploadEnabled,
+  fetchCloudRecordingById,
+  getSignedRecordingUrl,
+} from "@/lib/screenRecordingsSync";
+import { findRecordingByPlayId, parseRecordingPlayId } from "@/lib/screenShareStore";
 
 function formatWhen(iso) {
   if (!iso) return "—";
@@ -30,8 +36,8 @@ function formatDuration(seconds) {
   return `${m} דקות ו-${s} שניות`;
 }
 
-/** נגן הקלטה מ-IndexedDB — דמו בלבד, אותו דפדפן */
-export default function DemoRecordingPlayPage() {
+/** נגן הקלטה מ-IndexedDB — אותו דפדפן שבו נשמר הקובץ */
+export default function DemoRecordingPlayPage({ backTo = "/remote-support", titleSuffix = "" }) {
   const [searchParams] = useSearchParams();
   const playId = searchParams.get("id") || "";
   const [loading, setLoading] = useState(true);
@@ -39,19 +45,21 @@ export default function DemoRecordingPlayPage() {
   const [title, setTitle] = useState("");
   const [playUrl, setPlayUrl] = useState(null);
   const playUrlRef = useRef(null);
+  const playUrlIsBlobRef = useRef(false);
 
   const revokePlayUrl = useCallback(() => {
-    if (playUrlRef.current) {
+    if (playUrlRef.current && playUrlIsBlobRef.current) {
       URL.revokeObjectURL(playUrlRef.current);
-      playUrlRef.current = null;
     }
+    playUrlRef.current = null;
+    playUrlIsBlobRef.current = false;
     setPlayUrl(null);
   }, []);
 
   useEffect(() => {
-    if (!demoModeEnabled) {
+    if (!remoteSupportEnabled) {
       setLoading(false);
-      setError("נגן הקלטות זמין רק במצב דמו");
+      setError("תמיכה מרחוק אינה פעילה ב-build זה");
       return undefined;
     }
     if (!playId) {
@@ -66,7 +74,19 @@ export default function DemoRecordingPlayPage() {
     setLoading(true);
 
     (async () => {
-      const rec = findRecordingByPlayId(playId);
+      let rec = findRecordingByPlayId(playId);
+      const parsed = parseRecordingPlayId(playId);
+
+      if (!rec && cloudRecordingUploadEnabled() && parsed?.recordingId) {
+        const cloudRec = await fetchCloudRecordingById(parsed.recordingId);
+        if (cloudRec) {
+          rec = {
+            ...cloudRec,
+            sessionId: cloudRec.sessionId || parsed.sessionId,
+          };
+        }
+      }
+
       if (!rec) {
         if (!cancelled) {
           setError("ההקלטה לא נמצאה — ייתכן שנמחקה או שהקישור שגוי");
@@ -74,14 +94,32 @@ export default function DemoRecordingPlayPage() {
         }
         return;
       }
+
       setTitle(
         `${formatDuration(rec.durationSec)} · ${formatWhen(rec.stoppedAt || rec.startedAt)}`
       );
+
       try {
+        if (rec.cloudReady && rec.storagePath) {
+          const signedUrl = await getSignedRecordingUrl(rec.storagePath);
+          if (signedUrl) {
+            if (!cancelled) {
+              playUrlRef.current = signedUrl;
+              playUrlIsBlobRef.current = false;
+              setPlayUrl(signedUrl);
+            }
+            return;
+          }
+        }
+
         const blob = await getRecordingBlob(rec.sessionId, rec.id);
         if (!blob?.size) {
           if (!cancelled) {
-            setError("אין קובץ וידאו ב-IndexedDB — ההקלטה לא נשמרה בדפדפן זה");
+            setError(
+              cloudRecordingUploadEnabled()
+                ? recordingUploadStatusLabel(rec.cloudUploadStatus || "pending")
+                : "אין קובץ וידאו ב-IndexedDB — ההקלטה לא נשמרה בדפדפן זה"
+            );
             setLoading(false);
           }
           return;
@@ -89,6 +127,7 @@ export default function DemoRecordingPlayPage() {
         if (cancelled) return;
         const url = URL.createObjectURL(blob);
         playUrlRef.current = url;
+        playUrlIsBlobRef.current = true;
         setPlayUrl(url);
       } catch (err) {
         if (!cancelled) {
@@ -105,30 +144,33 @@ export default function DemoRecordingPlayPage() {
     };
   }, [playId, revokePlayUrl]);
 
-  if (!demoModeEnabled) return null;
+  if (!remoteSupportEnabled) return null;
 
   return (
     <div className={m3PageClass("min-h-screen p-4 sm:p-6")} dir="rtl">
       <div className="max-w-3xl mx-auto space-y-4">
         <Link
-          to="/remote-support"
+          to={backTo}
           className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
         >
           <ArrowRight className="w-4 h-4" />
-          חזרה לתמיכה מרחוק
+          חזרה
         </Link>
 
         <div className="m3-card p-4 sm:p-6 space-y-4">
           <div>
-            <h1 className="text-lg font-semibold text-slate-900">נגן הקלטה (דמו)</h1>
+            <h1 className="text-lg font-semibold text-slate-900">
+              נגן הקלטה{titleSuffix || (demoModeEnabled ? " (דמו)" : "")}
+            </h1>
             {title && (
               <p className="text-sm text-slate-600 mt-1">{title}</p>
             )}
           </div>
 
           <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed">
-            עובד באותו דפדפן בלבד — הקובץ נטען מ-IndexedDB במכשיר זה. אין שיתוף בין מחשבים או
-            דפדפנים.
+            {cloudRecordingUploadEnabled()
+              ? "בפרודקשן: הקלטות זמינות בשרת נטענות בקישור חתום. בדמו — מ-IndexedDB באותו דפדפן."
+              : "עובד באותו דפדפן בלבד — הקובץ נטען מ-IndexedDB במכשיר זה."}
           </p>
 
           {loading && (

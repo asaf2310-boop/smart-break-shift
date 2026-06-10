@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import Peer from "peerjs";
 import { motion } from "framer-motion";
@@ -12,17 +12,58 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   logRecordingConsent,
   logScreenConsent,
   GUEST_BOOTSTRAP_QUERY_KEY,
+  endSession,
   resolveGuestSession,
-  screenShareDemoAvailable,
+  screenShareFeaturesAvailable,
   subscribeScreenShare,
 } from "@/lib/screenShareStore";
+import { GUEST_LINK_ERROR, messageForGuestLinkError } from "@/lib/shortGuestLink";
+import { demoModeEnabled } from "@/api/demoClient";
 import { m3PageClass } from "@/lib/hypPage";
+import SessionFileShare from "@/components/remote/SessionFileShare";
+import { getPeerJsOptions } from "@/lib/webrtcConfig";
+import {
+  attachPeerConnectionDebugLogging,
+  ensureOutboundTracksOnPeerConnection,
+  logOutboundVideoTrack,
+  waitForIceConnected,
+} from "@/lib/screenShareWebRtc";
 
-const DEMO_BANNER =
-  "דמו — שיתוף מסך בדפדפן (צפייה בלבד). מומלץ Chrome או Edge. לפרודקשן: PeerServer עצמי.";
+function sleep(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+const GUEST_INFO_BANNER = demoModeEnabled
+  ? "דמו — שיתוף מסך בדפדפן (צפייה בלבד). מומלץ Chrome או Edge. לפרודקשן: PeerServer עצמי."
+  : "שיתוף מסך בדפדפן (צפייה בלבד). מומלץ Chrome או Edge.";
+
+const AGENT_ENDED_MESSAGE = "הנציג סיים את הסשן";
+const AGENT_ENDED_REASON = "agent_ended";
+
+function parsePeerData(raw) {
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  return raw && typeof raw === "object" ? raw : null;
+}
 
 /** אודיו מערכת ב-getDisplayMedia — בדרך כלל Chrome/Edge בדסקטופ */
 function displayMediaSystemAudioSupported() {
@@ -50,6 +91,371 @@ export default function ScreenShareGuestPage() {
   const peerRef = useRef(null);
   const callRef = useRef(null);
   const streamRef = useRef(null);
+  const reconnectTimerRef = useRef(null);
+  const sharingRef = useRef(false);
+  const endNotifiedRef = useRef(false);
+  const agentEndedHandledRef = useRef(false);
+  const [showAgentEndedDialog, setShowAgentEndedDialog] = useState(false);
+  const [agentEndedMessage, setAgentEndedMessage] = useState(AGENT_ENDED_MESSAGE);
+
+  useEffect(() => {
+    sharingRef.current = sharing;
+  }, [sharing]);
+
+  const isStreamAlive = useCallback(() => {
+    const track = streamRef.current?.getVideoTracks?.()?.[0];
+    return Boolean(track && track.readyState === "live");
+  }, []);
+
+  const clearReconnectTimer = useCallback(() => {
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+  }, []);
+
+  const endInStore = useCallback(
+    (reason) => {
+      if (!sessionId || endNotifiedRef.current) return;
+      endNotifiedRef.current = true;
+      try {
+        endSession(sessionId, { endedReason: reason });
+      } catch {
+        /* ignore */
+      }
+    },
+    [sessionId]
+  );
+
+  const stopPeerAndStream = useCallback(() => {
+    // Prevent placeCall's reconnection/err handlers from firing.
+    sharingRef.current = false;
+    clearReconnectTimer();
+    try {
+      callRef.current?.close();
+    } catch {
+      /* ignore */
+    }
+    try {
+      peerRef.current?.destroy();
+    } catch {
+      /* ignore */
+    }
+    callRef.current = null;
+    peerRef.current = null;
+    try {
+      streamRef.current?.getTracks?.().forEach((t) => t.stop());
+    } catch {
+      /* ignore */
+    }
+    streamRef.current = null;
+  }, [clearReconnectTimer]);
+
+  const endGuestSession = useCallback(
+    (reason, { updateUi = false } = {}) => {
+      endInStore(reason);
+      stopPeerAndStream();
+      if (!updateUi) return;
+      setError("");
+      setSharing(false);
+      setShared(false);
+      setSession(resolveGuestSession(sessionId, bootstrapKey));
+    },
+    [
+      endInStore,
+      stopPeerAndStream,
+      resolveGuestSession,
+      sessionId,
+      bootstrapKey,
+    ]
+  );
+
+  const sendPeerDataMessage = useCallback((payload) => {
+    const peer = peerRef.current;
+    if (!peer || peer.destroyed || !sessionId) return;
+    try {
+      const conn = peer.connect(sessionId, { reliable: true });
+      const sendAndClose = () => {
+        try {
+          conn.send(payload);
+        } catch {
+          /* ignore */
+        }
+        window.setTimeout(() => {
+          try {
+            conn.close();
+          } catch {
+            /* ignore */
+          }
+        }, 50);
+      };
+      if (conn.open) {
+        sendAndClose();
+      } else {
+        conn.on("open", sendAndClose);
+        window.setTimeout(() => {
+          try {
+            conn.close();
+          } catch {
+            /* ignore */
+          }
+        }, 300);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [sessionId]);
+
+  const notifyAgentSessionEnded = useCallback(
+    (reason) => {
+      sendPeerDataMessage({ type: "guest_end", reason, at: Date.now() });
+    },
+    [sendPeerDataMessage]
+  );
+
+  const notifyAgentGuestReady = useCallback(
+    (sessionSnapshot) => {
+      if (!sessionSnapshot) return;
+      sendPeerDataMessage({
+        type: "guest_ready",
+        consentAt: sessionSnapshot.consentAt || null,
+        recordingConsentAt: sessionSnapshot.recordingConsentAt || null,
+        at: Date.now(),
+      });
+    },
+    [sendPeerDataMessage]
+  );
+
+  const endGuestSessionWithNotify = useCallback(
+    (reason, options = {}) => {
+      notifyAgentSessionEnded(reason);
+      endGuestSession(reason, options);
+    },
+    [notifyAgentSessionEnded, endGuestSession]
+  );
+
+  const handleEndedByAgent = useCallback(
+    (message = AGENT_ENDED_MESSAGE) => {
+      if (agentEndedHandledRef.current) return;
+      agentEndedHandledRef.current = true;
+      endGuestSession(AGENT_ENDED_REASON, { updateUi: true });
+      setAgentEndedMessage(message || AGENT_ENDED_MESSAGE);
+      setShowAgentEndedDialog(true);
+    },
+    [endGuestSession]
+  );
+
+  const isAgentEndedSession = useCallback(
+    (sessionSnapshot) =>
+      sessionSnapshot?.status === "ended" &&
+      sessionSnapshot?.endedReason === AGENT_ENDED_REASON,
+    []
+  );
+
+  const placeCall = useCallback(
+    (peer, stream) => {
+      if (!sessionId || !stream) return false;
+      const videoTrack = stream.getVideoTracks()[0];
+      if (!videoTrack || videoTrack.readyState !== "live") {
+        setError("שיתוף המסך לא פעיל — בחרו מסך לשיתוף שוב");
+        return false;
+      }
+      videoTrack.enabled = true;
+      logOutboundVideoTrack(stream, { reason: "before_place_call", sessionId });
+      const call = peer.call(sessionId, stream);
+      callRef.current = call;
+
+      let stopPcDebug = () => {};
+      const pc = call.peerConnection;
+      if (pc) {
+        ensureOutboundTracksOnPeerConnection(pc, stream);
+        stopPcDebug = attachPeerConnectionDebugLogging(pc, {
+          role: "guest",
+          sessionId,
+        });
+        pc.addEventListener("iceconnectionstatechange", () => {
+          if (!sharingRef.current) return;
+          if (pc.iceConnectionState === "failed") {
+            setError(
+              "חיבור הרשת נכשל — ודאו שהנציג פתח סשן צפייה וש-TURN מוגדר בשרת"
+            );
+          }
+        });
+      }
+
+      call.on("close", () => {
+        stopPcDebug();
+        if (!sharingRef.current) return;
+        const latest = resolveGuestSession(sessionId, bootstrapKey);
+        if (isAgentEndedSession(latest)) {
+          handleEndedByAgent();
+          return;
+        }
+        if (!isStreamAlive()) {
+          setShared(false);
+          setError("שיתוף המסך הופסק מהדפדפן");
+          return;
+        }
+        setError("החיבור לנציג נותק — מנסה להתחבר מחדש…");
+        clearReconnectTimer();
+        reconnectTimerRef.current = setTimeout(() => {
+          reconnectTimerRef.current = null;
+          if (sharingRef.current && isStreamAlive()) {
+            placeCall(peer, stream);
+          }
+        }, 2000);
+      });
+
+      call.on("error", () => {
+        stopPcDebug();
+        if (!sharingRef.current) return;
+        const latest = resolveGuestSession(sessionId, bootstrapKey);
+        if (isAgentEndedSession(latest)) {
+          handleEndedByAgent();
+          return;
+        }
+        if (!isStreamAlive()) {
+          setShared(false);
+          setError("שיתוף המסך הופסק");
+          return;
+        }
+        setError("החיבור לנציג נותק — מנסה להתחבר מחדש…");
+        clearReconnectTimer();
+        reconnectTimerRef.current = setTimeout(() => {
+          reconnectTimerRef.current = null;
+          if (sharingRef.current && isStreamAlive()) {
+            placeCall(peer, stream);
+          }
+        }, 2000);
+      });
+
+      setError("");
+      return true;
+    },
+    [
+      sessionId,
+      bootstrapKey,
+      isStreamAlive,
+      clearReconnectTimer,
+      isAgentEndedSession,
+      handleEndedByAgent,
+    ]
+  );
+
+  const connectMediaToAgent = useCallback(
+    async (peer, stream) => {
+      const maxAttempts = 8;
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+          callRef.current?.close();
+        } catch {
+          /* ignore */
+        }
+        callRef.current = null;
+
+        if (!placeCall(peer, stream)) return false;
+
+        const pc = callRef.current?.peerConnection;
+        if (!pc) {
+          if (attempt < maxAttempts) await sleep(1500 * attempt);
+          continue;
+        }
+
+        const iceOk = await waitForIceConnected(pc, 20000);
+        if (iceOk) return true;
+
+        if (attempt < maxAttempts) {
+          setError(`מנסה להתחבר לנציג (ניסיון ${attempt + 1}/${maxAttempts})…`);
+          await sleep(2000 * attempt);
+        }
+      }
+      return false;
+    },
+    [placeCall]
+  );
+
+  const bindPeerAgentEndListener = useCallback(
+    (peer) => {
+      if (!peer) return;
+      peer.on("connection", (conn) => {
+        conn.on("data", (raw) => {
+          const data = parsePeerData(raw);
+          if (data?.type === "session_ended_by_agent") {
+            handleEndedByAgent(data.message);
+            return;
+          }
+          if (data?.type === "request_video_retry") {
+            if (!sharingRef.current || !isStreamAlive()) return;
+            void connectMediaToAgent(peer, streamRef.current);
+          }
+        });
+      });
+    },
+    [handleEndedByAgent, isStreamAlive, connectMediaToAgent]
+  );
+
+  const reconnectToAgent = useCallback(async () => {
+    if (!sharingRef.current || !sessionId || !isStreamAlive()) return;
+    setError("מתחבר מחדש לנציג…");
+    try {
+      callRef.current?.close();
+    } catch {
+      /* ignore */
+    }
+    callRef.current = null;
+
+    let peer = peerRef.current;
+    if (!peer || peer.destroyed) {
+      peer = new Peer(getPeerJsOptions());
+      peerRef.current = peer;
+      bindPeerAgentEndListener(peer);
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(
+          () => reject(new Error("תם הזמן להתחברות — ודאו שהנציג פתח את מסך הצפייה")),
+          45000
+        );
+        peer.on("open", () => {
+          clearTimeout(timeout);
+          resolve();
+        });
+        peer.on("error", (err) => {
+          clearTimeout(timeout);
+          reject(err);
+        });
+      });
+    }
+
+    const connected = await connectMediaToAgent(peer, streamRef.current);
+    if (!connected) {
+      setError(
+        "לא הצלחנו לחבר את שיתוף המסך לנציג — ודאו שהנציג פתח את סשן הצפייה ולחצו «שתף מסך» שוב"
+      );
+      return;
+    }
+    notifyAgentGuestReady(resolveGuestSession(sessionId, bootstrapKey));
+    setError("");
+  }, [
+    sessionId,
+    bootstrapKey,
+    isStreamAlive,
+    connectMediaToAgent,
+    notifyAgentGuestReady,
+    bindPeerAgentEndListener,
+  ]);
+
+  useEffect(() => {
+    if (!sessionId || agentEndedHandledRef.current) return;
+    if (!isAgentEndedSession(session)) return;
+    if (!(shared || sharingRef.current)) return;
+    handleEndedByAgent();
+  }, [
+    sessionId,
+    session?.status,
+    session?.endedReason,
+    shared,
+    isAgentEndedSession,
+    handleEndedByAgent,
+  ]);
 
   useEffect(() => {
     const refresh = () => setSession(resolveGuestSession(sessionId, bootstrapKey));
@@ -79,15 +485,41 @@ export default function ScreenShareGuestPage() {
 
   useEffect(() => {
     return () => {
-      try {
-        callRef.current?.close();
-        peerRef.current?.destroy();
-      } catch {
-        /* ignore */
+      if (sessionId && !endNotifiedRef.current) {
+        endInStore("client_closed");
       }
-      streamRef.current?.getTracks().forEach((t) => t.stop());
+      stopPeerAndStream();
     };
-  }, []);
+  }, [sessionId, endInStore, stopPeerAndStream]);
+
+  useEffect(() => {
+    if (!shared) return undefined;
+    const onVisibility = () => {
+      if (document.hidden) return;
+      if (sharingRef.current && isStreamAlive() && !callRef.current) {
+        reconnectToAgent();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [shared, isStreamAlive, reconnectToAgent]);
+
+  useEffect(() => {
+    if (!sessionId || !shared) return undefined;
+
+    const tryEndOnUnload = () => {
+      notifyAgentSessionEnded("client_closed");
+      endInStore("client_closed");
+    };
+
+    window.addEventListener("beforeunload", tryEndOnUnload);
+    window.addEventListener("pagehide", tryEndOnUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", tryEndOnUnload);
+      window.removeEventListener("pagehide", tryEndOnUnload);
+    };
+  }, [sessionId, shared, endInStore, notifyAgentSessionEnded]);
 
   const handleShareScreen = async () => {
     if (!session || session.status === "ended") return;
@@ -107,13 +539,27 @@ export default function ScreenShareGuestPage() {
       }
 
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { displaySurface: "monitor" },
-        audio: includeSystemAudio && systemAudioSupported,
+        video: {
+          cursor: "always",
+          displaySurface: "monitor",
+          frameRate: { ideal: 15, max: 30 },
+        },
+        audio: includeSystemAudio && systemAudioSupported ? true : false,
+      });
+      const displayVideoTrack = stream.getVideoTracks()[0];
+      if (!displayVideoTrack) {
+        throw new Error(
+          "לא התקבל מסלול וידאו משיתוף המסך — בחרו מסך או חלון ונסו שוב"
+        );
+      }
+      stream.getVideoTracks().forEach((track) => {
+        track.enabled = true;
       });
       streamRef.current = stream;
+      logOutboundVideoTrack(stream, { reason: "after_getDisplayMedia", sessionId });
 
       stream.getVideoTracks()[0]?.addEventListener("ended", () => {
-        setShared(false);
+        endGuestSessionWithNotify("client_stop", { updateUi: true });
         setError("שיתוף המסך הופסק מהדפדפן");
       });
 
@@ -123,8 +569,9 @@ export default function ScreenShareGuestPage() {
       }
       setSession(resolveGuestSession(sessionId, bootstrapKey));
 
-      const peer = new Peer({ debug: 0 });
+      const peer = new Peer(getPeerJsOptions());
       peerRef.current = peer;
+      bindPeerAgentEndListener(peer);
 
       await new Promise((resolve, reject) => {
         const timeout = setTimeout(
@@ -141,19 +588,16 @@ export default function ScreenShareGuestPage() {
         });
       });
 
-      const call = peer.call(sessionId, stream);
-      callRef.current = call;
-
-      call.on("close", () => {
-        setShared(false);
-      });
-
-      call.on("error", () => {
-        setError("החיבור לנציג נותק");
-        setShared(false);
-      });
-
+      sharingRef.current = true;
+      const connected = await connectMediaToAgent(peer, stream);
+      if (!connected) {
+        throw new Error(
+          "לא הצלחנו לחבר את שיתוף המסך לנציג — ודאו שהנציג פתח את סשן הצפייה לפני השיתוף"
+        );
+      }
+      notifyAgentGuestReady(resolveGuestSession(sessionId, bootstrapKey));
       setShared(true);
+      setError("");
     } catch (err) {
       const name = err?.name || "";
       let message = err?.message || "לא ניתן לשתף מסך";
@@ -174,10 +618,10 @@ export default function ScreenShareGuestPage() {
     }
   };
 
-  if (!screenShareDemoAvailable()) {
+  if (!screenShareFeaturesAvailable()) {
     return (
       <div className={m3PageClass("flex items-center justify-center p-6")} dir="rtl">
-        <p className="text-slate-600 text-center">שיתוף מסך זמין במצב דמו בלבד.</p>
+        <p className="text-slate-600 text-center">שיתוף מסך אינו פעיל בסביבה זו.</p>
       </div>
     );
   }
@@ -203,7 +647,7 @@ export default function ScreenShareGuestPage() {
       >
         <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-start gap-2 text-amber-950 text-xs leading-relaxed">
           <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
-          <span>{DEMO_BANNER}</span>
+          <span>{GUEST_INFO_BANNER}</span>
         </div>
 
         <div className="p-6 space-y-5">
@@ -218,12 +662,26 @@ export default function ScreenShareGuestPage() {
           {!session ? (
             <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 rounded-xl p-3 border border-red-100">
               <AlertCircle className="w-5 h-5 shrink-0" />
-              <p>קישור לא תקין או שפג תוקפו. בקשו מהנציג קישור חדש.</p>
+              <p>
+                {bootstrapKey
+                  ? messageForGuestLinkError(GUEST_LINK_ERROR.EXPIRED)
+                  : messageForGuestLinkError(GUEST_LINK_ERROR.NOT_FOUND)}
+              </p>
             </div>
           ) : session.status === "ended" ? (
-            <p className="text-sm text-center text-slate-600">סשן שיתוף המסך הסתיים.</p>
+            <div className="text-center space-y-2">
+              {session.endedReason === AGENT_ENDED_REASON && (
+                <p className="text-sm font-semibold text-slate-800">{AGENT_ENDED_MESSAGE}</p>
+              )}
+              <p className="text-sm text-slate-600">סשן שיתוף המסך הסתיים.</p>
+            </div>
           ) : shared ? (
             <div className="text-center space-y-3">
+              <SessionFileShare
+                sessionId={sessionId}
+                uploadedBy="guest"
+                uploaderLabel="לקוח"
+              />
               <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" />
               <p className="font-semibold text-emerald-800">המסך משותף לנציג</p>
               {session.recordingConsentAt && session.recordingActiveAt && (
@@ -236,13 +694,45 @@ export default function ScreenShareGuestPage() {
                   המסך מוקלט
                 </div>
               )}
+              {error && (
+                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed">
+                  {error}
+                </p>
+              )}
               <p className="text-xs text-slate-500 leading-relaxed">
-                השאירו דף זה פתוח. לעצירה — לחצו «הפסק שיתוף» בחלון הדפדפן או סגרו את
-                השיתוף.
+                השאירו דף זה פתוח. אם עברתם לחלון אחר — החיבור יתחדש אוטומטית כשתחזרו.
+                לעצירה — השתמשו בכפתור «הפסק סשן צפייה» למטה.
               </p>
+              {error && isStreamAlive() && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={reconnectToAgent}
+                  className="w-full border-teal-300 text-teal-900 hover:bg-teal-50"
+                >
+                  חזור לשיתוף עם הנציג
+                </Button>
+              )}
+
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  endGuestSessionWithNotify("client_stop", { updateUi: true });
+                }}
+                className="w-full"
+              >
+                הפסק סשן צפייה
+              </Button>
             </div>
           ) : (
             <>
+              <SessionFileShare
+                sessionId={sessionId}
+                uploadedBy="guest"
+                uploaderLabel="לקוח"
+              />
               <ol className="text-sm text-slate-700 space-y-2 list-decimal list-inside bg-slate-50 rounded-xl p-3 border border-slate-100 leading-relaxed">
                 <li>השתמשו ב-Chrome או Edge (מומלץ)</li>
                 <li>סמנו «אני מאשר שיתוף מסך»</li>
@@ -301,6 +791,11 @@ export default function ScreenShareGuestPage() {
                 </p>
               )}
 
+              <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 leading-relaxed">
+                בחלון הדפדפן בחרו <strong>מסך שלם</strong> או <strong>חלון גלוי</strong> — לא
+                חלון ממוזער או ריק (גורם למסך שחור).
+              </p>
+
               <Button
                 type="button"
                 onClick={handleShareScreen}
@@ -319,6 +814,20 @@ export default function ScreenShareGuestPage() {
           </p>
         </div>
       </motion.div>
+
+      <AlertDialog open={showAgentEndedDialog} onOpenChange={setShowAgentEndedDialog}>
+        <AlertDialogContent dir="rtl" className="text-right">
+          <AlertDialogHeader>
+            <AlertDialogTitle>סשן הצפייה הסתיים</AlertDialogTitle>
+            <AlertDialogDescription>{agentEndedMessage}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="sm:justify-start">
+            <AlertDialogAction onClick={() => setShowAgentEndedDialog(false)}>
+              הבנתי
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

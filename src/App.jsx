@@ -10,6 +10,7 @@ import AuthRequiredScreen from '@/components/AuthRequiredScreen';
 import AppLoadError from '@/components/AppLoadError';
 import AdminGate from '@/components/admin/AdminGate';
 import DemoGate from '@/components/DemoGate';
+import CustomerChatGate from '@/components/CustomerChatGate';
 import Home from './pages/Home';
 import BreakScheduler from './pages/BreakScheduler';
 import AdminDashboard from './pages/AdminDashboard';
@@ -24,19 +25,29 @@ import { ChatPanelProvider } from '@/context/ChatPanelContext';
 import { TelephonyProvider } from '@/context/TelephonyContext';
 import { FloatingWidgetsLayerProvider } from '@/context/FloatingWidgetsLayerContext';
 import { ChatUnreadProvider } from '@/hooks/useChatUnread';
-import ChatDeepLink from './pages/ChatDeepLink';
+import { ScreenShareSessionProvider } from '@/contexts/ScreenShareSessionContext';
+import ChatRoute from './pages/ChatRoute';
+import CustomerChatGuestPage from './pages/CustomerChatGuestPage';
+import AgentCustomerChatPage from './pages/AgentCustomerChatPage';
 import CrmDashboard from './pages/CrmDashboard';
 import CrmCustomerDetail from './pages/CrmCustomerDetail';
+import CrmLookupDeepLink from './pages/CrmLookupDeepLink';
 import KnowledgePage from './pages/KnowledgePage';
 import AdminKnowledge from './pages/AdminKnowledge';
+import AdminCustomerChat from './pages/AdminCustomerChat';
 import FloatingKnowledgeWidget from '@/components/knowledge/FloatingKnowledgeWidget';
 import AdminLocalhostLinksFloating from '@/components/admin/AdminLocalhostLinksFloating';
 import RemoteSupportConsentPage from './pages/RemoteSupportConsentPage';
 import RemoteSupportPage from './pages/RemoteSupportPage';
 import ScreenShareGuestPage from './pages/ScreenShareGuestPage';
+import GuestJoinRedirectPage from './pages/GuestJoinRedirectPage';
 import DemoRecordingPlayPage from './pages/DemoRecordingPlayPage';
 import TrainingPage from './pages/TrainingPage';
 import AdminTraining from './pages/AdminTraining';
+import AdminRecordings from './pages/AdminRecordings';
+import AdminMetrics from './pages/AdminMetrics';
+import AgentMetricsPage from './pages/AgentMetricsPage';
+import AgentMetricsRankingPage from './pages/AgentMetricsRankingPage';
 import RouteErrorBoundary from '@/components/RouteErrorBoundary';
 import { hasTopAppNav } from '@/lib/appNavPaths';
 import { brandVisualEnabled } from '@/lib/brandShell';
@@ -86,22 +97,39 @@ const AuthenticatedApp = () => {
         <Route path="/breaks" element={<BreakScheduler />} />
         <Route path="/shifts" element={<RouteErrorBoundary><ShiftScheduler /></RouteErrorBoundary>} />
         <Route path="/training" element={<TrainingPage />} />
-        <Route path="/chat" element={<ChatDeepLink />} />
+        <Route path="/metrics" element={<AgentMetricsPage />} />
+        <Route path="/metrics/ranking" element={<AgentMetricsRankingPage />} />
+        <Route path="/chat/guest" element={<CustomerChatGate><CustomerChatGuestPage /></CustomerChatGate>} />
+        <Route path="/chat" element={<ChatRoute />} />
+        <Route path="/customer-chat" element={<CustomerChatGate><AgentCustomerChatPage /></CustomerChatGate>} />
         <Route path="/crm" element={<DemoGate><CrmDashboard /></DemoGate>} />
+        <Route path="/crm/lookup" element={<DemoGate><CrmLookupDeepLink /></DemoGate>} />
         <Route path="/crm/:id" element={<DemoGate><CrmCustomerDetail /></DemoGate>} />
-        <Route path="/remote-support" element={<DemoGate><RemoteSupportPage /></DemoGate>} />
+        <Route path="/remote-support" element={<RemoteSupportPage />} />
         <Route
           path="/remote-support/recordings/play"
           element={<DemoGate><DemoRecordingPlayPage /></DemoGate>}
         />
-        <Route path="/support/consent/:token" element={<DemoGate><RemoteSupportConsentPage /></DemoGate>} />
-        <Route path="/support/screen/:sessionId" element={<DemoGate><ScreenShareGuestPage /></DemoGate>} />
+        <Route path="/j/:token" element={<GuestJoinRedirectPage />} />
+        <Route path="/support/consent/:token" element={<RemoteSupportConsentPage />} />
+        <Route path="/support/screen/:sessionId" element={<ScreenShareGuestPage />} />
         <Route path="/knowledge" element={<DemoGate><KnowledgePage /></DemoGate>} />
         <Route path="/admin" element={<AdminGate><AdminDashboard /></AdminGate>} />
         <Route path="/admin/knowledge" element={<DemoGate><AdminGate><AdminKnowledge /></AdminGate></DemoGate>} />
+        <Route path="/admin/customer-chat" element={<CustomerChatGate><AdminGate><AdminCustomerChat /></AdminGate></CustomerChatGate>} />
         <Route path="/admin/shifts" element={<AdminGate><AdminShifts /></AdminGate>} />
         <Route path="/admin/users" element={<AdminGate><AdminUsers /></AdminGate>} />
         <Route path="/admin/training" element={<AdminGate><AdminTraining /></AdminGate>} />
+        <Route path="/admin/recordings" element={<AdminGate><AdminRecordings /></AdminGate>} />
+        <Route path="/admin/metrics" element={<AdminGate><AdminMetrics /></AdminGate>} />
+        <Route
+          path="/admin/recordings/play"
+          element={
+            <AdminGate>
+              <DemoRecordingPlayPage backTo="/admin/recordings" />
+            </AdminGate>
+          }
+        />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="*" element={<PageNotFound />} />
       </Routes>
@@ -123,7 +151,9 @@ function App() {
             <ChatPanelProvider>
               <TelephonyProvider>
                 <ChatUnreadProvider>
-                  <AuthenticatedApp />
+                  <ScreenShareSessionProvider>
+                    <AuthenticatedApp />
+                  </ScreenShareSessionProvider>
                 </ChatUnreadProvider>
               </TelephonyProvider>
             </ChatPanelProvider>

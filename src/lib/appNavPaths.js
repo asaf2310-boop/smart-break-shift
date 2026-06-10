@@ -1,16 +1,20 @@
-import { demoModeEnabled } from "@/api/demoClient";
+import { customerChatEnabled, demoModeEnabled } from "@/api/demoClient";
 
-const PRODUCTION_TOP_NAV_PATHS = ["/breaks", "/shifts", "/training"];
+const PRODUCTION_TOP_NAV_PATHS = ["/breaks", "/shifts", "/training", "/metrics", "/remote-support"];
 
-const DEMO_TOP_NAV_PATHS = ["/crm", "/knowledge", "/remote-support"];
+const DEMO_TOP_NAV_PATHS = ["/crm", "/knowledge", "/customer-chat"];
+
+const LIVE_CUSTOMER_CHAT_PATHS = customerChatEnabled && !demoModeEnabled ? ["/customer-chat"] : [];
 
 /** Routes that show the main tab bar (logo is embedded in AppNav). */
 export const TOP_NAV_PATHS = new Set([
   ...PRODUCTION_TOP_NAV_PATHS,
+  ...LIVE_CUSTOMER_CHAT_PATHS,
   ...(demoModeEnabled ? DEMO_TOP_NAV_PATHS : []),
 ]);
 
 export function hasTopAppNav(pathname) {
+  if (pathname.startsWith("/metrics")) return true;
   return TOP_NAV_PATHS.has(pathname);
 }
 

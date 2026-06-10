@@ -1,4 +1,4 @@
-import { addDays, format } from "date-fns";
+import { addDays, format, isAfter } from "date-fns";
 import { demoModeEnabled } from "@/api/demoClient";
 import { listDemoAppUsers } from "@/lib/appUsersStore";
 import { getAgentSession } from "@/lib/agentAuth";
@@ -100,11 +100,50 @@ export function getPublishedScheduleWeekStart(now = new Date()) {
   return addDays(getWeekStartIsrael(now), 7);
 }
 
-/** דד-ליין אילוצים: רביעי 16:00 */
-export function getConstraintsDeadline(weekStart) {
-  const wednesday = addDays(weekStart, 3);
+/** דד-ליין אילוצים: רביעי 16:00 (שבוע ההגשה — השבוע שלפני שבוע האילוצים) */
+export function getConstraintsDeadline(submissionWeekStart) {
+  const wednesday = addDays(submissionWeekStart, 3);
   wednesday.setHours(16, 0, 0, 0);
   return wednesday;
+}
+
+/** שבוע ההגשה לפי שבוע האילוצים (יום ראשון של שבוע היעד) */
+export function getConstraintsSubmissionWeekStart(constraintsWeekStart) {
+  return addDays(constraintsWeekStart, -7);
+}
+
+export const CONSTRAINTS_SUBMISSION_OVERRIDE_MESSAGE =
+  "הגשת אילוצים פתוחה באופן ידני על ידי המנהל — ניתן לערוך גם לאחר הדד-ליין הרגיל.";
+
+export function getConstraintsDeadlineExtendedMessage(deadlineLabel) {
+  return `הגשת אילוצים הורחבה עד ${deadlineLabel} על ידי המנהל.`;
+}
+
+/**
+ * @param {object|null|undefined} weekSettings — ConstraintsWeekSettings row
+ * @returns {Date} effective deadline (may be later than default when extended)
+ */
+export function getEffectiveConstraintsDeadline(submissionWeekStart, weekSettings) {
+  const defaultDeadline = getConstraintsDeadline(submissionWeekStart);
+  const extendedRaw = weekSettings?.deadline_extended_until;
+  if (extendedRaw) {
+    const extended = new Date(extendedRaw);
+    if (!Number.isNaN(extended.getTime()) && extended > defaultDeadline) {
+      return extended;
+    }
+  }
+  return defaultDeadline;
+}
+
+/** true when agents cannot submit/edit constraints (unless admin opened override). */
+export function isConstraintsSubmissionClosed(
+  submissionWeekStart,
+  weekSettings,
+  now = new Date()
+) {
+  if (weekSettings?.submission_override_open) return false;
+  const deadline = getEffectiveConstraintsDeadline(submissionWeekStart, weekSettings);
+  return isAfter(now, deadline);
 }
 
 export function formatDateStr(date) {
@@ -117,6 +156,9 @@ export const BREAK_REGISTRATION_DEADLINE_HOUR = 10;
 
 export const BREAK_REGISTRATION_DEADLINE_MESSAGE =
   "רישום וביטול הפסקות ליום זה נסגרים בשעה 10:00 בבוקר (שעון ישראל). לא ניתן לפעול לאחר המועד.";
+
+export const BREAK_REGISTRATION_OVERRIDE_MESSAGE =
+  "רישום הפסקות פתוח באופן ידני על ידי המנהל — ניתן להירשם ולבטל גם לאחר 10:00.";
 
 export function parseDateStrLocal(dateStr) {
   const [y, m, d] = String(dateStr || "").split("-").map(Number);

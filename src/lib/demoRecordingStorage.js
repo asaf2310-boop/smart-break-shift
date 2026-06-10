@@ -1,4 +1,4 @@
-import { demoModeEnabled } from "@/api/demoClient";
+import { remoteSupportEnabled } from "@/api/demoClient";
 
 const DB_NAME = "smart-break-shift-demo-recordings-v1";
 const STORE_NAME = "blobs";
@@ -8,8 +8,12 @@ function compositeKey(sessionId, recordingId) {
   return `${sessionId}::${recordingId}`;
 }
 
+function recordingStorageAvailable() {
+  return remoteSupportEnabled && typeof indexedDB !== "undefined";
+}
+
 function openDb() {
-  if (!demoModeEnabled || typeof indexedDB === "undefined") {
+  if (!recordingStorageAvailable()) {
     return Promise.reject(new Error("IndexedDB unavailable"));
   }
   return new Promise((resolve, reject) => {
@@ -31,7 +35,7 @@ function openDb() {
  * @param {{ sessionId: string, recordingId: string, blob: Blob, meta?: object }} payload
  */
 export async function saveRecordingBlob({ sessionId, recordingId, blob, meta = {} }) {
-  if (!demoModeEnabled || !sessionId || !recordingId || !blob) return false;
+  if (!recordingStorageAvailable() || !sessionId || !recordingId || !blob) return false;
   const db = await openDb();
   const key = compositeKey(sessionId, recordingId);
   const record = {
@@ -58,7 +62,7 @@ export async function saveRecordingBlob({ sessionId, recordingId, blob, meta = {
 }
 
 export async function getRecordingBlob(sessionId, recordingId) {
-  if (!demoModeEnabled || !sessionId || !recordingId) return null;
+  if (!recordingStorageAvailable() || !sessionId || !recordingId) return null;
   const db = await openDb();
   const key = compositeKey(sessionId, recordingId);
   return new Promise((resolve, reject) => {
@@ -81,7 +85,7 @@ export async function hasRecordingBlob(sessionId, recordingId) {
 }
 
 export async function deleteRecordingBlob(sessionId, recordingId) {
-  if (!demoModeEnabled || !sessionId || !recordingId) return false;
+  if (!recordingStorageAvailable() || !sessionId || !recordingId) return false;
   const db = await openDb();
   const key = compositeKey(sessionId, recordingId);
   return new Promise((resolve, reject) => {
@@ -100,7 +104,7 @@ export async function deleteRecordingBlob(sessionId, recordingId) {
 
 /** @returns {Promise<Array<{ sessionId: string, recordingId: string, savedAt?: string }>>} */
 export async function listStoredRecordingRefs() {
-  if (!demoModeEnabled || typeof indexedDB === "undefined") return [];
+  if (!recordingStorageAvailable()) return [];
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, "readonly");

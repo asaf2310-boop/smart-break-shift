@@ -1,29 +1,39 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useLocation } from "react-router-dom";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Phone, X } from "lucide-react";
 import { getStoredAgentName } from "@/constants/scheduling";
+import { isCustomerChatGuestPath } from "@/lib/customerChatPaths";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { useTelephony } from "@/context/TelephonyContext";
 import AgentTelephonySidebar from "@/components/telephony/AgentTelephonySidebar";
+import CallDispositionModal from "@/components/telephony/CallDispositionModal";
+import { getCustomerByPhone } from "@/lib/crmStore";
 import {
   AGENT_TELEPHONY_STATUS,
   CALL_STATUS,
   connectAgentTelephonyAvailable,
+  dismissCallDisposition,
   getActiveCall,
   getAgentTelephonyStatus,
+  getPendingDisposition,
   hangUp,
   isAgentTelephonyConnected,
   setAgentTelephonyStatus,
   simulateInboundCall,
   startOutboundCall,
+  submitCallDisposition,
   subscribeTelephony,
   telephonyDemoAvailable,
   toggleMute,
   answerInbound,
+  bindSipTelephonyEvents,
+  isRealSipEnabled,
 } from "@/lib/telephonyStore";
 import {
   connectProductionCall,
   getConfiguredProvider,
+  getSipRegistrationState,
+  getSipRegistrationError,
   isTelephonyConfigured,
   isHttpsRequired,
 } from "@/lib/telephonyProvider";
@@ -53,7 +63,8 @@ function statusTone(status) {
 }
 
 export default function SoftphoneWidget() {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
+  const navigate = useNavigate();
   const hasTopNav = TOP_NAV_PATHS.has(pathname);
   const { displayName } = useAgentSession();
   const agentName = displayName || getStoredAgentName();
@@ -69,27 +80,49 @@ export default function SoftphoneWidget() {
     openSoftphone,
   } = useTelephony();
 
+  const remoteAudioRef = useRef(null);
   const showWidget = telephonyDemoAvailable() || isTelephonyConfigured();
   const isDemo = telephonyDemoAvailable();
+  const isSip = isRealSipEnabled();
   const provider = getConfiguredProvider();
 
   const [number, setNumber] = useState("");
   const [crmMeta, setCrmMeta] = useState(null);
   const [active, setActive] = useState(() => getActiveCall());
+  const [pendingDisposition, setPendingDisposition] = useState(() => getPendingDisposition());
   const [telephonyConnected, setTelephonyConnected] = useState(() =>
     isAgentTelephonyConnected()
   );
   const [statusKey, setStatusKey] = useState(() => getAgentTelephonyStatus(agentName));
   const [statusPending, setStatusPending] = useState(false);
+  const [sipRegistration, setSipRegistration] = useState(() => getSipRegistrationState());
+  const [sipError, setSipError] = useState(() => getSipRegistrationError());
+  const [callError, setCallError] = useState(null);
   const [tick, setTick] = useState(0);
 
   const refresh = useCallback(() => {
     setActive(getActiveCall());
+    setPendingDisposition(getPendingDisposition());
     setTelephonyConnected(isAgentTelephonyConnected());
     setStatusKey(getAgentTelephonyStatus(agentName));
   }, [agentName]);
 
+  useEffect(() => {
+    if (isSip) {
+      bindSipTelephonyEvents(remoteAudioRef.current);
+    }
+  }, [isSip]);
+
   useEffect(() => subscribeTelephony(refresh), [refresh]);
+
+  useEffect(() => {
+    if (!isSip) return undefined;
+    const id = setInterval(() => {
+      setSipRegistration(getSipRegistrationState());
+      setSipError(getSipRegistrationError());
+    }, 800);
+    return () => clearInterval(id);
+  }, [isSip]);
   useEffect(() => {
     refresh();
   }, [sidebarOpen, dialOpen, refresh]);
@@ -135,12 +168,43 @@ export default function SoftphoneWidget() {
     openSoftphone();
   }, [inboundRinging, openSoftphone]);
 
+  const screenPopCustomer = useMemo(() => {
+    if (!inboundRinging || !active?.phone) return null;
+    if (active.customer_id) {
+      return {
+        id: active.customer_id,
+        name: active.customer_name,
+        company: active.customer_company,
+      };
+    }
+    const match = getCustomerByPhone(active.phone);
+    if (!match) return null;
+    return { id: match.id, name: match.name, company: match.company };
+  }, [inboundRinging, active]);
+
+  const outboundMatch = useMemo(() => {
+    if (inCall || !String(number || "").trim()) return null;
+    return getCustomerByPhone(number);
+  }, [number, inCall]);
+
+  useEffect(() => {
+    if (!outboundMatch || inCall) return;
+    setCrmMeta((prev) =>
+      prev?.customerId === outboundMatch.id
+        ? prev
+        : {
+            customerId: outboundMatch.id,
+            customerName: outboundMatch.name,
+          }
+    );
+  }, [outboundMatch, inCall]);
+
   const liveDuration = useMemo(() => {
     if (!active?.connected_at) return 0;
     return Math.max(0, Math.round((Date.now() - new Date(active.connected_at).getTime()) / 1000));
   }, [active?.connected_at, tick]);
 
-  if (!showWidget || !agentName) return null;
+  if (!showWidget || !agentName || isCustomerChatGuestPath(pathname, search)) return null;
 
   const handleStatusChange = (e) => {
     const key = e.target.value;
@@ -164,25 +228,30 @@ export default function SoftphoneWidget() {
     setStatusPending(false);
   };
 
-  const handleCall = () => {
-    if (!isDemo) return;
-    startOutboundCall({
-      phone: number,
-      agentName,
-      customer_id: crmMeta?.customerId,
-      customer_name: crmMeta?.customerName,
-    });
-    refresh();
-    closeDialPad();
+  const handleCall = async () => {
+    setCallError(null);
+    try {
+      await startOutboundCall({
+        phone: number,
+        agentName,
+        customer_id: crmMeta?.customerId,
+        customer_name: crmMeta?.customerName,
+      });
+      refresh();
+      closeDialPad();
+    } catch (err) {
+      setCallError(err?.message || "כשל בחיוג");
+      refresh();
+    }
   };
 
-  const handleHangup = () => {
-    hangUp();
+  const handleHangup = async () => {
+    await hangUp();
     refresh();
   };
 
-  const handleMute = () => {
-    toggleMute();
+  const handleMute = async () => {
+    await toggleMute();
     refresh();
   };
 
@@ -190,19 +259,42 @@ export default function SoftphoneWidget() {
     simulateInboundCall({
       agentName,
       phone: number || "050-1234567",
-      customer_id: crmMeta?.customerId,
-      customer_name: crmMeta?.customerName || "לקוח דמו",
     });
     refresh();
   };
 
-  const handleAnswer = () => {
-    answerInbound();
+  const handleOpenCrm = (customerId) => {
+    if (customerId) navigate(`/crm/${customerId}`);
+  };
+
+  const handleCreateCustomer = () => {
+    const phone = active?.phone || number || "";
+    navigate(`/crm?addphone=${encodeURIComponent(phone)}`);
+  };
+
+  const handleDispositionSubmit = (data) => {
+    submitCallDisposition(data);
     refresh();
   };
 
-  const handleProductionStub = async () => {
-    await connectProductionCall();
+  const handleDispositionDismiss = () => {
+    dismissCallDisposition();
+    refresh();
+  };
+
+  const handleAnswer = async () => {
+    await answerInbound();
+    refresh();
+  };
+
+  const handleProductionCheck = async () => {
+    setCallError(null);
+    const result = await connectProductionCall();
+    if (!result.ok) {
+      setCallError(result.reason);
+    } else {
+      setCallError(result.reason);
+    }
   };
 
   const handleToggleMain = () => {
@@ -217,12 +309,23 @@ export default function SoftphoneWidget() {
 
   return (
     <div className={PHONE_FLOAT_CHROME_CLASS} dir="ltr">
+      <audio ref={remoteAudioRef} autoPlay playsInline className="sr-only" aria-hidden />
+      <CallDispositionModal
+        open={Boolean(pendingDisposition)}
+        call={pendingDisposition}
+        onSubmit={handleDispositionSubmit}
+        onDismiss={handleDispositionDismiss}
+      />
       {sidebarOpen && (
         <AgentTelephonySidebar
           agentName={agentName}
           isDemo={isDemo}
+          isSip={isSip}
           provider={provider}
           isHttpsRequired={isHttpsRequired()}
+          sipRegistration={sipRegistration}
+          sipError={sipError}
+          callError={callError}
           telephonyConnected={telephonyConnected}
           statusKey={statusKey}
           onStatusChange={handleStatusChange}
@@ -245,10 +348,14 @@ export default function SoftphoneWidget() {
           onToggleDialPad={handleToggleDialPad}
           onCall={handleCall}
           onSimulateInbound={handleInboundDemo}
-          onProductionStub={handleProductionStub}
+          onProductionCheck={handleProductionCheck}
           onClose={closeSoftphone}
           crmCustomerId={crmMeta?.customerId}
           crmCustomerName={crmMeta?.customerName}
+          screenPopCustomer={screenPopCustomer}
+          outboundMatch={outboundMatch}
+          onOpenCrm={handleOpenCrm}
+          onCreateCustomer={handleCreateCustomer}
         />
       )}
 
