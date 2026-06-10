@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { BookOpen, CalendarClock, CalendarDays, Contact, Film, GraduationCap, Home, Monitor, ShieldCheck } from "lucide-react";
+import { BookOpen, CalendarClock, CalendarDays, Contact, Film, GraduationCap, Home, MessageCircle, Monitor, ShieldCheck } from "lucide-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { demoModeEnabled } from "@/api/demoClient";
 import { brandVisualEnabled } from "@/lib/brandShell";
@@ -17,6 +17,7 @@ export default function AppNav() {
   const isCrm = location.pathname.startsWith("/crm");
   const isKnowledge = location.pathname.startsWith("/knowledge");
   const isRemoteSupport = location.pathname.startsWith("/remote-support");
+  const isCustomerChat = location.pathname.startsWith("/customer-chat");
 
   const useBrandNav = brandVisualEnabled;
 
@@ -77,6 +78,10 @@ export default function AppNav() {
               <Link to="/knowledge" className={tabClass(isKnowledge)}>
                 <BookOpen className="w-4 h-4" />
                 בסיס ידע
+              </Link>
+              <Link to="/customer-chat" className={tabClass(isCustomerChat)}>
+                <MessageCircle className="w-4 h-4" />
+                צ&apos;אט
               </Link>
             </>
           )}

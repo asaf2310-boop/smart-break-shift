@@ -38,6 +38,7 @@ function mapScreenShareRow(session, recordingCount = null) {
     recording_active_at: toIso(session.recordingActiveAt),
     recording_count: recCount,
     rust_desk_id: null,
+    short_code: session.shortCode || null,
     updated_at: new Date().toISOString(),
   };
 }
@@ -57,6 +58,7 @@ function mapRustDeskRow(session) {
     recording_active_at: null,
     recording_count: 0,
     rust_desk_id: session.rustDeskId || null,
+    short_code: session.shortCode || null,
     updated_at: new Date().toISOString(),
   };
 }

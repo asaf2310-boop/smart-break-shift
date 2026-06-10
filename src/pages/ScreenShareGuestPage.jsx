@@ -454,7 +454,7 @@ export default function ScreenShareGuestPage() {
       }
 
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { displaySurface: "monitor" },
+        video: true,
         audio: includeSystemAudio && systemAudioSupported,
       });
       streamRef.current = stream;

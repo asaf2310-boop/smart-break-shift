@@ -453,19 +453,17 @@ export default function ScreenShareAgentView({
     video.play().catch(() => {});
   }, []);
 
-  const attachRemoteStream = useCallback(
-    (remoteStream) => {
-      remoteStreamRef.current = remoteStream;
-      setHasRemoteStream(true);
-      setTabHidden(false);
-      setErrorDetail("");
-      if (videoRef.current) {
-        videoRef.current.srcObject = remoteStream;
-        videoRef.current.play().catch(() => {});
-      }
-    },
-    []
-  );
+  const attachRemoteStream = useCallback((remoteStream) => {
+    remoteStreamRef.current = remoteStream;
+    setHasRemoteStream(true);
+    setTabHidden(false);
+    setErrorDetail("");
+    const video = videoRef.current;
+    if (video) {
+      video.srcObject = remoteStream;
+      video.play().catch(() => {});
+    }
+  }, []);
 
   const clearRemoteVideo = useCallback(() => {
     setHasRemoteStream(false);
@@ -592,9 +590,6 @@ export default function ScreenShareAgentView({
 
     peer.on("call", (call) => {
       callRef.current = call;
-      call.answer();
-      setStatus("connected");
-      setReconnecting(false);
 
       call.on("stream", (remoteStream) => {
         attachRemoteStream(remoteStream);
@@ -610,6 +605,10 @@ export default function ScreenShareAgentView({
         if (sessionEndedRef.current) return;
         setErrorDetail("השיחה נותקה — לחצו «חזור לצפייה»");
       });
+
+      call.answer();
+      setStatus("connected");
+      setReconnecting(false);
     });
 
     peer.on("error", (err) => {
@@ -655,6 +654,25 @@ export default function ScreenShareAgentView({
     handleSessionEndedByGuest,
     stopRecordingInternal,
   ]);
+
+  useEffect(() => {
+    const stream = remoteStreamRef.current;
+    const video = videoRef.current;
+    if (!hasRemoteStream || !stream || !video) return undefined;
+
+    if (video.srcObject !== stream) {
+      video.srcObject = stream;
+    }
+
+    const startPlayback = () => {
+      video.play().catch(() => {});
+    };
+
+    video.addEventListener("loadedmetadata", startPlayback);
+    if (video.readyState >= 1) startPlayback();
+
+    return () => video.removeEventListener("loadedmetadata", startPlayback);
+  }, [hasRemoteStream, status]);
 
   useEffect(() => {
     const onVisibility = () => {
@@ -1108,7 +1126,7 @@ export default function ScreenShareAgentView({
           autoPlay
           playsInline
           muted
-          className="w-full h-full object-contain pointer-events-none select-none"
+          className="relative z-0 w-full h-full min-h-[180px] object-contain bg-black pointer-events-none select-none"
         />
       </div>
 

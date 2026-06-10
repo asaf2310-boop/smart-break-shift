@@ -7,7 +7,11 @@ const ADMIN_DEV_ROUTES_CORE = [
   { path: "/admin/recordings", label: "הקלטות" },
 ];
 
-const ADMIN_DEV_ROUTES_DEMO = [{ path: "/admin/knowledge", label: "ניהול ידע" }];
+const ADMIN_DEV_ROUTES_DEMO = [
+  { path: "/admin/knowledge", label: "ניהול ידע" },
+  { path: "/chat/guest", label: "צ'אט לקוח (אורח)" },
+  { path: "/customer-chat", label: "צ'אט לקוחות (נציג)" },
+];
 
 /** Admin routes from App.jsx — keep in sync when adding /admin/* pages. */
 export const ADMIN_DEV_ROUTES = [

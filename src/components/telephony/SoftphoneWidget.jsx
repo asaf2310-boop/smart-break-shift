@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useLocation, useNavigate } from "react-router-dom";
 import { Phone, X } from "lucide-react";
 import { getStoredAgentName } from "@/constants/scheduling";
+import { isCustomerChatGuestPath } from "@/lib/customerChatPaths";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { useTelephony } from "@/context/TelephonyContext";
 import AgentTelephonySidebar from "@/components/telephony/AgentTelephonySidebar";
@@ -62,7 +63,7 @@ function statusTone(status) {
 }
 
 export default function SoftphoneWidget() {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const navigate = useNavigate();
   const hasTopNav = TOP_NAV_PATHS.has(pathname);
   const { displayName } = useAgentSession();
@@ -203,7 +204,7 @@ export default function SoftphoneWidget() {
     return Math.max(0, Math.round((Date.now() - new Date(active.connected_at).getTime()) / 1000));
   }, [active?.connected_at, tick]);
 
-  if (!showWidget || !agentName) return null;
+  if (!showWidget || !agentName || isCustomerChatGuestPath(pathname, search)) return null;
 
   const handleStatusChange = (e) => {
     const key = e.target.value;

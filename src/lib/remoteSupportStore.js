@@ -4,9 +4,10 @@ import {
   remoteSupportEnabled,
 } from "@/api/demoClient";
 import {
-  GUEST_BOOTSTRAP_QUERY_KEY,
   decodeGuestBootstrapPayload,
   encodeGuestBootstrapPayload,
+} from "@/lib/guestLinkCodec";
+import {
   getPublicAppOrigin,
   isGuestSessionExpired,
 } from "@/lib/screenShareStore";
@@ -22,6 +23,8 @@ import {
 } from "@/lib/emailSimulatedReason";
 import { getStoredAgentName } from "@/constants/scheduling";
 import { syncRustDeskSessionToCloud } from "@/lib/supportSessionsSync";
+import { buildShortGuestUrl } from "@/lib/shortGuestLink";
+import { generateShortCode } from "@/lib/guestLinkCodec";
 
 export const REMOTE_SUPPORT_STORAGE_KEY = "smart-break-shift-remote-support-v1";
 export const REMOTE_SUPPORT_CHANGE_EVENT = "remote-support-changed";
@@ -37,7 +40,7 @@ export const CONSENT_TEXT_DEFAULT =
   "אני מאשר/ת שנציג התמיכה יקבל גישה מרחוק למחשב שלי באמצעות RustDesk לצורך טיפול בתקלה בלבד.";
 
 function makeId(prefix) {
-  return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+  return `${prefix}${generateShortCode(8)}`;
 }
 
 function readStore() {
@@ -101,6 +104,12 @@ export function getSessionByToken(token) {
   return getSession(token);
 }
 
+export function getSessionByShortCode(shortCode) {
+  const code = String(shortCode || "").trim();
+  if (!code) return null;
+  return readSessions().find((s) => s.shortCode === code) || null;
+}
+
 export function listSessions() {
   return readSessions().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 }
@@ -114,6 +123,7 @@ export function createSession({ crmCustomerId, agentName, rustDeskId, password, 
   const id = makeId("rs");
   const session = {
     id,
+    shortCode: generateShortCode(6),
     consentToken: id,
     crmCustomerId: crmCustomerId || null,
     agentName: String(agentName || getStoredAgentName() || "").trim(),
@@ -232,35 +242,22 @@ export function resolveConsentSession(sessionId, bootstrapParam = null) {
 }
 
 export function buildConsentUrl(sessionIdOrSession, origin) {
-  const base = (origin || getPublicAppOrigin()).replace(/\/$/, "");
-  let sessionId;
   let session = null;
 
   if (sessionIdOrSession && typeof sessionIdOrSession === "object" && sessionIdOrSession.id) {
     session = sessionIdOrSession;
-    sessionId = session.id;
   } else {
-    sessionId = String(sessionIdOrSession || "").trim();
+    const sessionId = String(sessionIdOrSession || "").trim();
     session = sessionId ? getSession(sessionId) : null;
   }
 
-  if (!sessionId) return "";
+  if (!session?.id) return "";
+  if (!remoteSupportEnabled || !session.createdAt) {
+    const base = (origin || getPublicAppOrigin()).replace(/\/$/, "");
+    return `${base}/support/consent/${encodeURIComponent(session.id)}`;
+  }
 
-  const path = `${base}/support/consent/${encodeURIComponent(sessionId)}`;
-  if (!remoteSupportEnabled || !session?.createdAt) return path;
-
-  const bootstrap = encodeGuestBootstrapPayload({
-    id: sessionId,
-    createdAt: session.createdAt,
-    agentName: session.agentName,
-    customerEmail: session.customerEmail || "",
-    crmCustomerId: session.crmCustomerId,
-  });
-  if (!bootstrap) return path;
-
-  const params = new URLSearchParams();
-  params.set(GUEST_BOOTSTRAP_QUERY_KEY, bootstrap);
-  return `${path}?${params.toString()}`;
+  return buildShortGuestUrl(session, { kind: "consent", origin });
 }
 
 export function buildRustDeskEmailBody({

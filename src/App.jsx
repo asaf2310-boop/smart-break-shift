@@ -24,7 +24,9 @@ import { ChatPanelProvider } from '@/context/ChatPanelContext';
 import { TelephonyProvider } from '@/context/TelephonyContext';
 import { FloatingWidgetsLayerProvider } from '@/context/FloatingWidgetsLayerContext';
 import { ChatUnreadProvider } from '@/hooks/useChatUnread';
-import ChatDeepLink from './pages/ChatDeepLink';
+import ChatRoute from './pages/ChatRoute';
+import CustomerChatGuestPage from './pages/CustomerChatGuestPage';
+import AgentCustomerChatPage from './pages/AgentCustomerChatPage';
 import CrmDashboard from './pages/CrmDashboard';
 import CrmCustomerDetail from './pages/CrmCustomerDetail';
 import CrmLookupDeepLink from './pages/CrmLookupDeepLink';
@@ -35,6 +37,7 @@ import AdminLocalhostLinksFloating from '@/components/admin/AdminLocalhostLinksF
 import RemoteSupportConsentPage from './pages/RemoteSupportConsentPage';
 import RemoteSupportPage from './pages/RemoteSupportPage';
 import ScreenShareGuestPage from './pages/ScreenShareGuestPage';
+import GuestJoinRedirectPage from './pages/GuestJoinRedirectPage';
 import DemoRecordingPlayPage from './pages/DemoRecordingPlayPage';
 import TrainingPage from './pages/TrainingPage';
 import AdminTraining from './pages/AdminTraining';
@@ -88,7 +91,9 @@ const AuthenticatedApp = () => {
         <Route path="/breaks" element={<BreakScheduler />} />
         <Route path="/shifts" element={<RouteErrorBoundary><ShiftScheduler /></RouteErrorBoundary>} />
         <Route path="/training" element={<TrainingPage />} />
-        <Route path="/chat" element={<ChatDeepLink />} />
+        <Route path="/chat/guest" element={<CustomerChatGuestPage />} />
+        <Route path="/chat" element={<ChatRoute />} />
+        <Route path="/customer-chat" element={<DemoGate><AgentCustomerChatPage /></DemoGate>} />
         <Route path="/crm" element={<DemoGate><CrmDashboard /></DemoGate>} />
         <Route path="/crm/lookup" element={<DemoGate><CrmLookupDeepLink /></DemoGate>} />
         <Route path="/crm/:id" element={<DemoGate><CrmCustomerDetail /></DemoGate>} />
@@ -97,6 +102,7 @@ const AuthenticatedApp = () => {
           path="/remote-support/recordings/play"
           element={<DemoGate><DemoRecordingPlayPage /></DemoGate>}
         />
+        <Route path="/j/:token" element={<GuestJoinRedirectPage />} />
         <Route path="/support/consent/:token" element={<RemoteSupportConsentPage />} />
         <Route path="/support/screen/:sessionId" element={<ScreenShareGuestPage />} />
         <Route path="/knowledge" element={<DemoGate><KnowledgePage /></DemoGate>} />

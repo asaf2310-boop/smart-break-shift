@@ -16,12 +16,20 @@ import {
 } from "@/lib/emailSimulatedReason";
 import { getStoredAgentName } from "@/constants/scheduling";
 import { syncScreenShareSessionToCloud } from "@/lib/supportSessionsSync";
+import { buildShortGuestUrl } from "@/lib/shortGuestLink";
+import {
+  decodeGuestBootstrapPayload,
+  encodeGuestBootstrapPayload,
+  generateShortCode,
+  GUEST_BOOTSTRAP_QUERY_KEY,
+} from "@/lib/guestLinkCodec";
+
+export { GUEST_BOOTSTRAP_QUERY_KEY, encodeGuestBootstrapPayload, decodeGuestBootstrapPayload };
 
 export const SCREEN_SHARE_STORAGE_KEY = "smart-break-shift-screen-share-v1";
 export const SCREEN_SHARE_CHANGE_EVENT = "screen-share-changed";
 /** דמו: תוקף קישור אורח — 72 שעות מיצירת הסשן (לא מחיקה אוטומטית מ-localStorage) */
 export const DEMO_GUEST_SESSION_TTL_MS = 72 * 60 * 60 * 1000;
-export const GUEST_BOOTSTRAP_QUERY_KEY = "b";
 
 const EMAIL_SUBJECT_SCREEN =
   "שיתוף מסך לתמיכה טכנית (צפייה בלבד) — באישורך";
@@ -30,7 +38,7 @@ export const DEMO_SCREEN_SHARE_EMAIL_MESSAGE =
   "בדמו: הקישור מוכן — העתיקו את הקישור למטה או פתחו mailto";
 
 function makeId(prefix) {
-  return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+  return `${prefix}${generateShortCode(8)}`;
 }
 
 function readStore() {
@@ -91,6 +99,12 @@ export function getSession(id) {
   return readSessions().find((s) => s.id === id) || null;
 }
 
+export function getSessionByShortCode(shortCode) {
+  const code = String(shortCode || "").trim();
+  if (!code) return null;
+  return readSessions().find((s) => s.shortCode === code) || null;
+}
+
 /** כתובת ציבורית לקישורים במייל — VITE_APP_URL או origin; מ-localhost מעדיף env */
 export function getPublicAppOrigin() {
   const fromEnv = cleanEnvValue(import.meta.env.VITE_APP_URL)?.replace(/\/$/, "") || "";
@@ -99,57 +113,6 @@ export function getPublicAppOrigin() {
   const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(origin);
   if (isLocal && fromEnv) return fromEnv;
   return fromEnv || origin;
-}
-
-function toBase64Url(str) {
-  if (typeof btoa === "undefined") return "";
-  const bytes = new TextEncoder().encode(str);
-  let binary = "";
-  bytes.forEach((b) => {
-    binary += String.fromCharCode(b);
-  });
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function fromBase64Url(encoded) {
-  if (!encoded || typeof atob === "undefined") return null;
-  try {
-    const padded = encoded.replace(/-/g, "+").replace(/_/g, "/");
-    const padLen = (4 - (padded.length % 4)) % 4;
-    const binary = atob(padded + "=".repeat(padLen));
-    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
-    return new TextDecoder().decode(bytes);
-  } catch {
-    return null;
-  }
-}
-
-export function encodeGuestBootstrapPayload(session) {
-  if (!session?.id || !session.createdAt) return "";
-  const payload = {
-    c: session.createdAt,
-    a: String(session.agentName || "").slice(0, 120),
-    e: String(session.customerEmail || "").slice(0, 200),
-    r: session.crmCustomerId || null,
-  };
-  return toBase64Url(JSON.stringify(payload));
-}
-
-export function decodeGuestBootstrapPayload(encoded) {
-  const json = fromBase64Url(encoded);
-  if (!json) return null;
-  try {
-    const parsed = JSON.parse(json);
-    if (!parsed?.c || Number.isNaN(new Date(parsed.c).getTime())) return null;
-    return {
-      createdAt: parsed.c,
-      agentName: String(parsed.a || "").slice(0, 120),
-      customerEmail: String(parsed.e || "").slice(0, 200),
-      crmCustomerId: parsed.r || null,
-    };
-  } catch {
-    return null;
-  }
 }
 
 export function isGuestSessionExpired(session) {
@@ -239,6 +202,7 @@ export function createScreenSession({
   const id = makeId("ss");
   const session = {
     id,
+    shortCode: generateShortCode(6),
     crmCustomerId: crmCustomerId || null,
     agentName: String(agentName || getStoredAgentName() || "").trim(),
     customerEmail: String(customerEmail || "").trim(),
@@ -547,29 +511,22 @@ export function endSession(id, { endedReason = "agent_ended" } = {}) {
  * @param {string} [origin] — ברירת מחדל getPublicAppOrigin()
  */
 export function buildScreenShareGuestUrl(sessionOrId, origin) {
-  const base = (origin || getPublicAppOrigin()).replace(/\/$/, "");
-  let sessionId;
   let session = null;
 
   if (sessionOrId && typeof sessionOrId === "object" && sessionOrId.id) {
     session = sessionOrId;
-    sessionId = session.id;
   } else {
-    sessionId = String(sessionOrId || "").trim();
+    const sessionId = String(sessionOrId || "").trim();
     session = sessionId ? getSession(sessionId) : null;
   }
 
-  if (!sessionId) return "";
+  if (!session?.id) return "";
+  if (!remoteSupportEnabled || !session.createdAt) {
+    const base = (origin || getPublicAppOrigin()).replace(/\/$/, "");
+    return `${base}/support/screen/${encodeURIComponent(session.id)}`;
+  }
 
-  const path = `${base}/support/screen/${encodeURIComponent(sessionId)}`;
-  if (!remoteSupportEnabled || !session?.createdAt) return path;
-
-  const bootstrap = encodeGuestBootstrapPayload(session);
-  if (!bootstrap) return path;
-
-  const params = new URLSearchParams();
-  params.set(GUEST_BOOTSTRAP_QUERY_KEY, bootstrap);
-  return `${path}?${params.toString()}`;
+  return buildShortGuestUrl(session, { kind: "screen", origin });
 }
 
 export function buildScreenShareEmailBody({
