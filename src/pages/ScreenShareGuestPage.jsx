@@ -218,12 +218,16 @@ export default function ScreenShareGuestPage() {
   const notifyAgentGuestReady = useCallback(
     (sessionSnapshot) => {
       if (!sessionSnapshot) return;
-      sendPeerDataMessage({
+      const payload = {
         type: "guest_ready",
         consentAt: sessionSnapshot.consentAt || null,
         recordingConsentAt: sessionSnapshot.recordingConsentAt || null,
         at: Date.now(),
-      });
+      };
+      sendPeerDataMessage(payload);
+      for (let attempt = 1; attempt <= 4; attempt += 1) {
+        window.setTimeout(() => sendPeerDataMessage(payload), attempt * 1200);
+      }
     },
     [sendPeerDataMessage]
   );
@@ -371,15 +375,18 @@ export default function ScreenShareGuestPage() {
           ensureOutboundTracksOnPeerConnection(pc, stream);
         }
 
-        // Call placed with outbound video — allow UI success while ICE completes (old flow).
         if (hasOutboundVideoSender(pc, stream)) {
-          void waitForIceConnected(pc, 25000).then((iceOk) => {
-            if (!sharingRef.current || iceOk) return;
-            setError(
-              "שיתוף המסך נשלח — ממתין לחיבור רשת. אם הנציג לא רואה תמונה, ודאו ש-TURN מוגדר"
-            );
-          });
-          return true;
+          const iceOk = await waitForIceConnected(pc, 12000);
+          if (iceOk) return true;
+          if (attempt < maxAttempts) {
+            setError(`ממתין לחיבור לנציג (ניסיון ${attempt + 1}/${maxAttempts})…`);
+            await sleep(1500 * attempt);
+            continue;
+          }
+          setError(
+            "שיתוף המסך נשלח — ממתין לחיבור רשת. אם הנציג לא רואה תמונה, ודאו שהנציג פתח סשן צפייה"
+          );
+          return false;
         }
 
         const iceOk = await waitForIceConnected(pc, 12000);

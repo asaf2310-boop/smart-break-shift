@@ -21,6 +21,7 @@ import {
   listSessionsForCustomer,
   markAgentPeerOpened,
   sendScreenShareEmail,
+  startSessionCloudPoll,
   subscribeScreenShare,
 } from "@/lib/screenShareStore";
 import EmailStatusBanner from "@/components/remote/EmailStatusBanner";
@@ -98,8 +99,14 @@ export default function ScreenSharePanel({
       setEmailLogRevision((n) => n + 1);
     };
     refresh();
-    return subscribeScreenShare(refresh);
-  }, [session?.id]);
+    const stopCloudPoll =
+      session.status === "active" ? startSessionCloudPoll(session.id) : () => {};
+    const stopStore = subscribeScreenShare(refresh);
+    return () => {
+      stopCloudPoll();
+      stopStore();
+    };
+  }, [session?.id, session?.status]);
 
   const lastEmailLog = useMemo(() => {
     if (!session?.id) return null;
