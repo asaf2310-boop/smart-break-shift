@@ -17,7 +17,7 @@ import { resolveAgentStatus, statusDotClass } from "@/lib/chatStatus";
 import { CHAT_STATUS, isAgentChatConnected } from "@/lib/agentChatPresence";
 import { CHAT_FLOAT_CHROME_CLASS } from "@/lib/floatingWidgetChrome";
 import { hasTopAppNav } from "@/lib/appNavPaths";
-import { isCustomerChatGuestPath } from "@/lib/customerChatPaths";
+import { isGuestChromeHiddenPath } from "@/lib/customerChatPaths";
 
 const CHAT_PANEL_HEIGHT_KEY = "chat-panel-height";
 const MIN_CHAT_PANEL_HEIGHT = 320;
@@ -97,8 +97,14 @@ function pointerClientY(event) {
   return event.clientY;
 }
 
-/** בועת צ'אט צפה — מופיעה בכל מסך, בלי טאב בסרגל */
+/** בועת צ'אט צפה — מופיעה במסכי נציג, בלי טאב בסרגל */
 export default function FloatingChatWidget() {
+  const { pathname, search } = useLocation();
+  if (isGuestChromeHiddenPath(pathname, search)) return null;
+  return <FloatingChatWidgetChrome />;
+}
+
+function FloatingChatWidgetChrome() {
   const { pathname, search } = useLocation();
   const hasTopNav = hasTopAppNav(pathname);
   const { open, toggleChat, closeChat } = useChatPanel();
@@ -290,8 +296,6 @@ export default function FloatingChatWidget() {
 
   const badgeLabel =
     unreadTotal > 99 ? "99+" : unreadTotal > 0 ? String(unreadTotal) : null;
-
-  if (isCustomerChatGuestPath(pathname, search)) return null;
 
   return (
     <div

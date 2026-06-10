@@ -76,3 +76,14 @@ export function toSupabaseChatSettingsPatch(branding) {
     updated_at: new Date().toISOString(),
   };
 }
+
+/** Missing table/row in Supabase — fall back to local defaults without console spam. */
+export function isChatSettingsUnavailableError(error) {
+  const msg = String(error?.message || "").toLowerCase();
+  return (
+    msg.includes("404") ||
+    msg.includes("42p01") ||
+    msg.includes("pgrst205") ||
+    (msg.includes("relation") && msg.includes("chat_settings"))
+  );
+}

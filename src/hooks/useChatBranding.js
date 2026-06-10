@@ -5,6 +5,7 @@ import { isSupabaseBackend } from "@/api/dataClient";
 import {
   CHAT_SETTINGS_ROW_ID,
   getEffectiveChatBranding,
+  isChatSettingsUnavailableError,
   mapSupabaseChatSettingsRow,
   readLocalChatBranding,
   toSupabaseChatSettingsPatch,
@@ -19,8 +20,15 @@ function useRemoteChatBranding() {
 }
 
 async function fetchRemoteChatBranding() {
-  const rows = await dataClient.entities.ChatSettings.filter({ id: CHAT_SETTINGS_ROW_ID });
-  return mapSupabaseChatSettingsRow(rows[0]) || readLocalChatBranding();
+  try {
+    const rows = await dataClient.entities.ChatSettings.filter({ id: CHAT_SETTINGS_ROW_ID });
+    return mapSupabaseChatSettingsRow(rows[0]) || readLocalChatBranding();
+  } catch (error) {
+    if (isChatSettingsUnavailableError(error)) {
+      return readLocalChatBranding();
+    }
+    throw error;
+  }
 }
 
 async function saveRemoteChatBranding(branding) {
@@ -45,6 +53,8 @@ export function useChatBranding() {
     queryKey: QUERY_KEY,
     queryFn: () => (remote ? fetchRemoteChatBranding() : readLocalChatBranding()),
     ...getLiveQueryOptions(),
+    retry: (failureCount, error) =>
+      !isChatSettingsUnavailableError(error) && failureCount < 2,
   });
 
   const effective = getEffectiveChatBranding(branding);

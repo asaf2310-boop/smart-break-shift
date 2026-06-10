@@ -205,6 +205,13 @@ export async function ensureGuestLinkReady(session) {
     cloudSynced = await waitForShortCodeInCloud(workingSession.shortCode);
   }
 
+  if (cloudSynced && workingSession.shortCode) {
+    const verified = updateSession(workingSession.id, {
+      shortCodeCloudSynced: true,
+    });
+    if (verified) workingSession = verified;
+  }
+
   if (!cloudSynced) {
     syncScreenShareSessionToCloud(workingSession);
     console.warn("[screenShareStore] guest link cloud sync pending", {
@@ -304,6 +311,7 @@ export function createScreenSession({
   const session = {
     id,
     shortCode: null,
+    shortCodeCloudSynced: null,
     agentPeerOpenedAt: null,
     agentPeerReadyAt: null,
     guestStreamConnectedAt: null,
@@ -608,6 +616,7 @@ export function endSession(id, { endedReason = "agent_ended" } = {}) {
     recordingActiveAt: null,
     endedReason: endedReason || null,
     shortCode: null,
+    shortCodeCloudSynced: null,
     agentPeerOpenedAt: null,
     agentPeerReadyAt: null,
     guestStreamConnectedAt: null,
@@ -630,6 +639,7 @@ export function endAllActiveScreenSessions({ agentName } = {}) {
       endedAt: now,
       endedReason: "agent_ended",
       shortCode: null,
+      shortCodeCloudSynced: null,
       recordingActiveAt: null,
       agentPeerOpenedAt: null,
       agentPeerReadyAt: null,
