@@ -17,6 +17,7 @@ import {
   REMOTE_SUPPORT_OPEN_EVENT,
   getSession,
   listSessions,
+  markAgentPeerOpened,
   startSessionCloudPoll,
   subscribeScreenShare,
 } from "@/lib/screenShareStore";
@@ -123,6 +124,8 @@ export function ScreenShareSessionProvider({ children }) {
 
   const openSessionView = useCallback((sessionId, { openPanel = true } = {}) => {
     if (!sessionId) return;
+    // Ensure background peer mounts (and survives minimize) even when opened from session list.
+    markAgentPeerOpened(sessionId);
     setBackgroundSessionId(sessionId);
     setViewOpen(true);
     if (openPanel) {

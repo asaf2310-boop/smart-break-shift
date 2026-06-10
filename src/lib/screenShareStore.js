@@ -147,6 +147,13 @@ export function markAgentPeerReady(id) {
   });
 }
 
+/** הנציג סגר/הרס Peer — לא לסמן «מוכן לקישור» עד peer.on('open') מחדש */
+export function clearAgentPeerReady(id) {
+  const session = getSession(id);
+  if (!session || session.status === "ended" || !session.agentPeerReadyAt) return session;
+  return updateSession(id, { agentPeerReadyAt: null });
+}
+
 export const REMOTE_SUPPORT_OPEN_EVENT = "remote-support-open-request";
 
 /** הלקוח התחבר ומשתף מסך — להתראה גלובלית לנציג */

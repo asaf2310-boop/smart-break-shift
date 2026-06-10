@@ -49,6 +49,7 @@ import {
   getSession,
   markGuestStreamConnected,
   markAgentPeerReady,
+  clearAgentPeerReady,
   listRecordingsForSession,
   markRecordingDownloaded,
   setRecordingActive,
@@ -168,6 +169,9 @@ export default function ScreenShareAgentView({
   const videoRetryTimerRef = useRef(null);
   const lastGuestPeerIdRef = useRef(null);
   const inboundStatsPollStopRef = useRef(null);
+  const noCallTimerRef = useRef(null);
+  const unavailableIdRetriesRef = useRef(0);
+  const viewOpenRef = useRef(viewOpen);
 
   const DEMO_AUTO_START_KEY = "demo-auto-start-recording";
   const [autoStartRecording, setAutoStartRecording] = useState(() => {
@@ -705,6 +709,51 @@ export default function ScreenShareAgentView({
   })();
 
   useEffect(() => {
+    viewOpenRef.current = viewOpen;
+  }, [viewOpen]);
+
+  const clearNoCallTimer = useCallback(() => {
+    if (noCallTimerRef.current) {
+      window.clearTimeout(noCallTimerRef.current);
+      noCallTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleNoCallWarning = useCallback(
+    (peer) => {
+      clearNoCallTimer();
+      if (!sessionId || !peer) return;
+      noCallTimerRef.current = window.setTimeout(() => {
+        noCallTimerRef.current = null;
+        if (sessionEndedRef.current || callRef.current) return;
+        const latest = getSession(sessionId);
+        const peerId = peer.id || sessionId;
+        if (latest?.consentAt) {
+          console.warn(
+            "[WebRTC:agent] No incoming call after guest consent",
+            {
+              sessionId,
+              peerId,
+              viewOpen: viewOpenRef.current,
+              guestStreamConnectedAt: latest.guestStreamConnectedAt,
+            }
+          );
+          setErrorDetail(
+            "הלקוח אישר אך לא התקבלה שיחה — ודאו שאין לשונית נציג נוספת פתוחה, לחצו «חזור לצפייה»"
+          );
+        } else {
+          console.log("[WebRTC:agent] Peer listening, no guest call yet", {
+            sessionId,
+            peerId,
+            viewOpen: viewOpenRef.current,
+          });
+        }
+      }, 45000);
+    },
+    [sessionId, clearNoCallTimer]
+  );
+
+  useEffect(() => {
     if (!sessionId) return undefined;
     sessionEndedRef.current = false;
 
@@ -723,6 +772,11 @@ export default function ScreenShareAgentView({
     chunksRef.current = [];
     metadataPersistedRef.current = false;
 
+    console.log("[WebRTC:agent] creating Peer", {
+      sessionId,
+      viewOpen: viewOpenRef.current,
+      expectedGuestCallTarget: sessionId,
+    });
     const peer = new Peer(getPeerJsOptions(sessionId));
     peerRef.current = peer;
 
@@ -733,11 +787,20 @@ export default function ScreenShareAgentView({
     };
 
     peer.on("open", () => {
+      unavailableIdRetriesRef.current = 0;
+      const peerId = peer.id || sessionId;
+      console.log("[WebRTC:agent] peer open", {
+        sessionId,
+        peerId,
+        viewOpen: viewOpenRef.current,
+        matchesSession: peerId === sessionId,
+      });
       setReconnecting(false);
-      if (sessionId) {
+      if (sessionId && peer.open) {
         markAgentPeerReady(sessionId);
         syncPeerSessionRecord();
       }
+      scheduleNoCallWarning(peer);
       setStatus((prev) => {
         if (prev === "ended") return prev;
         const latest = sessionId ? getSession(sessionId) : null;
@@ -777,6 +840,12 @@ export default function ScreenShareAgentView({
     });
 
     peer.on("call", (call) => {
+      clearNoCallTimer();
+      console.log("[WebRTC:agent] call received", {
+        sessionId,
+        agentPeerId: peer.id || sessionId,
+        guestPeerId: call.peer,
+      });
       if (sessionId) {
         markAgentPeerReady(sessionId);
         const latest = getSession(sessionId);
@@ -923,12 +992,32 @@ export default function ScreenShareAgentView({
     });
 
     peer.on("error", (err) => {
+      console.error("[WebRTC:agent] peer error", {
+        sessionId,
+        type: err?.type,
+        message: err?.message,
+        viewOpen: viewOpenRef.current,
+      });
       if (sessionEndedRef.current) return;
       const latest = getSession(sessionId);
       if (latest?.status === "ended" && isGuestInitiatedEnd(latest?.endedReason)) {
         handleSessionEndedByGuest();
         return;
       }
+      if (err?.type === "unavailable-id" && unavailableIdRetriesRef.current < 3) {
+        unavailableIdRetriesRef.current += 1;
+        clearAgentPeerReady(sessionId);
+        console.warn(
+          "[WebRTC:agent] unavailable-id — retrying peer registration",
+          { sessionId, attempt: unavailableIdRetriesRef.current }
+        );
+        window.setTimeout(
+          () => setConnectionEpoch((n) => n + 1),
+          1500 * unavailableIdRetriesRef.current
+        );
+        return;
+      }
+      if (sessionId) clearAgentPeerReady(sessionId);
       stopRecordingInternal();
       setStatus("error");
       setReconnecting(false);
@@ -940,6 +1029,8 @@ export default function ScreenShareAgentView({
     });
 
     return () => {
+      clearNoCallTimer();
+      if (sessionId) clearAgentPeerReady(sessionId);
       clearVideoRetryTimer();
       stopInboundStatsPolling();
       stopRecordingInternal(false);
@@ -970,6 +1061,8 @@ export default function ScreenShareAgentView({
     clearVideoRetryTimer,
     scheduleGuestVideoRetries,
     stopInboundStatsPolling,
+    clearNoCallTimer,
+    scheduleNoCallWarning,
   ]);
 
   useEffect(() => {
