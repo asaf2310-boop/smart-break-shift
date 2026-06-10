@@ -4,7 +4,30 @@ import { getAgentSession } from "@/lib/agentAuth";
 
 export const SCREEN_RECORDINGS_BUCKET = "screen-recordings";
 
+/** הקלטות בשרת נשמרות 7 ימים — מחיקה אוטומטית ב-Supabase (screen_recordings_retention.sql). */
+export const CLOUD_RECORDING_RETENTION_DAYS = 7;
+
 const SIGNED_URL_TTL_SEC = 3600;
+
+export function cloudRecordingRetentionCutoffIso(
+  retentionDays = CLOUD_RECORDING_RETENTION_DAYS
+) {
+  const ms = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+  return new Date(ms).toISOString();
+}
+
+export function isCloudRecordingWithinRetention(
+  rec,
+  retentionDays = CLOUD_RECORDING_RETENTION_DAYS
+) {
+  if (!rec) return false;
+  const iso = rec.cloudUploadedAt || rec.stoppedAt || rec.startedAt || rec.createdAt;
+  if (!iso) return true;
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return true;
+  const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+  return t >= cutoff;
+}
 
 /** העלאה לשרת פעילה בפרודקשן עם Supabase (לא בדמו). */
 export function cloudRecordingUploadEnabled() {
@@ -145,13 +168,15 @@ export async function fetchCloudRecordingById(recordingId) {
   }
 }
 
-/** שליפת הקלטות ענן לתצוגת מנהל. */
+/** שליפת הקלטות ענן לתצוגת מנהל (רק 7 ימים אחרונים). */
 export async function fetchCloudScreenRecordings(limit = 1000) {
   if (!cloudRecordingUploadEnabled()) return [];
+  const cutoffIso = cloudRecordingRetentionCutoffIso();
   try {
     const { data, error } = await supabase
       .from("screen_recordings")
       .select("*")
+      .gte("created_at", cutoffIso)
       .order("created_at", { ascending: false })
       .limit(limit);
     if (error) {

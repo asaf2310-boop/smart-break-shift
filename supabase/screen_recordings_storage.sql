@@ -6,6 +6,7 @@
 --
 -- חלופה ב-Dashboard: Storage → New bucket → שם screen-recordings → Private
 -- פירוט: docs/REMOTE_SUPPORT.md
+-- שמירה 7 ימים + מחיקה אוטומטית: screen_recordings_retention.sql
 -- =============================================================================
 
 -- Bucket פרטי — נגינה דרך signed URL (createSignedUrl מהאפליקציה)

@@ -4,7 +4,7 @@ import { deleteRecordingMetadata, listAllRecordings } from "@/lib/screenShareSto
 
 export const DEMO_RECORDING_RETENTION_KEY = "demo-recording-retention-days";
 export const RETENTION_DAY_OPTIONS = [7, 30, 90];
-const DEFAULT_RETENTION_DAYS = 30;
+const DEFAULT_RETENTION_DAYS = 7;
 
 export function getRecordingRetentionDays() {
   if (typeof window === "undefined") return DEFAULT_RETENTION_DAYS;

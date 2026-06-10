@@ -72,6 +72,7 @@ import { recordingUploadStatusLabel } from "@/lib/recordingUpload";
 import { buildRecordingPlayId } from "@/lib/screenShareStore";
 import { cloudSessionSyncEnabled } from "@/lib/supportSessionsSync";
 import {
+  CLOUD_RECORDING_RETENTION_DAYS,
   cloudRecordingUploadEnabled,
   getSignedRecordingUrl,
 } from "@/lib/screenRecordingsSync";
@@ -729,7 +730,8 @@ export default function AdminRecordingsPanel() {
           cloudUpload ? (
             <>
               יומן הסשנים והקלטות מסונכרנים ל-Supabase — מנהל רואה סשנים מכל הנציגים.
-              וידאו נשמר ב-bucket <strong>screen-recordings</strong> ונגן דרך קישור חתום מהשרת.
+              וידאו נשמר ב-bucket <strong>screen-recordings</strong> ל-{CLOUD_RECORDING_RETENTION_DAYS} ימים
+              ונמחק אוטומטית מהשרת; נגינה דרך קישור חתום.
             </>
           ) : (
             <>
