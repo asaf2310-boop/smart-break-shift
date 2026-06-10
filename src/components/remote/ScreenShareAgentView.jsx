@@ -57,13 +57,19 @@ import {
   updateRecordingMetadata,
 } from "@/lib/screenShareStore";
 import SessionFileShare from "@/components/remote/SessionFileShare";
-import { getPeerJsOptions } from "@/lib/webrtcConfig";
+import { getPeerJsOptions, isTurnConfigured } from "@/lib/webrtcConfig";
+import {
+  describeIcePath,
+  watchRemoteVideoFromPeerConnection,
+  watchVideoTrackActivation,
+} from "@/lib/screenShareWebRtc";
 
 const MAX_RECORDING_SECONDS = 30 * 60;
 
 const PEER_STATUS_LABELS = {
   idle: "ממתין לפתיחת חיבור",
   waiting: "ממתין לשיתוף מסך",
+  connecting: "מתחבר — ממתין לווידאו",
   connected: "מחובר — צפייה במסך",
   disconnected: "החיבור נותק — ניתן לחזור לצפייה",
   paused: "מושהה — חזרו ללשונית",
@@ -439,7 +445,8 @@ export default function ScreenShareAgentView({
       if (tabHidden && status === "connected") return PEER_STATUS_LABELS.paused;
       return PEER_STATUS_LABELS.connected;
     }
-    if (sessionRecord?.guestStreamConnectedAt || status === "connected") {
+    if (status === "connecting") return PEER_STATUS_LABELS.connecting;
+    if (sessionRecord?.guestStreamConnectedAt) {
       return "לקוח מחובר — ממתין לווידאו";
     }
     if (tabHidden && status === "connected") return PEER_STATUS_LABELS.paused;
@@ -466,18 +473,14 @@ export default function ScreenShareAgentView({
     video.play().catch(() => {});
   }, []);
 
-  const attachRemoteStream = useCallback(
+  const bindRemoteStreamToVideo = useCallback(
     (remoteStream) => {
-      const videoTracks = remoteStream?.getVideoTracks?.() || [];
-      if (!videoTracks.length) {
-        setHasRemoteStream(false);
-        setErrorDetail("לא התקבל זרם וידאו מהלקוח — בדקו שיתוף מסך בדפדפן הלקוח");
-        return;
-      }
       remoteStreamRef.current = remoteStream;
       setHasRemoteStream(true);
+      setStatus("connected");
       setTabHidden(false);
       setErrorDetail("");
+      setReconnecting(false);
       if (sessionId) {
         markGuestStreamConnected(sessionId);
         const latest = getSession(sessionId);
@@ -491,8 +494,35 @@ export default function ScreenShareAgentView({
         video.srcObject = remoteStream;
         video.play().catch(() => {});
       }
+      void describeIcePath(callRef.current?.peerConnection).then((info) => {
+        if (!info || sessionEndedRef.current) return;
+        if (!info.usingRelay && isTurnConfigured()) {
+          setErrorDetail(
+            "החיבור עלה בלי TURN — אם המסך שחור, בדקו VITE_TURN_* ב-Vercel ו-Redeploy"
+          );
+        }
+      });
     },
     [sessionId]
+  );
+
+  const attachRemoteStream = useCallback(
+    (remoteStream) => {
+      const videoTracks = remoteStream?.getVideoTracks?.() || [];
+      if (!videoTracks.length) {
+        setHasRemoteStream(false);
+        setErrorDetail("לא התקבל זרם וידאו מהלקוח — בדקו שיתוף מסך בדפדפן הלקוח");
+        return;
+      }
+      for (const track of videoTracks) {
+        track.enabled = true;
+      }
+      bindRemoteStreamToVideo(remoteStream);
+      watchVideoTrackActivation(remoteStream, () => {
+        resumeVideoPlayback();
+      });
+    },
+    [sessionId, bindRemoteStreamToVideo, resumeVideoPlayback]
   );
 
   const clearRemoteVideo = useCallback(() => {
@@ -622,6 +652,7 @@ export default function ScreenShareAgentView({
 
     peer.on("call", (call) => {
       callRef.current = call;
+      let stopWatchReceivers = () => {};
 
       call.on("stream", (remoteStream) => {
         attachRemoteStream(remoteStream);
@@ -629,38 +660,55 @@ export default function ScreenShareAgentView({
 
       const pc = call.peerConnection;
       if (pc) {
-        pc.addEventListener("track", (event) => {
-          if (event.track?.kind !== "video") return;
-          const stream =
-            event.streams?.[0] || new MediaStream([event.track]);
+        stopWatchReceivers = watchRemoteVideoFromPeerConnection(pc, (stream) => {
           attachRemoteStream(stream);
         });
 
         const onIceStateChange = () => {
           if (sessionEndedRef.current) return;
-          if (pc.iceConnectionState === "failed") {
+          const ice = pc.iceConnectionState;
+          if (ice === "connected" || ice === "completed") {
+            setStatus((prev) => (prev === "ended" ? prev : "connecting"));
+            return;
+          }
+          if (ice === "disconnected") {
+            setErrorDetail("חיבור הרשת נותק זמנית — ממתין לשחזור…");
+            return;
+          }
+          if (ice === "failed") {
             setStatus("error");
             setErrorDetail(
-              "חיבור WebRTC נכשל — ייתכן שנדרש שרת TURN לרשתות שונות. פנו למנהל המערכת להגדרת VITE_TURN_URL"
+              isTurnConfigured()
+                ? "חיבור WebRTC נכשל — ודאו ש-VITE_TURN_* נכונים ושבוצע Redeploy ב-Vercel"
+                : "חיבור WebRTC נכשל — הגדירו TURN (VITE_TURN_URL) לרשתות שונות"
             );
           }
         };
         pc.addEventListener("iceconnectionstatechange", onIceStateChange);
+        pc.addEventListener("connectionstatechange", () => {
+          if (sessionEndedRef.current) return;
+          if (pc.connectionState === "failed") {
+            setStatus("error");
+            setErrorDetail("חיבור המדיה נכשל — לחצו «חזור לצפייה» או בקשו מהלקוח לשתף שוב");
+          }
+        });
       }
 
       call.on("close", () => {
+        stopWatchReceivers();
         handleStreamDisconnect();
       });
 
       call.on("error", () => {
         if (sessionEndedRef.current) return;
+        stopWatchReceivers();
         handleStreamDisconnect();
         if (sessionEndedRef.current) return;
         setErrorDetail("השיחה נותקה — לחצו «חזור לצפייה»");
       });
 
       call.answer();
-      setStatus("connected");
+      setStatus("connecting");
       setReconnecting(false);
     });
 
@@ -1101,7 +1149,7 @@ export default function ScreenShareAgentView({
             <p className="text-xs text-center leading-relaxed pointer-events-none">
               {!sessionRecord?.agentPeerReadyAt
                 ? "מפעיל חיבור — המתינו רגע לפני שליחת הקישור ללקוח"
-                : sessionRecord?.guestStreamConnectedAt || status === "connected"
+                : status === "connecting" || sessionRecord?.guestStreamConnectedAt
                   ? "הלקוח מחובר — ממתין להופעת התמונה. אם נשאר שחור: בקשו מהלקוח לשתף שוב או לחצו «חזור לצפייה»"
                   : !sessionRecord?.consentAt
                     ? "שלחו ללקוח את הקישור — הוא יאשר וישתף מסך"
@@ -1109,7 +1157,7 @@ export default function ScreenShareAgentView({
                       ? "מתחבר מחדש ללקוח…"
                       : "השאירו חלון זה פתוח — הווידאו יופיע כשהלקוח ישתף מסך"}
             </p>
-            {(sessionRecord?.guestStreamConnectedAt || status === "connected") &&
+            {(status === "connecting" || sessionRecord?.guestStreamConnectedAt) &&
               canReconnect && (
                 <Button
                   type="button"

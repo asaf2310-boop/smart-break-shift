@@ -258,8 +258,26 @@ export default function ScreenShareGuestPage() {
   const placeCall = useCallback(
     (peer, stream) => {
       if (!sessionId || !stream) return false;
+      const videoTrack = stream.getVideoTracks()[0];
+      if (!videoTrack || videoTrack.readyState !== "live") {
+        setError("שיתוף המסך לא פעיל — בחרו מסך לשיתוף שוב");
+        return false;
+      }
+      videoTrack.enabled = true;
       const call = peer.call(sessionId, stream);
       callRef.current = call;
+
+      const pc = call.peerConnection;
+      if (pc) {
+        pc.addEventListener("iceconnectionstatechange", () => {
+          if (!sharingRef.current) return;
+          if (pc.iceConnectionState === "failed") {
+            setError(
+              "חיבור הרשת נכשל — ודאו שהנציג פתח סשן צפייה וש-TURN מוגדר בשרת"
+            );
+          }
+        });
+      }
 
       call.on("close", () => {
         if (!sharingRef.current) return;
@@ -457,8 +475,13 @@ export default function ScreenShareGuestPage() {
       }
 
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
+        video: {
+          frameRate: { ideal: 15, max: 30 },
+        },
         audio: includeSystemAudio && systemAudioSupported,
+      });
+      stream.getVideoTracks().forEach((track) => {
+        track.enabled = true;
       });
       streamRef.current = stream;
 
