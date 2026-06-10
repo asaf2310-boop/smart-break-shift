@@ -32,6 +32,7 @@ import {
 } from "@/lib/screenShareStore";
 import { GUEST_LINK_ERROR, messageForGuestLinkError } from "@/lib/shortGuestLink";
 import { demoModeEnabled } from "@/api/demoClient";
+import { CLOUD_RECORDING_RETENTION_DAYS } from "@/lib/screenRecordingsSync";
 import { m3PageClass } from "@/lib/hypPage";
 import SessionFileShare from "@/components/remote/SessionFileShare";
 import { getPeerJsOptions } from "@/lib/webrtcConfig";
@@ -793,7 +794,10 @@ export default function ScreenShareGuestPage() {
               <ol className="text-sm text-slate-700 space-y-2 list-decimal list-inside bg-slate-50 rounded-xl p-3 border border-slate-100 leading-relaxed">
                 <li>השתמשו ב-Chrome או Edge (מומלץ)</li>
                 <li>סמנו «אני מאשר שיתוף מסך»</li>
-                <li>אם הנציג עשוי להקליט — סמנו גם «אישור הקלטה» (אופציונלי לצפייה בלבד)</li>
+                <li>
+                  אם הנציג עשוי להקליט — סמנו גם «אישור הקלטה»; ההקלטה נשמרת בשרת{" "}
+                  {CLOUD_RECORDING_RETENTION_DAYS} ימים (אופציונלי לצפייה בלבד)
+                </li>
                 <li>לחצו «התחל שיתוף מסך»</li>
                 <li>בחרו מסך, חלון או לשונית לשיתוף</li>
               </ol>
@@ -823,8 +827,9 @@ export default function ScreenShareGuestPage() {
                   className="mt-0.5"
                 />
                 <span className="text-sm font-medium text-slate-800 leading-relaxed">
-                  אני מאשר שהנציג יוכל להקליט את שיתוף המסך לצורך תיעוד הטיפול (דמו) — הקובץ
-                  נשמר אצל הנציג בלבד ולא נשלח אוטומטית לשרת
+                  אני מאשר שהנציג יוכל להקליט את שיתוף המסך לצורך תיעוד הטיפול.
+                  {demoModeEnabled ? " (דמו)" : ""} ההקלטה נשמרת בשרת למשך{" "}
+                  {CLOUD_RECORDING_RETENTION_DAYS} ימים ונמחקת אוטומטית לאחר מכן.
                 </span>
               </label>
 
