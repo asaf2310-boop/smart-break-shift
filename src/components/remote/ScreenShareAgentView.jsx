@@ -47,6 +47,7 @@ import {
   applyGuestPeerSync,
   endSession,
   getSession,
+  markGuestStreamConnected,
   listRecordingsForSession,
   markRecordingDownloaded,
   setRecordingActive,
@@ -54,6 +55,7 @@ import {
   subscribeScreenShare,
   updateRecordingMetadata,
 } from "@/lib/screenShareStore";
+import SessionFileShare from "@/components/remote/SessionFileShare";
 
 const MAX_RECORDING_SECONDS = 30 * 60;
 
@@ -453,17 +455,21 @@ export default function ScreenShareAgentView({
     video.play().catch(() => {});
   }, []);
 
-  const attachRemoteStream = useCallback((remoteStream) => {
-    remoteStreamRef.current = remoteStream;
-    setHasRemoteStream(true);
-    setTabHidden(false);
-    setErrorDetail("");
-    const video = videoRef.current;
-    if (video) {
-      video.srcObject = remoteStream;
-      video.play().catch(() => {});
-    }
-  }, []);
+  const attachRemoteStream = useCallback(
+    (remoteStream) => {
+      remoteStreamRef.current = remoteStream;
+      setHasRemoteStream(true);
+      setTabHidden(false);
+      setErrorDetail("");
+      if (sessionId) markGuestStreamConnected(sessionId);
+      const video = videoRef.current;
+      if (video) {
+        video.srcObject = remoteStream;
+        video.play().catch(() => {});
+      }
+    },
+    [sessionId]
+  );
 
   const clearRemoteVideo = useCallback(() => {
     setHasRemoteStream(false);
@@ -1381,6 +1387,13 @@ export default function ScreenShareAgentView({
           </DialogContent>
         </Dialog>
       )}
+
+      <SessionFileShare
+        sessionId={sessionId}
+        uploadedBy="agent"
+        uploaderLabel={agentName || sessionRecord?.agentName || ""}
+        disabled={status === "ended"}
+      />
 
       <p className="text-[11px] text-slate-500 leading-relaxed">
         צפייה בלבד — לחיצה על הווידאו לא מסיימת את הסשן. השתמשו ב«מסך מלא» להגדלה; אם עברתם

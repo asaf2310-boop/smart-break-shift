@@ -44,7 +44,10 @@ import {
   syncRustDeskSessionToCloud,
   syncScreenShareSessionToCloud,
 } from "@/lib/supportSessionsSync";
-import { listSessions as listScreenShareSessions } from "@/lib/screenShareStore";
+import {
+  listSessions as listScreenShareSessions,
+  REMOTE_SUPPORT_OPEN_EVENT,
+} from "@/lib/screenShareStore";
 
 const PANEL_DEMO_BANNER =
   "דמו — בחרו למטה: שלב א צפייה בדפדפן (ללא התקנה) או שליטה מלאה ב-RustDesk.";
@@ -106,8 +109,13 @@ export default function RemoteSupportPanel({
   }, [open, defaultCustomerEmail]);
 
   useEffect(() => {
-    if (!open) setScreenSessionActive(false);
-  }, [open]);
+    const onOpenRequest = () => {
+      setOpen(true);
+      setSupportMode("screen");
+    };
+    window.addEventListener(REMOTE_SUPPORT_OPEN_EVENT, onOpenRequest);
+    return () => window.removeEventListener(REMOTE_SUPPORT_OPEN_EVENT, onOpenRequest);
+  }, []);
 
   useEffect(() => {
     if (!open || !cloudSessionSyncEnabled()) return;
@@ -462,17 +470,11 @@ export default function RemoteSupportPanel({
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent
           className={`rounded-2xl gap-0 p-0 overflow-hidden ${
-            screenSessionActive && supportMode === "screen"
+            supportMode === "screen"
               ? "sm:max-w-3xl max-h-[95vh] overflow-y-auto"
               : "sm:max-w-lg"
           }`}
           dir="rtl"
-          onPointerDownOutside={(e) => {
-            if (screenSessionActive && supportMode === "screen") e.preventDefault();
-          }}
-          onInteractOutside={(e) => {
-            if (screenSessionActive && supportMode === "screen") e.preventDefault();
-          }}
         >
           <div className="bg-violet-50 border-b border-violet-200 px-4 py-2 flex items-start gap-2 text-violet-950 text-xs leading-relaxed">
             <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-violet-700" />

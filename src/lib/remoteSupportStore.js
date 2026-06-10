@@ -111,7 +111,9 @@ export function getSessionByToken(token) {
 export function getSessionByShortCode(shortCode) {
   const code = String(shortCode || "").trim();
   if (!code) return null;
-  return readSessions().find((s) => s.shortCode === code) || null;
+  const session = readSessions().find((s) => s.shortCode === code) || null;
+  if (!session || session.status === "ended") return null;
+  return session;
 }
 
 export function listSessions() {
@@ -189,6 +191,7 @@ export function endSession(id) {
     status: "ended",
     endedAt: now,
     password: null,
+    shortCode: null,
   });
 }
 

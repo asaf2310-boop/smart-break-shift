@@ -106,7 +106,33 @@ export function getSession(id) {
 export function getSessionByShortCode(shortCode) {
   const code = String(shortCode || "").trim();
   if (!code) return null;
-  return readSessions().find((s) => s.shortCode === code) || null;
+  const session = readSessions().find((s) => s.shortCode === code) || null;
+  if (!session || session.status === "ended") return null;
+  return session;
+}
+
+/** סשן שיתוף מסך פעיל של נציג (האחרון שנוצר) */
+export function getActiveScreenSessionForAgent(agentName) {
+  const name = String(agentName || getStoredAgentName() || "").trim();
+  if (!name) return null;
+  return (
+    listSessions().find(
+      (s) => s.status === "active" && String(s.agentName || "").trim() === name
+    ) || null
+  );
+}
+
+export const REMOTE_SUPPORT_OPEN_EVENT = "remote-support-open-request";
+
+/** הלקוח התחבר ומשתף מסך — להתראה גלובלית לנציג */
+export function markGuestStreamConnected(id) {
+  const session = getSession(id);
+  if (!session || session.status === "ended" || session.guestStreamConnectedAt) {
+    return session;
+  }
+  return updateSession(id, {
+    guestStreamConnectedAt: new Date().toISOString(),
+  });
 }
 
 /** כתובת ציבורית לקישורים במייל — VITE_APP_URL או origin; מ-localhost מעדיף env */
@@ -185,7 +211,6 @@ export function bootstrapGuestSessionFromUrl(sessionId, bootstrapParam) {
 
   const existing = getSession(sessionId);
   if (existing) {
-    if (existing.status === "ended") return existing;
     return existing;
   }
 
@@ -555,6 +580,7 @@ export function endSession(id, { endedReason = "agent_ended" } = {}) {
     endedAt: now,
     recordingActiveAt: null,
     endedReason: endedReason || null,
+    shortCode: null,
   });
 }
 
@@ -573,6 +599,7 @@ export function buildScreenShareGuestUrl(sessionOrId, origin) {
   }
 
   if (!session?.id) return "";
+  if (session.status === "ended") return "";
   if (!remoteSupportEnabled || !session.createdAt) {
     const base = (origin || getPublicAppOrigin()).replace(/\/$/, "");
     return `${base}/support/screen/${encodeURIComponent(session.id)}`;

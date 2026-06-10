@@ -32,6 +32,7 @@ import {
 import { GUEST_LINK_ERROR, messageForGuestLinkError } from "@/lib/shortGuestLink";
 import { demoModeEnabled } from "@/api/demoClient";
 import { m3PageClass } from "@/lib/hypPage";
+import SessionFileShare from "@/components/remote/SessionFileShare";
 
 const GUEST_INFO_BANNER = demoModeEnabled
   ? "דמו — שיתוף מסך בדפדפן (צפייה בלבד). מומלץ Chrome או Edge. לפרודקשן: PeerServer עצמי."
@@ -574,6 +575,11 @@ export default function ScreenShareGuestPage() {
             </div>
           ) : shared ? (
             <div className="text-center space-y-3">
+              <SessionFileShare
+                sessionId={sessionId}
+                uploadedBy="guest"
+                uploaderLabel="לקוח"
+              />
               <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" />
               <p className="font-semibold text-emerald-800">המסך משותף לנציג</p>
               {session.recordingConsentAt && session.recordingActiveAt && (
@@ -620,6 +626,11 @@ export default function ScreenShareGuestPage() {
             </div>
           ) : (
             <>
+              <SessionFileShare
+                sessionId={sessionId}
+                uploadedBy="guest"
+                uploaderLabel="לקוח"
+              />
               <ol className="text-sm text-slate-700 space-y-2 list-decimal list-inside bg-slate-50 rounded-xl p-3 border border-slate-100 leading-relaxed">
                 <li>השתמשו ב-Chrome או Edge (מומלץ)</li>
                 <li>סמנו «אני מאשר שיתוף מסך»</li>

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { createCallLog, createEmailLog, getCustomerById } from "@/lib/crmStore";
+import { useScreenShareSession } from "@/contexts/ScreenShareSessionContext";
 import {
   buildScreenShareGuestUrl,
   buildScreenShareMailtoUrl,
@@ -14,12 +15,13 @@ import {
   ensureGuestLinkReady,
   GUEST_LINK_CLOUD_PENDING_MESSAGE,
   endSession,
+  getActiveScreenSessionForAgent,
   getLastEmailLogForSession,
   getSession,
+  listSessionsForCustomer,
   sendScreenShareEmail,
   subscribeScreenShare,
 } from "@/lib/screenShareStore";
-import ScreenShareAgentView from "@/components/remote/ScreenShareAgentView";
 import EmailStatusBanner from "@/components/remote/EmailStatusBanner";
 import EmailDiagnosticButton from "@/components/remote/EmailDiagnosticButton";
 import SessionEmailStatus from "@/components/remote/SessionEmailStatus";
@@ -41,6 +43,7 @@ export default function ScreenSharePanel({
   onSessionActiveChange,
 }) {
   const { toast } = useToast();
+  const { openSessionView, backgroundSessionId } = useScreenShareSession();
   const [emailTo, setEmailTo] = useState("");
   const [session, setSession] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -59,6 +62,25 @@ export default function ScreenSharePanel({
   }, [defaultCustomerEmail]);
 
   useEffect(() => {
+    if (session?.id) return;
+    let active = null;
+    if (crmCustomerId) {
+      active = listSessionsForCustomer(crmCustomerId).find((s) => s.status === "active");
+    }
+    if (!active && agentName) {
+      active = getActiveScreenSessionForAgent(agentName);
+    }
+    if (active) setSession(active);
+  }, [crmCustomerId, agentName, session?.id]);
+
+  useEffect(() => {
+    if (backgroundSessionId && !session?.id) {
+      const linked = getSession(backgroundSessionId);
+      if (linked?.status === "active") setSession(linked);
+    }
+  }, [backgroundSessionId, session?.id]);
+
+  useEffect(() => {
     onSessionActiveChange?.(Boolean(session?.id && session?.status !== "ended"));
   }, [session?.id, session?.status, onSessionActiveChange]);
 
@@ -66,7 +88,11 @@ export default function ScreenSharePanel({
     if (!session?.id) return undefined;
     const refresh = () => {
       const latest = getSession(session.id);
-      if (latest) setSession(latest);
+      if (!latest || latest.status === "ended") {
+        setSession(null);
+      } else {
+        setSession(latest);
+      }
       setEmailLogRevision((n) => n + 1);
     };
     refresh();
@@ -341,7 +367,8 @@ export default function ScreenSharePanel({
 
       <p className="text-sm text-slate-700 leading-relaxed bg-slate-50 rounded-xl p-3 border border-slate-100">
         שלב א: הלקוח פותח קישור בדפדפן, מאשר ומשתף מסך — <strong>צפייה בלבד</strong>, ללא
-        התקנת תוכנה. הנציג חייב להשאיר חלון זה פתוח בזמן הצפייה.
+        התקנת תוכנה. לאחר שליחת הקישור ניתן לסגור חלון זה ולהמשיך לעבוד — תקבלו התראה כשהלקוח
+        יתחבר.
       </p>
 
       {!session ? (
@@ -457,11 +484,36 @@ export default function ScreenSharePanel({
             </a>
           )}
 
-          <ScreenShareAgentView
-            sessionId={session.id}
-            agentName={agentName}
-            onEnded={handleEndSession}
-          />
+          <div className="space-y-3 rounded-xl border border-teal-200 bg-teal-50/80 p-3">
+            {session.guestStreamConnectedAt ? (
+              <p className="text-sm font-medium text-teal-900">
+                הלקוח מחובר ומשתף מסך
+              </p>
+            ) : session.consentAt ? (
+              <p className="text-sm text-slate-700">הלקוח אישר — ממתין לשיתוף מסך</p>
+            ) : (
+              <p className="text-sm text-amber-800">ממתין שהלקוח יפתח את הקישור</p>
+            )}
+            <p className="text-xs text-slate-600 leading-relaxed">
+              הסשן פעיל ברקע. ניתן לנווט בין מסכי המערכת — תופיע התראה כשהלקוח מתחבר.
+            </p>
+            <Button
+              type="button"
+              onClick={() => openSessionView(session.id)}
+              className="w-full gap-2 bg-teal-600 hover:bg-teal-700"
+            >
+              <MonitorPlay className="w-4 h-4" />
+              פתח צפייה במסך הלקוח
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleEndSession}
+              className="w-full border-red-200 text-red-800 hover:bg-red-50"
+            >
+              סיים סשן ובטל קישור
+            </Button>
+          </div>
         </div>
       )}
     </div>

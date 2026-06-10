@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { BookOpen, CalendarClock, CalendarDays, Contact, Film, GraduationCap, Home, MessageCircle, Monitor, ShieldCheck } from "lucide-react";
+import { BarChart3, BookOpen, CalendarClock, CalendarDays, Contact, Film, GraduationCap, Home, MessageCircle, Monitor, ShieldCheck } from "lucide-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { customerChatEnabled, demoModeEnabled } from "@/api/demoClient";
 import { brandVisualEnabled } from "@/lib/brandShell";
@@ -14,6 +14,7 @@ export default function AppNav() {
   const isBreaks = location.pathname === "/breaks";
   const isShifts = location.pathname === "/shifts";
   const isTraining = location.pathname === "/training";
+  const isMetrics = location.pathname === "/metrics";
   const isCrm = location.pathname.startsWith("/crm");
   const isKnowledge = location.pathname.startsWith("/knowledge");
   const isRemoteSupport = location.pathname.startsWith("/remote-support");
@@ -65,6 +66,10 @@ export default function AppNav() {
             <GraduationCap className="w-4 h-4" />
             הדרכה
           </Link>
+          <Link to="/metrics" className={tabClass(isMetrics)}>
+            <BarChart3 className="w-4 h-4" />
+            מדדים
+          </Link>
           <Link to="/remote-support" className={tabClass(isRemoteSupport)}>
             <Monitor className="w-4 h-4" />
             השתלטות מרחוק
@@ -111,6 +116,13 @@ export default function AppNav() {
               >
                 <Film className="w-4 h-4" />
                 הקלטות
+              </Link>
+              <Link
+                to="/admin/metrics"
+                className={tabClass(location.pathname.startsWith("/admin/metrics"))}
+              >
+                <BarChart3 className="w-4 h-4" />
+                מדדים
               </Link>
               {demoModeEnabled && (
                 <Link to="/admin/knowledge" className={tabClass(location.pathname === "/admin/knowledge")}>

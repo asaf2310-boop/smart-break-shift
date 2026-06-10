@@ -1,5 +1,5 @@
 import React from "react";
-import { BookOpen, CalendarClock, CalendarDays, Contact, GraduationCap, MessageCircle, Monitor } from "lucide-react";
+import { BarChart3, BookOpen, CalendarClock, CalendarDays, Contact, GraduationCap, MessageCircle, Monitor } from "lucide-react";
 import { getAgentNamesList } from "@/constants/scheduling";
 import AgentLogin from "@/components/auth/AgentLogin";
 import HypHomeShell from "@/components/hyp/HypHomeShell";
@@ -30,6 +30,13 @@ const productionCards = [
     title: "הדרכה",
     desc: "לוח זמנים לקורס דיגיטל לנציגים חדשים",
     icon: GraduationCap,
+    iconTile: "m3-icon-tile",
+  },
+  {
+    to: "/metrics",
+    title: "מדדים",
+    desc: "ביצועים אישיים לפי דיווח המנהל",
+    icon: BarChart3,
     iconTile: "m3-icon-tile",
   },
   {

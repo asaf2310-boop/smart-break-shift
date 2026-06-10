@@ -48,6 +48,7 @@ export { generateShortCode, encodeGuestBootstrapPayload, GUEST_BOOTSTRAP_QUERY_K
 export function buildShortGuestUrl(session, { kind = "screen", origin } = {}) {
   const base = (origin || getPublicAppOrigin()).replace(/\/$/, "");
   if (!session?.id) return "";
+  if (session.status === "ended") return "";
   if (session.shortCode && cloudSessionSyncEnabled()) {
     return `${base}/j/${session.shortCode}`;
   }

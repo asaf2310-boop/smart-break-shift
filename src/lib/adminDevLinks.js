@@ -5,6 +5,7 @@ const ADMIN_DEV_ROUTES_CORE = [
   { path: "/admin/shifts", label: "משמרות (מנהל)" },
   { path: "/admin/users", label: "נציגים" },
   { path: "/admin/recordings", label: "הקלטות" },
+  { path: "/admin/metrics", label: "מדדים" },
 ];
 
 const ADMIN_DEV_ROUTES_DEMO_ONLY = [{ path: "/admin/knowledge", label: "ניהול ידע" }];

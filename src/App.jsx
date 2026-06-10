@@ -25,6 +25,7 @@ import { ChatPanelProvider } from '@/context/ChatPanelContext';
 import { TelephonyProvider } from '@/context/TelephonyContext';
 import { FloatingWidgetsLayerProvider } from '@/context/FloatingWidgetsLayerContext';
 import { ChatUnreadProvider } from '@/hooks/useChatUnread';
+import { ScreenShareSessionProvider } from '@/contexts/ScreenShareSessionContext';
 import ChatRoute from './pages/ChatRoute';
 import CustomerChatGuestPage from './pages/CustomerChatGuestPage';
 import AgentCustomerChatPage from './pages/AgentCustomerChatPage';
@@ -44,6 +45,8 @@ import DemoRecordingPlayPage from './pages/DemoRecordingPlayPage';
 import TrainingPage from './pages/TrainingPage';
 import AdminTraining from './pages/AdminTraining';
 import AdminRecordings from './pages/AdminRecordings';
+import AdminMetrics from './pages/AdminMetrics';
+import AgentMetricsPage from './pages/AgentMetricsPage';
 import RouteErrorBoundary from '@/components/RouteErrorBoundary';
 import { hasTopAppNav } from '@/lib/appNavPaths';
 import { brandVisualEnabled } from '@/lib/brandShell';
@@ -93,6 +96,7 @@ const AuthenticatedApp = () => {
         <Route path="/breaks" element={<BreakScheduler />} />
         <Route path="/shifts" element={<RouteErrorBoundary><ShiftScheduler /></RouteErrorBoundary>} />
         <Route path="/training" element={<TrainingPage />} />
+        <Route path="/metrics" element={<AgentMetricsPage />} />
         <Route path="/chat/guest" element={<CustomerChatGate><CustomerChatGuestPage /></CustomerChatGate>} />
         <Route path="/chat" element={<ChatRoute />} />
         <Route path="/customer-chat" element={<CustomerChatGate><AgentCustomerChatPage /></CustomerChatGate>} />
@@ -115,6 +119,7 @@ const AuthenticatedApp = () => {
         <Route path="/admin/users" element={<AdminGate><AdminUsers /></AdminGate>} />
         <Route path="/admin/training" element={<AdminGate><AdminTraining /></AdminGate>} />
         <Route path="/admin/recordings" element={<AdminGate><AdminRecordings /></AdminGate>} />
+        <Route path="/admin/metrics" element={<AdminGate><AdminMetrics /></AdminGate>} />
         <Route
           path="/admin/recordings/play"
           element={
@@ -144,7 +149,9 @@ function App() {
             <ChatPanelProvider>
               <TelephonyProvider>
                 <ChatUnreadProvider>
-                  <AuthenticatedApp />
+                  <ScreenShareSessionProvider>
+                    <AuthenticatedApp />
+                  </ScreenShareSessionProvider>
                 </ChatUnreadProvider>
               </TelephonyProvider>
             </ChatPanelProvider>
