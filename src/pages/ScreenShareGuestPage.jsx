@@ -563,15 +563,16 @@ export default function ScreenShareGuestPage() {
     return () => clearInterval(timer);
   }, [shared, sessionId, bootstrapKey]);
 
+  // ניקוי רק ביציאה מהדף — לא כש-shared משתנה (אחרת סיום אוטומטי מיד אחרי setShared(true))
   useEffect(() => {
     return () => {
-      if (!shared && !sharingRef.current) return;
+      if (!sharingRef.current && !streamRef.current) return;
       if (sessionId && !endNotifiedRef.current) {
         endInStore("client_closed");
       }
       stopPeerAndStream();
     };
-  }, [sessionId, shared, endInStore, stopPeerAndStream]);
+  }, [sessionId, endInStore, stopPeerAndStream]);
 
   useEffect(() => {
     if (!shared) return undefined;
