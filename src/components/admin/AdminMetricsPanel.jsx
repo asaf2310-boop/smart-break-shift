@@ -10,7 +10,11 @@ import {
   importMetricsDataset,
   loadLatestMetrics,
 } from "@/lib/agentMetricsApi";
-import { downloadMetricsTemplate, parseMetricsFile } from "@/lib/agentMetricsImport";
+import {
+  downloadMetricsTemplate,
+  getCurrentMonthSheetContext,
+  parseMetricsFile,
+} from "@/lib/agentMetricsImport";
 import { getMetricsRankingNote, rankMetricRows } from "@/lib/agentMetricsScoring";
 
 export default function AdminMetricsPanel() {
@@ -82,13 +86,17 @@ export default function AdminMetricsPanel() {
         return;
       }
       setPreview(parsed);
-      if (!periodLabel) {
+      if (parsed.periodLabel) {
+        setPeriodLabel(parsed.periodLabel);
+      } else if (!periodLabel) {
         const base = file.name.replace(/\.(xlsx|xls|csv)$/i, "");
         setPeriodLabel(base);
       }
       toast({
         title: "קובץ נטען",
-        description: "בדקו את התצוגה המקדימה ולחצו «שמור נתונים»",
+        description: parsed.sheetName
+          ? `גיליון «${parsed.sheetName}» · בדקו תצוגה מקדימה ולחצו «שמור נתונים»`
+          : "בדקו את התצוגה המקדימה ולחצו «שמור נתונים»",
       });
       if (parsed.errors?.length) {
         toast({
@@ -197,7 +205,13 @@ export default function AdminMetricsPanel() {
           </div>
           <p>שורה ראשונה = כותרות. חובה עמודת <strong>שם נציג</strong>.</p>
           <p className="text-xs">
-            מומלץ: <strong>שיחות ממוצע לשעה</strong> (50% מהדירוג) + שיחות · עמידה ביעד % · ציון שביעות רצון
+            קובץ עם מספר גיליונות: המערכת טוענת אוטומטית את גיליון{" "}
+            <strong>{getCurrentMonthSheetContext().hebrewMonth}</strong> (החודש הנוכחי).
+          </p>
+          <p className="text-xs">
+            מומלץ לציון משוקלל: <strong>שיחות ממוצע לשעה</strong> (50%) · <strong>תיעוד %</strong> (20%) ·{" "}
+            <strong>אי זמינות %</strong> (10%) · <strong>כמות טיפול במיילים</strong> (10%) ·{" "}
+            <strong>ממוצע משך שיחה (דק)</strong> (10%)
           </p>
           <p className="text-xs text-violet-800 font-medium">{rankingNote}</p>
         </div>
@@ -209,6 +223,7 @@ export default function AdminMetricsPanel() {
             <div>
               <h3 className="text-sm font-semibold text-slate-800">תצוגה מקדימה — טרם נשמר</h3>
               <p className="text-xs text-slate-600 mt-0.5">
+                {preview.sheetName && <span>גיליון: {preview.sheetName} · </span>}
                 {preview.rows.length} נציגים · ממוין מהטוב ביותר · {rankingNote}
               </p>
             </div>
@@ -231,6 +246,7 @@ export default function AdminMetricsPanel() {
             columns={preview.columns}
             rows={previewRows}
             showRank
+            showCompositeScore
           />
         </div>
       )}
@@ -264,7 +280,7 @@ export default function AdminMetricsPanel() {
               {" · "}
               {snapshot.rows.length} נציגים · {rankingNote}
             </p>
-            <AgentMetricsTable columns={snapshot.columns} rows={savedRows} showRank />
+            <AgentMetricsTable columns={snapshot.columns} rows={savedRows} showRank showCompositeScore />
           </>
         ) : (
           <AgentMetricsTable columns={[]} rows={[]} />

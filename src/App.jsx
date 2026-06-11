@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
-import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import AppNav from '@/components/layout/AppNav';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
@@ -47,7 +47,6 @@ import AdminTraining from './pages/AdminTraining';
 import AdminRecordings from './pages/AdminRecordings';
 import AdminMetrics from './pages/AdminMetrics';
 import AgentMetricsPage from './pages/AgentMetricsPage';
-import AgentMetricsRankingPage from './pages/AgentMetricsRankingPage';
 import RouteErrorBoundary from '@/components/RouteErrorBoundary';
 import { hasTopAppNav } from '@/lib/appNavPaths';
 import { brandVisualEnabled } from '@/lib/brandShell';
@@ -98,7 +97,7 @@ const AuthenticatedApp = () => {
         <Route path="/shifts" element={<RouteErrorBoundary><ShiftScheduler /></RouteErrorBoundary>} />
         <Route path="/training" element={<TrainingPage />} />
         <Route path="/metrics" element={<AgentMetricsPage />} />
-        <Route path="/metrics/ranking" element={<AgentMetricsRankingPage />} />
+        <Route path="/metrics/ranking" element={<Navigate to="/metrics" replace />} />
         <Route path="/chat/guest" element={<CustomerChatGate><CustomerChatGuestPage /></CustomerChatGate>} />
         <Route path="/chat" element={<ChatRoute />} />
         <Route path="/customer-chat" element={<CustomerChatGate><AgentCustomerChatPage /></CustomerChatGate>} />

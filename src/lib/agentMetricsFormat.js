@@ -20,8 +20,11 @@ export function isPercentColumn(columnName) {
   const norm = normalizeHeader(columnName);
   if (norm.includes("%")) return true;
   if (norm.includes("אחוז")) return true;
+  if (norm.includes("תיעוד")) return true;
+  if (norm.includes("אי זמינות") || norm.includes("לא זמין")) return true;
   if (norm.includes("עמידה ביעד") || norm.includes("יעד")) return true;
   if (norm.includes("percent") || norm.includes("pct")) return true;
+  if (norm.includes("unavail")) return true;
   return false;
 }
 

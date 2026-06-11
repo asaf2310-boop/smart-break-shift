@@ -2,7 +2,6 @@ import React from "react";
 import { motion } from "framer-motion";
 import { BarChart3, Loader2 } from "lucide-react";
 import AgentMetricsTable from "@/components/metrics/AgentMetricsTable";
-import MetricsSubNav from "@/components/metrics/MetricsSubNav";
 import BackendConfigBanner from "@/components/BackendConfigBanner";
 import HypPageLayout from "@/components/hyp/HypPageLayout";
 import { hypHeaderIconClass } from "@/lib/hypPage";
@@ -13,7 +12,7 @@ import { getStoredAgentName } from "@/constants/scheduling";
 export default function AgentMetricsPage() {
   const { displayName } = useAgentSession();
   const agentName = displayName || getStoredAgentName();
-  const { loading, snapshot, rankedRows } = useAgentMetricsSnapshot();
+  const { loading, snapshot, rankedRows, rankingNote } = useAgentMetricsSnapshot();
 
   const hasData = Boolean(snapshot?.upload && rankedRows.length);
 
@@ -47,8 +46,6 @@ export default function AgentMetricsPage() {
         className="m3-card p-4 sm:p-6 space-y-4"
         dir="rtl"
       >
-        <MetricsSubNav />
-
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-12 text-slate-500 text-sm">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -77,9 +74,12 @@ export default function AgentMetricsPage() {
                 )}
               </p>
             )}
+            <div className="rounded-xl border border-violet-200 bg-violet-50/80 px-4 py-3 text-xs text-violet-950 leading-relaxed">
+              <p className="font-semibold mb-1">חישוב ציון משוקלל</p>
+              <p>{rankingNote}</p>
+            </div>
             <p className="text-xs text-slate-500 leading-relaxed">
-              הנציג המוביל מסומן בצהוב. השורה שלך מסומנת בירוק. לציון המשוקלל — עברו ללשונית «ציון
-              משוקלל».
+              הנציג המוביל מסומן בצהוב. השורה שלך מסומנת בירוק. הציון המשוקלל מופיע בעמודה האחרונה.
             </p>
             <AgentMetricsTable
               columns={snapshot.columns}
@@ -87,6 +87,7 @@ export default function AgentMetricsPage() {
               highlightAgentName={agentName}
               showRank
               highlightLeader
+              showCompositeScore
             />
           </>
         )}

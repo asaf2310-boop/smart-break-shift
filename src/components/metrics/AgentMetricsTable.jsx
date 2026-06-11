@@ -20,7 +20,7 @@ export default function AgentMetricsTable({
   rows = [],
   highlightAgentName,
   showRank = false,
-  showCompositeScore = false,
+  showCompositeScore = true,
   highlightLeader = true,
   hideMetricColumns = false,
 }) {
@@ -44,14 +44,16 @@ export default function AgentMetricsTable({
               <th className="px-3 py-2.5 text-center font-semibold whitespace-nowrap w-12">#</th>
             )}
             <th className="px-3 py-2.5 text-right font-semibold whitespace-nowrap">{agentColumn}</th>
-            {showCompositeScore && (
-              <th className="px-3 py-2.5 text-right font-semibold whitespace-nowrap">ציון משוקלל</th>
-            )}
             {metricColumns.map((col) => (
               <th key={col} className="px-3 py-2.5 text-right font-semibold whitespace-nowrap">
                 {col}
               </th>
             ))}
+            {showCompositeScore && (
+              <th className="px-3 py-2.5 text-right font-semibold whitespace-nowrap bg-violet-100/80">
+                ציון משוקלל
+              </th>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -104,21 +106,21 @@ export default function AgentMetricsTable({
                     )}
                   </span>
                 </td>
-                {showCompositeScore && (
-                  <td
-                    className={cn(
-                      "px-3 py-2.5 font-semibold whitespace-nowrap",
-                      isLeader ? "text-amber-800" : "text-slate-700"
-                    )}
-                  >
-                    {formatCompositeScore(row._compositeScore)}
-                  </td>
-                )}
                 {metricColumns.map((col) => (
                   <td key={col} className="px-3 py-2.5 text-slate-700 whitespace-nowrap">
                     {formatMetricCell(row.metrics?.[col], col)}
                   </td>
                 ))}
+                {showCompositeScore && (
+                  <td
+                    className={cn(
+                      "px-3 py-2.5 font-bold whitespace-nowrap bg-violet-50/50",
+                      isLeader ? "text-amber-800" : "text-violet-800"
+                    )}
+                  >
+                    {formatCompositeScore(row._compositeScore)}
+                  </td>
+                )}
               </tr>
             );
           })}

@@ -1,8 +1,15 @@
 import {
   isDurationMinutesColumn,
   metricValueForScoring,
-  parseMetricNumber,
 } from "@/lib/agentMetricsFormat";
+
+const SCORE_WEIGHTS = {
+  callsPerHour: 0.5,
+  documentation: 0.2,
+  unavailability: 0.1,
+  emailHandling: 0.1,
+  avgDuration: 0.1,
+};
 
 const CALLS_PER_HOUR_HEADERS = new Set([
   "שיחות ממוצע לשעה",
@@ -12,6 +19,47 @@ const CALLS_PER_HOUR_HEADERS = new Set([
   "calls per hour",
   "cph",
   "avg calls per hour",
+]);
+
+const DOCUMENTATION_HEADERS = new Set([
+  "תיעוד",
+  "תיעוד %",
+  "אחוז תיעוד",
+  "איכות תיעוד",
+  "עמידה בתיעוד",
+  "documentation",
+  "doc rate",
+  "documentation rate",
+]);
+
+const UNAVAILABILITY_HEADERS = new Set([
+  "אי זמינות",
+  "אי זמינות %",
+  "אחוז אי זמינות",
+  "לא זמין",
+  "unavailability",
+  "unavailable",
+  "unavailable %",
+]);
+
+const EMAIL_HANDLING_HEADERS = new Set([
+  "כמות טיפול במיילים",
+  "טיפול במיילים",
+  "מיילים",
+  "כמות מיילים",
+  "מספר מיילים",
+  "email handling",
+  "emails handled",
+  "email count",
+]);
+
+const AVG_DURATION_HEADERS = new Set([
+  "ממוצע משך שיחה (דק)",
+  "ממוצע משך שיחה",
+  "משך שיחה ממוצע",
+  "avg handle time",
+  "aht",
+  "average handle time",
 ]);
 
 function normalizeHeader(value) {
@@ -31,6 +79,55 @@ export function findCallsPerHourColumn(columns = []) {
   return null;
 }
 
+export function findDocumentationColumn(columns = []) {
+  for (const col of columns) {
+    const norm = normalizeHeader(col);
+    if (DOCUMENTATION_HEADERS.has(norm)) return col;
+    if (norm.includes("תיעוד")) return col;
+    if (norm.includes("documentation") || norm.includes("doc rate")) return col;
+  }
+  return null;
+}
+
+export function findUnavailabilityColumn(columns = []) {
+  for (const col of columns) {
+    const norm = normalizeHeader(col);
+    if (UNAVAILABILITY_HEADERS.has(norm)) return col;
+    if (norm.includes("אי זמינות") || norm.includes("לא זמין")) return col;
+    if (norm.includes("unavail")) return col;
+  }
+  return null;
+}
+
+export function findEmailHandlingColumn(columns = []) {
+  for (const col of columns) {
+    const norm = normalizeHeader(col);
+    if (EMAIL_HANDLING_HEADERS.has(norm)) return col;
+    if (norm.includes("מייל") && (norm.includes("טיפול") || norm.includes("כמות") || norm.includes("מספר"))) {
+      return col;
+    }
+    if (norm.includes("email") && (norm.includes("handl") || norm.includes("count"))) return col;
+  }
+  return null;
+}
+
+export function findAvgCallDurationColumn(columns = []) {
+  for (const col of columns) {
+    const norm = normalizeHeader(col);
+    if (AVG_DURATION_HEADERS.has(norm)) return col;
+    if (
+      (norm.includes("משך") || norm.includes("aht") || norm.includes("handle")) &&
+      (norm.includes("שיחה") || norm.includes("call") || norm.includes("ממוצע") || norm.includes("avg"))
+    ) {
+      return col;
+    }
+  }
+  for (const col of columns) {
+    if (isDurationMinutesColumn(col)) return col;
+  }
+  return null;
+}
+
 function normalizeSeries(values, { higherIsBetter = true } = {}) {
   const nums = values.map((v) => (v === null ? null : v));
   const present = nums.filter((v) => v !== null);
@@ -45,8 +142,29 @@ function normalizeSeries(values, { higherIsBetter = true } = {}) {
   });
 }
 
+function buildScoreComponents(metricColumns = []) {
+  const callsCol = findCallsPerHourColumn(metricColumns);
+  const docCol = findDocumentationColumn(metricColumns);
+  const unavailCol = findUnavailabilityColumn(metricColumns);
+  const emailCol = findEmailHandlingColumn(metricColumns);
+  const durationCol = findAvgCallDurationColumn(metricColumns);
+
+  return [
+    { key: "callsPerHour", col: callsCol, weight: SCORE_WEIGHTS.callsPerHour, higherIsBetter: true },
+    { key: "documentation", col: docCol, weight: SCORE_WEIGHTS.documentation, higherIsBetter: true },
+    {
+      key: "unavailability",
+      col: unavailCol,
+      weight: SCORE_WEIGHTS.unavailability,
+      higherIsBetter: false,
+    },
+    { key: "emailHandling", col: emailCol, weight: SCORE_WEIGHTS.emailHandling, higherIsBetter: true },
+    { key: "avgDuration", col: durationCol, weight: SCORE_WEIGHTS.avgDuration, higherIsBetter: false },
+  ].filter((item) => item.col);
+}
+
 /**
- * דירוג נציגים: 50% שקלול לפי שיחות ממוצע לשעה, 50% ממוצע שאר המדדים המספריים.
+ * ציון משוקלל: 50% שיחות/שעה · 20% תיעוד · 10% אי זמינות · 10% מיילים · 10% ממוצע משך שיחה.
  * @param {Array<{ agent_name?: string, agentName?: string, metrics: Record<string, unknown>, id?: string }>} rows
  * @param {string[]} columns
  */
@@ -54,28 +172,22 @@ export function rankMetricRows(rows = [], columns = []) {
   if (!rows.length) return [];
 
   const metricColumns = columns.slice(1);
-  const callsCol = findCallsPerHourColumn(metricColumns);
-  const otherCols = metricColumns.filter((c) => c !== callsCol);
+  const components = buildScoreComponents(metricColumns);
+  const activeWeight = components.reduce((sum, item) => sum + item.weight, 0);
 
-  const callsValues = rows.map((r) => parseMetricNumber(r.metrics?.[callsCol]));
-  const callsNorm = normalizeSeries(callsValues, { higherIsBetter: true });
-
-  const otherNormByCol = otherCols.map((col) => {
-    const higherIsBetter = !isDurationMinutesColumn(col);
+  const normByComponent = components.map(({ col, higherIsBetter }) => {
     const vals = rows.map((r) => metricValueForScoring(r.metrics?.[col], col));
     return normalizeSeries(vals, { higherIsBetter });
   });
 
   const scored = rows.map((row, index) => {
-    let otherSum = 0;
-    let otherCount = 0;
-    otherNormByCol.forEach((series) => {
-      otherSum += series[index] ?? 0;
-      otherCount += 1;
-    });
-    const otherAvg = otherCount ? otherSum / otherCount : 0;
-    const callsScore = callsCol ? callsNorm[index] ?? 0 : 0;
-    const compositeScore = callsCol ? callsScore * 0.5 + otherAvg * 0.5 : otherAvg;
+    let compositeScore = 0;
+    if (activeWeight > 0) {
+      components.forEach((comp, compIndex) => {
+        const share = comp.weight / activeWeight;
+        compositeScore += share * (normByComponent[compIndex][index] ?? 0);
+      });
+    }
 
     return {
       ...row,
@@ -94,11 +206,42 @@ export function rankMetricRows(rows = [], columns = []) {
 }
 
 export function getMetricsRankingNote(columns = []) {
-  const callsCol = findCallsPerHourColumn(columns.slice(1));
-  if (callsCol) {
-    return `דירוג: 50% לפי «${callsCol}», 50% ממוצע שאר המדדים (גבוה יותר = טוב יותר).`;
+  const metricColumns = columns.slice(1);
+  const components = buildScoreComponents(metricColumns);
+  const parts = [];
+
+  if (components.find((c) => c.key === "callsPerHour")) {
+    parts.push("50% שיחות ממוצע לשעה");
   }
-  return "דירוג: ממוצע כל המדדים המספריים (מומלץ לכלול עמודת «שיחות ממוצע לשעה» לשקלול 50%).";
+  if (components.find((c) => c.key === "documentation")) {
+    parts.push("20% תיעוד");
+  }
+  if (components.find((c) => c.key === "unavailability")) {
+    parts.push("10% אי זמינות (פחות = טוב יותר)");
+  }
+  if (components.find((c) => c.key === "emailHandling")) {
+    parts.push("10% כמות טיפול במיילים");
+  }
+  if (components.find((c) => c.key === "avgDuration")) {
+    parts.push("10% ממוצע משך שיחה (קצר יותר = טוב יותר)");
+  }
+
+  if (!parts.length) {
+    return "ציון משוקלל: הוסיפו לקובץ עמודות שיחות ממוצע לשעה, תיעוד, אי זמינות, כמות טיפול במיילים וממוצע משך שיחה.";
+  }
+
+  const missing = [];
+  if (!components.find((c) => c.key === "callsPerHour")) missing.push("שיחות ממוצע לשעה (50%)");
+  if (!components.find((c) => c.key === "documentation")) missing.push("תיעוד (20%)");
+  if (!components.find((c) => c.key === "unavailability")) missing.push("אי זמינות (10%)");
+  if (!components.find((c) => c.key === "emailHandling")) missing.push("כמות טיפול במיילים (10%)");
+  if (!components.find((c) => c.key === "avgDuration")) missing.push("ממוצע משך שיחה (10%)");
+
+  let note = `ציון משוקלל: ${parts.join(" · ")}. הציון מוצג בסולם 0–100 (השוואה לשאר הנציגים באותה תקופה).`;
+  if (missing.length) {
+    note += ` חסר בקובץ: ${missing.join(", ")} — השקלול מחושב מחדש לפי העמודות שנמצאו.`;
+  }
+  return note;
 }
 
 /** ציון משוקלל 0–100 להצגה */
