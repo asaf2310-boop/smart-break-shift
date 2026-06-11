@@ -16,6 +16,12 @@ import { REAL_AGENT_NAMES } from "@/constants/scheduling";
 
 const PENDING_EMAIL_SUFFIX = "@pending.local";
 
+function notifyAgentUsersChanged() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("app-users-changed"));
+  }
+}
+
 export function isPlaceholderAgentEmail(email) {
   const normalized = normalizeEmail(email);
   return !normalized || normalized.endsWith(PENDING_EMAIL_SUFFIX);
@@ -148,6 +154,7 @@ export async function adminSetManagedAgentPassword(id, password, { forceSetup = 
 
   if (demoModeEnabled) {
     const u = setDemoUserPasswordByAdmin(id, plain, { forceSetup });
+    notifyAgentUsersChanged();
     return mapDemoRow(u);
   }
 
@@ -155,15 +162,18 @@ export async function adminSetManagedAgentPassword(id, password, { forceSetup = 
     password_plain: plain,
     needs_password_setup: Boolean(forceSetup),
   });
+  notifyAgentUsersChanged();
   return mapSupabaseRow(row);
 }
 
 export async function setManagedAgentBlocked(id, blocked) {
   if (demoModeEnabled) {
     const u = setDemoUserBlocked(id, blocked);
+    notifyAgentUsersChanged();
     return mapDemoRow(u);
   }
   const row = await dataClient.entities.Agent.update(id, { blocked: Boolean(blocked) });
+  notifyAgentUsersChanged();
   return mapSupabaseRow(row);
 }
 

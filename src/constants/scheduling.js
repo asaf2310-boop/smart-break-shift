@@ -45,22 +45,15 @@ export function getStoredAgentName() {
   if (typeof window === "undefined") return "";
 
   const session = getAgentSession();
-  if (session?.displayName) return session.displayName;
-
-  const storedName = localStorage.getItem("agent_name") || "";
-  if (!storedName) return "";
+  if (session?.displayName && session?.email && session?.userId) {
+    return session.displayName;
+  }
 
   if (isAdminSessionActive()) {
     clearAdminSession();
   }
 
-  const allowed = getAgentNamesList();
-  if (!allowed.includes(storedName)) {
-    localStorage.removeItem("agent_name");
-    return "";
-  }
-
-  return storedName;
+  return "";
 }
 
 export const SHORT_BREAK_SLOTS = [

@@ -4,6 +4,7 @@ import { dataClient } from "@/api/client";
 import {
   findDemoUserByEmail,
   findDemoUserByEmailAny,
+  listAllDemoAppUsers,
   setDemoUserPassword,
   verifyDemoUserPassword,
   requestDemoPasswordReset,
@@ -84,6 +85,105 @@ function sessionFromAgent(agent) {
 
 export function canAgentAuthenticate(agent) {
   return Boolean(agent?.active && !agent?.blocked);
+}
+
+/** כניסה ישנה לפי שם בלבד — ללא אימייל/מזהה משתמש */
+export function isLegacyAgentSession(session) {
+  if (!session?.displayName) return false;
+  return !session.email || !session.userId;
+}
+
+async function resolveSupabaseAgentById(id) {
+  if (!id || !supabaseConfigured || !dataClient.entities.Agent?.list) return null;
+  try {
+    const all = await dataClient.entities.Agent.list("-created_at", 500);
+    const match = (all || []).find((r) => r.id === id);
+    return mapSupabaseAgent(match);
+  } catch (err) {
+    console.warn("[agentAuth] resolveSupabaseAgentById failed", err);
+    return null;
+  }
+}
+
+async function resolveSupabaseAgentByDisplayName(displayName) {
+  const normalized = String(displayName || "").trim();
+  if (!normalized || !supabaseConfigured || !dataClient.entities.Agent?.list) return null;
+  try {
+    const all = await dataClient.entities.Agent.list("-created_at", 500);
+    const match = (all || []).find(
+      (r) => String(r.display_name || "").trim() === normalized
+    );
+    return mapSupabaseAgent(match);
+  } catch (err) {
+    console.warn("[agentAuth] resolveSupabaseAgentByDisplayName failed", err);
+    return null;
+  }
+}
+
+/** מחזיר רשומת נציג לפי הסשן הפעיל */
+export async function resolveAgentForSession(session) {
+  if (!session) return null;
+
+  if (session.email) {
+    return resolveAgentByEmail(session.email);
+  }
+
+  if (session.userId) {
+    if (demoModeEnabled) {
+      const user = listAllDemoAppUsers().find((u) => u.id === session.userId);
+      return mapDemoAgent(user);
+    }
+    return resolveSupabaseAgentById(session.userId);
+  }
+
+  if (session.displayName) {
+    if (demoModeEnabled) {
+      const user = listAllDemoAppUsers().find(
+        (u) => String(u.name || "").trim() === String(session.displayName).trim()
+      );
+      return mapDemoAgent(user);
+    }
+    return resolveSupabaseAgentByDisplayName(session.displayName);
+  }
+
+  return null;
+}
+
+/**
+ * בודק שהסשן תקף (סיסמה הוגדרה, לא חסום) — אחרת מנתק.
+ * מחזיר null אם אין סשן או שנותק.
+ */
+export async function validateAndRefreshAgentSession() {
+  const session = getAgentSession();
+  if (!session?.displayName) return null;
+
+  if (isLegacyAgentSession(session)) {
+    await agentLogout();
+    return null;
+  }
+
+  const agent = await resolveAgentForSession(session);
+  if (!canAgentAuthenticate(agent) || agent.needsPasswordSetup) {
+    await agentLogout();
+    return null;
+  }
+
+  const refreshed = sessionFromAgent({
+    ...agent,
+    authUserId: session.authUserId,
+  });
+
+  const modulesChanged =
+    JSON.stringify(refreshed.modules || []) !== JSON.stringify(session.modules || []);
+  const profileChanged =
+    refreshed.displayName !== session.displayName || refreshed.email !== session.email;
+
+  if (modulesChanged || profileChanged) {
+    setAgentSession(refreshed);
+    return refreshed;
+  }
+
+  return session;
 }
 
 export function getAgentSession() {
@@ -285,14 +385,14 @@ export async function restoreSupabaseAgentSession() {
 
   const email = authSession.user.email;
   const agent = await lookupAgentByEmail(email);
-  if (!agent) {
+  if (!agent || agent.needsPasswordSetup) {
     await supabase.auth.signOut();
     clearAgentSession();
     return null;
   }
 
   if (existing?.authUserId === authSession.user.id) {
-    return existing;
+    return validateAndRefreshAgentSession();
   }
 
   const session = sessionFromAgent({ ...agent, authUserId: authSession.user.id });
