@@ -3,6 +3,7 @@
 
 create table if not exists agent_metrics_uploads (
   id uuid primary key default gen_random_uuid(),
+  channel text not null default 'phone',
   period_label text not null default '',
   file_name text,
   column_headers jsonb not null default '[]'::jsonb,
@@ -11,6 +12,10 @@ create table if not exists agent_metrics_uploads (
 );
 
 alter table agent_metrics_uploads add column if not exists team_summary jsonb;
+alter table agent_metrics_uploads add column if not exists channel text not null default 'phone';
+
+create index if not exists idx_agent_metrics_uploads_channel_uploaded
+  on agent_metrics_uploads(channel, uploaded_at desc);
 
 create table if not exists agent_metrics_rows (
   id uuid primary key default gen_random_uuid(),

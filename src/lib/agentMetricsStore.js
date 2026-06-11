@@ -1,20 +1,41 @@
-const STORAGE_KEY = "smart-break-shift-agent-metrics-v1";
+const STORAGE_KEY = "smart-break-shift-agent-metrics-v2";
+const LEGACY_STORAGE_KEY = "smart-break-shift-agent-metrics-v1";
+
+function emptyChannelState() {
+  return { upload: null, rows: [] };
+}
 
 function readState() {
   if (typeof window === "undefined") {
-    return { upload: null, rows: [] };
+    return { phone: emptyChannelState(), whatsapp: emptyChannelState() };
   }
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { upload: null, rows: [] };
-    const parsed = JSON.parse(raw);
-    return {
-      upload: parsed.upload ?? null,
-      rows: Array.isArray(parsed.rows) ? parsed.rows : [],
-    };
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        phone: parsed.phone ?? emptyChannelState(),
+        whatsapp: parsed.whatsapp ?? emptyChannelState(),
+      };
+    }
+
+    const legacyRaw = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (legacyRaw) {
+      const legacy = JSON.parse(legacyRaw);
+      if (legacy.upload) {
+        return {
+          phone: {
+            upload: { ...legacy.upload, channel: "phone" },
+            rows: Array.isArray(legacy.rows) ? legacy.rows : [],
+          },
+          whatsapp: emptyChannelState(),
+        };
+      }
+    }
   } catch {
-    return { upload: null, rows: [] };
+    /* ignore */
   }
+  return { phone: emptyChannelState(), whatsapp: emptyChannelState() };
 }
 
 function writeState(state) {
@@ -22,30 +43,48 @@ function writeState(state) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-export function getLatestMetricsSnapshot() {
-  const { upload, rows } = readState();
-  if (!upload) return null;
+function snapshotFromChannel(entry) {
+  if (!entry?.upload) return null;
   return {
-    upload,
-    rows,
-    columns: upload.column_headers || [],
+    upload: entry.upload,
+    rows: entry.rows ?? [],
+    columns: Array.isArray(entry.upload.column_headers) ? entry.upload.column_headers : [],
   };
 }
 
-export function getMetricsForAgent(agentName) {
-  const snapshot = getLatestMetricsSnapshot();
+export function getLatestMetricsSnapshot(channel = "phone") {
+  const state = readState();
+  return snapshotFromChannel(state[channel] || emptyChannelState());
+}
+
+export function getAllMetricsSnapshots() {
+  const state = readState();
+  return {
+    phone: snapshotFromChannel(state.phone),
+    whatsapp: snapshotFromChannel(state.whatsapp),
+  };
+}
+
+export function getMetricsForAgent(agentName, channel = "phone") {
+  const snapshot = getLatestMetricsSnapshot(channel);
   if (!snapshot) return snapshot;
   const name = String(agentName || "").trim();
-  const rows = snapshot.rows.filter(
-    (r) => String(r.agent_name || "").trim() === name
-  );
+  const rows = snapshot.rows.filter((r) => String(r.agent_name || "").trim() === name);
   return { ...snapshot, rows };
 }
 
-export function replaceMetricsDataset({ periodLabel, fileName, columns, rows, teamSummary }) {
-  const uploadId = `demo_upload_${Date.now()}`;
+export function replaceMetricsDataset({
+  channel = "phone",
+  periodLabel,
+  fileName,
+  columns,
+  rows,
+  teamSummary,
+}) {
+  const uploadId = `demo_upload_${channel}_${Date.now()}`;
   const upload = {
     id: uploadId,
+    channel,
     period_label: periodLabel || "",
     file_name: fileName || "",
     column_headers: columns,
@@ -59,10 +98,19 @@ export function replaceMetricsDataset({ periodLabel, fileName, columns, rows, te
     metrics: row.metrics,
     created_at: new Date().toISOString(),
   }));
-  writeState({ upload, rows: storedRows });
-  return { upload, rowCount: storedRows.length };
+
+  const state = readState();
+  state[channel] = { upload, rows: storedRows };
+  writeState(state);
+  return { upload, rowCount: storedRows.length, channel };
 }
 
-export function clearMetricsDataset() {
-  writeState({ upload: null, rows: [] });
+export function clearMetricsDataset(channel) {
+  const state = readState();
+  if (channel) {
+    state[channel] = emptyChannelState();
+    writeState(state);
+    return;
+  }
+  writeState({ phone: emptyChannelState(), whatsapp: emptyChannelState() });
 }

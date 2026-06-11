@@ -248,13 +248,12 @@ export function isBreakRegistrationClosed(dateStr, now = new Date()) {
 }
 
 /** מקסימום ימים לסימון "לא זמין" במשמרת בוקר (08:00–16:00) בשבוע אילוצים */
-export const MAX_MORNING_UNAVAILABLE_DAYS_PER_WEEK = 2;
+export const MAX_MORNING_UNAVAILABLE_DAYS_PER_WEEK = 4;
 
 /** מקסימום משמרות בוקר (08:00–16:00) לנציג בשיבוץ אוטומטי לשבוע אחד */
 export const MAX_MORNING_AUTO_ASSIGNMENTS_PER_WEEK = 2;
 
-export const MORNING_UNAVAILABLE_LIMIT_MESSAGE =
-  "ניתן לסמן משמרת בוקר (08:00–16:00) כלא זמינה לכל היותר ב-2 ימים בשבוע.";
+export const MORNING_UNAVAILABLE_LIMIT_MESSAGE = `ניתן לסמן משמרת בוקר (08:00–16:00) כלא זמינה לכל היותר ב-${MAX_MORNING_UNAVAILABLE_DAYS_PER_WEEK} ימים בשבוע.`;
 
 export function countMorningUnavailableDays(records, dateFrom, dateTo) {
   return records.filter(

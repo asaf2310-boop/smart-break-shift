@@ -3,6 +3,7 @@ import { supabase, supabaseConfigured } from "@/api/supabase";
 import { agentOwnsBreakRegistration } from "@/lib/breakCapacity";
 import {
   clearMetricsDataset,
+  getAllMetricsSnapshots,
   getLatestMetricsSnapshot,
   getMetricsForAgent,
   replaceMetricsDataset,
@@ -16,15 +17,21 @@ function cloudEnabled() {
   return supabaseConfigured && !demoModeEnabled && Boolean(supabase);
 }
 
-async function fetchLatestFromCloud() {
-  const { data: uploads, error: uploadError } = await supabase
+async function fetchChannelFromCloud(channel) {
+  let query = supabase
     .from("agent_metrics_uploads")
     .select("*")
     .order("uploaded_at", { ascending: false })
     .limit(1);
 
+  if (channel) {
+    query = query.eq("channel", channel);
+  }
+
+  const { data: uploads, error: uploadError } = await query;
   if (uploadError) throw new Error(uploadError.message);
-  const upload = uploads?.[0];
+
+  const upload = (uploads || []).find((row) => (row.channel || "phone") === channel) || uploads?.[0];
   if (!upload) return null;
 
   const { data: rows, error: rowsError } = await supabase
@@ -42,21 +49,33 @@ async function fetchLatestFromCloud() {
   };
 }
 
-export async function loadLatestMetrics() {
-  if (!agentMetricsEnabled()) return null;
-  if (cloudEnabled()) {
-    try {
-      return await fetchLatestFromCloud();
-    } catch (err) {
-      console.warn("[agentMetricsApi] cloud load failed", err);
-      return getLatestMetricsSnapshot();
-    }
-  }
-  return getLatestMetricsSnapshot();
+async function fetchAllFromCloud() {
+  const phone = await fetchChannelFromCloud("phone");
+  const whatsapp = await fetchChannelFromCloud("whatsapp");
+  return { phone, whatsapp };
 }
 
-export async function loadMetricsForAgent(agentName) {
-  const snapshot = await loadLatestMetrics();
+export async function loadAllMetricsSnapshots() {
+  if (!agentMetricsEnabled()) return { phone: null, whatsapp: null };
+  if (cloudEnabled()) {
+    try {
+      return await fetchAllFromCloud();
+    } catch (err) {
+      console.warn("[agentMetricsApi] cloud load failed", err);
+      return getAllMetricsSnapshots();
+    }
+  }
+  return getAllMetricsSnapshots();
+}
+
+/** @deprecated השתמשו ב-loadAllMetricsSnapshots */
+export async function loadLatestMetrics(channel = "phone") {
+  const all = await loadAllMetricsSnapshots();
+  return all[channel] || all.phone;
+}
+
+export async function loadMetricsForAgent(agentName, channel = "phone") {
+  const snapshot = await loadLatestMetrics(channel);
   if (!snapshot) return null;
   const rows = snapshot.rows.filter((r) =>
     agentOwnsBreakRegistration({ agent_name: r.agent_name }, agentName)
@@ -65,6 +84,7 @@ export async function loadMetricsForAgent(agentName) {
 }
 
 export async function importMetricsDataset({
+  channel = "phone",
   periodLabel,
   fileName,
   columns,
@@ -74,14 +94,12 @@ export async function importMetricsDataset({
   if (!rows?.length) throw new Error("אין שורות לייבוא");
 
   if (cloudEnabled()) {
-    await supabase
-      .from("agent_metrics_uploads")
-      .delete()
-      .neq("id", "00000000-0000-0000-0000-000000000000");
+    await supabase.from("agent_metrics_uploads").delete().eq("channel", channel);
 
     const { data: uploadRows, error: uploadError } = await supabase
       .from("agent_metrics_uploads")
       .insert({
+        channel,
         period_label: periodLabel || "",
         file_name: fileName || "",
         column_headers: columns,
@@ -98,26 +116,24 @@ export async function importMetricsDataset({
       metrics: row.metrics,
     }));
 
-    const { error: rowsError } = await supabase
-      .from("agent_metrics_rows")
-      .insert(payload);
-
+    const { error: rowsError } = await supabase.from("agent_metrics_rows").insert(payload);
     if (rowsError) throw new Error(rowsError.message);
 
-    return { upload: uploadRows, rowCount: payload.length };
+    return { upload: uploadRows, rowCount: payload.length, channel };
   }
 
-  return replaceMetricsDataset({ periodLabel, fileName, columns, rows, teamSummary });
+  return replaceMetricsDataset({ channel, periodLabel, fileName, columns, rows, teamSummary });
 }
 
-export async function clearAllMetrics() {
+export async function clearAllMetrics(channel) {
   if (cloudEnabled()) {
-    const { error } = await supabase
-      .from("agent_metrics_uploads")
-      .delete()
-      .neq("id", "00000000-0000-0000-0000-000000000000");
+    let query = supabase.from("agent_metrics_uploads").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    if (channel) {
+      query = supabase.from("agent_metrics_uploads").delete().eq("channel", channel);
+    }
+    const { error } = await query;
     if (error) throw new Error(error.message);
     return;
   }
-  clearMetricsDataset();
+  clearMetricsDataset(channel);
 }

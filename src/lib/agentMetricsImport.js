@@ -228,6 +228,28 @@ export function parseMetricsSheetRows(sheetRows) {
   return { columns, rows: agentRows, teamSummary, errors, agentColumn: agentKey };
 }
 
+/** זיהוי ערוץ (טלפון / WhatsApp) לפי כותרות העמודות */
+export function detectMetricsChannel(columns = []) {
+  const metricColumns = columns.slice(1);
+  for (const col of metricColumns) {
+    const norm = normalizeHeader(col);
+    if ((norm.includes("ווטסאפ") || norm.includes("whatsapp")) && norm.includes("שעה")) {
+      return "whatsapp";
+    }
+  }
+  const hasWhatsapp = metricColumns.some((col) => {
+    const norm = normalizeHeader(col);
+    return norm.includes("ווטסאפ") || norm.includes("whatsapp");
+  });
+  const hasPhoneCalls = metricColumns.some((col) => {
+    const norm = normalizeHeader(col);
+    if (norm.includes("ווטסאפ") || norm.includes("whatsapp")) return false;
+    return norm.includes("שיחות") && norm.includes("שעה");
+  });
+  if (hasWhatsapp && !hasPhoneCalls) return "whatsapp";
+  return "phone";
+}
+
 /**
  * @param {File} file
  * @param {{ referenceDate?: Date }} [options]
@@ -248,7 +270,7 @@ export async function parseMetricsFile(file, options = {}) {
     sheetName = availableSheets[0] || null;
     const sheet = sheetName ? workbook.Sheets[sheetName] : null;
     sheetRows = sheet
-      ? XLSX.utils.sheet_to_json(sheet, { defval: "", raw: true, cellDates: true })
+      ? XLSX.utils.sheet_to_json(sheet, { defval: "", raw: false, cellDates: true })
       : [];
   } else {
     const buffer = await file.arrayBuffer();
@@ -271,36 +293,50 @@ export async function parseMetricsFile(file, options = {}) {
     }
 
     const sheet = workbook.Sheets[sheetName];
-    sheetRows = XLSX.utils.sheet_to_json(sheet, { defval: "", raw: true, cellDates: true });
+    sheetRows = XLSX.utils.sheet_to_json(sheet, { defval: "", raw: false, cellDates: true });
   }
 
   const parsed = parseMetricsSheetRows(sheetRows);
+  const channel = detectMetricsChannel(parsed.columns);
   return {
     ...parsed,
+    channel,
     sheetName,
     periodLabel: periodLabelFromSheet(sheetName, referenceDate),
     availableSheets,
   };
 }
 
-export function downloadMetricsTemplate() {
+export function downloadMetricsTemplate(channel = "phone") {
+  const ctx = getCurrentMonthSheetContext();
+  const wb = XLSX.utils.book_new();
+
+  if (channel === "whatsapp") {
+    const headers = [
+      "שם נציג",
+      "ממוצע שיחות WhatsApp לשעה",
+      "כמות טיפול במיילים",
+      "ממוצע זמן טיפול",
+      "אחוז אי זמינות",
+    ];
+    const sample = ["דנה לוי", 12.4, 58, "4:35", "18%"];
+    const teamSample = ["ממוצע צוות", 10.8, 45, "5:10", "21%"];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([headers, sample, teamSample]), ctx.hebrewMonth);
+    XLSX.writeFile(wb, "template-agent-metrics-whatsapp.xlsx");
+    return;
+  }
+
   const headers = [
     "שם נציג",
-    "שיחות ממוצע לשעה",
-    "זמן התחברות (דק)",
-    "תיעוד %",
-    "אי זמינות %",
+    "ממוצע שיחות לשעה",
+    "זמן התחברות",
+    "אחוז תיעוד",
     "כמות טיפול במיילים",
-    "ממוצע משך שיחה (דק)",
-    "שיחות",
-    "עמידה ביעד %",
-    "ציון שביעות רצון",
+    "ממוצע משך שיחה",
+    "אחוז אי זמינות",
   ];
-  const sample = ["אוראל כליפה", 8.5, 7.2, 0.94, 0.03, 42, 4.5, 120, 0.92, 4.8];
-  const teamSample = ["ממוצע צוות", 7.8, 6.5, 0.91, 0.04, 38, 4.8, 110, 0.9, 4.6];
-  const ctx = getCurrentMonthSheetContext();
-  const ws = XLSX.utils.aoa_to_sheet([headers, sample, teamSample]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, ctx.hebrewMonth);
-  XLSX.writeFile(wb, "template-agent-metrics.xlsx");
+  const sample = ["אוראל כליפה", 8.5, "08:22:41", "88%", 42, "6:39", "21%"];
+  const teamSample = ["ממוצע צוות", 7.8, "07:55:00", "85%", 38, "7:05", "22%"];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([headers, sample, teamSample]), ctx.hebrewMonth);
+  XLSX.writeFile(wb, "template-agent-metrics-phone.xlsx");
 }

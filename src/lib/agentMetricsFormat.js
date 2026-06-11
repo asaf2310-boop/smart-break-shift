@@ -62,27 +62,58 @@ export function isConnectionTimeColumn(columnName) {
 
 export function isAvgCallDurationColumn(columnName) {
   if (isConnectionTimeColumn(columnName)) return false;
+  if (isAvgHandleTimeColumn(columnName)) return false;
   const norm = normalizeHeader(columnName);
   if (norm.includes("משך שיחה") || norm.includes("ממוצע משך")) return true;
-  if (norm.includes("aht") || norm.includes("handle time")) return true;
+  if (norm.includes("aht")) return true;
+  if (norm.includes("handle time") && norm.includes("call")) return true;
   if (norm.includes("דק") && norm.includes("שיחה")) return true;
   return false;
 }
 
-export function isDurationMinutesColumn(columnName) {
-  return isConnectionTimeColumn(columnName) || isAvgCallDurationColumn(columnName);
+/** ממוצע זמן טיפול — נציגי WhatsApp/טיקטים */
+export function isAvgHandleTimeColumn(columnName) {
+  if (isConnectionTimeColumn(columnName)) return false;
+  const norm = normalizeHeader(columnName);
+  if (norm.includes("זמן טיפול") && !norm.includes("שיחה")) return true;
+  if (norm.includes("treatment time")) return true;
+  if (norm.includes("handle time") && !norm.includes("call") && !norm.includes("שיחה")) return true;
+  return false;
 }
 
-/** חילוץ שעות/דקות/שניות מ-Date, מחרוזת Excel או מספר */
-export function extractTimeParts(value, columnName = "") {
-  if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return {
-      hours: value.getHours(),
-      minutes: value.getMinutes(),
-      seconds: value.getSeconds(),
-    };
-  }
+export function isDurationMinutesColumn(columnName) {
+  return (
+    isConnectionTimeColumn(columnName) ||
+    isAvgCallDurationColumn(columnName) ||
+    isAvgHandleTimeColumn(columnName)
+  );
+}
 
+/** עמודה שמוגדרת בדקות (למשל «זמן התחברות (דק)») */
+export function isMinutesBasedColumn(columnName) {
+  const norm = normalizeHeader(columnName);
+  if (norm.includes("(דק)") || norm.includes("בדקות")) return true;
+  if (norm.includes("דק") && !norm.includes("שיחה") && !norm.includes("שניות")) return true;
+  return false;
+}
+
+function partsFromTotalSeconds(totalSeconds) {
+  const safe = Math.max(0, Math.round(totalSeconds));
+  return {
+    hours: Math.floor(safe / 3600),
+    minutes: Math.floor((safe % 3600) / 60),
+    seconds: safe % 60,
+  };
+}
+
+/** Excel duration serial → שניות (תומך גם ב-[h]:mm:ss מעל 24 שעות) */
+export function excelSerialToTotalSeconds(serial) {
+  if (typeof serial !== "number" || !Number.isFinite(serial) || serial <= 0) return null;
+  return Math.round(serial * 86400);
+}
+
+/** מחרוזת תצוגה מ-Excel כמו 8:22:41 או 28:15:30 */
+export function parseTimeDisplayString(value, columnName = "") {
   const str = String(value ?? "").trim();
   if (!str) return null;
 
@@ -97,7 +128,7 @@ export function extractTimeParts(value, columnName = "") {
     };
   }
 
-  const hms = str.match(/^(\d{1,3}):(\d{1,2}):(\d{1,2})$/);
+  const hms = str.match(/^(\d{1,4}):(\d{1,2}):(\d{1,2})$/);
   if (hms) {
     return {
       hours: Number.parseInt(hms[1], 10),
@@ -106,37 +137,82 @@ export function extractTimeParts(value, columnName = "") {
     };
   }
 
-  const ms = str.match(/^(\d{1,3}):(\d{1,2})$/);
-  if (ms) {
-    return {
-      hours: 0,
-      minutes: Number.parseInt(ms[1], 10),
-      seconds: Number.parseInt(ms[2], 10),
-    };
+  if (
+    (isAvgCallDurationColumn(columnName) || isAvgHandleTimeColumn(columnName)) &&
+    !isConnectionTimeColumn(columnName)
+  ) {
+    const ms = str.match(/^(\d{1,4}):(\d{1,2})$/);
+    if (ms) {
+      return {
+        hours: 0,
+        minutes: Number.parseInt(ms[1], 10),
+        seconds: Number.parseInt(ms[2], 10),
+      };
+    }
   }
+
+  return null;
+}
+
+/** חילוץ שעות/דקות/שניות מ-Date, מחרוזת Excel או מספר */
+export function extractTimeParts(value, columnName = "") {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    if (value.getFullYear() <= 1900) {
+      return {
+        hours: value.getHours(),
+        minutes: value.getMinutes(),
+        seconds: value.getSeconds(),
+      };
+    }
+    const total = excelSerialToTotalSeconds(
+      (value.getHours() * 3600 + value.getMinutes() * 60 + value.getSeconds()) / 86400
+    );
+    return partsFromTotalSeconds(total ?? 0);
+  }
+
+  const str = String(value ?? "").trim();
+  if (!str) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}T/.test(str)) {
+    const parsed = new Date(str);
+    if (!Number.isNaN(parsed.getTime())) {
+      return {
+        hours: parsed.getHours(),
+        minutes: parsed.getMinutes(),
+        seconds: parsed.getSeconds(),
+      };
+    }
+  }
+
+  const fromDisplay = parseTimeDisplayString(str, columnName);
+  if (fromDisplay) return fromDisplay;
 
   const n = parseMetricNumber(value);
   if (n === null) return null;
 
-  let totalSeconds = 0;
+  let totalSeconds = null;
+
   if (n > 0 && n < 1) {
-    totalSeconds = Math.round(n * 24 * 60 * 60);
+    totalSeconds = excelSerialToTotalSeconds(n);
+  } else if (isMinutesBasedColumn(columnName)) {
+    totalSeconds = Math.round(n * 60);
   } else if (
-    (isConnectionTimeColumn(columnName) || isAvgCallDurationColumn(columnName)) &&
+    isDurationMinutesColumn(columnName) &&
     n >= 60 &&
-    n <= 7200 &&
+    n <= 86400 &&
     Math.abs(n - Math.round(n)) < 0.001
   ) {
     totalSeconds = Math.round(n);
-  } else {
+  } else if (isConnectionTimeColumn(columnName) && n >= 1 && n < 48) {
+    totalSeconds = Math.round(n * 3600);
+  } else if (isAvgCallDurationColumn(columnName) && n >= 1 && n < 180) {
+    totalSeconds = Math.round(n * 60);
+  } else if (isDurationMinutesColumn(columnName)) {
     totalSeconds = Math.round(n * 60);
   }
 
-  return {
-    hours: Math.floor(totalSeconds / 3600),
-    minutes: Math.floor((totalSeconds % 3600) / 60),
-    seconds: totalSeconds % 60,
-  };
+  if (totalSeconds === null) return null;
+  return partsFromTotalSeconds(totalSeconds);
 }
 
 /** זמן התחברות — HH:MM:SS */
@@ -169,16 +245,24 @@ export function serializeMetricValue(value, columnName) {
   if (isConnectionTimeColumn(columnName)) {
     return formatConnectionTime(value, columnName);
   }
-  if (isAvgCallDurationColumn(columnName)) {
+  if (isAvgCallDurationColumn(columnName) || isAvgHandleTimeColumn(columnName)) {
     return formatCallDuration(value, columnName);
   }
   if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (value instanceof Date) return formatConnectionTime(value, columnName);
+  if (value instanceof Date) {
+    if (isConnectionTimeColumn(columnName)) return formatConnectionTime(value, columnName);
+    if (isAvgCallDurationColumn(columnName) || isAvgHandleTimeColumn(columnName)) {
+      return formatCallDuration(value, columnName);
+    }
+    return formatConnectionTime(value, columnName);
+  }
 
   const str = String(value).trim();
   if (str.includes("GMT") && str.includes("Standard Time")) {
     if (isConnectionTimeColumn(columnName)) return formatConnectionTime(str, columnName);
-    if (isAvgCallDurationColumn(columnName)) return formatCallDuration(str, columnName);
+    if (isAvgCallDurationColumn(columnName) || isAvgHandleTimeColumn(columnName)) {
+      return formatCallDuration(str, columnName);
+    }
   }
   return str;
 }
@@ -223,7 +307,7 @@ export function formatMetricCell(value, columnName) {
   if (isConnectionTimeColumn(columnName)) {
     return formatConnectionTime(value, columnName);
   }
-  if (isAvgCallDurationColumn(columnName)) {
+  if (isAvgCallDurationColumn(columnName) || isAvgHandleTimeColumn(columnName)) {
     return formatCallDuration(value, columnName);
   }
 
@@ -233,7 +317,12 @@ export function formatMetricCell(value, columnName) {
   }
 
   const str = String(value).trim();
-  if (str.includes("GMT") && (isConnectionTimeColumn(columnName) || isAvgCallDurationColumn(columnName))) {
+  if (
+    str.includes("GMT") &&
+    (isConnectionTimeColumn(columnName) ||
+      isAvgCallDurationColumn(columnName) ||
+      isAvgHandleTimeColumn(columnName))
+  ) {
     return isConnectionTimeColumn(columnName)
       ? formatConnectionTime(str, columnName)
       : formatCallDuration(str, columnName);
