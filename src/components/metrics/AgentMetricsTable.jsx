@@ -1,7 +1,7 @@
 import React from "react";
 import { Crown } from "lucide-react";
 import { filterMetricsColumns, formatMetricCell } from "@/lib/agentMetricsFormat";
-import { formatCompositeScore } from "@/lib/agentMetricsScoring";
+import { formatCompositeScore, getChannelLabel } from "@/lib/agentMetricsScoring";
 import { cn } from "@/lib/utils";
 
 /**
@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
  *   showCompositeScore?: boolean,
  *   highlightLeader?: boolean,
  *   hideMetricColumns?: boolean,
+ *   showChannel?: boolean,
  * }} props
  */
 export default function AgentMetricsTable({
@@ -25,12 +26,17 @@ export default function AgentMetricsTable({
   showCompositeScore = true,
   highlightLeader = true,
   hideMetricColumns = false,
+  showChannel = false,
 }) {
   const displayColumns = filterMetricsColumns(columns);
   const agentColumn = displayColumns[0] || "שם נציג";
   const metricColumns = hideMetricColumns ? [] : displayColumns.slice(1);
   const colCount =
-    metricColumns.length + 1 + (showRank ? 1 : 0) + (showCompositeScore ? 1 : 0);
+    metricColumns.length +
+    1 +
+    (showRank ? 1 : 0) +
+    (showCompositeScore ? 1 : 0) +
+    (showChannel ? 1 : 0);
 
   if (!rows.length && !teamSummary) {
     return (
@@ -45,7 +51,8 @@ export default function AgentMetricsTable({
       <table className="w-full table-fixed text-[11px] sm:text-xs" dir="rtl">
         <colgroup>
           {showRank && <col style={{ width: "2.25rem" }} />}
-          <col style={{ width: showRank ? "14%" : "16%" }} />
+          <col style={{ width: showRank ? "12%" : "14%" }} />
+          {showChannel && <col style={{ width: "4.5rem" }} />}
           {metricColumns.map((col) => (
             <col key={col} />
           ))}
@@ -59,6 +66,9 @@ export default function AgentMetricsTable({
             <th className="px-1.5 py-2 text-right font-semibold leading-tight break-words">
               {agentColumn}
             </th>
+            {showChannel && (
+              <th className="px-1 py-2 text-right font-semibold leading-tight">ערוץ</th>
+            )}
             {metricColumns.map((col) => (
               <th
                 key={col}
@@ -125,6 +135,11 @@ export default function AgentMetricsTable({
                     )}
                   </span>
                 </td>
+                {showChannel && (
+                  <td className="px-1 py-1.5 text-slate-600 text-center text-[10px] font-medium">
+                    {getChannelLabel(row._channel)}
+                  </td>
+                )}
                 {metricColumns.map((col) => (
                   <td
                     key={col}
@@ -154,6 +169,7 @@ export default function AgentMetricsTable({
               <td className="px-1.5 py-2 break-words leading-snug">
                 {teamSummary.label || "ממוצע צוות"}
               </td>
+              {showChannel && <td className="px-1 py-2" />}
               {metricColumns.map((col) => (
                 <td
                   key={col}

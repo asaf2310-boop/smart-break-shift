@@ -1,19 +1,18 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { BarChart3, Loader2 } from "lucide-react";
-import MetricsChannelSection from "@/components/metrics/MetricsChannelSection";
+import AgentMetricsTable from "@/components/metrics/AgentMetricsTable";
 import BackendConfigBanner from "@/components/BackendConfigBanner";
 import HypPageLayout from "@/components/hyp/HypPageLayout";
 import { hypHeaderIconClass } from "@/lib/hypPage";
 import { useAgentMetricsSnapshots } from "@/hooks/useAgentMetricsSnapshot";
-import { METRICS_CHANNEL } from "@/lib/agentMetricsScoring";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { getStoredAgentName } from "@/constants/scheduling";
 
 export default function AgentMetricsPage() {
   const { displayName } = useAgentSession();
   const agentName = displayName || getStoredAgentName();
-  const { loading, phone, whatsapp, hasAnyData } = useAgentMetricsSnapshots();
+  const { loading, unified, hasAnyData } = useAgentMetricsSnapshots();
 
   return (
     <HypPageLayout variant="scheduling" contentClassName="max-w-[min(100%,80rem)] px-3 sm:px-4 py-8">
@@ -35,14 +34,14 @@ export default function AgentMetricsPage() {
         </div>
         <p className="text-sm text-slate-500">
           {agentName ? `מחובר כ־${agentName}` : "יש להתחבר כנציג"}
-          {hasAnyData && " · דירוג חודשי לפי ציון משוקלל"}
+          {hasAnyData && " · דירוג חודשי מאוחד (טלפון + WhatsApp)"}
         </p>
       </motion.div>
 
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        className="m3-card p-4 sm:p-6 space-y-6"
+        className="m3-card p-4 sm:p-6 space-y-4"
         dir="rtl"
       >
         {loading ? (
@@ -58,21 +57,26 @@ export default function AgentMetricsPage() {
           </div>
         ) : (
           <>
+            {unified.periodLabel && (
+              <p className="text-sm text-slate-600">
+                תקופת דיווח: <strong>{unified.periodLabel}</strong>
+              </p>
+            )}
+            <div className="rounded-xl border border-violet-200 bg-violet-50/80 px-4 py-3 text-xs text-violet-950 leading-relaxed">
+              <p className="font-semibold mb-1">חישוב ציון משוקלל</p>
+              <p>{unified.rankingNote}</p>
+            </div>
             <p className="text-xs text-slate-500 leading-relaxed">
-              כל מדד מושווה לנציג הטוב ביותר באותו חודש (מקסימום 100 נקודות למדד). הציון הסופי הוא
-              סכום משוקלל מתוך 100. הנציג המוביל מסומן בצהוב; השורה שלך בירוק.
+              טבלה אחת לכל הנציגים. הנציג המוביל מסומן בצהוב; השורה שלך בירוק.
             </p>
-
-            <MetricsChannelSection
-              channel={METRICS_CHANNEL.phone}
-              view={phone}
+            <AgentMetricsTable
+              columns={unified.displayColumns}
+              rows={unified.rankedRows}
               highlightAgentName={agentName}
-            />
-
-            <MetricsChannelSection
-              channel={METRICS_CHANNEL.whatsapp}
-              view={whatsapp}
-              highlightAgentName={agentName}
+              showRank
+              showChannel
+              showCompositeScore
+              highlightLeader
             />
           </>
         )}

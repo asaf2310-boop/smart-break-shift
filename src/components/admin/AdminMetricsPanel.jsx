@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import AgentMetricsTable from "@/components/metrics/AgentMetricsTable";
-import MetricsChannelSection from "@/components/metrics/MetricsChannelSection";
+import MetricsPointSettingsPanel from "@/components/admin/MetricsPointSettingsPanel";
 import {
   clearAllMetrics,
   importMetricsDataset,
@@ -17,14 +17,19 @@ import {
   parseMetricsFile,
 } from "@/lib/agentMetricsImport";
 import { filterMetricsColumns } from "@/lib/agentMetricsFormat";
+import { isTeamAverageLabel } from "@/lib/agentMetricsImport";
+import { loadMetricsPointSettings } from "@/lib/agentMetricsPointSettings";
 import {
   getChannelLabel,
   getMetricsRankingNote,
+  getUnifiedRankingNote,
+  mergeDisplayColumns,
   METRICS_CHANNEL,
   rankMetricRows,
+  rankUnifiedMetricRows,
 } from "@/lib/agentMetricsScoring";
 
-function buildRankedPreview(preview) {
+function buildRankedPreview(preview, pointSettings) {
   if (!preview?.rows?.length) return [];
   const columns = filterMetricsColumns(preview.columns || []);
   return rankMetricRows(
@@ -34,14 +39,29 @@ function buildRankedPreview(preview) {
       id: r.agentName,
     })),
     columns,
-    preview.channel
+    preview.channel,
+    pointSettings
   );
 }
 
-function buildRankedSaved(snapshot, channel) {
-  if (!snapshot?.rows?.length) return [];
-  const columns = filterMetricsColumns(snapshot.columns || []);
-  return rankMetricRows(snapshot.rows, columns, channel);
+function buildUnifiedSaved(snapshots, pointSettings) {
+  const phoneColumns = filterMetricsColumns(snapshots.phone?.columns || []);
+  const whatsappColumns = filterMetricsColumns(snapshots.whatsapp?.columns || []);
+  const phoneAgents = (snapshots.phone?.rows || []).filter((r) => !isTeamAverageLabel(r.agent_name));
+  const waAgents = (snapshots.whatsapp?.rows || []).filter((r) => !isTeamAverageLabel(r.agent_name));
+
+  return {
+    displayColumns: mergeDisplayColumns(phoneColumns, whatsappColumns),
+    rankedRows: rankUnifiedMetricRows({
+      phoneRows: phoneAgents,
+      phoneColumns,
+      whatsappRows: waAgents,
+      whatsappColumns,
+      pointSettings,
+    }),
+    rankingNote: getUnifiedRankingNote(pointSettings),
+    hasData: Boolean(phoneAgents.length || waAgents.length),
+  };
 }
 
 export default function AdminMetricsPanel() {
@@ -52,12 +72,17 @@ export default function AdminMetricsPanel() {
   const [periodLabel, setPeriodLabel] = useState("");
   const [preview, setPreview] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [pointSettings, setPointSettings] = useState(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await loadAllMetricsSnapshots();
+      const [data, settings] = await Promise.all([
+        loadAllMetricsSnapshots(),
+        loadMetricsPointSettings(),
+      ]);
       setSnapshots(data);
+      setPointSettings(settings);
       const label =
         data.phone?.upload?.period_label || data.whatsapp?.upload?.period_label || "";
       if (label) setPeriodLabel(label);
@@ -76,46 +101,36 @@ export default function AdminMetricsPanel() {
     void refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    const onSettingsChange = async () => {
+      setPointSettings(await loadMetricsPointSettings());
+    };
+    window.addEventListener("metrics-point-settings-changed", onSettingsChange);
+    return () => window.removeEventListener("metrics-point-settings-changed", onSettingsChange);
+  }, []);
+
   const previewColumns = useMemo(
     () => filterMetricsColumns(preview?.columns || []),
     [preview?.columns]
   );
 
-  const previewRows = useMemo(() => buildRankedPreview(preview), [preview]);
+  const previewRows = useMemo(
+    () => buildRankedPreview(preview, pointSettings),
+    [preview, pointSettings]
+  );
 
   const rankingNote = useMemo(
     () =>
       preview
-        ? getMetricsRankingNote(previewColumns, preview.channel)
+        ? getMetricsRankingNote(previewColumns, preview.channel, pointSettings)
         : "",
-    [preview, previewColumns]
+    [preview, previewColumns, pointSettings]
   );
 
-  const phoneSavedView = useMemo(() => {
-    const snapshot = snapshots.phone;
-    const displayColumns = filterMetricsColumns(snapshot?.columns || []);
-    return {
-      snapshot,
-      displayColumns,
-      rankedRows: buildRankedSaved(snapshot, METRICS_CHANNEL.phone),
-      teamSummary: snapshot?.upload?.team_summary || null,
-      rankingNote: getMetricsRankingNote(displayColumns, METRICS_CHANNEL.phone),
-      hasData: Boolean(snapshot?.rows?.length),
-    };
-  }, [snapshots.phone]);
-
-  const whatsappSavedView = useMemo(() => {
-    const snapshot = snapshots.whatsapp;
-    const displayColumns = filterMetricsColumns(snapshot?.columns || []);
-    return {
-      snapshot,
-      displayColumns,
-      rankedRows: buildRankedSaved(snapshot, METRICS_CHANNEL.whatsapp),
-      teamSummary: snapshot?.upload?.team_summary || null,
-      rankingNote: getMetricsRankingNote(displayColumns, METRICS_CHANNEL.whatsapp),
-      hasData: Boolean(snapshot?.rows?.length),
-    };
-  }, [snapshots.whatsapp]);
+  const unifiedSavedView = useMemo(
+    () => buildUnifiedSaved(snapshots, pointSettings),
+    [snapshots, pointSettings]
+  );
 
   const handleFileChange = async (event) => {
     const file = event.target.files?.[0];
@@ -221,9 +236,11 @@ export default function AdminMetricsPanel() {
 
   return (
     <div className="space-y-6" dir="rtl">
+      <MetricsPointSettingsPanel />
+
       <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-950 leading-relaxed">
-        העלו קובץ Excel לכל ערוץ בנפרד — <strong>טלפון</strong> ו-<strong>WhatsApp/טיקטים</strong>.
-        המערכת מזהה את הערוץ לפי כותרות העמודות. שמירה מחליפה רק את הדיווח של אותו ערוץ.
+        העלו קובץ Excel לכל ערוץ בנפרד — <strong>טלפון</strong> ו-<strong>WhatsApp</strong>.
+        הדירוג מוצג ב<strong>טבלה מאוחדת אחת</strong>. שמירה מחליפה רק את הדיווח של אותו ערוץ.
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -273,17 +290,17 @@ export default function AdminMetricsPanel() {
             <FileSpreadsheet className="h-4 w-4 text-violet-600" />
             נוסחאות ציון
           </div>
-          <p className="text-xs font-medium text-violet-900">נציגי טלפון (100 נק'):</p>
           <p className="text-xs">
-            50% שיחות לשעה · 20% תיעוד · 10% מיילים · 10% משך שיחה · 10% אי זמינות
+            1. ניקוד גולמי לכל פעולה (שיחה / WhatsApp / מייל / טיקט) לפי ההגדרות למעלה
           </p>
-          <p className="text-xs font-medium text-emerald-900 pt-1">WhatsApp / טיקטים (100 נק'):</p>
           <p className="text-xs">
-            50% WhatsApp לשעה · 30% מיילים · 10% זמן טיפול · 10% אי זמינות
+            2. נרמול כל מדד ל-0–100 מול הטוב ביותר בחודש
+          </p>
+          <p className="text-xs">
+            3. כפל במשקל האחוזי וסיכום לציון סופי
           </p>
           <p className="text-xs text-slate-500 pt-1">
-            כל מדד מושווה לנציג הטוב ביותר בחודש (מקסימום 100). גיליון אוטומטי:{" "}
-            <strong>{getCurrentMonthSheetContext().hebrewMonth}</strong>
+            גיליון אוטומטי: <strong>{getCurrentMonthSheetContext().hebrewMonth}</strong>
           </p>
         </div>
       </div>
@@ -367,11 +384,19 @@ export default function AdminMetricsPanel() {
             <Loader2 className="h-4 w-4 animate-spin" />
             טוען...
           </div>
-        ) : (
-          <div className="space-y-6">
-            <MetricsChannelSection channel={METRICS_CHANNEL.phone} view={phoneSavedView} />
-            <MetricsChannelSection channel={METRICS_CHANNEL.whatsapp} view={whatsappSavedView} />
+        ) : unifiedSavedView.hasData ? (
+          <div className="space-y-3">
+            <p className="text-xs text-slate-500">{unifiedSavedView.rankingNote}</p>
+            <AgentMetricsTable
+              columns={unifiedSavedView.displayColumns}
+              rows={unifiedSavedView.rankedRows}
+              showRank
+              showChannel
+              showCompositeScore
+            />
           </div>
+        ) : (
+          <AgentMetricsTable columns={[]} rows={[]} />
         )}
       </div>
     </div>
