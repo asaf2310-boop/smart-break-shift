@@ -11,7 +11,11 @@ import {
   HOLIDAY_EVE_DATES,
   MAX_MORNING_AUTO_ASSIGNMENTS_PER_WEEK,
 } from "@/constants/scheduling";
-import { sendScheduleSmsNotifications } from "@/lib/scheduleSms";
+import {
+  resendScheduleSmsNotifications,
+  sendScheduleSmsNotifications,
+  toastScheduleSmsResult,
+} from "@/lib/scheduleSms";
 import { refreshScheduleQueriesAfterPublish } from "@/lib/shiftScheduleQuery";
 import { useToast } from "@/components/ui/use-toast";
 import { demoModeEnabled } from "@/api/demoClient";
@@ -319,6 +323,8 @@ export default function AutoScheduleBuilder({ weekStart }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [sendSmsOnPublish, setSendSmsOnPublish] = useState(true);
+  const [lastPublishedRecords, setLastPublishedRecords] = useState([]);
+  const [resendingSms, setResendingSms] = useState(false);
   const { toast } = useToast();
   const scheduleGridRef = useRef(null);
 
@@ -415,45 +421,34 @@ export default function AutoScheduleBuilder({ weekStart }) {
       records: savedRecords.length ? savedRecords : records,
     });
 
-    const smsResult = await sendScheduleSmsNotifications({
-      records,
-      weekDays,
-      enabled: sendSmsOnPublish,
-    });
+    setLastPublishedRecords(records);
 
     if (sendSmsOnPublish) {
-      if (smsResult.simulated) {
-        toast({
-          title: `SMS דמו: ${smsResult.sent.length} הודעות`,
-          description:
-            smsResult.skipped.length > 0
-              ? `${smsResult.skipped.length} נציגים בלי מספר · ראה יומן SMS למטה`
-              : "לא נשלח SMS אמיתי — רק סימולציה",
-        });
-      } else if (smsResult.sent.length > 0) {
-        toast({
-          title: `נשלחו ${smsResult.sent.length} SMS`,
-          description:
-            smsResult.skipped.length > 0
-              ? `${smsResult.skipped.length} דולגו (ללא טלפון / הגדרות)`
-              : "הנציגים קיבלו עדכון על השיבוץ",
-        });
-      } else {
-        toast({
-          title: "השיבוץ פורסם · SMS לא נשלח",
-          description: "הגדר INFORU_* ב-Vercel, VITE_SCHEDULE_SMS_WEBHOOK=/api/send-schedule-sms ומספרי טלפון בעמוד ניהול נציגים",
-        });
-      }
-      if (smsResult.failed.length > 0) {
-        toast({
-          title: "חלק מה-SMS נכשלו",
-          description: `${smsResult.failed.length} הודעות לא יצאו`,
-        });
-      }
+      const smsResult = await sendScheduleSmsNotifications({ records, enabled: true });
+      toastScheduleSmsResult(toast, smsResult, {
+        simulatedTitle: (count) => `SMS דמו: ${count} הודעות`,
+        successTitle: (count) => `נשלחו ${count} SMS`,
+        emptyTitle: "השיבוץ פורסם · SMS לא נשלח",
+      });
     }
 
     setSaving(false);
     setSaved(true);
+  };
+
+  const handleResendSms = async () => {
+    if (!lastPublishedRecords.length) return;
+    setResendingSms(true);
+    try {
+      const smsResult = await resendScheduleSmsNotifications(lastPublishedRecords);
+      toastScheduleSmsResult(toast, smsResult, {
+        simulatedTitle: (count) => `SMS דמו (שליחה חוזרת): ${count}`,
+        successTitle: (count) => `נשלחו שוב ${count} SMS`,
+        emptyTitle: "SMS לא נשלח",
+      });
+    } finally {
+      setResendingSms(false);
+    }
   };
 
   return (
@@ -601,19 +596,35 @@ export default function AutoScheduleBuilder({ weekStart }) {
             </span>
           </label>
 
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-sm font-bold hover:shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {saving ? (
-              <><RefreshCw className="w-4 h-4 animate-spin" /> שומר...</>
-            ) : saved ? (
-              <><Check className="w-4 h-4" /> ✓ פורסם בהצלחה!</>
-            ) : (
-              "אשר ופרסם שיבוץ"
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={handleSave}
+              disabled={saving || resendingSms}
+              className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-sm font-bold hover:shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {saving ? (
+                <><RefreshCw className="w-4 h-4 animate-spin" /> שומר...</>
+              ) : saved ? (
+                <><Check className="w-4 h-4" /> ✓ פורסם בהצלחה!</>
+              ) : (
+                "אשר ופרסם שיבוץ"
+              )}
+            </button>
+            {saved && lastPublishedRecords.length > 0 && (
+              <button
+                type="button"
+                onClick={handleResendSms}
+                disabled={saving || resendingSms}
+                className="w-full py-2 px-4 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-800 text-sm font-semibold hover:bg-indigo-100 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {resendingSms ? (
+                  <><RefreshCw className="w-4 h-4 animate-spin" /> שולח SMS...</>
+                ) : (
+                  <><MessageSquare className="w-4 h-4" /> שלח שוב SMS לנציגים (ללא שינוי שיבוץ)</>
+                )}
+              </button>
             )}
-          </button>
+          </div>
         </>
       )}
     </motion.div>

@@ -6,6 +6,7 @@ import { DEMO_AGENT_PHONES } from "@/constants/agentPhones";
 
 const DEMO_SMS_LOG_KEY = "schedule-sms-demo-log-v1";
 const DEFAULT_APP_URL = "https://hypsmart.vercel.app";
+const SMS_RETRY_DELAY_MS = 1500;
 
 export function getScheduleSmsShiftsUrl() {
   const base =
@@ -17,6 +18,14 @@ export function getScheduleSmsShiftsUrl() {
 
 export function buildSchedulePublishSmsMessage() {
   return `שלום, השיבוץ לשבוע הבא פורסם בקישור - ${getScheduleSmsShiftsUrl()}`;
+}
+
+export function recordsFromShiftRegistrations(regs) {
+  return (regs || []).map((row) => ({
+    agent_name: row.agent_name,
+    shift_type: row.shift_type,
+    date: row.date,
+  }));
 }
 
 async function loadAgentPhoneMap() {
@@ -74,6 +83,8 @@ export function getDemoScheduleSmsLog() {
   return readDemoSmsLog();
 }
 
+const DEFAULT_SMS_WEBHOOK_PATH = "/api/send-schedule-sms";
+
 function resolveSmsWebhookUrl(webhook) {
   const cleaned = cleanEnvValue(webhook);
   if (!cleaned) return "";
@@ -83,21 +94,114 @@ function resolveSmsWebhookUrl(webhook) {
   return cleaned;
 }
 
-/**
- * שולח SMS בפרסום שיבוץ.
- * דמו: שומר ב-localStorage ומדמה שליחה.
- * אמת: POST ל-VITE_SCHEDULE_SMS_WEBHOOK — מומלץ /api/send-schedule-sms (Inforu ב-Vercel).
- */
-export async function sendScheduleSmsNotifications({ records, weekDays, enabled = true }) {
-  if (!enabled) {
-    return { sent: [], skipped: [], failed: [], simulated: demoModeEnabled };
+function getScheduleSmsWebhookUrl() {
+  const fromEnv = resolveSmsWebhookUrl(import.meta.env.VITE_SCHEDULE_SMS_WEBHOOK);
+  if (fromEnv) return fromEnv;
+  if (demoModeEnabled) return "";
+  return resolveSmsWebhookUrl(DEFAULT_SMS_WEBHOOK_PATH);
+}
+
+function emptySmsResult() {
+  return { sent: [], skipped: [], failed: [], simulated: demoModeEnabled, retried: false };
+}
+
+function mergeSmsResults(first, second) {
+  return {
+    sent: [...first.sent, ...second.sent],
+    skipped: first.skipped,
+    failed: second.failed,
+    simulated: first.simulated,
+    retried: true,
+  };
+}
+
+/** תיאור קצר לטוסט — למה SMS לא יצא */
+export function describeSmsResult(smsResult) {
+  const { sent = [], skipped = [], failed = [], retried = false } = smsResult || {};
+  if (sent.length > 0 && skipped.length === 0 && failed.length === 0) {
+    return retried
+      ? "הנציגים קיבלו עדכון על השיבוץ (אחרי ניסיון שליחה נוסף)"
+      : "הנציגים קיבלו עדכון על השיבוץ";
   }
 
-  const payloads = await buildScheduleSmsPayloads(records);
+  const parts = [];
+  if (retried) {
+    parts.push("בוצע ניסיון שליחה נוסף לנציגים שנכשלו");
+  }
+  const noPhone = skipped.filter((r) => r.reason === "אין מספר טלפון");
+  const noWebhook = skipped.filter((r) => r.reason === "לא הוגדר VITE_SCHEDULE_SMS_WEBHOOK");
+
+  if (noPhone.length) {
+    const names = noPhone.map((r) => r.agentName).filter(Boolean);
+    const preview = names.slice(0, 3).join(", ");
+    const more = names.length > 3 ? ` +${names.length - 3}` : "";
+    parts.push(`ללא טלפון: ${preview}${more} — עדכן/י בניהול נציגים`);
+  }
+  if (noWebhook.length) {
+    parts.push("Webhook SMS לא מוגדר (VITE_SCHEDULE_SMS_WEBHOOK)");
+  }
+  if (failed.length) {
+    parts.push(`${failed.length} נכשלו: ${failed[0]?.error || "שגיאת שליחה"}`);
+  }
+  if (!parts.length && skipped.length) {
+    parts.push(`${skipped.length} נציגים דולגו`);
+  }
+  return parts.join(" · ") || "בדוק/י טלפונים בניהול נציגים והגדרות Inforu ב-Vercel";
+}
+
+export function toastScheduleSmsResult(toast, smsResult, labels = {}) {
+  if (!smsResult) return;
+
+  const retrySuffix = smsResult.retried ? " (כולל ניסיון נוסף)" : "";
+  const {
+    simulatedTitle = (count) => `SMS דמו: ${count} הודעות`,
+    successTitle = (count) => `נשלחו ${count} SMS${retrySuffix}`,
+    emptyTitle = "SMS לא נשלח",
+  } = labels;
+
+  if (smsResult.simulated) {
+    toast({
+      title: simulatedTitle(smsResult.sent.length),
+      description: describeSmsResult(smsResult),
+    });
+    return;
+  }
+
+  if (smsResult.sent.length > 0) {
+    toast({
+      title: successTitle(smsResult.sent.length),
+      description: describeSmsResult(smsResult),
+    });
+    return;
+  }
+
+  toast({
+    title: emptyTitle,
+    description: describeSmsResult(smsResult),
+    variant: "destructive",
+  });
+}
+
+async function postScheduleSms(webhook, item) {
+  const response = await fetch(webhook, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      to: item.phone,
+      message: item.message,
+      agent_name: item.agentName,
+    }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || data.error || `SMS webhook failed (${response.status})`);
+  }
+}
+
+async function dispatchScheduleSmsPayloads(payloads, webhook) {
   const sent = [];
   const skipped = [];
   const failed = [];
-  const webhook = resolveSmsWebhookUrl(import.meta.env.VITE_SCHEDULE_SMS_WEBHOOK);
 
   for (const item of payloads) {
     if (!item.phone) {
@@ -116,36 +220,65 @@ export async function sendScheduleSmsNotifications({ records, weekDays, enabled 
     }
 
     try {
-      const response = await fetch(webhook, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          to: item.phone,
-          message: item.message,
-          agent_name: item.agentName,
-        }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.message || data.error || `SMS webhook failed (${response.status})`);
-      }
+      await postScheduleSms(webhook, item);
       sent.push(item);
     } catch (error) {
       failed.push({ ...item, error: error.message });
     }
   }
 
-  if (demoModeEnabled && sent.length) {
-    writeDemoSmsLog(
-      sent.map((row) => ({
-        id: `${Date.now()}_${row.agentName}`,
-        at: new Date().toISOString(),
-        agent_name: row.agentName,
-        phone: row.phone,
-        message: row.message,
-      }))
-    );
+  return { sent, skipped, failed, simulated: demoModeEnabled, retried: false };
+}
+
+function payloadsFromFailed(failedItems) {
+  return failedItems.map(({ agentName, phone, message }) => ({ agentName, phone, message }));
+}
+
+async function writeDemoLogIfNeeded(sent) {
+  if (!demoModeEnabled || !sent.length) return;
+  writeDemoSmsLog(
+    sent.map((row) => ({
+      id: `${Date.now()}_${row.agentName}`,
+      at: new Date().toISOString(),
+      agent_name: row.agentName,
+      phone: row.phone,
+      message: row.message,
+    }))
+  );
+}
+
+/**
+ * שולח SMS בפרסום שיבוץ.
+ * דמו: שומר ב-localStorage ומדמה שליחה.
+ * אמת: POST ל-VITE_SCHEDULE_SMS_WEBHOOK — מומלץ /api/send-schedule-sms (Inforu ב-Vercel).
+ */
+export async function sendScheduleSmsNotifications({
+  records,
+  enabled = true,
+  retryFailed = true,
+} = {}) {
+  if (!enabled) {
+    return emptySmsResult();
   }
 
-  return { sent, skipped, failed, simulated: demoModeEnabled };
+  const payloads = await buildScheduleSmsPayloads(records);
+  const webhook = getScheduleSmsWebhookUrl();
+  let result = await dispatchScheduleSmsPayloads(payloads, webhook);
+
+  if (retryFailed && !demoModeEnabled && result.failed.length > 0) {
+    await new Promise((resolve) => setTimeout(resolve, SMS_RETRY_DELAY_MS));
+    const retryResult = await dispatchScheduleSmsPayloads(
+      payloadsFromFailed(result.failed),
+      webhook
+    );
+    result = mergeSmsResults(result, retryResult);
+  }
+
+  await writeDemoLogIfNeeded(result.sent);
+  return result;
+}
+
+/** שליחה חוזרת בלבד — לא נוגע בשיבוץ שפורסם */
+export async function resendScheduleSmsNotifications(records) {
+  return sendScheduleSmsNotifications({ records, enabled: true, retryFailed: true });
 }

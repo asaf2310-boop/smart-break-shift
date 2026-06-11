@@ -3,11 +3,16 @@ import { dataClient } from "@/api/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, addDays } from "date-fns";
 import { motion } from "framer-motion";
-import { Pencil, Sun, Moon, X, Plus, Check, RefreshCw } from "lucide-react";
+import { Pencil, Sun, Moon, X, Plus, Check, RefreshCw, MessageSquare } from "lucide-react";
 
 const DAYS = ["ראשון", "שני", "שלישי", "רביעי", "חמישי"];
 import { AGENT_NAMES } from "@/constants/scheduling";
-import { sendScheduleSmsNotifications } from "@/lib/scheduleSms";
+import {
+  recordsFromShiftRegistrations,
+  resendScheduleSmsNotifications,
+  sendScheduleSmsNotifications,
+  toastScheduleSmsResult,
+} from "@/lib/scheduleSms";
 import { refreshScheduleQueriesAfterPublish } from "@/lib/shiftScheduleQuery";
 import { useToast } from "@/components/ui/use-toast";
 import { demoModeEnabled } from "@/api/demoClient";
@@ -107,6 +112,7 @@ export default function PublishedScheduleEditor({ weekStart }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [sendSmsOnSave, setSendSmsOnSave] = useState(false);
+  const [resendingSms, setResendingSms] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const scheduleGridRef = useRef(null);
@@ -203,25 +209,33 @@ export default function PublishedScheduleEditor({ weekStart }) {
       records: savedRecords.length ? savedRecords : records,
     });
 
-    const smsResult = await sendScheduleSmsNotifications({
-      records,
-      weekDays,
-      enabled: sendSmsOnSave,
-    });
-
     if (sendSmsOnSave) {
-      if (smsResult.simulated) {
-        toast({
-          title: `SMS דמו: ${smsResult.sent.length} הודעות`,
-          description: "עדכון שמור + סימולציית SMS ביומן הדמו",
-        });
-      } else if (smsResult.sent.length > 0) {
-        toast({ title: `נשלחו ${smsResult.sent.length} SMS עדכון` });
-      }
+      const smsResult = await sendScheduleSmsNotifications({ records, enabled: true });
+      toastScheduleSmsResult(toast, smsResult, {
+        simulatedTitle: (count) => `SMS דמו: ${count} הודעות`,
+        successTitle: (count) => `נשלחו ${count} SMS עדכון`,
+        emptyTitle: "השיבוץ נשמר · SMS לא נשלח",
+      });
     }
 
     setSaving(false);
     setSaved(true);
+  };
+
+  const handleResendSms = async () => {
+    const records = recordsFromShiftRegistrations(publishedRegs);
+    if (!records.length) return;
+    setResendingSms(true);
+    try {
+      const smsResult = await resendScheduleSmsNotifications(records);
+      toastScheduleSmsResult(toast, smsResult, {
+        simulatedTitle: (count) => `SMS דמו (שליחה חוזרת): ${count}`,
+        successTitle: (count) => `נשלחו שוב ${count} SMS`,
+        emptyTitle: "SMS לא נשלח",
+      });
+    } finally {
+      setResendingSms(false);
+    }
   };
 
   if (isLoading) {
@@ -317,19 +331,33 @@ export default function PublishedScheduleEditor({ weekStart }) {
         </span>
       </label>
 
-      <button
-        onClick={handleSave}
-        disabled={saving}
-        className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-sm font-bold hover:shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-      >
-        {saving ? (
-          <><RefreshCw className="w-4 h-4 animate-spin" /> שומר...</>
-        ) : saved ? (
-          <><Check className="w-4 h-4" /> ✓ עודכן בהצלחה!</>
-        ) : (
-          "שמור שינויים"
-        )}
-      </button>
+      <div className="flex flex-col gap-2">
+        <button
+          type="button"
+          onClick={handleResendSms}
+          disabled={saving || resendingSms}
+          className="w-full py-2 px-4 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 text-sm font-semibold hover:bg-emerald-100 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+          {resendingSms ? (
+            <><RefreshCw className="w-4 h-4 animate-spin" /> שולח SMS...</>
+          ) : (
+            <><MessageSquare className="w-4 h-4" /> שלח SMS לנציגים (ללא שינוי שיבוץ)</>
+          )}
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={saving || resendingSms}
+          className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-sm font-bold hover:shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+          {saving ? (
+            <><RefreshCw className="w-4 h-4 animate-spin" /> שומר...</>
+          ) : saved ? (
+            <><Check className="w-4 h-4" /> ✓ עודכן בהצלחה!</>
+          ) : (
+            "שמור שינויים"
+          )}
+        </button>
+      </div>
     </motion.div>
   );
 }
