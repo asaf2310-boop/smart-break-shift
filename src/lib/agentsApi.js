@@ -13,6 +13,7 @@ import { ensureAgentsSeeded } from "@/lib/agentSeed";
 import { PASSWORD_MIN_LENGTH } from "@/lib/agentAuth";
 import { DEFAULT_AGENT_MODULES, normalizeAgentModules } from "@/constants/agentModules";
 import { REAL_AGENT_NAMES } from "@/constants/scheduling";
+import { normalizeAgentPhone } from "@/lib/agentPhone";
 
 const PENDING_EMAIL_SUFFIX = "@pending.local";
 
@@ -38,6 +39,7 @@ function mapSupabaseRow(row) {
     authUserId: row.auth_user_id,
     password: row.password_plain || null,
     modules: normalizeAgentModules(row.modules),
+    phone: row.phone || "",
   };
 }
 
@@ -51,6 +53,7 @@ function mapDemoRow(u) {
     needsPasswordSetup: u.needsPasswordSetup !== false && !u.password,
     password: u.password || null,
     modules: normalizeAgentModules(u.modules),
+    phone: u.phone || "",
   };
 }
 
@@ -103,7 +106,7 @@ export async function listAgentDisplayNames() {
   return [...REAL_AGENT_NAMES];
 }
 
-export async function createManagedAgent({ email, name }) {
+export async function createManagedAgent({ email, name, phone }) {
   const normalized = email ? normalizeEmail(email) : "";
   const displayName = String(name || "").trim();
   if (!displayName) throw new Error("invalid_fields");
@@ -111,9 +114,11 @@ export async function createManagedAgent({ email, name }) {
     throw new Error("invalid_fields");
   }
 
+  const phoneValue = phone !== undefined && phone !== "" ? normalizeAgentPhone(phone) || null : null;
+
   if (demoModeEnabled) {
     if (!normalized) throw new Error("invalid_fields");
-    const u = createDemoAppUser({ email: normalized, name: displayName });
+    const u = createDemoAppUser({ email: normalized, name: displayName, phone: phoneValue });
     return mapDemoRow(u);
   }
 
@@ -125,13 +130,17 @@ export async function createManagedAgent({ email, name }) {
     needs_password_setup: true,
     password_plain: null,
     modules: [...DEFAULT_AGENT_MODULES],
+    phone: phoneValue,
   });
   return mapSupabaseRow(row);
 }
 
-export async function updateManagedAgent(id, { email, name }) {
+export async function updateManagedAgent(id, { email, name, phone }) {
   if (demoModeEnabled) {
-    const u = updateDemoAppUser(id, { email, name });
+    const patch = { email, name };
+    if (phone !== undefined) patch.phone = normalizeAgentPhone(phone) || null;
+    const u = updateDemoAppUser(id, patch);
+    notifyAgentUsersChanged();
     return mapDemoRow(u);
   }
 
@@ -141,7 +150,11 @@ export async function updateManagedAgent(id, { email, name }) {
     payload.email = normalized || null;
   }
   if (name !== undefined) payload.display_name = String(name).trim();
+  if (phone !== undefined) {
+    payload.phone = normalizeAgentPhone(phone) || null;
+  }
   const row = await dataClient.entities.Agent.update(id, payload);
+  notifyAgentUsersChanged();
   return mapSupabaseRow(row);
 }
 

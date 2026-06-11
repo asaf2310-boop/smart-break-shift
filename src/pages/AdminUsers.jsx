@@ -31,6 +31,7 @@ import {
 import AgentModulesPicker from "@/components/admin/AgentModulesPicker";
 import { formatModulesSummary } from "@/constants/agentModules";
 import { PASSWORD_MIN_LENGTH, PASSWORD_MIN_LENGTH_MSG } from "@/lib/agentAuth";
+import { formatAgentPhoneDisplay, normalizeAgentPhone } from "@/lib/agentPhone";
 import { demoModeEnabled } from "@/api/demoClient";
 import ChatBrandingPanel from "@/components/admin/ChatBrandingPanel";
 import HypPageLayout from "@/components/hyp/HypPageLayout";
@@ -51,7 +52,7 @@ export default function AdminUsers() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [dialog, setDialog] = useState(null);
-  const [form, setForm] = useState({ email: "", name: "" });
+  const [form, setForm] = useState({ email: "", name: "", phone: "" });
   const [passwordForm, setPasswordForm] = useState({ password: "", forceSetup: true });
   const [modulesForm, setModulesForm] = useState([]);
   const [revealedIds, setRevealedIds] = useState(() => new Set());
@@ -68,7 +69,7 @@ export default function AdminUsers() {
     onSuccess: () => {
       invalidate();
       setDialog(null);
-      setForm({ email: "", name: "" });
+      setForm({ email: "", name: "", phone: "" });
       toast({
         title: "נציג נוסף",
         description: "הגדיר/י אימייל וסיסמה — בכניסה הראשונה הנציג יגדיר סיסמה",
@@ -147,6 +148,16 @@ export default function AdminUsers() {
     onError: () => toast({ title: "שגיאה", description: "לא הצלחנו לעדכן חסימה", variant: "destructive" }),
   });
 
+  const phoneMutation = useMutation({
+    mutationFn: ({ id, phone }) => updateManagedAgent(id, { phone }),
+    onSuccess: () => {
+      invalidate();
+      toast({ title: "טלפון עודכן" });
+    },
+    onError: () =>
+      toast({ title: "שגיאה", description: "לא הצלחנו לעדכן טלפון", variant: "destructive" }),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id) => deleteManagedAgent(id),
     onSuccess: () => {
@@ -157,14 +168,26 @@ export default function AdminUsers() {
   });
 
   const openCreate = () => {
-    setForm({ email: "", name: "" });
+    setForm({ email: "", name: "", phone: "" });
     setDialog({ mode: "create" });
   };
 
   const openEdit = (user) => {
     const email = isPlaceholderAgentEmail(user.email) ? "" : user.email;
-    setForm({ email, name: user.name });
+    setForm({
+      email,
+      name: user.name,
+      phone: formatAgentPhoneDisplay(user.phone),
+    });
     setDialog({ mode: "edit", id: user.id });
+  };
+
+  const saveInlinePhone = (user, rawValue) => {
+    const next = normalizeAgentPhone(rawValue);
+    const current = normalizeAgentPhone(user.phone);
+    if (next === current) return;
+    if (!next && !current) return;
+    phoneMutation.mutate({ id: user.id, phone: rawValue });
   };
 
   const openPassword = (user) => {
@@ -279,11 +302,12 @@ export default function AdminUsers() {
       </button>
 
       <div className="bg-white rounded-3xl border border-slate-200 shadow-lg overflow-x-auto">
-        <table className="w-full text-sm min-w-[640px]">
+        <table className="w-full text-sm min-w-[760px]">
           <thead>
             <tr className="bg-slate-50 text-slate-600">
               <th className="text-right px-4 py-3 font-semibold">שם</th>
               <th className="text-right px-4 py-3 font-semibold">אימייל</th>
+              <th className="text-right px-4 py-3 font-semibold">טלפון (SMS)</th>
               <th className="text-right px-4 py-3 font-semibold">סיסמה</th>
               <th className="text-right px-4 py-3 font-semibold">מודולים</th>
               <th className="text-right px-4 py-3 font-semibold">סטטוס</th>
@@ -293,13 +317,13 @@ export default function AdminUsers() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                   טוען...
                 </td>
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                   אין נציגים — הוסף/י ראשון או המתן לטעינה
                 </td>
               </tr>
@@ -311,6 +335,20 @@ export default function AdminUsers() {
                 >
                   <td className="px-4 py-3 font-medium text-slate-800">{user.name}</td>
                   <td className="px-4 py-3">{formatEmail(user.email)}</td>
+                  <td className="px-4 py-3">
+                    <Input
+                      key={`${user.id}-${user.phone || ""}`}
+                      defaultValue={formatAgentPhoneDisplay(user.phone)}
+                      onBlur={(e) => saveInlinePhone(user, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") e.currentTarget.blur();
+                      }}
+                      placeholder="0501234567"
+                      dir="ltr"
+                      className="text-left text-xs h-8 max-w-[9rem] font-mono"
+                      disabled={phoneMutation.isPending}
+                    />
+                  </td>
                   <td className="px-4 py-3">{passwordCell(user)}</td>
                   <td className="px-4 py-3 text-xs text-slate-600 max-w-[10rem] leading-snug">
                     {formatModulesSummary(user.modules)}
@@ -392,6 +430,9 @@ export default function AdminUsers() {
           <li>
             <strong>מודולים</strong> — בחר/י אילו מסכים יופיעו לנציג (למשל רק השתלטות מרחוק)
           </li>
+          <li>
+            <strong>טלפון</strong> — לשליחת SMS בפרסום שיבוץ; עריכה ישירות בטבלה או בחלון עריכה
+          </li>
           <li className="text-amber-800">
             אזהרה: סיסמאות נשמרות לתצוגת מנהל — לא מומלץ לסביבות רגישות
           </li>
@@ -469,6 +510,17 @@ export default function AdminUsers() {
                     dir="ltr"
                     className="text-left"
                     placeholder="name@company.co.il"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">טלפון (SMS)</label>
+                  <Input
+                    type="tel"
+                    value={form.phone}
+                    onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                    dir="ltr"
+                    className="text-left font-mono"
+                    placeholder="0501234567"
                   />
                 </div>
               </div>

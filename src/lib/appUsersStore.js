@@ -78,7 +78,7 @@ export function findDemoUserById(id) {
   return user && isNotDeleted(user) ? user : null;
 }
 
-export function createDemoAppUser({ email, name }) {
+export function createDemoAppUser({ email, name, phone }) {
   const users = readRawUsers();
   const normalized = normalizeEmail(email);
   if (users.some((u) => normalizeEmail(u.email) === normalized && isNotDeleted(u))) {
@@ -93,13 +93,14 @@ export function createDemoAppUser({ email, name }) {
     needsPasswordSetup: true,
     password: null,
     modules: [...DEFAULT_AGENT_MODULES],
+    phone: phone || null,
   };
   users.push(user);
   writeRawUsers(users);
   return user;
 }
 
-export function updateDemoAppUser(id, { email, name, active, blocked, modules }) {
+export function updateDemoAppUser(id, { email, name, phone, active, blocked, modules }) {
   const users = readRawUsers();
   const index = users.findIndex((u) => u.id === id);
   if (index < 0) throw new Error("not_found");
@@ -114,6 +115,7 @@ export function updateDemoAppUser(id, { email, name, active, blocked, modules })
     ...(active !== undefined ? { active } : {}),
     ...(blocked !== undefined ? { blocked: Boolean(blocked) } : {}),
     ...(modules !== undefined ? { modules: normalizeAgentModules(modules) } : {}),
+    ...(phone !== undefined ? { phone: phone ? String(phone).trim() : null } : {}),
   };
   users[index] = updated;
   writeRawUsers(users);

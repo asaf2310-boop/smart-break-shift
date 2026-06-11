@@ -1,20 +1,4 @@
-import { demoModeEnabled } from "@/api/demoClient";
-
-/** מספרי נציגים לפרודקשן — עדכן לפי הרשימה האמיתית */
-export const AGENT_PHONES = {
-  "רחלה מנשה": "",
-  "שרון שפיר": "",
-  "תהילה קיפרווסר": "",
-  "בני סגל": "",
-  "אופיר דוד": "",
-  "אוראל כליפה": "",
-  "הילה שלמה": "",
-  "אורפז דאבוש": "",
-  "בוריס טורבין": "",
-  "נהוראי וקנין": "",
-};
-
-/** מספרי דמו לסביבת טסט */
+/** מספרי דמו לסביבת טסט — בפרודקשן הטלפונים מנוהלים בעמוד ניהול נציגים */
 export const DEMO_AGENT_PHONES = {
   "נציג 01": "0501000001",
   "נציג 02": "0501000002",
@@ -27,8 +11,3 @@ export const DEMO_AGENT_PHONES = {
   "נציג 09": "0501000009",
   "נציג 10": "0501000010",
 };
-
-export function getAgentPhone(agentName) {
-  const map = demoModeEnabled ? DEMO_AGENT_PHONES : AGENT_PHONES;
-  return String(map[agentName] || "").trim();
-}

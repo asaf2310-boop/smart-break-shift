@@ -33,12 +33,16 @@ alter table agents add column if not exists password_plain text;
 alter table agents add column if not exists auth_user_id uuid;
 alter table agents add column if not exists created_at timestamptz not null default now();
 alter table agents add column if not exists updated_at timestamptz not null default now();
+alter table agents add column if not exists phone text;
 
 -- אימייל אופציונלי (שם בלבד / placeholder @pending.local)
 alter table agents alter column email drop not null;
 
 comment on column agents.password_plain is
   'סיסמה בטקסט גלוי לתצוגת מנהל בלבד — החלף ב-hash + Auth לפני פרודקשן רגיש';
+
+comment on column agents.phone is
+  'מספר טלפון לשליחת SMS בשיבוץ — ניהול מעמוד נציגים';
 
 -- ── 3. אינדקס אימייל ────────────────────────────────────────────────────────
 drop index if exists idx_agents_email_lower;

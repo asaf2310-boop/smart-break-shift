@@ -22,7 +22,10 @@ alter table agents add column if not exists blocked boolean not null default fal
 alter table agents add column if not exists deleted_at timestamptz;
 alter table agents add column if not exists password_plain text;
 alter table agents add column if not exists modules jsonb not null default '["breaks","shifts","training","metrics","remote_support","customer_chat","internal_chat","crm","knowledge"]'::jsonb;
+alter table agents add column if not exists phone text;
 alter table agents alter column email drop not null;
+
+comment on column agents.phone is 'מספר טלפון לשליחת SMS בשיבוץ — ניהול מעמוד נציגים';
 
 drop index if exists idx_agents_email_lower;
 create unique index if not exists idx_agents_email_lower

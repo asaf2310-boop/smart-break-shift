@@ -1,6 +1,8 @@
 import { demoModeEnabled } from "@/api/demoClient";
 import { cleanEnvValue } from "@/api/supabase";
-import { getAgentPhone } from "@/constants/agentPhones";
+import { listManagedAgents } from "@/lib/agentsApi";
+import { normalizeAgentPhone } from "@/lib/agentPhone";
+import { DEMO_AGENT_PHONES } from "@/constants/agentPhones";
 
 const DEMO_SMS_LOG_KEY = "schedule-sms-demo-log-v1";
 const DEFAULT_APP_URL = "https://hypsmart.vercel.app";
@@ -17,14 +19,38 @@ export function buildSchedulePublishSmsMessage() {
   return `שלום, השיבוץ לשבוע הבא פורסם בקישור - ${getScheduleSmsShiftsUrl()}`;
 }
 
+async function loadAgentPhoneMap() {
+  const map = new Map();
+  try {
+    const agents = await listManagedAgents();
+    for (const agent of agents) {
+      const name = String(agent.name || "").trim();
+      const phone = normalizeAgentPhone(agent.phone);
+      if (name && phone) map.set(name, phone);
+    }
+  } catch (err) {
+    console.warn("[scheduleSms] loadAgentPhoneMap failed", err);
+  }
+
+  if (demoModeEnabled) {
+    for (const [name, phone] of Object.entries(DEMO_AGENT_PHONES)) {
+      const normalized = normalizeAgentPhone(phone);
+      if (normalized && !map.has(name)) map.set(name, normalized);
+    }
+  }
+
+  return map;
+}
+
 /** מקבץ נמעני SMS לפי נציגים משובצים (אותה הודעה לכולם) */
-export function buildScheduleSmsPayloads(records) {
+export async function buildScheduleSmsPayloads(records) {
   const message = buildSchedulePublishSmsMessage();
+  const phoneMap = await loadAgentPhoneMap();
   const agentNames = [...new Set((records || []).map((row) => row.agent_name).filter(Boolean))];
 
   return agentNames.map((agentName) => ({
     agentName,
-    phone: getAgentPhone(agentName),
+    phone: phoneMap.get(String(agentName).trim()) || "",
     message,
   }));
 }
@@ -67,7 +93,7 @@ export async function sendScheduleSmsNotifications({ records, weekDays, enabled 
     return { sent: [], skipped: [], failed: [], simulated: demoModeEnabled };
   }
 
-  const payloads = buildScheduleSmsPayloads(records);
+  const payloads = await buildScheduleSmsPayloads(records);
   const sent = [];
   const skipped = [];
   const failed = [];
