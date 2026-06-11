@@ -47,6 +47,7 @@ import {
 import {
   listSessions as listScreenShareSessions,
   REMOTE_SUPPORT_OPEN_EVENT,
+  REMOTE_SUPPORT_PANEL_CLOSE_EVENT,
 } from "@/lib/screenShareStore";
 
 const PANEL_DEMO_BANNER =
@@ -113,8 +114,13 @@ export default function RemoteSupportPanel({
       setOpen(true);
       setSupportMode("screen");
     };
+    const onCloseRequest = () => setOpen(false);
     window.addEventListener(REMOTE_SUPPORT_OPEN_EVENT, onOpenRequest);
-    return () => window.removeEventListener(REMOTE_SUPPORT_OPEN_EVENT, onOpenRequest);
+    window.addEventListener(REMOTE_SUPPORT_PANEL_CLOSE_EVENT, onCloseRequest);
+    return () => {
+      window.removeEventListener(REMOTE_SUPPORT_OPEN_EVENT, onOpenRequest);
+      window.removeEventListener(REMOTE_SUPPORT_PANEL_CLOSE_EVENT, onCloseRequest);
+    };
   }, []);
 
   useEffect(() => {

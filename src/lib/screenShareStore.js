@@ -172,6 +172,7 @@ export function clearAgentPeerReady(id) {
 }
 
 export const REMOTE_SUPPORT_OPEN_EVENT = "remote-support-open-request";
+export const REMOTE_SUPPORT_PANEL_CLOSE_EVENT = "remote-support-panel-close-request";
 
 /** הלקוח התחבר ומשתף מסך — להתראה גלובלית לנציג */
 export function markGuestStreamConnected(id) {

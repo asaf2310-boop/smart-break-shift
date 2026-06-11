@@ -15,6 +15,7 @@ import { dismissToastsByDedupeKey, toast } from "@/components/ui/use-toast";
 import ScreenShareAgentView from "@/components/remote/ScreenShareAgentView";
 import {
   REMOTE_SUPPORT_OPEN_EVENT,
+  REMOTE_SUPPORT_PANEL_CLOSE_EVENT,
   getSession,
   listSessions,
   markAgentPeerOpened,
@@ -86,6 +87,31 @@ export function ScreenShareSessionProvider({ children }) {
     return subscribeScreenShare(syncEndedFromStore);
   }, [backgroundSessionId]);
 
+  const ensureBackgroundSession = useCallback((sessionId) => {
+    if (!sessionId) return;
+    markAgentPeerOpened(sessionId);
+    setBackgroundSessionId(sessionId);
+  }, []);
+
+  const openSessionView = useCallback(
+    (sessionId, { openPanel = false, showView = true } = {}) => {
+      if (!sessionId) return;
+      ensureBackgroundSession(sessionId);
+      if (!showView) return;
+      setViewExpanded(false);
+      setViewOpen(true);
+      window.dispatchEvent(new CustomEvent(REMOTE_SUPPORT_PANEL_CLOSE_EVENT));
+      if (openPanel) {
+        window.dispatchEvent(
+          new CustomEvent(REMOTE_SUPPORT_OPEN_EVENT, {
+            detail: { sessionId },
+          })
+        );
+      }
+    },
+    [ensureBackgroundSession]
+  );
+
   useEffect(() => {
     if (!remoteSupportEnabled || !agentName) return undefined;
 
@@ -130,17 +156,7 @@ export function ScreenShareSessionProvider({ children }) {
               size="sm"
               className="shrink-0 bg-teal-600 hover:bg-teal-700 text-white"
               onClick={() => {
-                setBackgroundSessionId(s.id);
-                setViewExpanded(false);
-                setViewOpen(true);
-                window.dispatchEvent(
-                  new CustomEvent(REMOTE_SUPPORT_OPEN_EVENT, {
-                    detail: {
-                      sessionId: s.id,
-                      crmCustomerId: s.crmCustomerId,
-                    },
-                  })
-                );
+                openSessionView(s.id, { openPanel: false });
               }}
             >
               <MonitorPlay className="w-3.5 h-3.5 ml-1" />
@@ -153,7 +169,7 @@ export function ScreenShareSessionProvider({ children }) {
 
     checkGuestConnected();
     return subscribeScreenShare(checkGuestConnected);
-  }, [agentName]);
+  }, [agentName, openSessionView]);
 
   const handleEnded = useCallback((sessionId) => {
     setBackgroundSessionId((prev) => (prev === sessionId ? null : prev));
@@ -162,30 +178,6 @@ export function ScreenShareSessionProvider({ children }) {
     dismissToastsByDedupeKey(`guest-stream-${sessionId}`);
     notifiedRef.current.delete(`${sessionId}:stream`);
   }, []);
-
-  const ensureBackgroundSession = useCallback((sessionId) => {
-    if (!sessionId) return;
-    markAgentPeerOpened(sessionId);
-    setBackgroundSessionId(sessionId);
-  }, []);
-
-  const openSessionView = useCallback(
-    (sessionId, { openPanel = false, showView = true } = {}) => {
-      if (!sessionId) return;
-      ensureBackgroundSession(sessionId);
-      if (!showView) return;
-      setViewExpanded(false);
-      setViewOpen(true);
-      if (openPanel) {
-        window.dispatchEvent(
-          new CustomEvent(REMOTE_SUPPORT_OPEN_EVENT, {
-            detail: { sessionId },
-          })
-        );
-      }
-    },
-    [ensureBackgroundSession]
-  );
 
   const value = useMemo(
     () => ({
@@ -210,19 +202,12 @@ export function ScreenShareSessionProvider({ children }) {
     <ScreenShareSessionContext.Provider value={value}>
       {children}
       {remoteSupportEnabled && backgroundSessionId && (
-        <>
-          {viewOpen && !viewExpanded ? (
-            <div
-              className="fixed inset-0 z-[199] bg-black/20 pointer-events-none"
-              aria-hidden
-            />
-          ) : null}
           <div
             className={
               viewOpen
                 ? viewExpanded
-                  ? "fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-3 sm:p-6"
-                  : "fixed z-[200] bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:w-[min(520px,calc(100vw-3rem))]"
+                  ? "fixed inset-0 z-[250] flex items-center justify-center bg-black/50 p-3 sm:p-6"
+                  : "fixed inset-0 z-[250] flex items-center justify-center p-4 sm:p-6 pointer-events-none"
                 : "fixed left-[-9999px] top-0 w-[320px] h-[180px] overflow-hidden opacity-0 pointer-events-none"
             }
             aria-hidden={!viewOpen}
@@ -232,8 +217,8 @@ export function ScreenShareSessionProvider({ children }) {
               className={
                 viewOpen
                   ? viewExpanded
-                    ? "relative flex w-full max-w-5xl max-h-[92vh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
-                    : "relative flex w-full h-[min(420px,58vh)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+                    ? "relative flex w-full max-w-5xl max-h-[92vh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl pointer-events-auto"
+                    : "relative flex w-full max-w-[min(520px,calc(100vw-2rem))] h-[min(420px,58vh)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl pointer-events-auto"
                   : "w-[320px] h-[180px]"
               }
             >
@@ -314,7 +299,6 @@ export function ScreenShareSessionProvider({ children }) {
               </div>
             </div>
           </div>
-        </>
       )}
     </ScreenShareSessionContext.Provider>
   );
