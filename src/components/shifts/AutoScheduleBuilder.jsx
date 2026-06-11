@@ -17,25 +17,36 @@ import { useToast } from "@/components/ui/use-toast";
 import { demoModeEnabled } from "@/api/demoClient";
 
 // Auto-schedule algorithm:
-// - For regular days: split available agents evenly between morning & evening
-// - Auto-assign puts each agent on at most one shift per day (admin may override when editing)
-// - Balance tracked across the week so each agent gets ~equal morning/evening
-// - At most MAX_MORNING_AUTO_ASSIGNMENTS_PER_WEEK morning shifts (08:00–16:00) per agent in one generated week
-// - Evening assignments are not capped by auto-schedule (manual add may differ)
-// - For holiday eve: only agents who explicitly marked themselves available (not unavailable) appear, under "holiday_eve" key
+// - רק נציגים שאישרו אילוצים (אם יש אישורים בשבוע)
+// - לא זמין = סימון "לא זמין" / חופש מאושר לאותה משמרת
+// - עדיפות לערב 09:00–17:00; בוקר 08:00–16:00 רק אם סימנו לא זמין בערב או לכיסוי מינימלי
+// - לכל היותר MAX_MORNING_AUTO_ASSIGNMENTS_PER_WEEK משמרות בוקר לנציג בשבוע
+// - נציג אחד לכל היותר במשמרת אחת ביום
 function buildAutoSchedule(weekDays, unavailabilities, vacationRequests, confirmedAgentNames = new Set()) {
   const schedule = {};
   const agentMorningCount = Object.fromEntries(AGENT_NAMES.map(n => [n, 0]));
   const agentEveningCount = Object.fromEntries(AGENT_NAMES.map(n => [n, 0]));
 
-  // Agent is unavailable if they have an unavailability record OR an approved vacation
-  const isUnavailable = (agentName, dateStr, shiftType) => {
-    const onVacation = vacationRequests.some(v => v.agent_name === agentName && v.date === dateStr && v.status === "approved");
+  const schedulingPool =
+    confirmedAgentNames.size > 0
+      ? AGENT_NAMES.filter((n) => confirmedAgentNames.has(n))
+      : [...AGENT_NAMES];
+
+  const isShiftUnavailable = (agentName, dateStr, shiftType) => {
+    const onVacation = vacationRequests.some(
+      (v) => v.agent_name === agentName && v.date === dateStr && v.status === "approved"
+    );
     if (onVacation) return true;
-    return unavailabilities.some(u =>
-      u.agent_name === agentName && u.date === dateStr && u.shift_type === shiftType
+    return unavailabilities.some(
+      (u) =>
+        u.agent_name === agentName &&
+        u.date === dateStr &&
+        u.shift_type === shiftType
     );
   };
+
+  const canAssignMorning = (name) =>
+    agentMorningCount[name] < MAX_MORNING_AUTO_ASSIGNMENTS_PER_WEEK;
 
   for (const date of weekDays) {
     const dateStr = format(date, "yyyy-MM-dd");
@@ -48,62 +59,81 @@ function buildAutoSchedule(weekDays, unavailabilities, vacationRequests, confirm
         if (onVacation) return true;
         return unavailabilities.some(u => u.agent_name === agentName && u.date === dateStr);
       };
-      const available = AGENT_NAMES.filter(n =>
-        confirmedAgentNames.has(n) && !isUnavailableHoliday(n)
+      const available = schedulingPool.filter(
+        (n) => confirmedAgentNames.has(n) && !isUnavailableHoliday(n)
       );
       schedule[`${dateStr}|holiday_eve`] = available;
       continue;
     }
 
-    // Agents available for each shift
-    const availMorning = AGENT_NAMES.filter(n => !isUnavailable(n, dateStr, "morning"));
-    const availEvening = AGENT_NAMES.filter(n => !isUnavailable(n, dateStr, "evening"));
-    const canAssignMorning = (name) =>
-      agentMorningCount[name] < MAX_MORNING_AUTO_ASSIGNMENTS_PER_WEEK;
+    const availMorning = schedulingPool.filter((n) => !isShiftUnavailable(n, dateStr, "morning"));
+    const availEvening = schedulingPool.filter((n) => !isShiftUnavailable(n, dateStr, "evening"));
 
-    // Agents only available for one shift go directly there (morning only if under weekly cap)
-    const onlyMorning = AGENT_NAMES.filter(
-      n => availMorning.includes(n) && !availEvening.includes(n) && canAssignMorning(n)
+    const onlyMorning = schedulingPool.filter(
+      (n) => availMorning.includes(n) && !availEvening.includes(n)
     );
-    const onlyEvening = AGENT_NAMES.filter(n => !availMorning.includes(n) && availEvening.includes(n));
-    const bothAvail = AGENT_NAMES.filter(n => availMorning.includes(n) && availEvening.includes(n));
+    const onlyEvening = schedulingPool.filter(
+      (n) => !availMorning.includes(n) && availEvening.includes(n)
+    );
+    const bothAvail = schedulingPool.filter(
+      (n) => availMorning.includes(n) && availEvening.includes(n)
+    );
 
     const morningAgents = [...onlyMorning];
     const eveningAgents = [...onlyEvening];
 
-    // Agents at morning cap but free for evening → evening only
-    bothAvail.filter(n => !canAssignMorning(n)).forEach(n => eveningAgents.push(n));
-
-    const bothCanMorning = bothAvail.filter(canAssignMorning);
-
-    // Target: morning and evening should each get half of total available agents
-    const totalAvail = onlyMorning.length + onlyEvening.length + bothAvail.length;
-    const targetMorning = Math.round(totalAvail / 2);
-    const morningNeeded = Math.max(
-      0,
-      Math.min(targetMorning - onlyMorning.length, bothCanMorning.length)
-    );
-
-    // Sort bothCanMorning: those with most morning excess go to evening, least go to morning
-    const sorted = [...bothCanMorning].sort((a, b) => {
+    const bothSortedForEvening = [...bothAvail].sort((a, b) => {
       const biasA = agentMorningCount[a] - agentEveningCount[a];
       const biasB = agentMorningCount[b] - agentEveningCount[b];
-      return biasA - biasB; // ascending: least morning first → send to morning
+      return biasB - biasA;
     });
+    eveningAgents.push(...bothSortedForEvening);
 
-    sorted.forEach((name, idx) => {
-      if (idx < morningNeeded) morningAgents.push(name);
-      else eveningAgents.push(name);
-    });
+    const morningEligibleCount =
+      onlyMorning.length + bothAvail.filter(canAssignMorning).length;
+    const morningTarget =
+      morningEligibleCount > 0 ? Math.max(onlyMorning.length, 1) : 0;
+    let morningStillNeeded = Math.max(0, morningTarget - morningAgents.length);
+
+    if (morningStillNeeded > 0) {
+      const sortForMorning = (a, b) => {
+        const morningDiff = agentMorningCount[a] - agentMorningCount[b];
+        if (morningDiff !== 0) return morningDiff;
+        return agentEveningCount[b] - agentEveningCount[a];
+      };
+      let candidatesForMorning = bothSortedForEvening
+        .filter((name) => eveningAgents.includes(name) && canAssignMorning(name))
+        .sort(sortForMorning);
+      if (!candidatesForMorning.length) {
+        candidatesForMorning = bothSortedForEvening
+          .filter((name) => eveningAgents.includes(name))
+          .sort(sortForMorning);
+      }
+
+      for (const name of candidatesForMorning) {
+        if (morningStillNeeded <= 0) break;
+        const idx = eveningAgents.indexOf(name);
+        if (idx === -1) continue;
+        eveningAgents.splice(idx, 1);
+        morningAgents.push(name);
+        morningStillNeeded--;
+      }
+    }
 
     schedule[`${dateStr}|morning`] = morningAgents;
     schedule[`${dateStr}|evening`] = eveningAgents;
-    morningAgents.forEach(n => agentMorningCount[n]++);
-    eveningAgents.forEach(n => agentEveningCount[n]++);
+    morningAgents.forEach((n) => {
+      agentMorningCount[n]++;
+    });
+    eveningAgents.forEach((n) => {
+      agentEveningCount[n]++;
+    });
   }
 
   return schedule;
 }
+
+export { buildAutoSchedule };
 
 function NotePopover({ note, onSave, color = "indigo" }) {
   const [open, setOpen] = useState(false);
