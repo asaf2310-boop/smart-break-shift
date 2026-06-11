@@ -12,7 +12,8 @@ import { getStoredAgentName } from "@/constants/scheduling";
 export default function AgentMetricsPage() {
   const { displayName } = useAgentSession();
   const agentName = displayName || getStoredAgentName();
-  const { loading, snapshot, rankedRows, teamSummary, rankingNote } = useAgentMetricsSnapshot();
+  const { loading, snapshot, displayColumns, rankedRows, teamSummary, rankingNote } =
+    useAgentMetricsSnapshot();
 
   const hasData = Boolean(snapshot?.upload && rankedRows.length);
 
@@ -82,7 +83,7 @@ export default function AgentMetricsPage() {
               הנציג המוביל מסומן בצהוב. השורה שלך מסומנת בירוק. הציון המשוקלל מופיע בעמודה האחרונה.
             </p>
             <AgentMetricsTable
-              columns={snapshot.columns}
+              columns={displayColumns}
               rows={rankedRows}
               teamSummary={teamSummary}
               highlightAgentName={agentName}

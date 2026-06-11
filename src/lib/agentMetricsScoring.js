@@ -1,6 +1,7 @@
 import { isTeamAverageLabel } from "@/lib/agentMetricsImport";
 import {
-  isDurationMinutesColumn,
+  isAvgCallDurationColumn,
+  isHiddenMetricColumn,
   metricValueForScoring,
 } from "@/lib/agentMetricsFormat";
 
@@ -82,8 +83,10 @@ export function findCallsPerHourColumn(columns = []) {
 
 export function findDocumentationColumn(columns = []) {
   for (const col of columns) {
+    if (isHiddenMetricColumn(col)) continue;
     const norm = normalizeHeader(col);
     if (DOCUMENTATION_HEADERS.has(norm)) return col;
+    if (norm.includes("פניות מתועדות")) continue;
     if (norm.includes("תיעוד")) return col;
     if (norm.includes("documentation") || norm.includes("doc rate")) return col;
   }
@@ -114,17 +117,10 @@ export function findEmailHandlingColumn(columns = []) {
 
 export function findAvgCallDurationColumn(columns = []) {
   for (const col of columns) {
+    if (isHiddenMetricColumn(col)) continue;
+    if (isAvgCallDurationColumn(col)) return col;
     const norm = normalizeHeader(col);
     if (AVG_DURATION_HEADERS.has(norm)) return col;
-    if (
-      (norm.includes("משך") || norm.includes("aht") || norm.includes("handle")) &&
-      (norm.includes("שיחה") || norm.includes("call") || norm.includes("ממוצע") || norm.includes("avg"))
-    ) {
-      return col;
-    }
-  }
-  for (const col of columns) {
-    if (isDurationMinutesColumn(col)) return col;
   }
   return null;
 }

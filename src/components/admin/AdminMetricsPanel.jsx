@@ -15,6 +15,7 @@ import {
   getCurrentMonthSheetContext,
   parseMetricsFile,
 } from "@/lib/agentMetricsImport";
+import { filterMetricsColumns } from "@/lib/agentMetricsFormat";
 import { getMetricsRankingNote, rankMetricRows } from "@/lib/agentMetricsScoring";
 
 export default function AdminMetricsPanel() {
@@ -47,6 +48,16 @@ export default function AdminMetricsPanel() {
     void refresh();
   }, [refresh]);
 
+  const previewColumns = useMemo(
+    () => filterMetricsColumns(preview?.columns || []),
+    [preview?.columns]
+  );
+
+  const savedColumns = useMemo(
+    () => filterMetricsColumns(snapshot?.columns || []),
+    [snapshot?.columns]
+  );
+
   const previewRows = useMemo(() => {
     if (!preview?.rows?.length) return [];
     return rankMetricRows(
@@ -55,18 +66,18 @@ export default function AdminMetricsPanel() {
         metrics: r.metrics,
         id: r.agentName,
       })),
-      preview.columns
+      previewColumns
     );
-  }, [preview]);
+  }, [preview, previewColumns]);
 
   const savedRows = useMemo(() => {
     if (!snapshot?.rows?.length) return [];
-    return rankMetricRows(snapshot.rows, snapshot.columns);
-  }, [snapshot]);
+    return rankMetricRows(snapshot.rows, savedColumns);
+  }, [snapshot, savedColumns]);
 
   const rankingNote = useMemo(
-    () => getMetricsRankingNote(preview?.columns || snapshot?.columns || []),
-    [preview?.columns, snapshot?.columns]
+    () => getMetricsRankingNote(previewColumns.length ? previewColumns : savedColumns),
+    [previewColumns, savedColumns]
   );
 
   const handleFileChange = async (event) => {
@@ -248,7 +259,7 @@ export default function AdminMetricsPanel() {
             </Button>
           </div>
           <AgentMetricsTable
-            columns={preview.columns}
+            columns={previewColumns}
             rows={previewRows}
             teamSummary={preview.teamSummary}
             showRank
@@ -287,7 +298,7 @@ export default function AdminMetricsPanel() {
               {snapshot.rows.length} נציגים · {rankingNote}
             </p>
             <AgentMetricsTable
-              columns={snapshot.columns}
+              columns={savedColumns}
               rows={savedRows}
               teamSummary={snapshot.upload?.team_summary}
               showRank

@@ -1,6 +1,6 @@
 import React from "react";
 import { Crown } from "lucide-react";
-import { formatMetricCell } from "@/lib/agentMetricsFormat";
+import { filterMetricsColumns, formatMetricCell } from "@/lib/agentMetricsFormat";
 import { formatCompositeScore } from "@/lib/agentMetricsScoring";
 import { cn } from "@/lib/utils";
 
@@ -26,8 +26,9 @@ export default function AgentMetricsTable({
   highlightLeader = true,
   hideMetricColumns = false,
 }) {
-  const agentColumn = columns[0] || "שם נציג";
-  const metricColumns = hideMetricColumns ? [] : columns.slice(1);
+  const displayColumns = filterMetricsColumns(columns);
+  const agentColumn = displayColumns[0] || "שם נציג";
+  const metricColumns = hideMetricColumns ? [] : displayColumns.slice(1);
   const colCount =
     metricColumns.length + 1 + (showRank ? 1 : 0) + (showCompositeScore ? 1 : 0);
 

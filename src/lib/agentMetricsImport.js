@@ -1,4 +1,9 @@
 import * as XLSX from "xlsx";
+import {
+  filterMetricsColumns,
+  isHiddenMetricColumn,
+  serializeMetricValue,
+} from "@/lib/agentMetricsFormat";
 
 const AGENT_NAME_HEADERS = new Set([
   "שם נציג",
@@ -172,7 +177,9 @@ export function parseMetricsSheetRows(sheetRows) {
     return { columns: [], rows: [], errors: ["הקובץ ריק או ללא שורות נתונים"] };
   }
 
-  const keys = Object.keys(sheetRows[0] || {}).filter((k) => k && String(k).trim());
+  const keys = Object.keys(sheetRows[0] || {}).filter(
+    (k) => k && String(k).trim() && !isHiddenMetricColumn(k)
+  );
   if (!keys.length) {
     return { columns: [], rows: [], errors: ["לא נמצאו עמודות בקובץ"] };
   }
@@ -182,8 +189,8 @@ export function parseMetricsSheetRows(sheetRows) {
     return { columns: [], rows: [], errors: ["לא נמצאה עמודת שם נציג"] };
   }
 
-  const metricKeys = keys.filter((k) => k !== agentKey);
-  const columns = [agentKey, ...metricKeys];
+  const metricKeys = keys.filter((k) => k !== agentKey && !isHiddenMetricColumn(k));
+  const columns = filterMetricsColumns([agentKey, ...metricKeys]);
   const parsedRows = [];
   const errors = [];
 
@@ -193,9 +200,13 @@ export function parseMetricsSheetRows(sheetRows) {
 
     const metrics = {};
     for (const key of metricKeys) {
+      if (isHiddenMetricColumn(key)) continue;
       const val = raw[key];
       if (val === undefined || val === null || val === "") continue;
-      metrics[key] = typeof val === "number" ? val : String(val).trim();
+      const serialized = serializeMetricValue(val, key);
+      if (serialized !== null && serialized !== "") {
+        metrics[key] = serialized;
+      }
     }
 
     if (Object.keys(metrics).length === 0) {
@@ -236,7 +247,9 @@ export async function parseMetricsFile(file, options = {}) {
     availableSheets = workbook.SheetNames || [];
     sheetName = availableSheets[0] || null;
     const sheet = sheetName ? workbook.Sheets[sheetName] : null;
-    sheetRows = sheet ? XLSX.utils.sheet_to_json(sheet, { defval: "" }) : [];
+    sheetRows = sheet
+      ? XLSX.utils.sheet_to_json(sheet, { defval: "", raw: true, cellDates: true })
+      : [];
   } else {
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(new Uint8Array(buffer), { type: "array", cellDates: true });
@@ -258,7 +271,7 @@ export async function parseMetricsFile(file, options = {}) {
     }
 
     const sheet = workbook.Sheets[sheetName];
-    sheetRows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+    sheetRows = XLSX.utils.sheet_to_json(sheet, { defval: "", raw: true, cellDates: true });
   }
 
   const parsed = parseMetricsSheetRows(sheetRows);

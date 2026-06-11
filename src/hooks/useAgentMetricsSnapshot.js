@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { loadLatestMetrics } from "@/lib/agentMetricsApi";
+import { filterMetricsColumns } from "@/lib/agentMetricsFormat";
 import { isTeamAverageLabel, partitionMetricsRows } from "@/lib/agentMetricsImport";
 import { getMetricsRankingNote, rankMetricRows } from "@/lib/agentMetricsScoring";
 
@@ -40,6 +41,11 @@ export function useAgentMetricsSnapshot() {
 
   const teamSummary = useMemo(() => resolveTeamSummary(snapshot), [snapshot]);
 
+  const displayColumns = useMemo(
+    () => filterMetricsColumns(snapshot?.columns || []),
+    [snapshot?.columns]
+  );
+
   const rankedRows = useMemo(() => {
     if (!snapshot?.rows?.length) return [];
     const { agentRows } = partitionMetricsRows(
@@ -50,13 +56,13 @@ export function useAgentMetricsSnapshot() {
         id: r.id,
       }))
     );
-    return rankMetricRows(agentRows, snapshot.columns || []);
-  }, [snapshot]);
+    return rankMetricRows(agentRows, displayColumns);
+  }, [snapshot, displayColumns]);
 
   const rankingNote = useMemo(
-    () => getMetricsRankingNote(snapshot?.columns || []),
-    [snapshot?.columns]
+    () => getMetricsRankingNote(displayColumns),
+    [displayColumns]
   );
 
-  return { loading, snapshot, rankedRows, teamSummary, rankingNote };
+  return { loading, snapshot, displayColumns, rankedRows, teamSummary, rankingNote };
 }
