@@ -1,69 +1,32 @@
-import { format, parseISO } from "date-fns";
 import { demoModeEnabled } from "@/api/demoClient";
 import { cleanEnvValue } from "@/api/supabase";
 import { getAgentPhone } from "@/constants/agentPhones";
-import { WEEKDAY_LABELS } from "@/constants/scheduling";
 
 const DEMO_SMS_LOG_KEY = "schedule-sms-demo-log-v1";
+const DEFAULT_APP_URL = "https://hypsmart.vercel.app";
 
-const SHIFT_LABELS = {
-  morning: "בוקר (08:00-16:00)",
-  evening: "ערב (09:00-17:00)",
-};
-
-function weekdayLabel(dateStr) {
-  const day = parseISO(dateStr).getDay();
-  return WEEKDAY_LABELS[day] || "";
-}
-
-function formatShortDate(dateStr) {
-  return format(parseISO(dateStr), "dd/MM");
-}
-
-/** מקבץ רשומות שיבוץ להודעת SMS לכל נציג */
-export function buildScheduleSmsPayloads(records, weekDays) {
-  const weekLabel =
-    weekDays?.length >= 2
-      ? `${format(weekDays[0], "dd/MM")}-${format(weekDays[weekDays.length - 1], "dd/MM/yyyy")}`
-      : "";
-
-  const byAgent = new Map();
-  for (const row of records) {
-    if (!byAgent.has(row.agent_name)) byAgent.set(row.agent_name, []);
-    byAgent.get(row.agent_name).push(row);
-  }
-
-  const appUrl =
+export function getScheduleSmsShiftsUrl() {
+  const base =
     cleanEnvValue(import.meta.env.VITE_APP_URL) ||
-    (typeof window !== "undefined" ? window.location.origin : "");
+    (typeof window !== "undefined" ? window.location.origin : "") ||
+    DEFAULT_APP_URL;
+  return `${base.replace(/\/$/, "")}/shifts`;
+}
 
-  const payloads = [];
-  for (const [agentName, rows] of byAgent.entries()) {
-    const lines = rows
-      .slice()
-      .sort((a, b) => a.date.localeCompare(b.date) || a.shift_type.localeCompare(b.shift_type))
-      .map((row) => {
-        const shift = SHIFT_LABELS[row.shift_type] || row.shift_type;
-        return `${weekdayLabel(row.date)} ${formatShortDate(row.date)}: ${shift}`;
-      });
+export function buildSchedulePublishSmsMessage() {
+  return `שלום, השיבוץ לשבוע הבא פורסם בקישור - ${getScheduleSmsShiftsUrl()}`;
+}
 
-    const message = [
-      `שלום ${agentName},`,
-      `פורסם השיבוץ לשבוע ${weekLabel}:`,
-      ...lines,
-      appUrl ? `לצפייה: ${appUrl}/shifts` : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
+/** מקבץ נמעני SMS לפי נציגים משובצים (אותה הודעה לכולם) */
+export function buildScheduleSmsPayloads(records) {
+  const message = buildSchedulePublishSmsMessage();
+  const agentNames = [...new Set((records || []).map((row) => row.agent_name).filter(Boolean))];
 
-    payloads.push({
-      agentName,
-      phone: getAgentPhone(agentName),
-      message,
-    });
-  }
-
-  return payloads;
+  return agentNames.map((agentName) => ({
+    agentName,
+    phone: getAgentPhone(agentName),
+    message,
+  }));
 }
 
 function readDemoSmsLog() {
@@ -85,21 +48,30 @@ export function getDemoScheduleSmsLog() {
   return readDemoSmsLog();
 }
 
+function resolveSmsWebhookUrl(webhook) {
+  const cleaned = cleanEnvValue(webhook);
+  if (!cleaned) return "";
+  if (cleaned.startsWith("/") && typeof window !== "undefined") {
+    return `${window.location.origin}${cleaned}`;
+  }
+  return cleaned;
+}
+
 /**
  * שולח SMS בפרסום שיבוץ.
  * דמו: שומר ב-localStorage ומדמה שליחה.
- * אמת: POST ל-VITE_SCHEDULE_SMS_WEBHOOK (Make / Twilio / שרת פנימי).
+ * אמת: POST ל-VITE_SCHEDULE_SMS_WEBHOOK — מומלץ /api/send-schedule-sms (Inforu ב-Vercel).
  */
 export async function sendScheduleSmsNotifications({ records, weekDays, enabled = true }) {
   if (!enabled) {
     return { sent: [], skipped: [], failed: [], simulated: demoModeEnabled };
   }
 
-  const payloads = buildScheduleSmsPayloads(records, weekDays);
+  const payloads = buildScheduleSmsPayloads(records);
   const sent = [];
   const skipped = [];
   const failed = [];
-  const webhook = cleanEnvValue(import.meta.env.VITE_SCHEDULE_SMS_WEBHOOK);
+  const webhook = resolveSmsWebhookUrl(import.meta.env.VITE_SCHEDULE_SMS_WEBHOOK);
 
   for (const item of payloads) {
     if (!item.phone) {
@@ -127,7 +99,10 @@ export async function sendScheduleSmsNotifications({ records, weekDays, enabled 
           agent_name: item.agentName,
         }),
       });
-      if (!response.ok) throw new Error(`SMS webhook failed (${response.status})`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.message || data.error || `SMS webhook failed (${response.status})`);
+      }
       sent.push(item);
     } catch (error) {
       failed.push({ ...item, error: error.message });

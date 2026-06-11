@@ -441,7 +441,7 @@ export default function AutoScheduleBuilder({ weekStart }) {
       } else {
         toast({
           title: "השיבוץ פורסם · SMS לא נשלח",
-          description: "הגדר VITE_SCHEDULE_SMS_WEBHOOK ומספרי טלפון ב-agentPhones.js",
+          description: "הגדר INFORU_* ב-Vercel, VITE_SCHEDULE_SMS_WEBHOOK=/api/send-schedule-sms ומספרי טלפון ב-agentPhones.js",
         });
       }
       if (smsResult.failed.length > 0) {
