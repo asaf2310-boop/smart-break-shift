@@ -9,6 +9,7 @@ import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import AuthRequiredScreen from '@/components/AuthRequiredScreen';
 import AppLoadError from '@/components/AppLoadError';
 import AdminGate from '@/components/admin/AdminGate';
+import ModuleGate from '@/components/auth/ModuleGate';
 import DemoGate from '@/components/DemoGate';
 import CustomerChatGate from '@/components/CustomerChatGate';
 import Home from './pages/Home';
@@ -94,18 +95,18 @@ const AuthenticatedApp = () => {
       <TopAppNav />
       <Routes>
         <Route path="/" element={<Home />} />
-        <Route path="/breaks" element={<BreakScheduler />} />
-        <Route path="/shifts" element={<RouteErrorBoundary><ShiftScheduler /></RouteErrorBoundary>} />
-        <Route path="/training" element={<TrainingPage />} />
-        <Route path="/metrics" element={<AgentMetricsPage />} />
-        <Route path="/metrics/ranking" element={<AgentMetricsRankingPage />} />
+        <Route path="/breaks" element={<ModuleGate module="breaks"><BreakScheduler /></ModuleGate>} />
+        <Route path="/shifts" element={<ModuleGate module="shifts"><RouteErrorBoundary><ShiftScheduler /></RouteErrorBoundary></ModuleGate>} />
+        <Route path="/training" element={<ModuleGate module="training"><TrainingPage /></ModuleGate>} />
+        <Route path="/metrics" element={<ModuleGate module="metrics"><AgentMetricsPage /></ModuleGate>} />
+        <Route path="/metrics/ranking" element={<ModuleGate module="metrics"><AgentMetricsRankingPage /></ModuleGate>} />
         <Route path="/chat/guest" element={<CustomerChatGate><CustomerChatGuestPage /></CustomerChatGate>} />
         <Route path="/chat" element={<ChatRoute />} />
-        <Route path="/customer-chat" element={<CustomerChatGate><AgentCustomerChatPage /></CustomerChatGate>} />
-        <Route path="/crm" element={<DemoGate><CrmDashboard /></DemoGate>} />
-        <Route path="/crm/lookup" element={<DemoGate><CrmLookupDeepLink /></DemoGate>} />
-        <Route path="/crm/:id" element={<DemoGate><CrmCustomerDetail /></DemoGate>} />
-        <Route path="/remote-support" element={<RemoteSupportPage />} />
+        <Route path="/customer-chat" element={<ModuleGate module="customer_chat"><CustomerChatGate><AgentCustomerChatPage /></CustomerChatGate></ModuleGate>} />
+        <Route path="/crm" element={<ModuleGate module="crm"><DemoGate><CrmDashboard /></DemoGate></ModuleGate>} />
+        <Route path="/crm/lookup" element={<ModuleGate module="crm"><DemoGate><CrmLookupDeepLink /></DemoGate></ModuleGate>} />
+        <Route path="/crm/:id" element={<ModuleGate module="crm"><DemoGate><CrmCustomerDetail /></DemoGate></ModuleGate>} />
+        <Route path="/remote-support" element={<ModuleGate module="remote_support"><RemoteSupportPage /></ModuleGate>} />
         <Route
           path="/remote-support/recordings/play"
           element={<DemoGate><DemoRecordingPlayPage /></DemoGate>}
@@ -113,7 +114,7 @@ const AuthenticatedApp = () => {
         <Route path="/j/:token" element={<RouteErrorBoundary><GuestJoinRedirectPage /></RouteErrorBoundary>} />
         <Route path="/support/consent/:token" element={<RouteErrorBoundary><RemoteSupportConsentPage /></RouteErrorBoundary>} />
         <Route path="/support/screen/:sessionId" element={<RouteErrorBoundary><ScreenShareGuestPage /></RouteErrorBoundary>} />
-        <Route path="/knowledge" element={<DemoGate><KnowledgePage /></DemoGate>} />
+        <Route path="/knowledge" element={<ModuleGate module="knowledge"><DemoGate><KnowledgePage /></DemoGate></ModuleGate>} />
         <Route path="/admin" element={<AdminGate><AdminDashboard /></AdminGate>} />
         <Route path="/admin/knowledge" element={<DemoGate><AdminGate><AdminKnowledge /></AdminGate></DemoGate>} />
         <Route path="/admin/customer-chat" element={<CustomerChatGate><AdminGate><AdminCustomerChat /></AdminGate></CustomerChatGate>} />

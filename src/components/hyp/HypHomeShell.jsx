@@ -55,6 +55,11 @@ export default function HypHomeShell({
           </header>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1 items-stretch">
+            {!homeCards.length && (
+              <div className="sm:col-span-2 rounded-2xl border border-dashed border-slate-300 bg-white/60 px-4 py-10 text-center text-sm text-slate-600">
+                לא הוקצו מודולים לחשבון שלך. פנה/י למנהל המערכת לעדכון הרשאות.
+              </div>
+            )}
             {homeCards.map((card, i) => {
               const Icon = card.icon;
               return (

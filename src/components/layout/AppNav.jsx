@@ -2,6 +2,7 @@ import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { BarChart3, BookOpen, CalendarClock, CalendarDays, Contact, Film, GraduationCap, Home, MessageCircle, Monitor, ShieldCheck } from "lucide-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { useAgentModules } from "@/hooks/useAgentModules";
 import { customerChatEnabled, demoModeEnabled } from "@/api/demoClient";
 import { brandVisualEnabled } from "@/lib/brandShell";
 
@@ -11,6 +12,8 @@ export const APP_NAV_HEIGHT = "var(--app-nav-height)";
 export default function AppNav() {
   const location = useLocation();
   const isAdmin = useIsAdmin();
+  const { hasModule, isLoggedIn } = useAgentModules();
+  const showTab = (moduleId) => !isLoggedIn || hasModule(moduleId);
   const isBreaks = location.pathname === "/breaks";
   const isShifts = location.pathname === "/shifts";
   const isTraining = location.pathname === "/training";
@@ -55,27 +58,37 @@ export default function AppNav() {
             <Home className="w-4 h-4" />
             ראשי
           </Link>
-          <Link to="/breaks" className={tabClass(isBreaks)}>
-            <CalendarClock className="w-4 h-4" />
-            הפסקות
-          </Link>
-          <Link to="/shifts" className={tabClass(isShifts)}>
-            <CalendarDays className="w-4 h-4" />
-            משמרות
-          </Link>
-          <Link to="/training" className={tabClass(isTraining)}>
-            <GraduationCap className="w-4 h-4" />
-            הדרכה
-          </Link>
-          <Link to="/metrics" className={tabClass(isMetrics)}>
-            <BarChart3 className="w-4 h-4" />
-            מדדים
-          </Link>
-          <Link to="/remote-support" className={tabClass(isRemoteSupport)}>
-            <Monitor className="w-4 h-4" />
-            השתלטות מרחוק
-          </Link>
-          {customerChatEnabled && !demoModeEnabled && (
+          {showTab("breaks") && (
+            <Link to="/breaks" className={tabClass(isBreaks)}>
+              <CalendarClock className="w-4 h-4" />
+              הפסקות
+            </Link>
+          )}
+          {showTab("shifts") && (
+            <Link to="/shifts" className={tabClass(isShifts)}>
+              <CalendarDays className="w-4 h-4" />
+              משמרות
+            </Link>
+          )}
+          {showTab("training") && (
+            <Link to="/training" className={tabClass(isTraining)}>
+              <GraduationCap className="w-4 h-4" />
+              הדרכה
+            </Link>
+          )}
+          {showTab("metrics") && (
+            <Link to="/metrics" className={tabClass(isMetrics)}>
+              <BarChart3 className="w-4 h-4" />
+              מדדים
+            </Link>
+          )}
+          {showTab("remote_support") && (
+            <Link to="/remote-support" className={tabClass(isRemoteSupport)}>
+              <Monitor className="w-4 h-4" />
+              השתלטות מרחוק
+            </Link>
+          )}
+          {customerChatEnabled && !demoModeEnabled && showTab("customer_chat") && (
             <Link to="/customer-chat" className={tabClass(isCustomerChat)}>
               <MessageCircle className="w-4 h-4" />
               צ&apos;אט לקוחות
@@ -83,18 +96,24 @@ export default function AppNav() {
           )}
           {demoModeEnabled && (
             <>
-              <Link to="/crm" className={tabClass(isCrm)}>
-                <Contact className="w-4 h-4" />
-                CRM
-              </Link>
-              <Link to="/knowledge" className={tabClass(isKnowledge)}>
-                <BookOpen className="w-4 h-4" />
-                בסיס ידע
-              </Link>
-              <Link to="/customer-chat" className={tabClass(isCustomerChat)}>
-                <MessageCircle className="w-4 h-4" />
-                צ&apos;אט
-              </Link>
+              {showTab("crm") && (
+                <Link to="/crm" className={tabClass(isCrm)}>
+                  <Contact className="w-4 h-4" />
+                  CRM
+                </Link>
+              )}
+              {showTab("knowledge") && (
+                <Link to="/knowledge" className={tabClass(isKnowledge)}>
+                  <BookOpen className="w-4 h-4" />
+                  בסיס ידע
+                </Link>
+              )}
+              {showTab("customer_chat") && (
+                <Link to="/customer-chat" className={tabClass(isCustomerChat)}>
+                  <MessageCircle className="w-4 h-4" />
+                  צ&apos;אט
+                </Link>
+              )}
             </>
           )}
           {isAdmin && (

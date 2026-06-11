@@ -285,6 +285,7 @@ const demoAgentEntity = {
       blocked: u.blocked === true,
       needs_password_setup: u.needsPasswordSetup !== false && !u.password,
       password_plain: u.password || null,
+      modules: u.modules,
     }));
   },
   async list() {
@@ -308,6 +309,7 @@ const demoAgentEntity = {
       name: row.display_name,
       active: row.active,
       blocked: row.blocked,
+      modules: row.modules,
     });
     return {
       id: u.id,
@@ -317,6 +319,7 @@ const demoAgentEntity = {
       blocked: u.blocked === true,
       needs_password_setup: u.needsPasswordSetup !== false && !u.password,
       password_plain: u.password || null,
+      modules: u.modules,
     };
   },
   async delete(id) {

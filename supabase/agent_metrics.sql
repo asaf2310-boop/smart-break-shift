@@ -44,3 +44,16 @@ create policy anon_all_agent_metrics_uploads on agent_metrics_uploads
 drop policy if exists anon_all_agent_metrics_rows on agent_metrics_rows;
 create policy anon_all_agent_metrics_rows on agent_metrics_rows
   for all using (true) with check (true);
+
+-- הגדרות ניקוד פעולות (בונוסים)
+create table if not exists agent_metrics_settings (
+  id text primary key default 'default',
+  point_values jsonb not null default '{"phoneCall":1,"whatsappCall":0.5,"email":0.75,"ticket":0.75}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
+alter table agent_metrics_settings enable row level security;
+
+drop policy if exists anon_all_agent_metrics_settings on agent_metrics_settings;
+create policy anon_all_agent_metrics_settings on agent_metrics_settings
+  for all using (true) with check (true);

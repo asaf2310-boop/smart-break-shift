@@ -10,6 +10,7 @@ import {
   KeyRound,
   Pencil,
   Plus,
+  LayoutGrid,
   ShieldCheck,
   Trash2,
   UserPlus,
@@ -25,7 +26,10 @@ import {
   listManagedAgents,
   setManagedAgentBlocked,
   updateManagedAgent,
+  updateManagedAgentModules,
 } from "@/lib/agentsApi";
+import AgentModulesPicker from "@/components/admin/AgentModulesPicker";
+import { formatModulesSummary } from "@/constants/agentModules";
 import { PASSWORD_MIN_LENGTH, PASSWORD_MIN_LENGTH_MSG } from "@/lib/agentAuth";
 import { demoModeEnabled } from "@/api/demoClient";
 import ChatBrandingPanel from "@/components/admin/ChatBrandingPanel";
@@ -49,6 +53,7 @@ export default function AdminUsers() {
   const [dialog, setDialog] = useState(null);
   const [form, setForm] = useState({ email: "", name: "" });
   const [passwordForm, setPasswordForm] = useState({ password: "", forceSetup: true });
+  const [modulesForm, setModulesForm] = useState([]);
   const [revealedIds, setRevealedIds] = useState(() => new Set());
 
   const { data: users = [], isLoading } = useQuery({
@@ -119,6 +124,20 @@ export default function AdminUsers() {
     },
   });
 
+  const modulesMutation = useMutation({
+    mutationFn: () => updateManagedAgentModules(dialog.id, modulesForm),
+    onSuccess: () => {
+      invalidate();
+      setDialog(null);
+      toast({
+        title: "הרשאות עודכנו",
+        description: "השינוי יחול בכניסה הבאה של הנציג (או לאחר התנתקות והתחברות מחדש)",
+      });
+    },
+    onError: () =>
+      toast({ title: "שגיאה", description: "לא הצלחנו לעדכן הרשאות", variant: "destructive" }),
+  });
+
   const blockMutation = useMutation({
     mutationFn: ({ id, blocked }) => setManagedAgentBlocked(id, blocked),
     onSuccess: (_, { blocked }) => {
@@ -153,6 +172,11 @@ export default function AdminUsers() {
     setDialog({ mode: "password", id: user.id, userName: user.name });
   };
 
+  const openModules = (user) => {
+    setModulesForm(user.modules || []);
+    setDialog({ mode: "modules", id: user.id, userName: user.name });
+  };
+
   const toggleReveal = (id) => {
     setRevealedIds((prev) => {
       const next = new Set(prev);
@@ -167,6 +191,7 @@ export default function AdminUsers() {
     if (dialog.mode === "create") createMutation.mutate();
     else if (dialog.mode === "edit") updateMutation.mutate();
     else if (dialog.mode === "password") passwordMutation.mutate();
+    else if (dialog.mode === "modules") modulesMutation.mutate();
   };
 
   const statusBadge = (user) => {
@@ -260,6 +285,7 @@ export default function AdminUsers() {
               <th className="text-right px-4 py-3 font-semibold">שם</th>
               <th className="text-right px-4 py-3 font-semibold">אימייל</th>
               <th className="text-right px-4 py-3 font-semibold">סיסמה</th>
+              <th className="text-right px-4 py-3 font-semibold">מודולים</th>
               <th className="text-right px-4 py-3 font-semibold">סטטוס</th>
               <th className="px-4 py-3" />
             </tr>
@@ -267,13 +293,13 @@ export default function AdminUsers() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
                   טוען...
                 </td>
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
                   אין נציגים — הוסף/י ראשון או המתן לטעינה
                 </td>
               </tr>
@@ -286,9 +312,21 @@ export default function AdminUsers() {
                   <td className="px-4 py-3 font-medium text-slate-800">{user.name}</td>
                   <td className="px-4 py-3">{formatEmail(user.email)}</td>
                   <td className="px-4 py-3">{passwordCell(user)}</td>
+                  <td className="px-4 py-3 text-xs text-slate-600 max-w-[10rem] leading-snug">
+                    {formatModulesSummary(user.modules)}
+                  </td>
                   <td className="px-4 py-3">{statusBadge(user)}</td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1 justify-end flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => openModules(user)}
+                        className="p-2 rounded-lg hover:bg-violet-50 text-violet-700"
+                        title="הרשאות מודולים"
+                        aria-label="הרשאות"
+                      >
+                        <LayoutGrid className="w-4 h-4" />
+                      </button>
                       <button
                         type="button"
                         onClick={() => openPassword(user)}
@@ -351,6 +389,9 @@ export default function AdminUsers() {
           <li>
             <strong>חסימה</strong> — הנציג נשאר ברשימה; התחברות נחסמת
           </li>
+          <li>
+            <strong>מודולים</strong> — בחר/י אילו מסכים יופיעו לנציג (למשל רק השתלטות מרחוק)
+          </li>
           <li className="text-amber-800">
             אזהרה: סיסמאות נשמרות לתצוגת מנהל — לא מומלץ לסביבות רגישות
           </li>
@@ -363,7 +404,7 @@ export default function AdminUsers() {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             onSubmit={handleSubmit}
-            className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl"
+            className={`w-full bg-white rounded-3xl p-6 shadow-2xl ${dialog.mode === "modules" ? "max-w-lg" : "max-w-md"}`}
             dir="rtl"
           >
             <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
@@ -375,9 +416,12 @@ export default function AdminUsers() {
               {dialog.mode === "create" && "נציג חדש"}
               {dialog.mode === "edit" && "עריכת נציג"}
               {dialog.mode === "password" && `סיסמה — ${dialog.userName}`}
+              {dialog.mode === "modules" && `הרשאות מודולים — ${dialog.userName}`}
             </h2>
 
-            {dialog.mode === "password" ? (
+            {dialog.mode === "modules" ? (
+              <AgentModulesPicker value={modulesForm} onChange={setModulesForm} />
+            ) : dialog.mode === "password" ? (
               <div className="space-y-3">
                 <div>
                   <label className="text-xs text-slate-500 mb-1 block">סיסמה חדשה</label>
@@ -443,7 +487,8 @@ export default function AdminUsers() {
                 disabled={
                   createMutation.isPending ||
                   updateMutation.isPending ||
-                  passwordMutation.isPending
+                  passwordMutation.isPending ||
+                  modulesMutation.isPending
                 }
                 className="flex-1 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-white font-bold disabled:opacity-50"
               >

@@ -11,6 +11,7 @@ import {
 } from "@/lib/appUsersStore";
 import { ensureAgentsSeeded } from "@/lib/agentSeed";
 import { PASSWORD_MIN_LENGTH } from "@/lib/agentAuth";
+import { DEFAULT_AGENT_MODULES, normalizeAgentModules } from "@/constants/agentModules";
 import { REAL_AGENT_NAMES } from "@/constants/scheduling";
 
 const PENDING_EMAIL_SUFFIX = "@pending.local";
@@ -30,6 +31,7 @@ function mapSupabaseRow(row) {
     needsPasswordSetup: row.needs_password_setup !== false && !row.password_plain,
     authUserId: row.auth_user_id,
     password: row.password_plain || null,
+    modules: normalizeAgentModules(row.modules),
   };
 }
 
@@ -42,6 +44,7 @@ function mapDemoRow(u) {
     blocked: u.blocked === true,
     needsPasswordSetup: u.needsPasswordSetup !== false && !u.password,
     password: u.password || null,
+    modules: normalizeAgentModules(u.modules),
   };
 }
 
@@ -115,6 +118,7 @@ export async function createManagedAgent({ email, name }) {
     blocked: false,
     needs_password_setup: true,
     password_plain: null,
+    modules: [...DEFAULT_AGENT_MODULES],
   });
   return mapSupabaseRow(row);
 }
@@ -160,6 +164,20 @@ export async function setManagedAgentBlocked(id, blocked) {
     return mapDemoRow(u);
   }
   const row = await dataClient.entities.Agent.update(id, { blocked: Boolean(blocked) });
+  return mapSupabaseRow(row);
+}
+
+export async function updateManagedAgentModules(id, modules) {
+  const normalized = Array.isArray(modules)
+    ? normalizeAgentModules(modules)
+    : [...DEFAULT_AGENT_MODULES];
+
+  if (demoModeEnabled) {
+    const u = updateDemoAppUser(id, { modules: normalized });
+    return mapDemoRow(u);
+  }
+
+  const row = await dataClient.entities.Agent.update(id, { modules: normalized });
   return mapSupabaseRow(row);
 }
 

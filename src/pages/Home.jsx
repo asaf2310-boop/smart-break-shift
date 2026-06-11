@@ -8,10 +8,13 @@ import { customerChatEnabled, demoModeEnabled } from "@/api/demoClient";
 import { isAdminPinConfigured } from "@/hooks/useIsAdmin";
 import { connectAgentAsAvailable } from "@/lib/agentChatPresence";
 import { useAgentSession } from "@/hooks/useAgentSession";
+import { useAgentModules } from "@/hooks/useAgentModules";
+import { filterItemsByModules } from "@/constants/agentModules";
 import { agentLogout } from "@/lib/agentAuth";
 
 const productionCards = [
   {
+    module: "breaks",
     to: "/breaks",
     title: "הפסקות",
     desc: "הזמנת הפסקת 10 דקות וצהריים להיום",
@@ -19,6 +22,7 @@ const productionCards = [
     iconTile: "m3-icon-tile",
   },
   {
+    module: "shifts",
     to: "/shifts",
     title: "משמרות",
     desc: "אילוצים, חופש ושיבוץ שבועי",
@@ -26,6 +30,7 @@ const productionCards = [
     iconTile: "m3-icon-tile",
   },
   {
+    module: "training",
     to: "/training",
     title: "הדרכה",
     desc: "לוח זמנים לקורס דיגיטל לנציגים חדשים",
@@ -33,6 +38,7 @@ const productionCards = [
     iconTile: "m3-icon-tile",
   },
   {
+    module: "metrics",
     to: "/metrics",
     title: "מדדים",
     desc: "טבלת כל הנציגים וציון משוקלל",
@@ -40,6 +46,7 @@ const productionCards = [
     iconTile: "m3-icon-tile",
   },
   {
+    module: "remote_support",
     to: "/remote-support",
     title: "השתלטות מרחוק",
     desc: "צפייה בדפדפן · RustDesk · אישור ותיעוד",
@@ -49,6 +56,7 @@ const productionCards = [
 ];
 
 const customerChatCard = {
+  module: "customer_chat",
   to: "/customer-chat",
   title: "צ'אט לקוחות",
   desc: "תור המתנה, קבלת שיחות ומענה ללקוחות",
@@ -58,6 +66,7 @@ const customerChatCard = {
 
 const demoOnlyCards = [
   {
+    module: "crm",
     to: "/crm",
     title: "CRM",
     desc: "לקוחות ותיעוד שיחות",
@@ -65,6 +74,7 @@ const demoOnlyCards = [
     iconTile: "m3-icon-tile",
   },
   {
+    module: "knowledge",
     to: "/knowledge",
     title: "בסיס ידע",
     desc: "שאלות ותשובות ממסמכי הארגון",
@@ -88,6 +98,8 @@ const showAdminDemoHint =
 
 function HomeContent() {
   const { displayName, isLoggedIn, refresh } = useAgentSession();
+  const { modules } = useAgentModules();
+  const visibleCards = filterItemsByModules(homeCards, modules);
   const agentCount = getAgentNamesList().length;
   const adminPin = String(import.meta.env.VITE_ADMIN_PIN ?? "").trim();
 
@@ -109,7 +121,7 @@ function HomeContent() {
     <HypHomeShell
       displayName={displayName}
       agentCount={agentCount}
-      homeCards={homeCards}
+      homeCards={visibleCards}
       showAdminDemoHint={showAdminDemoHint}
       adminPin={adminPin}
       onLogout={handleLogout}

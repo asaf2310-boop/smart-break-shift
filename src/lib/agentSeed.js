@@ -1,6 +1,7 @@
 import { dataClient } from "@/api/client";
 import { demoModeEnabled } from "@/api/demoClient";
 import { isSupabaseBackend } from "@/api/dataClient";
+import { DEFAULT_AGENT_MODULES } from "@/constants/agentModules";
 import { REAL_AGENT_NAMES } from "@/constants/scheduling";
 
 function pendingEmail(index) {
@@ -30,6 +31,7 @@ export async function ensureAgentsSeeded() {
       blocked: false,
       needs_password_setup: true,
       password_plain: null,
+      modules: [...DEFAULT_AGENT_MODULES],
     }));
 
     await dataClient.entities.Agent.bulkCreate(rows);

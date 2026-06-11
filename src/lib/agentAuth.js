@@ -9,6 +9,7 @@ import {
   requestDemoPasswordReset,
 } from "@/lib/appUsersStore";
 import { clearAdminSession } from "@/hooks/useIsAdmin";
+import { normalizeAgentModules } from "@/constants/agentModules";
 import { getAgentNamesList } from "@/constants/scheduling";
 
 export const AGENT_SESSION_KEY = "smart-break-agent-session-v1";
@@ -54,6 +55,7 @@ function mapSupabaseAgent(row) {
     passwordPlain: row.password_plain || null,
     active: row.active !== false && !row.deleted_at,
     blocked: row.blocked === true,
+    modules: normalizeAgentModules(row.modules),
   };
 }
 
@@ -66,6 +68,17 @@ function mapDemoAgent(user) {
     needsPasswordSetup: user.needsPasswordSetup !== false && !user.password,
     active: user.active !== false,
     blocked: user.blocked === true,
+    modules: normalizeAgentModules(user.modules),
+  };
+}
+
+function sessionFromAgent(agent) {
+  return {
+    userId: agent.id,
+    email: agent.email,
+    displayName: agent.displayName,
+    modules: normalizeAgentModules(agent.modules),
+    ...(agent.authUserId ? { authUserId: agent.authUserId } : {}),
   };
 }
 
@@ -173,7 +186,7 @@ export async function agentLoginWithPassword(email, password) {
     if (!verifyDemoUserPassword(user, password)) {
       return credentialsError();
     }
-    const session = { userId: user.id, email: user.email, displayName: user.name };
+    const session = sessionFromAgent(mapDemoAgent(user));
     setAgentSession(session);
     return { ok: true, session };
   }
@@ -182,11 +195,7 @@ export async function agentLoginWithPassword(email, password) {
     return credentialsError();
   }
 
-  const session = {
-    userId: agent.id,
-    email: agent.email,
-    displayName: agent.displayName,
-  };
+  const session = sessionFromAgent(agent);
   setAgentSession(session);
   return { ok: true, session };
 }
@@ -203,7 +212,7 @@ export async function agentSetupPassword(email, password) {
 
   if (demoModeEnabled) {
     const updated = setDemoUserPassword(agent.id, password);
-    const session = { userId: updated.id, email: updated.email, displayName: updated.name };
+    const session = sessionFromAgent(mapDemoAgent(updated));
     setAgentSession(session);
     return { ok: true, session };
   }
@@ -218,11 +227,7 @@ export async function agentSetupPassword(email, password) {
     needs_password_setup: false,
   });
 
-  const session = {
-    userId: agent.id,
-    email: agent.email,
-    displayName: agent.displayName,
-  };
+  const session = sessionFromAgent(agent);
   setAgentSession(session);
   return { ok: true, session };
 }
@@ -290,12 +295,7 @@ export async function restoreSupabaseAgentSession() {
     return existing;
   }
 
-  const session = {
-    userId: agent.id,
-    email: agent.email,
-    displayName: agent.displayName,
-    authUserId: authSession.user.id,
-  };
+  const session = sessionFromAgent({ ...agent, authUserId: authSession.user.id });
   setAgentSession(session);
   return session;
 }

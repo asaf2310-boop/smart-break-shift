@@ -12,6 +12,7 @@ import { dataClient } from "@/api/client";
 import { getChatEntities, isLocalChatStore } from "@/api/localChatStore";
 import { getStoredAgentName } from "@/constants/scheduling";
 import { useAgentSession } from "@/hooks/useAgentSession";
+import { useAgentModules } from "@/hooks/useAgentModules";
 import { getLiveQueryOptions } from "@/lib/liveQuery";
 import { resolveAgentStatus, statusDotClass } from "@/lib/chatStatus";
 import { CHAT_STATUS, isAgentChatConnected } from "@/lib/agentChatPresence";
@@ -100,7 +101,9 @@ function pointerClientY(event) {
 /** בועת צ'אט צפה — מופיעה במסכי נציג, בלי טאב בסרגל */
 export default function FloatingChatWidget() {
   const { pathname, search } = useLocation();
+  const { hasModule, isLoggedIn } = useAgentModules();
   if (isGuestChromeHiddenPath(pathname, search)) return null;
+  if (isLoggedIn && !hasModule("internal_chat")) return null;
   return <FloatingChatWidgetChrome />;
 }
 
