@@ -222,18 +222,28 @@ export default function ScreenShareGuestPage() {
   const notifyAgentGuestReady = useCallback(
     (sessionSnapshot) => {
       if (!sessionSnapshot) return;
-      const payload = {
-        type: "guest_ready",
-        consentAt: sessionSnapshot.consentAt || null,
-        recordingConsentAt: sessionSnapshot.recordingConsentAt || null,
-        at: Date.now(),
+      const sendReady = () => {
+        const latest = resolveGuestSession(sessionId, bootstrapKey) || sessionSnapshot;
+        sendPeerDataMessage({
+          type: "guest_ready",
+          consentAt: latest.consentAt || null,
+          recordingConsentAt: latest.recordingConsentAt || null,
+          at: Date.now(),
+        });
+        if (latest.recordingConsentAt) {
+          sendPeerDataMessage({
+            type: "recording_consent",
+            recordingConsentAt: latest.recordingConsentAt,
+            at: Date.now(),
+          });
+        }
       };
-      sendPeerDataMessage(payload);
+      sendReady();
       for (let attempt = 1; attempt <= 4; attempt += 1) {
-        window.setTimeout(() => sendPeerDataMessage(payload), attempt * 1200);
+        window.setTimeout(sendReady, attempt * 1200);
       }
     },
-    [sendPeerDataMessage]
+    [sendPeerDataMessage, sessionId, bootstrapKey]
   );
 
   const endGuestSessionWithNotify = useCallback(

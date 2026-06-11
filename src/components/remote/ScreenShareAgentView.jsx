@@ -61,7 +61,9 @@ import {
   setRecordingStopped,
   subscribeScreenShare,
   updateRecordingMetadata,
+  pullSessionFieldsFromCloud,
 } from "@/lib/screenShareStore";
+import { cloudSessionSyncEnabled } from "@/lib/supportSessionsSync";
 import SessionFileShare from "@/components/remote/SessionFileShare";
 import SessionSupportChat from "@/components/remote/SessionSupportChat";
 import { isTurnConfigured } from "@/lib/webrtcConfig";
@@ -952,6 +954,15 @@ export default function ScreenShareAgentView({
             setStatus((prev) => (prev === "ended" ? prev : "connecting"));
             return;
           }
+          if (data?.type === "recording_consent" && data.recordingConsentAt) {
+            if (sessionId) {
+              applyGuestPeerSync(sessionId, {
+                recordingConsentAt: data.recordingConsentAt,
+              });
+              syncPeerSessionRecord();
+            }
+            return;
+          }
           if (data?.type !== "guest_end") return;
           const reason = data.reason || "client_stop";
           endSession(sessionId, { endedReason: reason });
@@ -974,6 +985,9 @@ export default function ScreenShareAgentView({
             applyGuestPeerSync(sessionId, { consentAt: new Date().toISOString() });
           }
           syncPeerSessionRecord();
+          if (cloudSessionSyncEnabled()) {
+            void pullSessionFieldsFromCloud(sessionId).then(() => syncPeerSessionRecord());
+          }
         }
         callRef.current = call;
         let stopWatchReceivers = () => {};
@@ -1392,7 +1406,13 @@ export default function ScreenShareAgentView({
     autoStartAttemptedRef.current = true;
     startRecordingRef.current();
     return undefined;
-  }, [recordingFeaturesEnabled, autoStartRecording, canRecord, isRecording]);
+  }, [
+    recordingFeaturesEnabled,
+    autoStartRecording,
+    canRecord,
+    isRecording,
+    liveSession?.recordingConsentAt,
+  ]);
 
   const handleAutoStartToggle = (event) => {
     const checked = event.target.checked;

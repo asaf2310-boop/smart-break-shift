@@ -45,6 +45,14 @@ function mapScreenShareRow(session, recordingCount = null) {
   };
 }
 
+/** אל תדרוס אישורי לקוח בענן כשהנציג עדיין לא קיבל אותם ל-localStorage. */
+function rowForCloudUpsert(session, recordingCount = null) {
+  const row = mapScreenShareRow(session, recordingCount);
+  if (!session.consentAt) delete row.consent_at;
+  if (!session.recordingConsentAt) delete row.recording_consent_at;
+  return row;
+}
+
 function mapRustDeskRow(session) {
   return {
     id: session.id,
@@ -71,7 +79,7 @@ function mapRustDeskRow(session) {
  */
 export function syncScreenShareSessionToCloud(session, { recordingCount } = {}) {
   if (!cloudSessionSyncEnabled() || !session?.id) return;
-  const row = mapScreenShareRow(session, recordingCount);
+  const row = rowForCloudUpsert(session, recordingCount);
   void supabase
     .from("support_sessions")
     .upsert(row, { onConflict: "id" })
@@ -83,7 +91,7 @@ export function syncScreenShareSessionToCloud(session, { recordingCount } = {}) 
 /** Upsert ממתין — לפני FK של screen_recordings. */
 export async function syncScreenShareSessionToCloudAwait(session, options = {}) {
   if (!cloudSessionSyncEnabled() || !session?.id) return { ok: true };
-  const row = mapScreenShareRow(session, options.recordingCount);
+  const row = rowForCloudUpsert(session, options.recordingCount);
   const { error } = await supabase.from("support_sessions").upsert(row, { onConflict: "id" });
   if (error) {
     console.warn("[supportSessionsSync] screen share upsert failed", error.message);
