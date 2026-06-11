@@ -28,14 +28,56 @@ export function isPercentColumn(columnName) {
   return false;
 }
 
+/** זמן התחברות — בדקות כמו ב-Excel */
+export function isConnectionTimeColumn(columnName) {
+  const norm = normalizeHeader(columnName);
+  if (norm.includes("זמן התחברות") || norm.includes("התחברות")) return true;
+  if (norm.includes("connection time") || norm.includes("login time")) return true;
+  return false;
+}
+
 export function isDurationMinutesColumn(columnName) {
   const norm = normalizeHeader(columnName);
+  if (isConnectionTimeColumn(columnName)) return true;
   if (norm.includes("דק")) return true;
   if (norm.includes("משך שיחה") || norm.includes("ממוצע משך")) return true;
-  if (norm.includes("זמן ממוצע") || norm.includes("משך")) return true;
+  if (norm.includes("זמן ממוצע")) return true;
   if (norm.includes("aht") || norm.includes("handle time")) return true;
   if (norm.includes("duration") && (norm.includes("min") || norm.includes("דק"))) return true;
   return false;
+}
+
+/** המרה לדקות — תואם Excel (עשרוני, שבר יום, או mm:ss) */
+export function parseDurationToMinutes(value, columnName = "") {
+  if (value === null || value === undefined || value === "") return null;
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.getHours() * 60 + value.getMinutes() + value.getSeconds() / 60;
+  }
+
+  const str = String(value).trim();
+  const hms = str.match(/^(\d{1,3}):(\d{1,2})(?::(\d{1,2}))?$/);
+  if (hms) {
+    const first = Number.parseInt(hms[1], 10);
+    const second = Number.parseInt(hms[2], 10);
+    const third = hms[3] !== undefined ? Number.parseInt(hms[3], 10) : null;
+    if (third !== null) return first * 60 + second + third / 60;
+    return first + second / 60;
+  }
+
+  const n = parseMetricNumber(value);
+  if (n === null) return null;
+
+  const norm = normalizeHeader(columnName);
+
+  // Excel time cell — שבר מיום (למשל 4.5 דק' ≈ 0.003125)
+  if (n > 0 && n < 1) return n * 24 * 60;
+
+  // עמודה מסומנת במפורש כדקות
+  if (norm.includes("דק")) return n;
+
+  // ברירת מחדל: הערך ב-Excel הוא כבר בדקות (למשל 4.5)
+  return n;
 }
 
 /** ערך מספרי לדירוג — מנרמל אחוזים מ-Excel (0.92 → 92) */
@@ -43,7 +85,9 @@ export function metricValueForScoring(value, columnName) {
   const n = parseMetricNumber(value);
   if (n === null) return null;
   if (isPercentColumn(columnName) && n > 0 && n <= 1) return n * 100;
-  if (isDurationMinutesColumn(columnName) && n >= 60 && n < 6000) return n / 60;
+  if (isDurationMinutesColumn(columnName)) {
+    return parseDurationToMinutes(value, columnName);
+  }
   return n;
 }
 
@@ -65,34 +109,18 @@ function formatPercent(value) {
   return `${rounded}%`;
 }
 
-function formatDurationMinutes(value) {
-  const str = String(value).trim();
-  const clockMatch = str.match(/^(\d{1,3}):(\d{1,2})$/);
-  if (clockMatch) {
-    const mins = Number.parseInt(clockMatch[1], 10);
-    const secs = Number.parseInt(clockMatch[2], 10);
-    if (secs === 0) return `${mins} דק'`;
-    return `${mins}:${String(secs).padStart(2, "0")} דק'`;
+export function formatDurationMinutes(value, columnName = "") {
+  const totalMinutes = parseDurationToMinutes(value, columnName);
+  if (totalMinutes === null) {
+    const str = String(value ?? "").trim();
+    return str || "—";
   }
 
-  const n = parseMetricNumber(value);
-  if (n === null) return str;
-
-  let totalMinutes = n;
-  if (n >= 60 && n < 6000) {
-    totalMinutes = n / 60;
+  const rounded = Math.round(totalMinutes * 10) / 10;
+  if (Math.abs(rounded - Math.round(rounded)) < 0.05) {
+    return `${Math.round(rounded)} דק'`;
   }
-
-  const mins = Math.floor(totalMinutes);
-  let secs = Math.round((totalMinutes - mins) * 60);
-  if (secs === 60) {
-    return `${mins + 1} דק'`;
-  }
-  if (secs === 0) {
-    if (Math.abs(totalMinutes - mins) < 0.001) return `${mins} דק'`;
-    return `${totalMinutes.toFixed(1)} דק'`;
-  }
-  return `${mins}:${String(secs).padStart(2, "0")} דק'`;
+  return `${rounded.toFixed(1)} דק'`;
 }
 
 export function formatMetricCell(value, columnName) {
@@ -102,7 +130,7 @@ export function formatMetricCell(value, columnName) {
     return formatPercent(value);
   }
   if (isDurationMinutesColumn(columnName)) {
-    return formatDurationMinutes(value);
+    return formatDurationMinutes(value, columnName);
   }
 
   const n = parseMetricNumber(value);

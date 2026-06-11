@@ -6,8 +6,11 @@ create table if not exists agent_metrics_uploads (
   period_label text not null default '',
   file_name text,
   column_headers jsonb not null default '[]'::jsonb,
+  team_summary jsonb,
   uploaded_at timestamptz not null default now()
 );
+
+alter table agent_metrics_uploads add column if not exists team_summary jsonb;
 
 create table if not exists agent_metrics_rows (
   id uuid primary key default gen_random_uuid(),

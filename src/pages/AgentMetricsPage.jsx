@@ -12,12 +12,12 @@ import { getStoredAgentName } from "@/constants/scheduling";
 export default function AgentMetricsPage() {
   const { displayName } = useAgentSession();
   const agentName = displayName || getStoredAgentName();
-  const { loading, snapshot, rankedRows, rankingNote } = useAgentMetricsSnapshot();
+  const { loading, snapshot, rankedRows, teamSummary, rankingNote } = useAgentMetricsSnapshot();
 
   const hasData = Boolean(snapshot?.upload && rankedRows.length);
 
   return (
-    <HypPageLayout variant="scheduling" contentClassName="max-w-5xl px-4 py-8">
+    <HypPageLayout variant="scheduling" contentClassName="max-w-[min(100%,80rem)] px-3 sm:px-4 py-8">
       <BackendConfigBanner />
       <motion.div
         initial={{ opacity: 0, y: -12 }}
@@ -84,6 +84,7 @@ export default function AgentMetricsPage() {
             <AgentMetricsTable
               columns={snapshot.columns}
               rows={rankedRows}
+              teamSummary={teamSummary}
               highlightAgentName={agentName}
               showRank
               highlightLeader

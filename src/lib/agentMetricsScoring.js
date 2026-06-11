@@ -1,3 +1,4 @@
+import { isTeamAverageLabel } from "@/lib/agentMetricsImport";
 import {
   isDurationMinutesColumn,
   metricValueForScoring,
@@ -169,18 +170,21 @@ function buildScoreComponents(metricColumns = []) {
  * @param {string[]} columns
  */
 export function rankMetricRows(rows = [], columns = []) {
-  if (!rows.length) return [];
+  const agentRows = rows.filter(
+    (row) => !isTeamAverageLabel(row.agent_name || row.agentName)
+  );
+  if (!agentRows.length) return [];
 
   const metricColumns = columns.slice(1);
   const components = buildScoreComponents(metricColumns);
   const activeWeight = components.reduce((sum, item) => sum + item.weight, 0);
 
   const normByComponent = components.map(({ col, higherIsBetter }) => {
-    const vals = rows.map((r) => metricValueForScoring(r.metrics?.[col], col));
+    const vals = agentRows.map((r) => metricValueForScoring(r.metrics?.[col], col));
     return normalizeSeries(vals, { higherIsBetter });
   });
 
-  const scored = rows.map((row, index) => {
+  const scored = agentRows.map((row, index) => {
     let compositeScore = 0;
     if (activeWeight > 0) {
       components.forEach((comp, compIndex) => {

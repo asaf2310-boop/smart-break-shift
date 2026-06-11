@@ -130,6 +130,7 @@ export default function AdminMetricsPanel() {
         fileName: selectedFile?.name || "",
         columns: preview.columns,
         rows: preview.rows,
+        teamSummary: preview.teamSummary || null,
       });
       toast({
         title: "נשמר בהצלחה",
@@ -209,6 +210,10 @@ export default function AdminMetricsPanel() {
             <strong>{getCurrentMonthSheetContext().hebrewMonth}</strong> (החודש הנוכחי).
           </p>
           <p className="text-xs">
+            שורת <strong>ממוצע צוות</strong> ב-Excel מוצגת בתחתית הטבלה (לא בדירוג). זמן התחברות ומשך
+            שיחה — בדקות.
+          </p>
+          <p className="text-xs">
             מומלץ לציון משוקלל: <strong>שיחות ממוצע לשעה</strong> (50%) · <strong>תיעוד %</strong> (20%) ·{" "}
             <strong>אי זמינות %</strong> (10%) · <strong>כמות טיפול במיילים</strong> (10%) ·{" "}
             <strong>ממוצע משך שיחה (דק)</strong> (10%)
@@ -245,6 +250,7 @@ export default function AdminMetricsPanel() {
           <AgentMetricsTable
             columns={preview.columns}
             rows={previewRows}
+            teamSummary={preview.teamSummary}
             showRank
             showCompositeScore
           />
@@ -280,7 +286,13 @@ export default function AdminMetricsPanel() {
               {" · "}
               {snapshot.rows.length} נציגים · {rankingNote}
             </p>
-            <AgentMetricsTable columns={snapshot.columns} rows={savedRows} showRank showCompositeScore />
+            <AgentMetricsTable
+              columns={snapshot.columns}
+              rows={savedRows}
+              teamSummary={snapshot.upload?.team_summary}
+              showRank
+              showCompositeScore
+            />
           </>
         ) : (
           <AgentMetricsTable columns={[]} rows={[]} />

@@ -42,13 +42,14 @@ export function getMetricsForAgent(agentName) {
   return { ...snapshot, rows };
 }
 
-export function replaceMetricsDataset({ periodLabel, fileName, columns, rows }) {
+export function replaceMetricsDataset({ periodLabel, fileName, columns, rows, teamSummary }) {
   const uploadId = `demo_upload_${Date.now()}`;
   const upload = {
     id: uploadId,
     period_label: periodLabel || "",
     file_name: fileName || "",
     column_headers: columns,
+    team_summary: teamSummary || null,
     uploaded_at: new Date().toISOString(),
   };
   const storedRows = rows.map((row, index) => ({

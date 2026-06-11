@@ -69,6 +69,7 @@ export async function importMetricsDataset({
   fileName,
   columns,
   rows,
+  teamSummary,
 }) {
   if (!rows?.length) throw new Error("אין שורות לייבוא");
 
@@ -84,6 +85,7 @@ export async function importMetricsDataset({
         period_label: periodLabel || "",
         file_name: fileName || "",
         column_headers: columns,
+        team_summary: teamSummary || null,
       })
       .select("*")
       .single();
@@ -105,7 +107,7 @@ export async function importMetricsDataset({
     return { upload: uploadRows, rowCount: payload.length };
   }
 
-  return replaceMetricsDataset({ periodLabel, fileName, columns, rows });
+  return replaceMetricsDataset({ periodLabel, fileName, columns, rows, teamSummary });
 }
 
 export async function clearAllMetrics() {

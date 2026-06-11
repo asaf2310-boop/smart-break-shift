@@ -134,6 +134,36 @@ function normalizeAgentName(value) {
   return String(value ?? "").trim().replace(/\s+/g, " ");
 }
 
+/** שורת סיכום צוות ב-Excel — לא נכללת בדירוג נציגים */
+export function isTeamAverageLabel(name) {
+  const norm = normalizeAgentName(name).toLowerCase();
+  if (!norm) return false;
+  if (norm === "ממוצע צוות" || norm === "ממוצע" || norm === "צוות") return true;
+  if (norm.includes("ממוצע") && norm.includes("צוות")) return true;
+  if (norm === "team average" || norm === "team avg" || norm === "team") return true;
+  if (norm.includes("team") && norm.includes("average")) return true;
+  return false;
+}
+
+export function partitionMetricsRows(rows = []) {
+  const agentRows = [];
+  let teamSummary = null;
+
+  for (const row of rows) {
+    const name = row.agentName || row.agent_name || "";
+    if (isTeamAverageLabel(name)) {
+      teamSummary = {
+        label: normalizeAgentName(name) || "ממוצע צוות",
+        metrics: row.metrics || {},
+      };
+      continue;
+    }
+    agentRows.push(row);
+  }
+
+  return { agentRows, teamSummary };
+}
+
 /**
  * @param {Record<string, unknown>[]} sheetRows — from XLSX sheet_to_json
  */
@@ -154,7 +184,7 @@ export function parseMetricsSheetRows(sheetRows) {
 
   const metricKeys = keys.filter((k) => k !== agentKey);
   const columns = [agentKey, ...metricKeys];
-  const rows = [];
+  const parsedRows = [];
   const errors = [];
 
   sheetRows.forEach((raw, index) => {
@@ -169,18 +199,22 @@ export function parseMetricsSheetRows(sheetRows) {
     }
 
     if (Object.keys(metrics).length === 0) {
-      errors.push(`שורה ${index + 2}: אין מדדים עבור ${agentName}`);
+      if (!isTeamAverageLabel(agentName)) {
+        errors.push(`שורה ${index + 2}: אין מדדים עבור ${agentName}`);
+      }
       return;
     }
 
-    rows.push({ agentName, metrics });
+    parsedRows.push({ agentName, metrics });
   });
 
-  if (!rows.length) {
+  const { agentRows, teamSummary } = partitionMetricsRows(parsedRows);
+
+  if (!agentRows.length && !teamSummary) {
     errors.push("לא נמצאו שורות תקינות עם שם נציג ומדדים");
   }
 
-  return { columns, rows, errors, agentColumn: agentKey };
+  return { columns, rows: agentRows, teamSummary, errors, agentColumn: agentKey };
 }
 
 /**
@@ -205,7 +239,7 @@ export async function parseMetricsFile(file, options = {}) {
     sheetRows = sheet ? XLSX.utils.sheet_to_json(sheet, { defval: "" }) : [];
   } else {
     const buffer = await file.arrayBuffer();
-    const workbook = XLSX.read(new Uint8Array(buffer), { type: "array" });
+    const workbook = XLSX.read(new Uint8Array(buffer), { type: "array", cellDates: true });
     availableSheets = workbook.SheetNames || [];
 
     sheetName = findMetricsSheetName(availableSheets, referenceDate);
@@ -240,6 +274,7 @@ export function downloadMetricsTemplate() {
   const headers = [
     "שם נציג",
     "שיחות ממוצע לשעה",
+    "זמן התחברות (דק)",
     "תיעוד %",
     "אי זמינות %",
     "כמות טיפול במיילים",
@@ -248,9 +283,10 @@ export function downloadMetricsTemplate() {
     "עמידה ביעד %",
     "ציון שביעות רצון",
   ];
-  const sample = ["אוראל כליפה", 8.5, 0.94, 0.03, 42, 4.5, 120, 0.92, 4.8];
+  const sample = ["אוראל כליפה", 8.5, 7.2, 0.94, 0.03, 42, 4.5, 120, 0.92, 4.8];
+  const teamSample = ["ממוצע צוות", 7.8, 6.5, 0.91, 0.04, 38, 4.8, 110, 0.9, 4.6];
   const ctx = getCurrentMonthSheetContext();
-  const ws = XLSX.utils.aoa_to_sheet([headers, sample]);
+  const ws = XLSX.utils.aoa_to_sheet([headers, sample, teamSample]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, ctx.hebrewMonth);
   XLSX.writeFile(wb, "template-agent-metrics.xlsx");
