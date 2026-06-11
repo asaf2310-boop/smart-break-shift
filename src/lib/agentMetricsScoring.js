@@ -314,9 +314,30 @@ export function relativeMetricScore(value, bestValue, higherIsBetter = true) {
   }
 
   if (value <= 0) return 100;
-  if (bestValue <= 0) return 100;
+  if (bestValue <= 0) return 0;
   return Math.min(100, (bestValue / value) * 100);
 }
+
+/** מפתחות מדדים שמושווים יחד בדירוג מאוחד (למשל ניקוד שיחות לשעה מכל הערוצים) */
+const UNIFIED_NORMALIZATION_GROUPS = {
+  callPointsPerHour: ["callsPerHour", "whatsappPerHour"],
+  writtenWork: ["emailPoints", "writtenWorkPoints"],
+  unavailability: ["unavailability"],
+  documentation: ["documentation"],
+  avgDuration: ["avgDuration"],
+  handleTime: ["handleTime"],
+};
+
+const COMPONENT_NORMALIZATION_GROUP = {
+  callsPerHour: "callPointsPerHour",
+  whatsappPerHour: "callPointsPerHour",
+  emailPoints: "writtenWork",
+  writtenWorkPoints: "writtenWork",
+  unavailability: "unavailability",
+  documentation: "documentation",
+  avgDuration: "avgDuration",
+  handleTime: "handleTime",
+};
 
 function buildPhoneScoreComponents(metricColumns = [], pointSettings) {
   const docCol = findDocumentationColumn(metricColumns);
@@ -457,7 +478,73 @@ export function rankMetricRows(rows = [], columns = [], channel, pointSettings) 
   return scored;
 }
 
-/** דירוג מאוחד — טלפון + WhatsApp בטבלה אחת */
+function scoreUnifiedAgentRows(phoneAgents, phoneColumns, waAgents, whatsappColumns, pointSettings) {
+  const entries = [
+    ...phoneAgents.map((row) => ({
+      row,
+      channel: METRICS_CHANNEL.phone,
+      metricColumns: phoneColumns.slice(1),
+    })),
+    ...waAgents.map((row) => ({
+      row,
+      channel: METRICS_CHANNEL.whatsapp,
+      metricColumns: whatsappColumns.slice(1),
+    })),
+  ];
+
+  if (!entries.length) return [];
+
+  const prepared = entries.map(({ row, channel, metricColumns }) => {
+    const components = buildScoreComponents(metricColumns, channel, pointSettings).filter((c) => c.getRaw);
+    const rawByKey = Object.fromEntries(components.map((comp) => [comp.key, comp.getRaw(row)]));
+    return { row, channel, components, rawByKey };
+  });
+
+  const groupMeta = {};
+  for (const groupName of Object.keys(UNIFIED_NORMALIZATION_GROUPS)) {
+    const keys = UNIFIED_NORMALIZATION_GROUPS[groupName];
+    const values = [];
+    let higherIsBetter = true;
+
+    prepared.forEach(({ components, rawByKey }) => {
+      components.forEach((comp) => {
+        if (!keys.includes(comp.key)) return;
+        const value = rawByKey[comp.key];
+        if (value !== null && Number.isFinite(value)) values.push(value);
+        higherIsBetter = comp.higherIsBetter;
+      });
+    });
+
+    groupMeta[groupName] = {
+      best: pickBestValue(values, higherIsBetter),
+      higherIsBetter,
+    };
+  }
+
+  return prepared.map(({ row, channel, components, rawByKey }) => {
+    let compositeScore = 0;
+
+    components.forEach((comp) => {
+      const groupName = COMPONENT_NORMALIZATION_GROUP[comp.key];
+      const group = groupMeta[groupName];
+      const normalized = relativeMetricScore(
+        rawByKey[comp.key],
+        group?.best ?? null,
+        group?.higherIsBetter ?? comp.higherIsBetter
+      );
+      compositeScore += comp.weight * normalized;
+    });
+
+    return {
+      ...row,
+      agent_name: row.agent_name || row.agentName,
+      _compositeScore: compositeScore,
+      _channel: channel,
+    };
+  });
+}
+
+/** דירוג מאוחד — טלפון + WhatsApp בטבלה אחת; נרמול מדדים משותפים מול כל הנציגים */
 export function rankUnifiedMetricRows({
   phoneRows = [],
   phoneColumns = [],
@@ -468,20 +555,14 @@ export function rankUnifiedMetricRows({
   const phoneAgents = phoneRows.filter((r) => !isTeamAverageLabel(r.agent_name || r.agentName));
   const waAgents = whatsappRows.filter((r) => !isTeamAverageLabel(r.agent_name || r.agentName));
 
-  const phoneScored = scoreAgentRows(
+  const merged = scoreUnifiedAgentRows(
     phoneAgents,
-    phoneColumns.slice(1),
-    METRICS_CHANNEL.phone,
-    pointSettings
-  );
-  const waScored = scoreAgentRows(
+    phoneColumns,
     waAgents,
-    whatsappColumns.slice(1),
-    METRICS_CHANNEL.whatsapp,
+    whatsappColumns,
     pointSettings
   );
 
-  const merged = [...phoneScored, ...waScored];
   merged.sort((a, b) => b._compositeScore - a._compositeScore);
   merged.forEach((row, i) => {
     row._rank = i + 1;
@@ -502,7 +583,7 @@ export function getUnifiedRankingNote(pointSettings) {
   const s = resolvePointSettings(pointSettings);
   return (
     `דירוג מאוחד (טלפון + WhatsApp): לכל מדד מחשבים ניקוד גולמי (שיחה טלפונית=${s.phoneCall} · WhatsApp=${s.whatsappCall} · מייל=${s.email} · טיקט=${s.ticket}), ` +
-    `מנרמלים ל-0–100 מול הטוב ביותר בחודש, ומכפילים במשקל. ` +
+    `מנרמלים ל-0–100 מול הטוב ביותר בחודש מבין כל הנציגים (שיחות לשעה, מיילים ואי זמינות — ביחד), ומכפילים במשקל. ` +
     `טלפון: 50% שיחות/שעה · 20% תיעוד · 10% מיילים · 10% משך שיחה · 10% אי זמינות. ` +
     `WhatsApp: 50% שיחות/שעה · 30% מיילים+טיקטים · 10% זמן טיפול · 10% אי זמינות.`
   );
