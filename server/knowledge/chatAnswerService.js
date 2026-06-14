@@ -1,27 +1,22 @@
-/** OpenAI chat completion for RAG answers (chunks only — no full documents). */
+/** AI chat completion for RAG answers (chunks only — no full documents). */
 
-import { fetchOpenAiWithRetry, getRetryAfterSec } from "../openaiRetry.js";
+import { generateText, getAiProvider } from "../ai/aiProvider.js";
+import { generateGeminiKnowledgeAnswer } from "./geminiChatService.js";
+import {
+  GEMINI_KNOWLEDGE_SYSTEM_PROMPT,
+  KNOWLEDGE_MISSING_ANSWER,
+} from "./geminiKnowledgePrompt.js";
 
-const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
-
-export const KNOWLEDGE_SYSTEM_PROMPT = `אתה עוזר AI לבסיס ידע של מוקד שירות לקוחות.
-ענה בעברית בלבד, בצורה טבעית וברורה.
-השתמש אך ורק בקטעי ההקשר שסופקו — התעלם מכל מידע שלא קשור ישירות לשאלה.
-אם התשובה לא קיימת בהקשר, אמור בדיוק:
-'לא מצאתי תשובה ברורה במסמכים הקיימים.'
-אסור להמציא מידע, לענות מידע כללי, או להזכיר נושאים שלא נשאלו עליהם.
-כתוב עם רווח בין כל מילה עברית, סימני פיסוק נכונים, ושורות מסודרות.
-שמור על סדר שלבים לוגי — אל תהפוך או תמזג מילים.
-חובה לציין מקור: שם מסמך / עמוד / סעיף עם מספר סימוכין [1], [2] מההקשר.`;
+export const KNOWLEDGE_SYSTEM_PROMPT = GEMINI_KNOWLEDGE_SYSTEM_PROMPT;
 
 export const KNOWLEDGE_ANSWER_FORMAT_HINT = `Structure every answer as:
-תשובה קצרה וברורה
-(optional) פירוט לפי סעיפים אם צריך — רק מידע שקשור ישירות לשאלה
-מקור: שם המסמך / עמוד / כותרת (חובה — ציין את מספר הסימוכין [1], [2] מההקשר אם רלוונטי)`;
+- Bullet points and bold highlights (no long paragraphs)
+- Optional numbered steps for procedures
+- If information is missing, reply exactly: "${KNOWLEDGE_MISSING_ANSWER}"`;
 
-export const KNOWLEDGE_NO_CONTEXT_ANSWER = "לא מצאתי תשובה ברורה במסמכים הקיימים.";
+export const KNOWLEDGE_NO_CONTEXT_ANSWER = KNOWLEDGE_MISSING_ANSWER;
 
-export const KNOWLEDGE_LOW_RELEVANCE_ANSWER = "לא מצאתי מקור ברור במאגר הידע.";
+export const KNOWLEDGE_LOW_RELEVANCE_ANSWER = KNOWLEDGE_MISSING_ANSWER;
 
 const MAX_CONTEXT_CHARS = 2800;
 const MAX_SNIPPET_CHARS = 480;
@@ -114,53 +109,47 @@ function buildMessages(query, context) {
 /**
  * @param {string} query
  * @param {Array} chunks
+ * @param {{ images?: Array, confidence?: number }} [options]
  */
-export async function generateChatAnswer(query, chunks) {
-  const apiKey = String(process.env.OPENAI_API_KEY || "").trim();
-  const model = String(process.env.OPENAI_MODEL || "gpt-4o-mini").trim();
-
-  if (!apiKey) {
-    return {
-      answer: null,
-      citations: uniqueCitations(chunks),
-      error: "openai_not_configured",
-      retryAfterSec: null,
-    };
+export async function generateChatAnswer(query, chunks, options = {}) {
+  if (getAiProvider() === "gemini") {
+    return generateGeminiKnowledgeAnswer(query, chunks, options);
   }
 
   const contextBlocks = buildContextBlocks(chunks);
   const context = contextBlocks.join("\n\n");
   const { howTo, messages } = buildMessages(query, context);
 
-  const openaiRes = await fetchOpenAiWithRetry(OPENAI_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.2,
-      max_tokens: howTo ? 480 : 380,
-      messages,
-    }),
-  });
-
-  if (!openaiRes.ok) {
-    const errText = await openaiRes.text().catch(() => "");
-    const retryAfterSec = openaiRes.status === 429 ? getRetryAfterSec(openaiRes) : null;
+  if (!messages.length) {
     return {
       answer: null,
       citations: uniqueCitations(chunks),
-      error: `openai_error:${openaiRes.status}`,
-      detail: errText.slice(0, 200),
-      retryAfterSec,
-      rateLimited: openaiRes.status === 429,
+      error: "ai_not_configured",
+      retryAfterSec: null,
     };
   }
 
-  const data = await openaiRes.json();
-  const raw = data.choices?.[0]?.message?.content?.trim() || KNOWLEDGE_NO_CONTEXT_ANSWER;
+  const system = messages.find((m) => m.role === "system")?.content || KNOWLEDGE_SYSTEM_PROMPT;
+  const user = messages.find((m) => m.role === "user")?.content || "";
+
+  const result = await generateText({
+    system,
+    user,
+    maxTokens: howTo ? 480 : 380,
+    temperature: 0.2,
+  });
+
+  if (result.error) {
+    return {
+      answer: null,
+      citations: uniqueCitations(chunks),
+      error: result.error,
+      retryAfterSec: result.retryAfterSec,
+      rateLimited: result.rateLimited,
+    };
+  }
+
+  const raw = result.text?.trim() || KNOWLEDGE_NO_CONTEXT_ANSWER;
 
   return {
     answer: sanitizeAssistantAnswer(raw),

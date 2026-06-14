@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import ReactMarkdown from "react-markdown";
 import { BookOpen, ChevronDown, ChevronUp, Copy, ExternalLink, Loader2, RefreshCw, Send, Sparkles, ThumbsDown } from "lucide-react";
 import {
   askKnowledgeBase,
@@ -31,21 +32,21 @@ function isDebugPanelEnabled() {
   }
 }
 
-function formatAssistantContent(content) {
-  const text = String(content || "").trim();
-  if (!text) return [];
-
-  return text
-    .split(/\n{2,}/)
-    .map((block) => block.trim())
-    .filter(Boolean)
-    .map((block) => {
-      const lines = block.split(/\n/).map((l) => l.trim()).filter(Boolean);
-      if (lines.length > 1 && lines.every((l) => /^\d+[\.\)]\s/.test(l))) {
-        return { type: "steps", lines };
-      }
-      return { type: "text", text: lines.join("\n") };
-    });
+function AssistantMarkdown({ content }) {
+  return (
+    <ReactMarkdown
+      className="knowledge-markdown prose prose-sm max-w-none dark:prose-invert [&_p]:m-0 [&_p+p]:mt-2 [&_ul]:my-2 [&_ol]:my-2 [&_li]:my-0.5 [&_strong]:font-semibold [&_table]:text-xs"
+      components={{
+        a: ({ href, children }) => (
+          <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline">
+            {children}
+          </a>
+        ),
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  );
 }
 
 function RetrievalDebugPanel({ debug, expanded, onToggle }) {
@@ -135,37 +136,22 @@ function MessageBubble({ message, showDebug, onRetry, onFeedback, feedbackSendin
         {isUser ? (
           message.content
         ) : (
-          <div className="space-y-2.5">
-            {formatAssistantContent(message.content).map((block, i) =>
-              block.type === "steps" ? (
-                <ol key={i} className="m-0 ps-5 space-y-1.5 list-decimal">
-                  {block.lines.map((line, j) => (
-                    <li key={j} className="ps-0.5">
-                      {line.replace(/^\d+[\.\)]\s*/, "")}
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <p key={i} className="m-0">
-                  {block.text}
-                </p>
-              ),
-            )}
-          </div>
+          <AssistantMarkdown content={message.content} />
         )}
         {!isUser && message.images?.length > 0 && (
           <div className="mt-3 grid gap-2">
-            {message.images.map((img) => (
-              <figure key={`${img.documentId}-${img.pageNumber}`} className="m-0">
+            {message.images.map((img, idx) => (
+              <figure key={`${img.documentId}-${img.pageNumber}-${idx}`} className="m-0">
                 <img
-                  src={img.src}
-                  alt={`${img.documentTitle || "מסמך"} — עמוד ${img.pageNumber}`}
+                  src={img.url || img.src}
+                  alt={`${img.documentTitle || img.documentName || "מסמך"}${img.pageNumber != null ? ` — עמוד ${img.pageNumber}` : ""}`}
                   className="rounded-lg border border-outline/20 max-w-full h-auto bg-white"
                   loading="lazy"
                 />
                 <figcaption className="text-[10px] text-on-surface-variant mt-1">
-                  {img.documentTitle || "מסמך"}
+                  {img.documentTitle || img.documentName || "מסמך"}
                   {img.pageNumber != null ? ` · עמוד ${img.pageNumber}` : ""}
+                  {img.caption ? ` · ${img.caption}` : ""}
                 </figcaption>
               </figure>
             ))}
@@ -424,7 +410,7 @@ export default function KnowledgeChat({ compact = false }) {
         onPhase: (phase, sec) => {
           if (phase === "searching") setLoadingHint("מחפש בבסיס הידע…");
           else if (phase === "embedding") setLoadingHint("מנתח את השאלה…");
-          else if (phase === "gpt") setLoadingHint("מכין תשובה עם GPT…");
+          else if (phase === "gpt") setLoadingHint("מכין תשובה…");
           else if (phase === "fallback_local") setLoadingHint("מחפש במאגר מקומי…");
           else if (phase === "indexing") setLoadingHint("מכין אינדקס מקומי…");
           else if (phase === "waiting_rate_limit") {
@@ -458,7 +444,9 @@ export default function KnowledgeChat({ compact = false }) {
           role: "assistant",
           content: result.answer,
           citations: result.citations,
+          sources: result.sources || [],
           images: result.images || [],
+          grounded: result.grounded,
           confidence: result.confidence ?? result.debug?.confidence ?? null,
           mode: result.mode,
           userQuestion: trimmed,

@@ -1,5 +1,6 @@
-/** Google Gemini — chat, embeddings, vision OCR. */
+/** Google Gemini — chat, embeddings, vision OCR, structured SDK responses. */
 
+import { GoogleGenAI } from "@google/genai";
 import { fetchOpenAiWithRetry, getRetryAfterSec } from "../openaiRetry.js";
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
@@ -18,6 +19,91 @@ export function getGeminiEmbedModel() {
 
 export function isGeminiConfigured() {
   return Boolean(getApiKey());
+}
+
+/** Structured agent JSON schema — Hebrew answer + relevant screenshot URLs. */
+export const AGENT_STRUCTURED_RESPONSE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    hebrewAnswerMarkdown: {
+      type: "STRING",
+      description: "The formatting answer in Hebrew Markdown",
+    },
+    relevantImageUrlsToDisplay: {
+      type: "ARRAY",
+      items: { type: "STRING" },
+      description: "List of URLs of the screenshots that the agent should see",
+    },
+  },
+  required: ["hebrewAnswerMarkdown", "relevantImageUrlsToDisplay"],
+};
+
+let sdkClient = null;
+
+function getSdkClient() {
+  const apiKey = getApiKey();
+  if (!apiKey) return null;
+  if (!sdkClient) {
+    sdkClient = new GoogleGenAI({ apiKey });
+  }
+  return sdkClient;
+}
+
+export function isGeminiSdkAvailable() {
+  return Boolean(getSdkClient());
+}
+
+/**
+ * Structured agent response via @google/genai SDK.
+ * @param {{ systemInstruction: string, contents: Array<{ text?: string, inlineData?: { mimeType: string, data: string } }>, model?: string, maxOutputTokens?: number, temperature?: number }}
+ */
+export async function geminiGenerateStructuredAgentResponse({
+  systemInstruction,
+  contents,
+  model,
+  maxOutputTokens = 720,
+  temperature = 0.15,
+}) {
+  const ai = getSdkClient();
+  if (!ai) {
+    return { parsed: null, text: null, error: "ai_not_configured", retryAfterSec: null, rateLimited: false };
+  }
+
+  try {
+    const response = await ai.models.generateContent({
+      model: model || getGeminiChatModel(),
+      contents,
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json",
+        responseSchema: AGENT_STRUCTURED_RESPONSE_SCHEMA,
+        temperature,
+        maxOutputTokens,
+      },
+    });
+
+    const text = String(response.text || "").trim();
+    if (!text) {
+      return { parsed: null, text: null, error: "empty_response", retryAfterSec: null, rateLimited: false };
+    }
+
+    try {
+      const parsed = JSON.parse(text);
+      return { parsed, text, error: null, retryAfterSec: null, rateLimited: false };
+    } catch {
+      return { parsed: null, text, error: "json_parse_failed", retryAfterSec: null, rateLimited: false };
+    }
+  } catch (err) {
+    const status = err?.status ?? err?.code ?? 500;
+    const is429 = status === 429;
+    return {
+      parsed: null,
+      text: null,
+      error: `ai_error:${status}:${String(err?.message || "").slice(0, 120)}`,
+      retryAfterSec: is429 ? getRetryAfterSec({ headers: { get: () => err?.headers?.["retry-after"] } }) : null,
+      rateLimited: is429,
+    };
+  }
 }
 
 function modelPath(model) {
@@ -52,6 +138,53 @@ export async function geminiGenerateText({ system, user, maxTokens = 480, temper
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
         contents: [{ role: "user", parts: [{ text: user }] }],
+        generationConfig: {
+          temperature,
+          maxOutputTokens: maxTokens,
+        },
+      }),
+    },
+  );
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    return {
+      text: null,
+      error: parseGeminiError(res.status, errText),
+      retryAfterSec: res.status === 429 ? getRetryAfterSec(res) : null,
+      rateLimited: res.status === 429,
+    };
+  }
+
+  const data = await res.json();
+  const text =
+    data.candidates?.[0]?.content?.parts
+      ?.map((p) => p.text || "")
+      .join("")
+      .trim() || null;
+
+  return { text, error: null, retryAfterSec: null, rateLimited: false };
+}
+
+/**
+ * Multimodal generateContent — text + optional inline images.
+ * @param {{ system: string, userParts: Array<{ text?: string, inline_data?: { mime_type: string, data: string } }>, maxTokens?: number, temperature?: number }}
+ */
+export async function geminiGenerateMultimodal({ system, userParts, maxTokens = 560, temperature = 0.15 }) {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    return { text: null, error: "ai_not_configured", retryAfterSec: null, rateLimited: false };
+  }
+
+  const model = getGeminiChatModel();
+  const res = await fetchOpenAiWithRetry(
+    geminiUrl(model, "generateContent"),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: "user", parts: userParts }],
         generationConfig: {
           temperature,
           maxOutputTokens: maxTokens,

@@ -1,23 +1,11 @@
-/** Vercel serverless — full server-side RAG: hybrid search → OpenAI (chunks only). */
+/** Vercel serverless — full server-side RAG: hybrid search → Gemini multimodal. */
 
 import { json, readJsonBody, handleOptions, isSameOrigin } from "../server/knowledge/httpUtils.js";
 import { isPgVectorConfigured } from "../server/knowledge/supabaseAdmin.js";
-import { embedQuery, isEmbeddingConfigured } from "../server/knowledge/embeddingService.js";
-import { RETRIEVAL_TOP_K_DEFAULT } from "../server/knowledge/vectorSearchService.js";
-import {
-  hybridSearch,
-  MIN_CONFIDENCE,
-  KNOWLEDGE_NO_SOURCE_ANSWER,
-} from "../server/knowledge/hybridSearchService.js";
-import { fetchImagesForChunks } from "../server/knowledge/imageIngestService.js";
-import { logKnowledgeGap } from "../server/knowledge/gapFeedbackService.js";
-import {
-  generateChatAnswer,
-  buildContextBlocks,
-  KNOWLEDGE_LOW_RELEVANCE_ANSWER,
-  truncateSnippet,
-} from "../server/knowledge/chatAnswerService.js";
-import { logKnowledgeQuery } from "../server/knowledge/loggingService.js";
+import { isEmbeddingConfigured } from "../server/knowledge/embeddingService.js";
+import { MIN_CONFIDENCE } from "../server/knowledge/hybridSearchService.js";
+import { buildKnowledgeSources } from "../server/knowledge/geminiChatService.js";
+import { generateAgentResponse } from "../server/knowledge/generateAgentResponse.js";
 import {
   getAiProvider,
   isAiConfigured,
@@ -31,6 +19,46 @@ import {
   KNOWLEDGE_ANSWER_FORMAT_HINT,
   KNOWLEDGE_NO_CONTEXT_ANSWER,
 } from "../server/knowledge/chatAnswerService.js";
+
+function buildAgentResponse({
+  answer,
+  citations = [],
+  sources = null,
+  images = [],
+  chunks = [],
+  confidence = null,
+  mode,
+  grounded = true,
+  debug = null,
+}) {
+  const normalizedImages = (images || []).map((img) => ({
+    id: img.id ?? null,
+    url: img.url || img.src,
+    src: img.src || img.url,
+    documentId: img.documentId,
+    documentName: img.documentName || img.documentTitle,
+    documentTitle: img.documentTitle || img.documentName,
+    pageNumber: img.pageNumber ?? null,
+    caption: img.caption || img.description || null,
+    label: img.label ?? null,
+  }));
+
+  const normalizedSources =
+    sources ||
+    buildKnowledgeSources(citations, normalizedImages);
+
+  return {
+    answer,
+    grounded,
+    confidence,
+    mode,
+    sources: normalizedSources,
+    citations,
+    images: normalizedImages,
+    chunks,
+    debug,
+  };
+}
 
 function resolveTenantId(body) {
   const fromBody = body.tenantId ?? body.tenant_id ?? null;
@@ -93,163 +121,92 @@ async function handleLegacyChat(req, res, body) {
   }
 
   const answer = result.text?.trim() || KNOWLEDGE_NO_CONTEXT_ANSWER;
-  return json(res, 200, { answer, mode: getAiProvider() }, req);
+  return json(
+    res,
+    200,
+    buildAgentResponse({
+      answer,
+      citations: [],
+      images: [],
+      chunks: [],
+      confidence: null,
+      mode: getAiProvider(),
+      grounded: true,
+    }),
+    req,
+  );
 }
 
 async function handleServerRag(req, res, body) {
   const query = String(body.query || "").trim();
   const tenantId = resolveTenantId(body);
-  const topK = body.topK ?? RETRIEVAL_TOP_K_DEFAULT;
+  const topK = body.topK ?? undefined;
 
   if (!query) {
     return json(res, 400, { error: "query_required" }, req);
   }
 
-  if (!isPgVectorConfigured()) {
+  const result = await generateAgentResponse(query, { tenantId, topK });
+
+  if (result.error === "query_required") {
+    return json(res, 400, { error: "query_required" }, req);
+  }
+
+  if (result.error === "pgvector_not_configured") {
     return json(res, 503, { error: "pgvector_not_configured" }, req);
   }
 
-  if (!isEmbeddingConfigured()) {
+  if (result.error === "ai_not_configured") {
     return json(res, 503, { error: "ai_not_configured" }, req);
   }
 
-  const { embedding, error: embedErr, retryAfterSec } = await embedQuery(query);
-  if (embedErr || !embedding) {
+  if (result.error === "embedding_failed" || (result.error && result.error !== "search_failed")) {
+    const is429 = String(result.error || "").includes("429");
     return json(
       res,
-      embedErr?.includes("429") ? 429 : 503,
-      { error: embedErr || "embedding_failed", retryAfterSec },
-      req,
-    );
-  }
-
-  const searchResult = await hybridSearch(query, embedding, { topK, tenantId });
-  if (searchResult.error) {
-    return json(res, 500, { error: "search_failed", detail: searchResult.error }, req);
-  }
-
-  const hits = searchResult.hits;
-  const confidence = searchResult.confidence;
-  const chunks = hits.map((h) => h.chunk);
-  const contextBlocks = buildContextBlocks(chunks);
-  const context = contextBlocks.join("\n\n");
-
-  const debug = {
-    question: query,
-    retrievalMethod: searchResult.retrievalMethod,
-    confidence: Number(confidence.toFixed(4)),
-    minConfidence: MIN_CONFIDENCE,
-    retrievedChunks: hits.map((h) => ({
-      documentName: h.chunk.documentName,
-      chunkIndex: h.chunk.chunkIndex,
-      pageNumber: h.chunk.pageNumber,
-      sectionTitle: h.chunk.sectionTitle,
-      score: Number(h.score.toFixed(4)),
-      vectorScore: h.vectorScore != null ? Number(h.vectorScore.toFixed(4)) : null,
-      keywordScore: h.keywordScore != null ? Number(h.keywordScore.toFixed(4)) : null,
-      snippet: truncateSnippet(h.chunk.text, 160),
-    })),
-    contextSent: context,
-  };
-
-  const lowConfidenceAnswer = KNOWLEDGE_NO_SOURCE_ANSWER;
-
-  if (!chunks.length || !searchResult.passesThreshold) {
-    await logKnowledgeQuery({
-      question: query,
-      tenantId,
-      retrievalMethod: "hybrid_low_confidence",
-      hits,
-      answer: lowConfidenceAnswer,
-    });
-
-    await logKnowledgeGap({
-      question: query,
-      tenantId,
-      confidence,
-      retrievalMethod: "hybrid_low_confidence",
-    });
-
-    return json(
-      res,
-      200,
+      is429 ? 429 : 503,
       {
-        answer: lowConfidenceAnswer,
-        citations: [],
-        chunks: [],
-        images: [],
-        confidence,
-        mode: "low_relevance",
-        debug,
+        error: result.error,
+        retryAfterSec: result.retryAfterSec,
+        rateLimited: is429,
+        debug: result.debug,
       },
       req,
     );
   }
 
-  const result = await generateChatAnswer(query, chunks);
+  if (result.error === "search_failed") {
+    return json(res, 500, { error: "search_failed", detail: result.detail }, req);
+  }
+
   if (result.error) {
     return json(
       res,
       result.rateLimited ? 429 : 503,
       {
         error: result.error,
-        detail: result.detail,
         retryAfterSec: result.retryAfterSec,
         rateLimited: result.rateLimited,
-        debug,
+        debug: result.debug,
       },
       req,
     );
   }
-
-  if (!result.citations?.length) {
-    return json(
-      res,
-      200,
-      {
-        answer: lowConfidenceAnswer,
-        citations: [],
-        chunks: [],
-        images: [],
-        confidence,
-        mode: "no_citation",
-        debug,
-      },
-      req,
-    );
-  }
-
-  const chunkRefs = chunks.map((c) => ({
-    documentId: c.documentId,
-    pageNumber: c.pageNumber,
-  }));
-  const images = await fetchImagesForChunks(chunkRefs, { tenantId, limit: 3 });
-
-  await logKnowledgeQuery({
-    question: query,
-    tenantId,
-    retrievalMethod: "hybrid",
-    hits,
-    answer: result.answer,
-  });
 
   return json(
     res,
     200,
-    {
+    buildAgentResponse({
       answer: result.answer,
       citations: result.citations,
-      chunks: chunks.map((c) => ({
-        documentId: c.documentId,
-        documentName: c.documentName,
-        pageNumber: c.pageNumber,
-        sectionTitle: c.sectionTitle,
-      })),
-      images,
-      confidence,
-      mode: getAiProvider(),
-      debug,
-    },
+      sources: result.sources,
+      images: result.images,
+      chunks: result.chunks,
+      confidence: result.confidence,
+      mode: result.mode || getAiProvider(),
+      grounded: result.grounded !== false,
+      debug: result.debug,
+    }),
     req,
   );
 }

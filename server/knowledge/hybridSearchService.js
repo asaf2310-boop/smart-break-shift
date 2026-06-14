@@ -3,9 +3,10 @@
 import { getSupabaseAdmin } from "./supabaseAdmin.js";
 import { searchKnowledgeChunks, RETRIEVAL_TOP_K_DEFAULT } from "./vectorSearchService.js";
 import { searchKnowledgeImages } from "./imageIngestService.js";
+import { KNOWLEDGE_MISSING_ANSWER } from "./geminiKnowledgePrompt.js";
 
 export const MIN_CONFIDENCE = 0.58;
-export const KNOWLEDGE_NO_SOURCE_ANSWER = "לא מצאתי מקור ברור במאגר הידע.";
+export const KNOWLEDGE_NO_SOURCE_ANSWER = KNOWLEDGE_MISSING_ANSWER;
 
 const VECTOR_WEIGHT = 0.55;
 const KEYWORD_WEIGHT = 0.25;
@@ -24,7 +25,7 @@ export async function hybridSearch(query, queryEmbedding, options = {}) {
   const [vectorResult, keywordHits, imageResult] = await Promise.all([
     searchKnowledgeChunks(queryEmbedding, { topK: topK * 2, tenantId }),
     searchKeywordChunks(query, { topK: topK * 2, tenantId }),
-    searchKnowledgeImages(queryEmbedding, { topK: 3, tenantId }),
+    searchKnowledgeImages(queryEmbedding, { topK, tenantId }),
   ]);
 
   const merged = mergeAndRerank(
