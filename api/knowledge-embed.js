@@ -1,5 +1,7 @@
 /** Vercel serverless — OpenAI embeddings for knowledge RAG (OPENAI_API_KEY only) */
 
+import { fetchOpenAiWithRetry, getRetryAfterSec } from "./openaiRetry.js";
+
 const OPENAI_EMBED_URL = "https://api.openai.com/v1/embeddings";
 const DEFAULT_MODEL = "text-embedding-3-small";
 const MAX_BATCH = 64;
@@ -121,7 +123,7 @@ export default async function handler(req, res) {
     return json(res, 400, { error: "batch_too_large", max: MAX_BATCH }, req);
   }
 
-  const openaiRes = await fetch(OPENAI_EMBED_URL, {
+  const openaiRes = await fetchOpenAiWithRetry(OPENAI_EMBED_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -132,10 +134,16 @@ export default async function handler(req, res) {
 
   if (!openaiRes.ok) {
     const errText = await openaiRes.text().catch(() => "");
+    const retryAfterSec = openaiRes.status === 429 ? getRetryAfterSec(openaiRes) : null;
     return json(
       res,
       openaiRes.status,
-      { error: `openai_error:${openaiRes.status}`, detail: errText.slice(0, 200) },
+      {
+        error: `openai_error:${openaiRes.status}`,
+        detail: errText.slice(0, 200),
+        retryAfterSec,
+        rateLimited: openaiRes.status === 429,
+      },
       req,
     );
   }

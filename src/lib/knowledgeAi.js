@@ -33,7 +33,10 @@ const MIN_KEYWORD_MATCHES_FOR_EMBEDDING = 1;
 
 const MAX_CONTEXT_CHARS = 2800;
 const MAX_SNIPPET_CHARS = 480;
-const EMBED_BATCH_SIZE = 64;
+const EMBED_BATCH_SIZE = 48;
+const EMBED_BATCH_DELAY_MS = 750;
+const EMBED_CLIENT_MAX_RETRIES = 2;
+const CHAT_CLIENT_MAX_RETRIES = 1;
 const MAX_CHUNKS_PER_DOCUMENT = 2;
 
 const STOP_WORDS = new Set([
@@ -375,6 +378,42 @@ function ensureKnowledgeSanitizeMigration() {
 
 let indexBuildPromise = null;
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRateLimitCode(code, status) {
+  const msg = String(code || "");
+  return status === 429 || msg.includes("429") || msg.includes("rate_limited");
+}
+
+let rateLimitUntil = 0;
+
+function markRateLimited(retryAfterMs = 30_000) {
+  rateLimitUntil = Math.max(rateLimitUntil, Date.now() + retryAfterMs);
+}
+
+export function isOpenAiRateLimited() {
+  return Date.now() < rateLimitUntil;
+}
+
+export function getOpenAiRateLimitRetrySec() {
+  return Math.max(0, Math.ceil((rateLimitUntil - Date.now()) / 1000));
+}
+
+function parseRetryAfterFromResponse(res, data) {
+  const header = res.headers?.get?.("retry-after");
+  if (header) {
+    const seconds = Number(header);
+    if (!Number.isNaN(seconds) && seconds > 0) return seconds * 1000;
+  }
+  if (data?.retryAfterSec > 0) return data.retryAfterSec * 1000;
+  return null;
+}
+
+const queryEmbedCache = new Map();
+const QUERY_EMBED_CACHE_TTL_MS = 15 * 60_000;
+
 /** Text sent to the embedding model — includes doc metadata for better retrieval. */
 function buildEmbeddingInput(chunk) {
   const meta = [
@@ -405,36 +444,91 @@ export function getKnowledgeIndexStats() {
   return statsFromChunks(getAllChunks());
 }
 
-async function fetchEmbeddingsBatch(texts) {
-  if (!texts.length) return { embeddings: [], error: null };
+async function fetchEmbedBatchWithRetry(inputs) {
+  let lastError = null;
 
-  const allEmbeddings = [];
-  for (let offset = 0; offset < texts.length; offset += EMBED_BATCH_SIZE) {
-    const batch = texts.slice(offset, offset + EMBED_BATCH_SIZE);
+  for (let attempt = 0; attempt <= EMBED_CLIENT_MAX_RETRIES; attempt += 1) {
+    if (attempt > 0) {
+      await sleep(1200 * 2 ** (attempt - 1));
+    }
+
     try {
       const res = await fetch("/api/knowledge-embed", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ inputs: batch }),
+        body: JSON.stringify({ inputs }),
       });
+      const data = await res.json().catch(() => ({}));
+
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
+        const code = data.error || data.code || `http_${res.status}`;
+        lastError = code;
+        if (isRateLimitCode(code, res.status) && attempt < EMBED_CLIENT_MAX_RETRIES) {
+          const retryMs = parseRetryAfterFromResponse(res, data) ?? 2500 * 2 ** attempt;
+          markRateLimited(retryMs);
+          await sleep(retryMs);
+          continue;
+        }
         return {
           embeddings: null,
-          error: data.error || data.code || `http_${res.status}`,
+          error: code,
+          retryAfterSec: data.retryAfterSec ?? getOpenAiRateLimitRetrySec(),
+          rateLimited: isRateLimitCode(code, res.status),
         };
       }
-      const data = await res.json();
+
       if (!Array.isArray(data.embeddings)) {
-        return { embeddings: null, error: "invalid_response" };
+        return { embeddings: null, error: "invalid_response", rateLimited: false };
       }
-      allEmbeddings.push(...data.embeddings);
+
+      return { embeddings: data.embeddings, error: null, rateLimited: false };
     } catch {
-      return { embeddings: null, error: "network" };
+      lastError = "network";
+      if (attempt < EMBED_CLIENT_MAX_RETRIES) continue;
+      return { embeddings: null, error: "network", rateLimited: false };
     }
   }
 
-  return { embeddings: allEmbeddings, error: null };
+  return {
+    embeddings: null,
+    error: lastError || "network",
+    retryAfterSec: getOpenAiRateLimitRetrySec(),
+    rateLimited: isRateLimitCode(lastError),
+  };
+}
+
+async function fetchEmbeddingsBatch(texts) {
+  if (!texts.length) return { embeddings: [], error: null, rateLimited: false };
+
+  if (isOpenAiRateLimited()) {
+    return {
+      embeddings: null,
+      error: "openai_error:429",
+      retryAfterSec: getOpenAiRateLimitRetrySec(),
+      rateLimited: true,
+    };
+  }
+
+  const allEmbeddings = [];
+  for (let offset = 0; offset < texts.length; offset += EMBED_BATCH_SIZE) {
+    if (offset > 0) {
+      await sleep(EMBED_BATCH_DELAY_MS);
+    }
+
+    const batch = texts.slice(offset, offset + EMBED_BATCH_SIZE);
+    const result = await fetchEmbedBatchWithRetry(batch);
+    if (result.error) {
+      return {
+        embeddings: null,
+        error: result.error,
+        retryAfterSec: result.retryAfterSec,
+        rateLimited: result.rateLimited,
+      };
+    }
+    allEmbeddings.push(...result.embeddings);
+  }
+
+  return { embeddings: allEmbeddings, error: null, rateLimited: false };
 }
 
 /**
@@ -442,6 +536,21 @@ async function fetchEmbeddingsBatch(texts) {
  * @returns {Promise<{ chunks: Array, chunkCount: number, embeddingCount: number, embeddingsOk: boolean, embeddingError: string | null }>}
  */
 export async function rebuildKnowledgeChunkIndex({ force = false } = {}) {
+  if (indexBuildPromise) {
+    const pending = await indexBuildPromise;
+    if (!force) return pending;
+  }
+
+  const task = rebuildKnowledgeChunkIndexInner({ force });
+  indexBuildPromise = task;
+  try {
+    return await task;
+  } finally {
+    if (indexBuildPromise === task) indexBuildPromise = null;
+  }
+}
+
+async function rebuildKnowledgeChunkIndexInner({ force = false } = {}) {
   await hydrateKnowledgeStore();
   ensureKnowledgeSanitizeMigration();
   const documents = listKnowledgeDocuments();
@@ -462,13 +571,49 @@ export async function rebuildKnowledgeChunkIndex({ force = false } = {}) {
     return { chunks: [], embeddingError: null, ...statsFromChunks([]) };
   }
 
+  const existingEmbeddingsById = new Map();
+  if (existing?.chunks?.length) {
+    for (const chunk of existing.chunks) {
+      if (Array.isArray(chunk.embedding) && chunk.embedding.length) {
+        existingEmbeddingsById.set(chunk.id, chunk.embedding);
+      }
+    }
+  }
+
   const rawChunks = documents.flatMap(chunkDocument);
-  const texts = rawChunks.map(buildEmbeddingInput);
-  const { embeddings, error: embeddingError } = await fetchEmbeddingsBatch(texts);
+  const needEmbedIndices = [];
+  const needEmbedTexts = [];
+
+  for (let i = 0; i < rawChunks.length; i += 1) {
+    const chunk = rawChunks[i];
+    if (existingEmbeddingsById.has(chunk.id)) continue;
+    needEmbedIndices.push(i);
+    needEmbedTexts.push(buildEmbeddingInput(chunk));
+  }
+
+  let embeddingError = null;
+  const embeddingsByIndex = new Map();
+
+  for (let i = 0; i < rawChunks.length; i += 1) {
+    const reused = existingEmbeddingsById.get(rawChunks[i].id);
+    if (reused) embeddingsByIndex.set(i, reused);
+  }
+
+  if (needEmbedTexts.length) {
+    const { embeddings, error, rateLimited } = await fetchEmbeddingsBatch(needEmbedTexts);
+    embeddingError = error;
+    if (embeddings?.length) {
+      needEmbedIndices.forEach((chunkIndex, embedIndex) => {
+        embeddingsByIndex.set(chunkIndex, embeddings[embedIndex] ?? null);
+      });
+    } else if (rateLimited) {
+      markRateLimited((getOpenAiRateLimitRetrySec() || 30) * 1000);
+    }
+  }
 
   const chunks = rawChunks.map((chunk, i) => ({
     ...chunk,
-    embedding: embeddings?.[i] ?? null,
+    embedding: embeddingsByIndex.get(i) ?? null,
   }));
 
   writeKnowledgeChunkIndex(chunks, fingerprint);
@@ -482,12 +627,7 @@ function ensureChunkIndexReady() {
   if (existing?.fingerprint === fingerprint && existing.chunks?.length) {
     return Promise.resolve(existing.chunks);
   }
-  if (!indexBuildPromise) {
-    indexBuildPromise = rebuildKnowledgeChunkIndex().finally(() => {
-      indexBuildPromise = null;
-    });
-  }
-  return indexBuildPromise;
+  return rebuildKnowledgeChunkIndex();
 }
 
 export function getAllChunks() {
@@ -571,9 +711,25 @@ function scoreChunkKeyword(chunk, tokens) {
 }
 
 async function embedQuery(text) {
-  const enriched = `שאלה: ${normalizeText(text)}`;
-  const { embeddings } = await fetchEmbeddingsBatch([enriched]);
-  return embeddings?.[0] ?? null;
+  const key = normalizeText(text);
+  if (!key) return null;
+
+  const cached = queryEmbedCache.get(key);
+  if (cached && Date.now() - cached.at < QUERY_EMBED_CACHE_TTL_MS) {
+    return cached.embedding;
+  }
+
+  if (isOpenAiRateLimited()) return null;
+
+  const enriched = `שאלה: ${key}`;
+  const { embeddings, error, rateLimited } = await fetchEmbeddingsBatch([enriched]);
+  if (rateLimited || error) return null;
+
+  const embedding = embeddings?.[0] ?? null;
+  if (embedding) {
+    queryEmbedCache.set(key, { embedding, at: Date.now() });
+  }
+  return embedding;
 }
 
 /** Prefer diverse sources — cap chunks per document before filling remaining slots. */
@@ -770,7 +926,8 @@ export function isOpenAiConfigured() {
 
 let openAiProbeCache = null;
 let openAiProbeAt = 0;
-const OPENAI_PROBE_TTL_MS = 60_000;
+const OPENAI_PROBE_TTL_MS = 5 * 60_000;
+const OPENAI_PROBE_RATE_LIMIT_TTL_MS = 90_000;
 
 export function resetOpenAiProbeCache() {
   openAiProbeCache = null;
@@ -778,11 +935,24 @@ export function resetOpenAiProbeCache() {
 }
 
 export async function probeOpenAiAvailability({ force = false } = {}) {
+  const probeTtl = isOpenAiRateLimited() ? OPENAI_PROBE_RATE_LIMIT_TTL_MS : OPENAI_PROBE_TTL_MS;
+
   if (
     !force &&
     openAiProbeCache &&
-    Date.now() - openAiProbeAt < OPENAI_PROBE_TTL_MS
+    Date.now() - openAiProbeAt < probeTtl
   ) {
+    return openAiProbeCache;
+  }
+
+  if (isOpenAiRateLimited()) {
+    openAiProbeCache = {
+      available: false,
+      source: null,
+      rateLimited: true,
+      retryAfterSec: getOpenAiRateLimitRetrySec(),
+    };
+    openAiProbeAt = Date.now();
     return openAiProbeCache;
   }
 
@@ -791,7 +961,7 @@ export async function probeOpenAiAvailability({ force = false } = {}) {
     if (res.ok) {
       const data = await res.json().catch(() => ({}));
       if (data.ok) {
-        openAiProbeCache = { available: true, source: "server" };
+        openAiProbeCache = { available: true, source: "server", rateLimited: false };
         openAiProbeAt = Date.now();
         return openAiProbeCache;
       }
@@ -801,26 +971,30 @@ export async function probeOpenAiAvailability({ force = false } = {}) {
   }
 
   if (hasClientOpenAiKey()) {
-    openAiProbeCache = { available: true, source: "client" };
+    openAiProbeCache = { available: true, source: "client", rateLimited: false };
     openAiProbeAt = Date.now();
     return openAiProbeCache;
   }
 
-  openAiProbeCache = { available: false, source: null };
+  openAiProbeCache = { available: false, source: null, rateLimited: false };
   openAiProbeAt = Date.now();
   return openAiProbeCache;
 }
 
-export function formatOpenAiError(err) {
+export function formatOpenAiError(err, retryAfterSec) {
   const msg = String(err?.message || err || "");
+  const waitSec = retryAfterSec ?? getOpenAiRateLimitRetrySec();
   if (msg.includes("openai_not_configured") || msg.includes("openai_error:503")) {
     return "שירות GPT לא מוגדר בשרת. הוסף OPENAI_API_KEY ב-Vercel → Environment Variables ופרוס מחדש.";
   }
   if (msg.includes("openai_error:401") || msg.includes("openai_error:403")) {
     return "מפתח OpenAI לא תקין או חסר הרשאה. בדוק את OPENAI_API_KEY ב-Vercel ופרוס מחדש.";
   }
-  if (msg.includes("openai_error:429")) {
-    return "מגבלת קצב ב-OpenAI — נסה שוב בעוד רגע.";
+  if (msg.includes("openai_error:429") || msg.includes("429")) {
+    if (waitSec > 0) {
+      return `מגבלת קצב ב-OpenAI — ניסיון חוזר אוטומטי בעוד ${waitSec} שניות. אפשר גם להמתין וללחוץ «נסה שוב עם GPT».`;
+    }
+    return "מגבלת קצב ב-OpenAI — המתן כדקה ונסה שוב, או שדרג את מסלול החיוב ב-OpenAI.";
   }
   if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
     return "בעיית רשת בחיבור ל-GPT — בדוק חיבור או הרץ vercel dev עם OPENAI_API_KEY.";
@@ -831,13 +1005,17 @@ export function formatOpenAiError(err) {
   return "לא ניתן להפעיל GPT כרגע.";
 }
 
-export function formatEmbeddingError(code) {
+export function formatEmbeddingError(code, retryAfterSec) {
   const msg = String(code || "");
+  const waitSec = retryAfterSec ?? getOpenAiRateLimitRetrySec();
   if (msg.includes("openai_not_configured")) {
     return "Embeddings לא זמינים — הגדר OPENAI_API_KEY ב-Vercel. החיפוש יעבוד במצב מילות מפתח בלבד.";
   }
   if (msg.includes("429")) {
-    return "מגבלת קצב ב-OpenAI — נסה לבנות אינדекс שוב בעוד רגע.";
+    if (waitSec > 0) {
+      return `מגבלת קצב ב-OpenAI — embeddings חלקיים נשמרו. נסה לבנות אינדקס שוב בעוד ${waitSec} שניות.`;
+    }
+    return "מגבלת קצב ב-OpenAI — embeddings חלקיים נשמרו. המתן דקה ונסה שוב.";
   }
   if (msg === "network") {
     return "בעיית רשת בעת יצירת embeddings — בדוק חיבור או הרץ vercel dev.";
@@ -846,34 +1024,53 @@ export function formatEmbeddingError(code) {
 }
 
 async function callOpenAiViaServer(query, chunks, context) {
-  const res = await fetch("/api/knowledge-chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      query,
-      context,
-      chunkMeta: chunks.map((c, i) => ({
-        ref: i + 1,
-        documentName: c.documentName || c.documentTitle,
-        chunkIndex: c.chunkIndex,
-        pageNumber: c.pageNumber,
-        sectionTitle: c.sectionTitle,
-      })),
-    }),
-  });
+  let lastErr = null;
 
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const code = data.error || data.code || `openai_error:${res.status}`;
-    throw new Error(String(code));
+  for (let attempt = 0; attempt <= CHAT_CLIENT_MAX_RETRIES; attempt += 1) {
+    if (attempt > 0) {
+      const waitMs = (getOpenAiRateLimitRetrySec() || 8) * 1000;
+      await sleep(waitMs);
+    }
+
+    const res = await fetch("/api/knowledge-chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query,
+        context,
+        chunkMeta: chunks.map((c, i) => ({
+          ref: i + 1,
+          documentName: c.documentName || c.documentTitle,
+          chunkIndex: c.chunkIndex,
+          pageNumber: c.pageNumber,
+          sectionTitle: c.sectionTitle,
+        })),
+      }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const code = data.error || data.code || `openai_error:${res.status}`;
+      lastErr = new Error(String(code));
+      lastErr.retryAfterSec = data.retryAfterSec ?? getOpenAiRateLimitRetrySec();
+      lastErr.rateLimited = isRateLimitCode(code, res.status);
+
+      if (lastErr.rateLimited) {
+        markRateLimited((lastErr.retryAfterSec || 30) * 1000);
+        if (attempt < CHAT_CLIENT_MAX_RETRIES) continue;
+      }
+      throw lastErr;
+    }
+
+    const raw = data.answer?.trim() || KNOWLEDGE_NO_CONTEXT_ANSWER;
+    return {
+      answer: polishModelAnswer(raw),
+      citations: uniqueCitations(chunks),
+      mode: "openai",
+    };
   }
 
-  const raw = data.answer?.trim() || KNOWLEDGE_NO_CONTEXT_ANSWER;
-  return {
-    answer: polishModelAnswer(raw),
-    citations: uniqueCitations(chunks),
-    mode: "openai",
-  };
+  throw lastErr || new Error("openai_error:429");
 }
 
 async function callOpenAiViaClient(query, chunks, context) {
@@ -1038,12 +1235,38 @@ export async function askKnowledgeBase(query) {
   const pageImages = resolvePageImages(chunks);
 
   const probe = await probeOpenAiAvailability();
-  if (probe.available) {
+  if (probe.available && !probe.rateLimited) {
     try {
       const result = await callOpenAi(trimmed, chunks, context);
       return { ...result, chunks, images: pageImages, debug };
     } catch (err) {
       resetOpenAiProbeCache();
+
+      const retryAfterSec = err?.retryAfterSec ?? getOpenAiRateLimitRetrySec();
+      const rateLimited = err?.rateLimited || isRateLimitCode(err?.message, 429);
+
+      if (rateLimited && retryAfterSec > 0) {
+        await sleep(retryAfterSec * 1000);
+        try {
+          resetOpenAiProbeCache();
+          const retryResult = await callOpenAi(trimmed, chunks, context);
+          return { ...retryResult, chunks, images: pageImages, debug, retriedAfterRateLimit: true };
+        } catch (retryErr) {
+          return {
+            answer: buildLocalStructuredAnswer(chunks),
+            citations: uniqueCitations(chunks),
+            chunks,
+            images: pageImages,
+            mode: "local_fallback",
+            openAiFailed: true,
+            openAiError: formatOpenAiError(retryErr, retryErr?.retryAfterSec),
+            rateLimited: true,
+            retryAfterSec: retryErr?.retryAfterSec ?? getOpenAiRateLimitRetrySec(),
+            debug,
+          };
+        }
+      }
+
       return {
         answer: buildLocalStructuredAnswer(chunks),
         citations: uniqueCitations(chunks),
@@ -1051,7 +1274,9 @@ export async function askKnowledgeBase(query) {
         images: pageImages,
         mode: "local_fallback",
         openAiFailed: true,
-        openAiError: formatOpenAiError(err),
+        openAiError: formatOpenAiError(err, retryAfterSec),
+        rateLimited,
+        retryAfterSec,
         debug,
       };
     }

@@ -4,6 +4,8 @@ import { BookOpen, ChevronDown, ChevronUp, Loader2, RefreshCw, Send, Sparkles } 
 import {
   askKnowledgeBase,
   getKnowledgeIndexStats,
+  getOpenAiRateLimitRetrySec,
+  isOpenAiRateLimited,
   probeOpenAiAvailability,
   rebuildKnowledgeChunkIndex,
   resetOpenAiProbeCache,
@@ -218,6 +220,7 @@ export default function KnowledgeChat({ compact = false }) {
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingHint, setLoadingHint] = useState("");
   const [indexing, setIndexing] = useState(false);
   const listRef = useRef(null);
   const { toast } = useToast();
@@ -248,7 +251,7 @@ export default function KnowledgeChat({ compact = false }) {
         existing?.fingerprint === fingerprint &&
         existing.chunks?.length > 0;
 
-      if (!indexFresh) {
+      if (!indexFresh && !isOpenAiRateLimited()) {
         setIndexing(true);
         try {
           await rebuildKnowledgeChunkIndex();
@@ -260,17 +263,26 @@ export default function KnowledgeChat({ compact = false }) {
       refreshChunkCount();
     };
 
+    let syncTimer = null;
+    const debouncedSyncIndex = () => {
+      clearTimeout(syncTimer);
+      syncTimer = setTimeout(() => {
+        syncIndex();
+      }, 600);
+    };
+
     syncIndex();
     probeOpenAiAvailability().then((p) => {
-      if (!cancelled) setOpenAiOn(p.available);
+      if (!cancelled) setOpenAiOn(p.available && !p.rateLimited);
     });
 
     const unsub = subscribeKnowledgeStore(() => {
-      syncIndex();
+      debouncedSyncIndex();
     });
 
     return () => {
       cancelled = true;
+      clearTimeout(syncTimer);
       unsub();
     };
   }, []);
@@ -290,17 +302,36 @@ export default function KnowledgeChat({ compact = false }) {
     }
 
     setLoading(true);
+    setLoadingHint("");
 
     try {
       if (isRetry) resetOpenAiProbeCache();
+
+      if (isOpenAiRateLimited()) {
+        const waitSec = getOpenAiRateLimitRetrySec();
+        if (waitSec > 0) {
+          setLoadingHint(`מגבלת קצב OpenAI — ממתין ${waitSec} שניות לפני ניסיון חוזר…`);
+          for (let sec = waitSec; sec > 0; sec -= 1) {
+            setLoadingHint(`מגבלת קצב OpenAI — ממתין ${sec} שניות לפני ניסיון חוזר…`);
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }
+        }
+      }
+
       const result = await askKnowledgeBase(trimmed);
       if (result.openAiFailed) {
         toast({
-          title: "GPT לא זמין",
+          title: result.rateLimited ? "מגבלת קצב OpenAI" : "GPT לא זמין",
           description: result.openAiError,
           variant: "destructive",
         });
+      } else if (result.retriedAfterRateLimit) {
+        toast({
+          title: "GPT חזר לפעול",
+          description: "התשובה התקבלה לאחר המתנה קצרה בגלל מגבלת קצב.",
+        });
       }
+      setOpenAiOn(!result.openAiFailed && result.mode === "openai");
       setMessages((prev) => [
         ...prev,
         {
@@ -330,6 +361,7 @@ export default function KnowledgeChat({ compact = false }) {
       ]);
     } finally {
       setLoading(false);
+      setLoadingHint("");
     }
   };
 
@@ -377,7 +409,7 @@ export default function KnowledgeChat({ compact = false }) {
           <div className="flex justify-end">
             <div className="knowledge-chat-message rounded-2xl bg-surface-container-high px-4 py-3 flex items-center gap-2 text-sm text-on-surface-variant">
               <Loader2 className="w-4 h-4 animate-spin" />
-              מחפש בבסיס הידע...
+              {loadingHint || "מחפש בבסיס הידע..."}
             </div>
           </div>
         )}

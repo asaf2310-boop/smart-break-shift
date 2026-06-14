@@ -3,6 +3,8 @@
  *  Does NOT accept full documents or raw document bodies.
  */
 
+import { fetchOpenAiWithRetry, getRetryAfterSec } from "./openaiRetry.js";
+
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
 const KNOWLEDGE_SYSTEM_PROMPT = `You are an AI knowledge-base assistant for a call center management system.
@@ -185,7 +187,7 @@ export default async function handler(req, res) {
 
   const { howTo, messages } = buildMessages(query, context);
 
-  const openaiRes = await fetch(OPENAI_URL, {
+  const openaiRes = await fetchOpenAiWithRetry(OPENAI_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -201,12 +203,15 @@ export default async function handler(req, res) {
 
   if (!openaiRes.ok) {
     const errText = await openaiRes.text().catch(() => "");
+    const retryAfterSec = openaiRes.status === 429 ? getRetryAfterSec(openaiRes) : null;
     return json(
       res,
       openaiRes.status,
       {
         error: `openai_error:${openaiRes.status}`,
         detail: errText.slice(0, 200),
+        retryAfterSec,
+        rateLimited: openaiRes.status === 429,
       },
       req,
     );

@@ -24,6 +24,8 @@ import {
   rebuildKnowledgeChunkIndex,
   sanitizeMarkdownIngestText,
   formatEmbeddingError,
+  getOpenAiRateLimitRetrySec,
+  isOpenAiRateLimited,
 } from "@/lib/knowledgeAi";
 import { extractTextFromFile } from "@/lib/knowledgeFileExtract";
 
@@ -63,7 +65,7 @@ export default function KnowledgeAdmin() {
     if (result?.embeddingError) {
       toast({
         title: "אינדקס נשמר — embeddings חלקיים",
-        description: formatEmbeddingError(result.embeddingError),
+        description: formatEmbeddingError(result.embeddingError, getOpenAiRateLimitRetrySec()),
         variant: "destructive",
       });
       return;
@@ -78,6 +80,15 @@ export default function KnowledgeAdmin() {
 
   const handleReindex = async () => {
     if (reindexing) return;
+    if (isOpenAiRateLimited()) {
+      const waitSec = getOpenAiRateLimitRetrySec();
+      toast({
+        title: "מגבלת קצב OpenAI",
+        description: formatEmbeddingError("openai_error:429", waitSec),
+        variant: "destructive",
+      });
+      return;
+    }
     setReindexing(true);
     try {
       const result = await rebuildKnowledgeChunkIndex({ force: true });
