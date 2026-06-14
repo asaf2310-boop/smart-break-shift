@@ -1,5 +1,6 @@
 import {
   getKnowledgeDocumentsFingerprint,
+  hydrateKnowledgeStore,
   listKnowledgeDocuments,
   patchKnowledgeDocumentsContent,
   readKnowledgeChunkIndex,
@@ -371,12 +372,20 @@ async function fetchEmbeddingsBatch(texts) {
 
 /** Rebuild localStorage chunk index (with optional OpenAI embeddings). */
 export async function rebuildKnowledgeChunkIndex() {
+  await hydrateKnowledgeStore();
   ensureKnowledgeSanitizeMigration();
   const documents = listKnowledgeDocuments();
   const fingerprint = getKnowledgeDocumentsFingerprint(documents);
   const existing = readKnowledgeChunkIndex();
   if (existing?.fingerprint === fingerprint && existing.chunks?.length) {
     return existing.chunks;
+  }
+
+  if (!documents.length) {
+    if (existing?.chunks?.length) {
+      writeKnowledgeChunkIndex([], fingerprint);
+    }
+    return [];
   }
 
   const rawChunks = documents.flatMap(chunkDocument);

@@ -5,6 +5,7 @@ import { isSupabaseBackend } from "@/api/dataClient";
 export const KNOWLEDGE_STORAGE_KEY = "smart-break-shift-knowledge-v1";
 export const KNOWLEDGE_CHUNKS_KEY = "smart-break-shift-knowledge-chunks-v1";
 export const KNOWLEDGE_CHANGE_EVENT = "knowledge-store-changed";
+const KNOWLEDGE_LOCAL_DIRTY_KEY = "smart-break-shift-knowledge-local-dirty";
 
 const DEFAULT_CATEGORIES = ["כללי", "מוצר", "נהלים", "תמיכה"];
 const INDEX_ROW_ID = "default";
@@ -105,15 +106,71 @@ function readRaw() {
   return memoryStore;
 }
 
+function markKnowledgeLocalDirty() {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(KNOWLEDGE_LOCAL_DIRTY_KEY, Date.now().toString());
+  } catch {
+    // ignore
+  }
+}
+
+function clearKnowledgeLocalDirty() {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(KNOWLEDGE_LOCAL_DIRTY_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+function isKnowledgeLocalDirty() {
+  if (typeof window === "undefined") return false;
+  try {
+    return Boolean(localStorage.getItem(KNOWLEDGE_LOCAL_DIRTY_KEY));
+  } catch {
+    return false;
+  }
+}
+
+function mergeKnowledgeDocuments(localDocs, cloudDocs) {
+  const localMap = new Map((localDocs || []).map((doc) => [doc.id, doc]));
+  const merged = new Map();
+
+  for (const cloud of cloudDocs || []) {
+    const local = localMap.get(cloud.id);
+    if (!local) {
+      merged.set(cloud.id, cloud);
+      continue;
+    }
+    merged.set(
+      cloud.id,
+      new Date(local.updatedAt) >= new Date(cloud.updatedAt) ? local : cloud,
+    );
+    localMap.delete(cloud.id);
+  }
+
+  for (const local of localMap.values()) {
+    merged.set(local.id, local);
+  }
+
+  return [...merged.values()];
+}
+
 function writeRaw(store) {
   memoryStore = { version: 1, documents: store.documents || [] };
   if (typeof window !== "undefined") {
     localStorage.setItem(KNOWLEDGE_STORAGE_KEY, JSON.stringify(memoryStore));
+    markKnowledgeLocalDirty();
     window.dispatchEvent(new CustomEvent(KNOWLEDGE_CHANGE_EVENT));
   }
-  persistDocumentsToCloud(memoryStore.documents).catch((err) => {
-    console.warn("[knowledgeStore] cloud persist failed", err);
-  });
+  persistDocumentsToCloud(memoryStore.documents)
+    .catch((err) => {
+      console.warn("[knowledgeStore] cloud persist failed", err);
+    })
+    .finally(() => {
+      clearKnowledgeLocalDirty();
+    });
 }
 
 async function persistDocumentsToCloud(documents) {
@@ -174,19 +231,31 @@ async function loadFromCloud() {
     const rows = await dataClient.entities.KnowledgeDocument.list("-updated_at", 500);
     const docs = (rows || []).map(mapDbRow);
 
-    if (docs.length > 0) {
-      memoryStore = { version: 1, documents: docs };
-      localStorage.setItem(KNOWLEDGE_STORAGE_KEY, JSON.stringify(memoryStore));
-    } else if (local.documents.length > 0) {
+    if (isKnowledgeLocalDirty()) {
       memoryStore = local;
-      await persistDocumentsToCloud(local.documents);
+    } else if (docs.length > 0 || local.documents.length > 0) {
+      const merged = mergeKnowledgeDocuments(local.documents, docs);
+      memoryStore = { version: 1, documents: merged };
+      localStorage.setItem(KNOWLEDGE_STORAGE_KEY, JSON.stringify(memoryStore));
+      const mergedFingerprint = getKnowledgeDocumentsFingerprint(merged);
+      const cloudFingerprint = getKnowledgeDocumentsFingerprint(docs);
+      if (mergedFingerprint !== cloudFingerprint) {
+        markKnowledgeLocalDirty();
+        try {
+          await persistDocumentsToCloud(merged);
+        } finally {
+          clearKnowledgeLocalDirty();
+        }
+      }
     } else {
       memoryStore = { version: 1, documents: [] };
     }
 
     const indexRows = await dataClient.entities.KnowledgeIndex.filter({ id: INDEX_ROW_ID });
     const cloudIndex = indexRows?.[0]?.payload;
-    if (cloudIndex?.version === 1 && Array.isArray(cloudIndex.chunks)) {
+    if (isKnowledgeLocalDirty()) {
+      memoryChunkIndex = localChunks;
+    } else if (cloudIndex?.version === 1 && Array.isArray(cloudIndex.chunks)) {
       memoryChunkIndex = cloudIndex;
       localStorage.setItem(KNOWLEDGE_CHUNKS_KEY, JSON.stringify(cloudIndex));
     } else if (localChunks) {
@@ -360,13 +429,6 @@ export function clearKnowledgeChunkIndex() {
     // ignore
   }
   window.dispatchEvent(new CustomEvent(KNOWLEDGE_CHANGE_EVENT));
-  if (!demoModeEnabled && isSupabaseBackend() && dataClient.entities.KnowledgeIndex) {
-    dataClient.entities.KnowledgeIndex.update(INDEX_ROW_ID, {
-      id: INDEX_ROW_ID,
-      payload: { version: 1, fingerprint: "", chunks: [], updatedAt: new Date().toISOString() },
-      updated_at: new Date().toISOString(),
-    }).catch(() => {});
-  }
 }
 
 export function patchKnowledgeDocumentsContent(contentPatcher) {

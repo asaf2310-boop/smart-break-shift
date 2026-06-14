@@ -8,7 +8,12 @@ import {
   rebuildKnowledgeChunkIndex,
 } from "@/lib/knowledgeAi";
 import { demoModeEnabled } from "@/api/demoClient";
-import { subscribeKnowledgeStore, hydrateKnowledgeStore } from "@/lib/knowledgeStore";
+import {
+  getKnowledgeDocumentsFingerprint,
+  readKnowledgeChunkIndex,
+  subscribeKnowledgeStore,
+  hydrateKnowledgeStore,
+} from "@/lib/knowledgeStore";
 import { useToast } from "@/components/ui/use-toast";
 
 function isDebugPanelEnabled() {
@@ -186,28 +191,47 @@ export default function KnowledgeChat({ compact = false }) {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      setIndexing(true);
-      try {
-        await rebuildKnowledgeChunkIndex();
-      } finally {
-        if (!cancelled) {
-          setChunkCount(getAllChunks().length);
-          setIndexing(false);
+
+    const refreshChunkCount = () => {
+      if (!cancelled) setChunkCount(getAllChunks().length);
+    };
+
+    const syncIndex = async ({ forceRebuild = false } = {}) => {
+      await hydrateKnowledgeStore();
+      if (cancelled) return;
+
+      const fingerprint = getKnowledgeDocumentsFingerprint();
+      const existing = readKnowledgeChunkIndex();
+      const indexFresh =
+        !forceRebuild &&
+        existing?.fingerprint === fingerprint &&
+        existing.chunks?.length > 0;
+
+      if (!indexFresh) {
+        setIndexing(true);
+        try {
+          await rebuildKnowledgeChunkIndex();
+        } finally {
+          if (!cancelled) setIndexing(false);
         }
       }
-    })();
+
+      refreshChunkCount();
+    };
+
+    syncIndex();
     probeOpenAiAvailability().then((p) => {
       if (!cancelled) setOpenAiOn(p.available);
     });
+
+    const unsub = subscribeKnowledgeStore(() => {
+      syncIndex();
+    });
+
     return () => {
       cancelled = true;
+      unsub();
     };
-  }, []);
-
-  useEffect(() => {
-    hydrateKnowledgeStore().then(() => setChunkCount(getAllChunks().length));
-    return subscribeKnowledgeStore(() => setChunkCount(getAllChunks().length));
   }, []);
 
   useEffect(() => {
