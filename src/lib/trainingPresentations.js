@@ -1,4 +1,7 @@
 import presentationsSeed from "@/data/trainingPresentations.json";
+import { demoModeEnabled } from "@/api/demoClient";
+import { dataClient } from "@/api/client";
+import { isSupabaseBackend } from "@/api/dataClient";
 import { supabase, supabaseConfigured } from "@/api/supabase";
 import {
   deleteTrainingPdfBlob,
@@ -6,6 +9,8 @@ import {
   hasTrainingPdfBlob,
   saveTrainingPdfBlob,
 } from "@/lib/trainingDocStore";
+
+export const TRAINING_PRESENTATION_META_CHANGE_EVENT = "training-presentation-meta-changed";
 
 export const TRAINING_DOCS_BUCKET = "training-docs";
 
@@ -15,6 +20,124 @@ export const TRAINING_BUCKET_SETUP_HINT =
 
 const META_STORAGE_KEY = "training-presentation-meta-v1";
 const DEFAULT_PUBLIC_SLIDE_BASE = "/training/slides";
+
+let metaMapCache = null;
+let metaHydratePromise = null;
+
+function readMetaMapLocal() {
+  try {
+    const raw = localStorage.getItem(META_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeMetaMapLocal(map) {
+  localStorage.setItem(META_STORAGE_KEY, JSON.stringify(map));
+}
+
+function notifyMetaChanged() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(TRAINING_PRESENTATION_META_CHANGE_EVENT));
+  }
+}
+
+function readMetaMap() {
+  if (metaMapCache) return metaMapCache;
+  metaMapCache = readMetaMapLocal();
+  return metaMapCache;
+}
+
+async function persistMetaRowToCloud(sessionId, meta) {
+  if (demoModeEnabled || !isSupabaseBackend() || !dataClient.entities.TrainingPresentationMeta) {
+    return;
+  }
+
+  const payload = {
+    id: sessionId,
+    meta,
+    updated_at: new Date().toISOString(),
+  };
+
+  const existing = await dataClient.entities.TrainingPresentationMeta.filter({ id: sessionId });
+  if (existing?.length) {
+    await dataClient.entities.TrainingPresentationMeta.update(sessionId, payload);
+  } else {
+    await dataClient.entities.TrainingPresentationMeta.create(payload);
+  }
+}
+
+async function deleteMetaRowFromCloud(sessionId) {
+  if (demoModeEnabled || !isSupabaseBackend() || !dataClient.entities.TrainingPresentationMeta) {
+    return;
+  }
+  try {
+    await dataClient.entities.TrainingPresentationMeta.delete(sessionId);
+  } catch {
+    // row may not exist
+  }
+}
+
+async function loadMetaFromCloud() {
+  if (demoModeEnabled || !isSupabaseBackend() || !dataClient.entities.TrainingPresentationMeta) {
+    metaMapCache = readMetaMapLocal();
+    return metaMapCache;
+  }
+
+  const local = readMetaMapLocal();
+  const localKeys = Object.keys(local);
+
+  try {
+    const rows = await dataClient.entities.TrainingPresentationMeta.list("-updated_at", 500);
+    const map = {};
+    for (const row of rows || []) {
+      if (row?.id && row.meta) map[row.id] = row.meta;
+    }
+
+    if (Object.keys(map).length > 0) {
+      metaMapCache = map;
+      writeMetaMapLocal(map);
+      return map;
+    }
+
+    if (localKeys.length > 0) {
+      metaMapCache = local;
+      await Promise.all(
+        localKeys.map((sessionId) => persistMetaRowToCloud(sessionId, local[sessionId]))
+      );
+      return local;
+    }
+
+    metaMapCache = map;
+    return map;
+  } catch (err) {
+    console.warn("[trainingPresentations] cloud meta load failed", err);
+    metaMapCache = readMetaMapLocal();
+    return metaMapCache;
+  }
+}
+
+/** טוען קישורים ומטא-דאטה למצגות מ-Supabase */
+export function hydrateTrainingPresentationMeta() {
+  if (!metaHydratePromise) {
+    metaHydratePromise = loadMetaFromCloud().finally(() => notifyMetaChanged());
+  }
+  return metaHydratePromise;
+}
+
+/** רענון מ-Supabase Realtime */
+export function invalidateTrainingPresentationCache() {
+  metaMapCache = null;
+  metaHydratePromise = null;
+  return hydrateTrainingPresentationMeta();
+}
+
+function writeMetaMap(map) {
+  metaMapCache = { ...map };
+  writeMetaMapLocal(metaMapCache);
+  notifyMetaChanged();
+}
 
 /** @param {{ message?: string; statusCode?: number; status?: number }} | null | undefined error */
 export function isStorageBucketMissingError(error) {
@@ -36,19 +159,6 @@ async function savePresentationLocally(sessionId, file) {
   });
 }
 
-function readMetaMap() {
-  try {
-    const raw = localStorage.getItem(META_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
-
-function writeMetaMap(map) {
-  localStorage.setItem(META_STORAGE_KEY, JSON.stringify(map));
-}
-
 export function getStaticPresentationPath(sessionId) {
   const fromSeed = presentationsSeed.presentations?.[sessionId];
   if (fromSeed) return fromSeed;
@@ -62,14 +172,21 @@ export function getPresentationMeta(sessionId) {
 
 export function setPresentationMeta(sessionId, meta) {
   const map = readMetaMap();
-  map[sessionId] = { ...(map[sessionId] ?? {}), ...meta, updatedAt: new Date().toISOString() };
+  const next = { ...(map[sessionId] ?? {}), ...meta, updatedAt: new Date().toISOString() };
+  map[sessionId] = next;
   writeMetaMap(map);
+  persistMetaRowToCloud(sessionId, next).catch((err) => {
+    console.warn("[trainingPresentations] cloud meta persist failed", err);
+  });
 }
 
 export function clearPresentationMeta(sessionId) {
   const map = readMetaMap();
   delete map[sessionId];
   writeMetaMap(map);
+  deleteMetaRowFromCloud(sessionId).catch((err) => {
+    console.warn("[trainingPresentations] cloud meta delete failed", err);
+  });
 }
 
 const HTTP_URL_PATTERN = /^https?:\/\/.+/i;
@@ -126,10 +243,14 @@ export function removeExternalLink(sessionId) {
   const map = readMetaMap();
   if (Object.keys(rest).filter((k) => k !== "updatedAt").length === 0) {
     delete map[sessionId];
+    writeMetaMap(map);
+    deleteMetaRowFromCloud(sessionId).catch(() => {});
   } else {
-    map[sessionId] = { ...rest, updatedAt: new Date().toISOString() };
+    const next = { ...rest, updatedAt: new Date().toISOString() };
+    map[sessionId] = next;
+    writeMetaMap(map);
+    persistMetaRowToCloud(sessionId, next).catch(() => {});
   }
-  writeMetaMap(map);
   return { ok: true, message: "הקישור הוסר" };
 }
 
@@ -161,7 +282,21 @@ export async function hasPresentationSource(sessionId) {
   }
   const blob = await getTrainingPdfBlob(sessionId);
   if (blob?.size) return true;
+  if (await probeSupabasePublicPdf(sessionId)) return true;
   return probePublicPdf(sessionId);
+}
+
+async function probeSupabasePublicPdf(sessionId) {
+  if (!supabaseConfigured || !supabase) return false;
+  const storagePath = `${sessionId}.pdf`;
+  const { data } = supabase.storage.from(TRAINING_DOCS_BUCKET).getPublicUrl(storagePath);
+  if (!data?.publicUrl) return false;
+  try {
+    const res = await fetch(data.publicUrl, { method: "HEAD" });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 async function probePublicPdf(sessionId) {
@@ -193,6 +328,14 @@ export async function resolvePresentationSource(sessionId) {
     const { data } = supabase.storage.from(TRAINING_DOCS_BUCKET).getPublicUrl(meta.storagePath);
     if (data?.publicUrl) {
       return { kind: "url", url: data.publicUrl, fileName: meta.fileName };
+    }
+  }
+
+  if (supabaseConfigured && supabase) {
+    const storagePath = `${sessionId}.pdf`;
+    const { data } = supabase.storage.from(TRAINING_DOCS_BUCKET).getPublicUrl(storagePath);
+    if (data?.publicUrl && (await probeSupabasePublicPdf(sessionId))) {
+      return { kind: "url", url: data.publicUrl, fileName: `${sessionId}.pdf` };
     }
   }
 

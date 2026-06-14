@@ -4,8 +4,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { parseISO } from "date-fns";
 import {
   ArrowRight,
-  ChevronLeft,
-  ChevronRight,
   GraduationCap,
   Link2,
   Presentation,
@@ -14,15 +12,18 @@ import {
 import TrainingDayTimeline from "@/components/training/TrainingDayTimeline";
 
 import {
-  getDefaultTrainingWeekIndex,
   groupTrainingDaysIntoWeeks,
   resolveTrainingSchedule,
 } from "@/lib/trainingSchedule";
-import { subscribeTrainingScheduleStore } from "@/lib/trainingScheduleStore";
+import {
+  hydrateTrainingData,
+  subscribeTrainingScheduleStore,
+} from "@/lib/trainingScheduleStore";
 import {
   getExternalLink,
   listPresentationAvailability,
   resolvePresentationOpenUrl,
+  TRAINING_PRESENTATION_META_CHANGE_EVENT,
 } from "@/lib/trainingPresentations";
 import { hypHeaderIconClass, m3PageClass } from "@/lib/hypPage";
 import { demoModeEnabled } from "@/api/demoClient";
@@ -107,50 +108,6 @@ function DayCard({ day, dayIndex, summary, onSelect }) {
   );
 }
 
-function WeekNavigator({ weeks, weekIndex, onWeekChange }) {
-  if (weeks.length <= 1) return null;
-
-  const week = weeks[weekIndex];
-  const canPrev = weekIndex > 0;
-  const canNext = weekIndex < weeks.length - 1;
-
-  return (
-    <motion.nav
-      initial={{ opacity: 0, y: 4 }}
-      animate={{ opacity: 1, y: 0 }}
-      aria-label="ניווט בין שבועות הקורס"
-      className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mb-5"
-    >
-      <button
-        type="button"
-        onClick={() => onWeekChange(weekIndex - 1)}
-        disabled={!canPrev}
-        className="m3-btn-outlined p-2 disabled:opacity-40 disabled:pointer-events-none"
-        aria-label="שבוע קודם"
-      >
-        <ChevronRight className="w-5 h-5" />
-      </button>
-
-      <div className="text-center min-w-[10rem] px-2">
-        <p className="text-sm font-semibold text-primary">
-          שבוע {weekIndex + 1} מתוך {weeks.length}
-        </p>
-        <p className="m3-label-medium mt-0.5">{week.rangeLabel}</p>
-      </div>
-
-      <button
-        type="button"
-        onClick={() => onWeekChange(weekIndex + 1)}
-        disabled={!canNext}
-        className="m3-btn-outlined p-2 disabled:opacity-40 disabled:pointer-events-none"
-        aria-label="שבוע הבא"
-      >
-        <ChevronLeft className="w-5 h-5" />
-      </button>
-    </motion.nav>
-  );
-}
-
 function DayGridView({ days, daySummaries, onSelectDay }) {
   return (
     <>
@@ -181,10 +138,27 @@ function DayGridView({ days, daySummaries, onSelectDay }) {
   );
 }
 
+function FullScheduleGrid({ weeks, daySummaries, onSelectDay }) {
+  return (
+    <div className="space-y-8">
+      {weeks.map((week, weekIndex) => (
+        <section key={week.weekStart}>
+          {weeks.length > 1 && (
+            <p className="text-sm font-semibold text-primary text-center mb-4">
+              שבוע {weekIndex + 1} · {week.rangeLabel}
+            </p>
+          )}
+          <DayGridView days={week.days} daySummaries={daySummaries} onSelectDay={onSelectDay} />
+        </section>
+      ))}
+    </div>
+  );
+}
+
 export default function TrainingPage() {
   const [schedule, setSchedule] = useState(() => resolveTrainingSchedule());
   const [selectedDayKey, setSelectedDayKey] = useState(null);
-  const [weekIndex, setWeekIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
   const weeksSignatureRef = useRef("");
 
   const sessionIds = useMemo(
@@ -199,7 +173,15 @@ export default function TrainingPage() {
   }, []);
 
   useEffect(() => {
-    refreshSchedule();
+    let cancelled = false;
+    setLoading(true);
+    hydrateTrainingData()
+      .then(() => {
+        if (!cancelled) refreshSchedule();
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
     return subscribeTrainingScheduleStore(refreshSchedule);
   }, [refreshSchedule]);
 
@@ -212,22 +194,20 @@ export default function TrainingPage() {
     refreshAvailability();
   }, [refreshAvailability]);
 
+  useEffect(() => {
+    const onMeta = () => refreshAvailability();
+    window.addEventListener(TRAINING_PRESENTATION_META_CHANGE_EVENT, onMeta);
+    return () => window.removeEventListener(TRAINING_PRESENTATION_META_CHANGE_EVENT, onMeta);
+  }, [refreshAvailability]);
+
   const weeks = useMemo(() => groupTrainingDaysIntoWeeks(schedule.days), [schedule.days]);
 
   useEffect(() => {
     const signature = weeks.map((w) => w.weekStart).join("|");
     if (signature !== weeksSignatureRef.current) {
       weeksSignatureRef.current = signature;
-      setWeekIndex(getDefaultTrainingWeekIndex(weeks));
-      return;
     }
-    setWeekIndex((prev) => Math.min(prev, Math.max(0, weeks.length - 1)));
   }, [weeks]);
-
-  const currentWeekDays = useMemo(
-    () => weeks[weekIndex]?.days ?? [],
-    [weeks, weekIndex]
-  );
 
   const daySummaries = useMemo(() => {
     const map = {};
@@ -299,8 +279,14 @@ export default function TrainingPage() {
           className="m3-label-medium text-center mb-4 px-2"
         >
           מתחיל {schedule.courseStartDate.split("-").reverse().join(".")}
+          {weeks.length > 1 && ` · ${weeks.length} שבועות`}
         </motion.p>
 
+        {loading ? (
+          <div className="flex justify-center py-16">
+            <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+          </div>
+        ) : (
         <AnimatePresence mode="wait">
           {selectedDay ? (
             <motion.div
@@ -318,19 +304,15 @@ export default function TrainingPage() {
             </motion.div>
           ) : (
             <motion.div key="grid" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <WeekNavigator
+              <FullScheduleGrid
                 weeks={weeks}
-                weekIndex={weekIndex}
-                onWeekChange={setWeekIndex}
-              />
-              <DayGridView
-                days={currentWeekDays}
                 daySummaries={daySummaries}
                 onSelectDay={setSelectedDayKey}
               />
             </motion.div>
           )}
         </AnimatePresence>
+        )}
       </div>
     </div>
   );

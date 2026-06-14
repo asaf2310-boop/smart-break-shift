@@ -114,6 +114,8 @@ const ENTITY_TABLES = {
   ChatPresence: "chat_presence",
   ChatSettings: "chat_settings",
   Agent: "agents",
+  TrainingScheduleSettings: "training_schedule_settings",
+  TrainingPresentationMeta: "training_presentation_meta",
 };
 
 export function createSupabaseDataClient() {

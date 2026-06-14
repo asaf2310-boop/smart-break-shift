@@ -24,6 +24,7 @@ import { supabaseConfigured } from "@/api/supabase";
 import { resolveTrainingSchedule } from "@/lib/trainingSchedule";
 import {
   deleteTrainingSession,
+  hydrateTrainingData,
   resetTrainingScheduleStore,
   subscribeTrainingScheduleStore,
   updateTrainingCourseConfig,
@@ -72,7 +73,7 @@ export default function AdminTraining() {
   }, []);
 
   React.useEffect(() => {
-    refreshSchedule();
+    hydrateTrainingData().then(refreshSchedule);
     return subscribeTrainingScheduleStore(refreshSchedule);
   }, [refreshSchedule]);
 

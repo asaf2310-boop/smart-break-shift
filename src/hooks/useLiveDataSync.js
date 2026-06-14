@@ -34,6 +34,21 @@ const TABLE_QUERY_PREFIXES = {
   chat_messages: ["chat-messages"],
   chat_presence: ["chat-presence"],
   chat_settings: ["chat-branding"],
+  training_schedule_settings: ["training-schedule"],
+  training_presentation_meta: ["training-presentation-meta"],
+};
+
+const TRAINING_REALTIME_HANDLERS = {
+  training_schedule_settings: () => {
+    import("@/lib/trainingScheduleStore").then(({ invalidateTrainingScheduleCache }) => {
+      invalidateTrainingScheduleCache();
+    });
+  },
+  training_presentation_meta: () => {
+    import("@/lib/trainingPresentations").then(({ invalidateTrainingPresentationCache }) => {
+      invalidateTrainingPresentationCache();
+    });
+  },
 };
 
 function invalidateByPrefixes(queryClient, prefixes) {
@@ -91,6 +106,7 @@ export function useLiveDataSync() {
         { event: "*", schema: "public", table },
         () => {
           invalidateByPrefixes(queryClient, TABLE_QUERY_PREFIXES[table]);
+          TRAINING_REALTIME_HANDLERS[table]?.();
         }
       );
     }

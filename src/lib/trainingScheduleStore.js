@@ -1,7 +1,15 @@
 import courseConfig from "@/data/trainingCourseConfig.json";
+import { demoModeEnabled } from "@/api/demoClient";
+import { dataClient } from "@/api/client";
+import { isSupabaseBackend } from "@/api/dataClient";
 
 export const TRAINING_SCHEDULE_STORAGE_KEY = "smart-break-shift-training-schedule-v1";
 export const TRAINING_SCHEDULE_CHANGE_EVENT = "training-schedule-changed";
+
+const CLOUD_ROW_ID = "default";
+
+let memoryStore = null;
+let hydratePromise = null;
 
 function makeSessionId() {
   return `custom_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
@@ -17,37 +25,139 @@ function emptyStore() {
   };
 }
 
-function readRaw() {
+function normalizeStore(parsed) {
+  if (!parsed || parsed.version !== 1) return emptyStore();
+  return {
+    version: 1,
+    configOverrides: parsed.configOverrides || {},
+    sessionPatches: parsed.sessionPatches || {},
+    addedSessions: Array.isArray(parsed.addedSessions) ? parsed.addedSessions : [],
+    deletedSessionIds: Array.isArray(parsed.deletedSessionIds) ? parsed.deletedSessionIds : [],
+  };
+}
+
+function readLocalStorageRaw() {
   if (typeof window === "undefined") return emptyStore();
   try {
     const raw = localStorage.getItem(TRAINING_SCHEDULE_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed?.version === 1) {
-        return {
-          version: 1,
-          configOverrides: parsed.configOverrides || {},
-          sessionPatches: parsed.sessionPatches || {},
-          addedSessions: Array.isArray(parsed.addedSessions) ? parsed.addedSessions : [],
-          deletedSessionIds: Array.isArray(parsed.deletedSessionIds) ? parsed.deletedSessionIds : [],
-        };
-      }
-    }
+    if (raw) return normalizeStore(JSON.parse(raw));
   } catch {
     // ignore
   }
   return emptyStore();
 }
 
+function readRaw() {
+  if (memoryStore) return memoryStore;
+  memoryStore = readLocalStorageRaw();
+  return memoryStore;
+}
+
 function writeRaw(store) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(TRAINING_SCHEDULE_STORAGE_KEY, JSON.stringify(store));
-  window.dispatchEvent(new CustomEvent(TRAINING_SCHEDULE_CHANGE_EVENT));
+  memoryStore = normalizeStore(store);
+  if (typeof window !== "undefined") {
+    localStorage.setItem(TRAINING_SCHEDULE_STORAGE_KEY, JSON.stringify(memoryStore));
+    window.dispatchEvent(new CustomEvent(TRAINING_SCHEDULE_CHANGE_EVENT));
+  }
+  persistScheduleToCloud(memoryStore).catch((err) => {
+    console.warn("[trainingScheduleStore] cloud persist failed", err);
+  });
+}
+
+async function persistScheduleToCloud(store) {
+  if (demoModeEnabled || !isSupabaseBackend() || !dataClient.entities.TrainingScheduleSettings) {
+    return;
+  }
+
+  const payload = {
+    id: CLOUD_ROW_ID,
+    payload: normalizeStore(store),
+    updated_at: new Date().toISOString(),
+  };
+
+  const existing = await dataClient.entities.TrainingScheduleSettings.filter({ id: CLOUD_ROW_ID });
+  if (existing?.length) {
+    await dataClient.entities.TrainingScheduleSettings.update(existing[0].id, payload);
+  } else {
+    await dataClient.entities.TrainingScheduleSettings.create(payload);
+  }
+}
+
+function storeHasOverrides(store) {
+  const s = normalizeStore(store);
+  return (
+    Object.keys(s.configOverrides).length > 0 ||
+    Object.keys(s.sessionPatches).length > 0 ||
+    s.addedSessions.length > 0 ||
+    s.deletedSessionIds.length > 0
+  );
+}
+
+async function loadScheduleFromCloud() {
+  if (demoModeEnabled || !isSupabaseBackend() || !dataClient.entities.TrainingScheduleSettings) {
+    memoryStore = readLocalStorageRaw();
+    return memoryStore;
+  }
+
+  const local = readLocalStorageRaw();
+
+  try {
+    const rows = await dataClient.entities.TrainingScheduleSettings.filter({ id: CLOUD_ROW_ID });
+    const row = rows?.[0];
+    if (row?.payload && storeHasOverrides(row.payload)) {
+      memoryStore = normalizeStore(row.payload);
+      if (typeof window !== "undefined") {
+        localStorage.setItem(TRAINING_SCHEDULE_STORAGE_KEY, JSON.stringify(memoryStore));
+      }
+      return memoryStore;
+    }
+
+    if (storeHasOverrides(local)) {
+      memoryStore = local;
+      await persistScheduleToCloud(local);
+      return memoryStore;
+    }
+
+    if (row?.payload) {
+      memoryStore = normalizeStore(row.payload);
+      if (typeof window !== "undefined") {
+        localStorage.setItem(TRAINING_SCHEDULE_STORAGE_KEY, JSON.stringify(memoryStore));
+      }
+      return memoryStore;
+    }
+  } catch (err) {
+    console.warn("[trainingScheduleStore] cloud load failed", err);
+  }
+
+  memoryStore = local;
+  return memoryStore;
+}
+
+/** טוען לוח הדרכה מ-Supabase (כל הנציגים / רשת חיצונית) */
+export function hydrateTrainingScheduleStore() {
+  if (!hydratePromise) {
+    hydratePromise = loadScheduleFromCloud().finally(() => {
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent(TRAINING_SCHEDULE_CHANGE_EVENT));
+      }
+    });
+  }
+  return hydratePromise;
+}
+
+/** רענון מ-Supabase Realtime */
+export function invalidateTrainingScheduleCache() {
+  memoryStore = null;
+  hydratePromise = null;
+  return hydrateTrainingScheduleStore();
 }
 
 export function subscribeTrainingScheduleStore(callback) {
   const onStorage = (e) => {
-    if (e.key === TRAINING_SCHEDULE_STORAGE_KEY) callback();
+    if (e.key === TRAINING_SCHEDULE_STORAGE_KEY) {
+      memoryStore = null;
+      callback();
+    }
   };
   window.addEventListener("storage", onStorage);
   window.addEventListener(TRAINING_SCHEDULE_CHANGE_EVENT, callback);
@@ -190,7 +300,7 @@ export function mergeSessionFields(session, patch) {
   return next;
 }
 
-/** Apply localStorage overrides onto a resolved base schedule. */
+/** Apply overrides onto a resolved base schedule. */
 export function applyScheduleCustomizations(baseSchedule) {
   const store = readRaw();
   const deleted = new Set(store.deletedSessionIds);
@@ -271,4 +381,10 @@ export function applyScheduleCustomizations(baseSchedule) {
 export function getEffectiveCourseConfig() {
   const overrides = getTrainingConfigOverrides();
   return { ...courseConfig, ...overrides };
+}
+
+/** טוען לוח + מטא-דאטה למצגות */
+export async function hydrateTrainingData() {
+  const { hydrateTrainingPresentationMeta } = await import("@/lib/trainingPresentations");
+  await Promise.all([hydrateTrainingScheduleStore(), hydrateTrainingPresentationMeta()]);
 }

@@ -56,6 +56,9 @@ const ENTITY_KEYS = {
   ConstraintsWeekSettings: "constraintsWeekSettings",
   ChatMessage: "chatMessages",
   ChatPresence: "chatPresence",
+  ChatSettings: "chatSettings",
+  TrainingScheduleSettings: "trainingScheduleSettings",
+  TrainingPresentationMeta: "trainingPresentationMeta",
 };
 
 function pad(value) {
