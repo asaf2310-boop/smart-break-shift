@@ -17,6 +17,7 @@ import {
   readKnowledgeChunkIndex,
   subscribeKnowledgeStore,
   hydrateKnowledgeStore,
+  listKnowledgeDocuments,
 } from "@/lib/knowledgeStore";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -283,6 +284,7 @@ export default function KnowledgeChat({ compact = false }) {
   const listRef = useRef(null);
   const { toast } = useToast();
   const [chunkCount, setChunkCount] = useState(() => getKnowledgeIndexStats().chunkCount);
+  const [docCount, setDocCount] = useState(() => listKnowledgeDocuments().length);
   const [embeddingsOk, setEmbeddingsOk] = useState(() => getKnowledgeIndexStats().embeddingsOk);
   const [openAiOn, setOpenAiOn] = useState(false);
   const [serverRag, setServerRag] = useState(false);
@@ -297,6 +299,7 @@ export default function KnowledgeChat({ compact = false }) {
         const stats = getKnowledgeIndexStats();
         setChunkCount(stats.chunkCount);
         setEmbeddingsOk(stats.embeddingsOk);
+        setDocCount(listKnowledgeDocuments().length);
       }
     };
 
@@ -317,7 +320,9 @@ export default function KnowledgeChat({ compact = false }) {
             setEmbeddingsOk(health.embeddings);
           }
         } catch {
-          if (!cancelled) setChunkCount(0);
+          if (!cancelled) {
+            refreshChunkCount();
+          }
         }
         return;
       }
@@ -372,6 +377,16 @@ export default function KnowledgeChat({ compact = false }) {
   const submitQuery = async (text, { isRetry = false } = {}) => {
     const trimmed = text.trim();
     if (!trimmed || loading) return;
+
+    const hasKnowledge = chunkCount > 0 || docCount > 0;
+    if (!hasKnowledge) {
+      toast({
+        title: "אין תוכן בבסיס הידע",
+        description: "מנהל המערכת צריך להעלות מסמכים ב-/admin/knowledge",
+        variant: "destructive",
+      });
+      return;
+    }
 
     if (!isRetry) {
       const userMsg = { id: `u_${Date.now()}`, role: "user", content: trimmed };
@@ -494,7 +509,9 @@ export default function KnowledgeChat({ compact = false }) {
             ? "מאנדקס מסמכים…"
             : chunkCount > 0
               ? `${chunkCount} קטעי ידע מאונדקסים`
-              : "אין תוכן בבסיס הידע"}
+              : docCount > 0
+                ? `${docCount} מסמכים — ממתין לאינדוקס`
+                : "אין תוכן בבסיס הידע"}
         </p>
         {openAiOn ? (
           <span className="m3-badge text-[10px]">{serverRag ? "RAG בשרת" : "GPT פעיל"}</span>
@@ -538,12 +555,12 @@ export default function KnowledgeChat({ compact = false }) {
           onChange={(e) => setInput(e.target.value)}
           placeholder="שאל שאלה על המדיניות, המוצר או הנהלים..."
           className="flex-1 rounded-2xl border border-outline/25 bg-card px-4 py-3 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
-          disabled={loading || chunkCount === 0 || indexing}
+          disabled={loading}
           dir="auto"
         />
         <button
           type="submit"
-          disabled={loading || !input.trim() || chunkCount === 0 || indexing}
+          disabled={loading || !input.trim()}
           className="m3-btn-tonal shrink-0 px-4 disabled:opacity-50"
           aria-label="שליחה"
         >
