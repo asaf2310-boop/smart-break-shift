@@ -12,6 +12,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 ).toString();
 
 export const MAX_KNOWLEDGE_FILE_BYTES = 5 * 1024 * 1024;
+const MAX_PAGE_THUMBNAILS = 24;
+const THUMBNAIL_MAX_WIDTH = 520;
 
 const SUPPORTED_EXTENSIONS = new Set(["txt", "md", "pdf", "docx"]);
 
@@ -36,35 +38,66 @@ function titleFromFileName(fileName) {
     .trim() || "מסמך מועלה";
 }
 
+/** Group PDF text items into lines, sort RTL, and insert word spaces from glyph gaps. */
 function pdfItemsToText(items) {
-  let text = "";
-  let lastEndX = null;
-  let lastY = null;
+  if (!items?.length) return "";
+
+  const lineMap = new Map();
 
   for (const item of items) {
     if (!("str" in item) || !item.str) continue;
-    const str = item.str;
     const transform = item.transform || [1, 0, 0, 1, 0, 0];
     const x = transform[4];
     const y = transform[5];
-    const width = item.width ?? str.length * 4;
+    const yKey = Math.round(y / 4) * 4;
+    const width = item.width ?? item.str.length * 5;
 
-    if (lastEndX !== null) {
-      const gap = x - lastEndX;
-      const newLine = Math.abs(y - lastY) > 4;
-      if (newLine) {
-        text += "\n";
-      } else if (gap > 1.5) {
-        text += gap > 6 ? " " : "";
-      }
-    }
-
-    text += str;
-    lastEndX = x + width;
-    lastY = y;
+    if (!lineMap.has(yKey)) lineMap.set(yKey, []);
+    lineMap.get(yKey).push({ x, str: item.str, width, endX: x + width });
   }
 
-  return text.trim();
+  const lines = [...lineMap.keys()].sort((a, b) => b - a);
+  const parts = [];
+
+  for (const yKey of lines) {
+    const row = lineMap.get(yKey).sort((a, b) => b.x - a.x);
+    let lineText = "";
+    let prevStartX = null;
+
+    for (const { x, str, endX } of row) {
+      if (prevStartX !== null) {
+        const gap = prevStartX - endX;
+        if (gap > 1.2) {
+          lineText += gap > 2.5 || /[\u0590-\u05FF]$/.test(lineText) ? " " : "";
+        }
+      }
+      lineText += str;
+      prevStartX = x;
+    }
+
+    const trimmed = lineText.trim();
+    if (trimmed) parts.push(trimmed);
+  }
+
+  return parts.join("\n");
+}
+
+async function renderPageThumbnail(page) {
+  const baseViewport = page.getViewport({ scale: 1 });
+  if (!baseViewport.width) return null;
+
+  const scale = Math.min(THUMBNAIL_MAX_WIDTH / baseViewport.width, 1.25);
+  const viewport = page.getViewport({ scale });
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.floor(viewport.width);
+  canvas.height = Math.floor(viewport.height);
+  const ctx = canvas.getContext("2d", { alpha: false });
+  if (!ctx) return null;
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  return canvas.toDataURL("image/jpeg", 0.62);
 }
 
 async function extractPdfText(file) {
@@ -77,9 +110,23 @@ async function extractPdfText(file) {
     const page = await pdf.getPage(pageNum);
     const content = await page.getTextContent();
     const pageText = normalizeHebrewText(pdfItemsToText(content.items));
-    if (pageText) {
-      parts.push(pageText);
-      pages.push({ pageNumber: pageNum, text: pageText });
+    let thumbnail = null;
+
+    if (pageText && pageNum <= MAX_PAGE_THUMBNAILS) {
+      try {
+        thumbnail = await renderPageThumbnail(page);
+      } catch {
+        thumbnail = null;
+      }
+    }
+
+    if (pageText || thumbnail) {
+      if (pageText) parts.push(pageText);
+      pages.push({
+        pageNumber: pageNum,
+        text: pageText || "",
+        ...(thumbnail ? { thumbnail } : {}),
+      });
     }
   }
 
@@ -103,7 +150,7 @@ async function extractDocxText(file) {
 
 /**
  * @param {File} file
- * @returns {Promise<{ text: string, title: string, error: string | null, pages?: Array<{ pageNumber: number, text: string }> }>}
+ * @returns {Promise<{ text: string, title: string, error: string | null, pages?: Array<{ pageNumber: number, text: string, thumbnail?: string }> }>}
  */
 export async function extractTextFromFile(file) {
   const title = titleFromFileName(file.name);

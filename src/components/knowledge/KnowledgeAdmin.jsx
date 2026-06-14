@@ -124,8 +124,15 @@ export default function KnowledgeAdmin() {
         category: form.category || "כללי",
         pages: pages || null,
       });
+      const thumbCount = pages?.filter((p) => p?.thumbnail).length || 0;
       setDialog({ mode: "create", sourceType: "upload", fileName: file.name });
-      toast({ title: "הקובץ נקרא בהצלחה", description: "בדקו את התוכן ולחצו שמירה" });
+      toast({
+        title: "הקובץ נקרא בהצלחה",
+        description:
+          thumbCount > 0
+            ? `נשמרו ${thumbCount} תמונות עמוד מ-PDF. בדקו את התוכן ולחצו שמירה.`
+            : "בדקו את התוכן ולחצו שמירה",
+      });
     } finally {
       setUploading(false);
     }

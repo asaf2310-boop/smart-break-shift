@@ -1842,12 +1842,12 @@ html.app-hyp-demo .customer-chat-bubble--staff {
   }
 }
 
-/* Knowledge base chat — RTL / mixed-script message bubbles */
+/* Knowledge base chat — stable RTL rendering (avoid plaintext bidi reordering) */
 .knowledge-chat-message,
 .chat-message {
   direction: rtl;
-  unicode-bidi: plaintext;
-  text-align: right;
+  unicode-bidi: embed;
+  text-align: start;
   font-family: "Heebo", "Rubik", "Assistant", Arial, sans-serif;
   line-height: 1.8;
   white-space: pre-wrap;
@@ -1858,7 +1858,7 @@ html.app-hyp-demo .customer-chat-bubble--staff {
 .knowledge-chat-message *,
 .chat-message * {
   direction: inherit;
-  unicode-bidi: plaintext;
+  unicode-bidi: inherit;
 }
 
 /* Training calendar — premium day cards (TrainingPage.jsx) */

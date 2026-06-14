@@ -1,5 +1,6 @@
 import {
   getKnowledgeDocumentsFingerprint,
+  getKnowledgeDocument,
   hydrateKnowledgeStore,
   listKnowledgeDocuments,
   patchKnowledgeDocumentsContent,
@@ -20,13 +21,15 @@ const CHUNK_MAX_CHARS = 3200;
 /** ~100–150 tokens overlap */
 const CHUNK_OVERLAP_CHARS = 500;
 
-const RETRIEVAL_TOP_K_MIN = 5;
-const RETRIEVAL_TOP_K_MAX = 8;
-const RETRIEVAL_TOP_K = 6;
+const RETRIEVAL_TOP_K_MIN = 4;
+const RETRIEVAL_TOP_K_MAX = 6;
+const RETRIEVAL_TOP_K = 5;
 
-const MIN_EMBEDDING_SCORE = 0.58;
-const MIN_KEYWORD_SCORE = 3.5;
-const MIN_KEYWORD_RELATIVE_RATIO = 0.5;
+const MIN_EMBEDDING_SCORE = 0.62;
+const MIN_EMBEDDING_RELATIVE_RATIO = 0.72;
+const MIN_KEYWORD_SCORE = 4;
+const MIN_KEYWORD_RELATIVE_RATIO = 0.55;
+const MIN_KEYWORD_MATCHES_FOR_EMBEDDING = 1;
 
 const MAX_CONTEXT_CHARS = 2400;
 const MAX_SNIPPET_CHARS = 420;
@@ -67,7 +70,23 @@ const STOP_WORDS = new Set([
   "for",
 ]);
 
-const KNOWLEDGE_SANITIZE_STORAGE_KEY = "knowledge-content-sanitize-v4";
+const KNOWLEDGE_SANITIZE_STORAGE_KEY = "knowledge-content-sanitize-v5";
+
+/** Light sanitize for GPT answers — preserves spacing; no OCR rejoin heuristics. */
+export function sanitizeAssistantAnswer(text) {
+  let s = String(text || "").replace(/\r\n/g, "\n").trim();
+  if (!s) return "";
+
+  s = stripBrokenMarkdownLinks(s);
+  s = separateHebrewLatinGlue(s);
+  s = s
+    .split("\n")
+    .map((line) => line.replace(/[ \t]+/g, " ").trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n");
+
+  return s.trim();
+}
 
 function normalizeText(text) {
   return String(text || "")
@@ -521,17 +540,33 @@ export async function searchKnowledgeChunksWithScores(query, limit = RETRIEVAL_T
     const queryEmbedding = await embedQuery(trimmed);
     if (queryEmbedding) {
       const ranked = withEmbeddings
-        .map((chunk) => ({
-          chunk,
-          score: cosineEmbedding(queryEmbedding, chunk.embedding),
-          method: "embedding",
-        }))
-        .sort((a, b) => b.score - a.score)
-        .slice(0, topK);
+        .map((chunk) => {
+          const embScore = cosineEmbedding(queryEmbedding, chunk.embedding);
+          const keywordScore = scoreChunkKeyword(chunk, tokens);
+          const keywordBoost = Math.min(keywordScore / 14, 1);
+          const score = embScore * 0.84 + keywordBoost * 0.16;
+          return { chunk, score, embScore, keywordScore, method: "embedding" };
+        })
+        .filter((row) => {
+          if (row.embScore < MIN_EMBEDDING_SCORE - 0.06) return false;
+          if (tokens.length >= 2 && row.keywordScore < MIN_KEYWORD_MATCHES_FOR_EMBEDDING) {
+            return false;
+          }
+          return row.score >= MIN_EMBEDDING_SCORE;
+        })
+        .sort((a, b) => b.score - a.score);
+
+      if (!ranked.length) {
+        return { chunks: [], hits: [], method: "embedding" };
+      }
+
+      const topScore = ranked[0].score;
+      const minRelative = topScore * MIN_EMBEDDING_RELATIVE_RATIO;
+      const filtered = ranked.filter((row) => row.score >= minRelative).slice(0, topK);
 
       return {
-        chunks: ranked.map((r) => r.chunk),
-        hits: ranked,
+        chunks: filtered.map((r) => r.chunk),
+        hits: filtered,
         method: "embedding",
       };
     }
@@ -778,9 +813,33 @@ async function callOpenAi(query, chunks, context) {
 }
 
 function polishModelAnswer(raw) {
-  let text = sanitizeChunkText(raw);
-  text = text.replace(/^(#{1,6}\s+|\*\s+|-\s+)/gm, "");
-  return text.replace(/\r\n/g, "\n").trim();
+  return sanitizeAssistantAnswer(raw);
+}
+
+function resolvePageImages(chunks, limit = 3) {
+  const seen = new Set();
+  const images = [];
+
+  for (const chunk of chunks) {
+    if (chunk.pageNumber == null) continue;
+    const key = `${chunk.documentId}:${chunk.pageNumber}`;
+    if (seen.has(key)) continue;
+
+    const doc = getKnowledgeDocument(chunk.documentId);
+    const page = doc?.pages?.find((p) => p.pageNumber === chunk.pageNumber);
+    if (!page?.thumbnail) continue;
+
+    seen.add(key);
+    images.push({
+      documentId: chunk.documentId,
+      documentTitle: chunk.documentName || chunk.documentTitle || doc?.title,
+      pageNumber: chunk.pageNumber,
+      src: page.thumbnail,
+    });
+    if (images.length >= limit) break;
+  }
+
+  return images;
 }
 
 function formatSourceLine(chunk) {
@@ -832,7 +891,7 @@ function buildDebugPayload(query, retrieval, context) {
 export async function askKnowledgeBase(query) {
   const trimmed = normalizeText(query);
   if (!trimmed) {
-    return { answer: "נא להקליד שאלה.", citations: [], chunks: [], mode: "empty", debug: null };
+    return { answer: "נא להקליד שאלה.", citations: [], chunks: [], images: [], mode: "empty", debug: null };
   }
 
   const retrieval = await searchKnowledgeChunksWithScores(trimmed);
@@ -850,21 +909,25 @@ export async function askKnowledgeBase(query) {
       answer: KNOWLEDGE_LOW_RELEVANCE_ANSWER,
       citations: [],
       chunks: [],
+      images: [],
       mode: "low_relevance",
       debug,
     };
   }
 
+  const pageImages = resolvePageImages(chunks);
+
   const probe = await probeOpenAiAvailability();
   if (probe.available) {
     try {
       const result = await callOpenAi(trimmed, chunks, context);
-      return { ...result, chunks, debug };
+      return { ...result, chunks, images: pageImages, debug };
     } catch (err) {
       return {
         answer: buildLocalStructuredAnswer(chunks),
         citations: uniqueCitations(chunks),
         chunks,
+        images: pageImages,
         mode: "local_fallback",
         openAiFailed: true,
         openAiError: formatOpenAiError(err),
@@ -877,6 +940,7 @@ export async function askKnowledgeBase(query) {
     answer: buildLocalStructuredAnswer(chunks),
     citations: uniqueCitations(chunks),
     chunks,
+    images: pageImages,
     mode: "local_fallback",
     debug,
   };

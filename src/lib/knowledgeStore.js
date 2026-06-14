@@ -392,8 +392,15 @@ export function resetKnowledgeToSeed() {
   clearKnowledgeChunkIndex();
 }
 
+/** Bump when chunking / ingest logic changes so indexes rebuild automatically. */
+const KNOWLEDGE_INDEX_VERSION = "rag-v2";
+
 export function getKnowledgeDocumentsFingerprint(documents = listKnowledgeDocuments()) {
-  return documents.map((d) => `${d.id}:${d.updatedAt}:${(d.content || "").length}`).join("|");
+  const pageThumbCount = (d) =>
+    Array.isArray(d.pages) ? d.pages.filter((p) => p?.thumbnail).length : 0;
+  return `${KNOWLEDGE_INDEX_VERSION}|${documents
+    .map((d) => `${d.id}:${d.updatedAt}:${(d.content || "").length}:${pageThumbCount(d)}`)
+    .join("|")}`;
 }
 
 function readChunkIndexRaw() {

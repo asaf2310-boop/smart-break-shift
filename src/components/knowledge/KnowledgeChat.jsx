@@ -99,7 +99,7 @@ function MessageBubble({ message, showDebug }) {
       className={`flex ${isUser ? "justify-start" : "justify-end"}`}
     >
       <div
-        dir="auto"
+        dir="rtl"
         lang="he"
         className={`knowledge-chat-message max-w-[92%] sm:max-w-[85%] rounded-2xl px-4 py-3 text-sm ${
           isUser
@@ -126,6 +126,24 @@ function MessageBubble({ message, showDebug }) {
                 </p>
               ),
             )}
+          </div>
+        )}
+        {!isUser && message.images?.length > 0 && (
+          <div className="mt-3 grid gap-2">
+            {message.images.map((img) => (
+              <figure key={`${img.documentId}-${img.pageNumber}`} className="m-0">
+                <img
+                  src={img.src}
+                  alt={`${img.documentTitle || "מסמך"} — עמוד ${img.pageNumber}`}
+                  className="rounded-lg border border-outline/20 max-w-full h-auto bg-white"
+                  loading="lazy"
+                />
+                <figcaption className="text-[10px] text-on-surface-variant mt-1">
+                  {img.documentTitle || "מסמך"}
+                  {img.pageNumber != null ? ` · עמוד ${img.pageNumber}` : ""}
+                </figcaption>
+              </figure>
+            ))}
           </div>
         )}
         {!isUser && message.citations?.length > 0 && (
@@ -264,6 +282,7 @@ export default function KnowledgeChat({ compact = false }) {
           role: "assistant",
           content: result.answer,
           citations: result.citations,
+          images: result.images || [],
           mode: result.mode,
           openAiFailed: result.openAiFailed,
           openAiError: result.openAiError,
