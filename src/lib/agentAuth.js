@@ -7,11 +7,12 @@ import {
   listAllDemoAppUsers,
   setDemoUserPassword,
   verifyDemoUserPassword,
-  requestDemoPasswordReset,
 } from "@/lib/appUsersStore";
 import { clearAdminSession } from "@/hooks/useIsAdmin";
 import { normalizeAgentModules } from "@/constants/agentModules";
 import { getAgentNamesList } from "@/constants/scheduling";
+import { normalizeAgentPhone } from "@/lib/agentPhone";
+import { requestAgentPasswordResetSms } from "@/lib/agentPasswordReset";
 
 export const AGENT_SESSION_KEY = "smart-break-agent-session-v1";
 export const INVALID_CREDENTIALS_MSG = "אימייל או סיסמה שגויים";
@@ -52,8 +53,10 @@ function mapSupabaseAgent(row) {
     email: row.email || "",
     displayName: row.display_name,
     authUserId: row.auth_user_id,
-    needsPasswordSetup: row.needs_password_setup !== false && !row.password_plain,
+    needsPasswordSetup: row.needs_password_setup === true,
+    hasStoredPassword: Boolean(row.password_plain),
     passwordPlain: row.password_plain || null,
+    phone: row.phone || "",
     active: row.active !== false && !row.deleted_at,
     blocked: row.blocked === true,
     modules: normalizeAgentModules(row.modules),
@@ -66,7 +69,10 @@ function mapDemoAgent(user) {
     id: user.id,
     email: user.email,
     displayName: user.name,
-    needsPasswordSetup: user.needsPasswordSetup !== false && !user.password,
+    needsPasswordSetup: user.needsPasswordSetup === true,
+    hasStoredPassword: Boolean(user.password),
+    passwordPlain: user.password || null,
+    phone: user.phone || "",
     active: user.active !== false,
     blocked: user.blocked === true,
     modules: normalizeAgentModules(user.modules),
@@ -272,12 +278,40 @@ function verifySupabaseAgentPassword(agent, password) {
   return agent.passwordPlain === String(password);
 }
 
+export function agentHasPendingPasswordReset(agent) {
+  return Boolean(agent?.needsPasswordSetup && agent?.hasStoredPassword);
+}
+
+export async function agentVerifyTemporaryPassword(email, password) {
+  const agent = await resolveAgentByEmail(email);
+  if (!canAgentAuthenticate(agent) || !agentHasPendingPasswordReset(agent)) {
+    return credentialsError();
+  }
+
+  if (demoModeEnabled) {
+    const user = findDemoUserByEmailAny(email);
+    if (!verifyDemoUserPassword(user, password)) {
+      return credentialsError();
+    }
+    return { ok: true };
+  }
+
+  if (!verifySupabaseAgentPassword(agent, password)) {
+    return credentialsError();
+  }
+
+  return { ok: true };
+}
+
 export async function agentLoginWithPassword(email, password) {
   const agent = await resolveAgentByEmail(email);
   if (!canAgentAuthenticate(agent)) {
     return credentialsError();
   }
   if (agent.needsPasswordSetup) {
+    if (agentHasPendingPasswordReset(agent)) {
+      return { ok: false, error: "needs_temp_password", agent };
+    }
     return { ok: false, error: "needs_password_setup", agent };
   }
 
@@ -333,37 +367,20 @@ export async function agentSetupPassword(email, password) {
 }
 
 export async function agentRequestPasswordReset(email) {
-  if (!demoModeEnabled) {
-    const agent = await resolveAgentByEmail(email);
-    if (!canAgentAuthenticate(agent)) {
-      return { ok: false, message: "אם האימייל ברשימה, פנה/י למנהל המערכת." };
-    }
-    return { ok: true, message: "איפוס סיסמה מתבצע דרך מנהל המערכת בלבד." };
-  }
-
   const agent = await resolveAgentByEmail(email);
   if (!canAgentAuthenticate(agent)) {
-    return { ok: false, message: "אם האימייל ברשימה, נשלח קישור לאיפוס. בדוק את תיבת הדואר." };
+    return { ok: true, message: "אם האימייל רשום במערכת ויש טלפון — נשלחה סיסמה זמנית ב-SMS." };
   }
 
-  if (demoModeEnabled) {
-    const result = requestDemoPasswordReset(email);
-    return { ok: true, message: result.message };
+  const phone = normalizeAgentPhone(agent.phone);
+  if (!phone && !demoModeEnabled) {
+    return {
+      ok: false,
+      message: "לא הוגדר טלפון לנציג. פנה/י למנהל לעדכון מספר בניהול נציגים.",
+    };
   }
 
-  if (!supabase) {
-    return { ok: false, message: "Supabase לא מוגדר" };
-  }
-
-  const redirectTo = `${window.location.origin}/reset-password`;
-  const { error } = await supabase.auth.resetPasswordForEmail(agent.email, { redirectTo });
-  if (error) {
-    return { ok: false, message: error.message };
-  }
-  return {
-    ok: true,
-    message: "נשלח קישור לאיפוס סיסמה (אם SMTP מוגדר ב-Supabase). בדוק את תיבת הדואר.",
-  };
+  return requestAgentPasswordResetSms(agent);
 }
 
 export async function agentLogout() {
