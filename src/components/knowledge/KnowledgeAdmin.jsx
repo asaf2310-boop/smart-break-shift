@@ -20,9 +20,10 @@ import {
   hydrateKnowledgeStore,
 } from "@/lib/knowledgeStore";
 import {
-  getAllChunks,
+  getKnowledgeIndexStats,
   rebuildKnowledgeChunkIndex,
   sanitizeMarkdownIngestText,
+  formatEmbeddingError,
 } from "@/lib/knowledgeAi";
 import { extractTextFromFile } from "@/lib/knowledgeFileExtract";
 
@@ -41,10 +42,13 @@ export default function KnowledgeAdmin() {
     pages: null,
   });
   const [uploading, setUploading] = useState(false);
+  const [reindexing, setReindexing] = useState(false);
+  const [indexStats, setIndexStats] = useState(() => getKnowledgeIndexStats());
 
   const refresh = useCallback(() => {
     setDocuments(listKnowledgeDocuments());
     setCategories(listKnowledgeCategories());
+    setIndexStats(getKnowledgeIndexStats());
   }, []);
 
   useEffect(() => {
@@ -52,7 +56,46 @@ export default function KnowledgeAdmin() {
     return subscribeKnowledgeStore(refresh);
   }, [refresh]);
 
-  const chunkCount = getAllChunks().length;
+  const chunkCount = indexStats.chunkCount;
+
+  const notifyIndexResult = (result) => {
+    setIndexStats(getKnowledgeIndexStats());
+    if (result?.embeddingError) {
+      toast({
+        title: "אינדקס נשמר — embeddings חלקיים",
+        description: formatEmbeddingError(result.embeddingError),
+        variant: "destructive",
+      });
+      return;
+    }
+    if (result && !result.embeddingsOk && result.chunkCount > 0) {
+      toast({
+        title: "אינדקס נשמר — ללא embeddings",
+        description: formatEmbeddingError("openai_not_configured"),
+      });
+    }
+  };
+
+  const handleReindex = async () => {
+    if (reindexing) return;
+    setReindexing(true);
+    try {
+      const result = await rebuildKnowledgeChunkIndex({ force: true });
+      refresh();
+      if (result.embeddingsOk) {
+        toast({
+          title: "האינדקס נבנה מחדש",
+          description: `${result.embeddingCount} embeddings ל-${result.chunkCount} קטעים`,
+        });
+      } else {
+        notifyIndexResult(result);
+      }
+    } catch {
+      toast({ title: "שגיאה", description: "לא ניתן לבנות אינדекс", variant: "destructive" });
+    } finally {
+      setReindexing(false);
+    }
+  };
 
   const openCreate = () => {
     setForm({ title: "", content: "", category: categories[0] || "כללי", pages: null });
@@ -83,7 +126,8 @@ export default function KnowledgeAdmin() {
       });
       setDialog(null);
       refresh();
-      await rebuildKnowledgeChunkIndex();
+      const result = await rebuildKnowledgeChunkIndex();
+      notifyIndexResult(result);
       toast({ title: "נשמר בהצלחה", description: "אינדקס החיפוש עודכן" });
     } catch (err) {
       toast({
@@ -99,7 +143,8 @@ export default function KnowledgeAdmin() {
     try {
       deleteKnowledgeDocument(doc.id);
       refresh();
-      await rebuildKnowledgeChunkIndex();
+      const result = await rebuildKnowledgeChunkIndex();
+      notifyIndexResult(result);
       toast({ title: "המסמך נמחק" });
     } catch {
       toast({ title: "שגיאה", description: "לא ניתן למחוק", variant: "destructive" });
@@ -142,17 +187,37 @@ export default function KnowledgeAdmin() {
     if (!window.confirm("לאפס את בסיס הידע לנתוני הדמו? פעולה זו תמחק את כל המסמכים הנוכחיים.")) return;
     resetKnowledgeToSeed();
     refresh();
-    await rebuildKnowledgeChunkIndex();
+    const result = await rebuildKnowledgeChunkIndex();
+    notifyIndexResult(result);
     toast({ title: "בסיס הידע אופס לדמו" });
   };
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="m3-label-medium">
-          {documents.length} מסמכים · {chunkCount} קטעים לחיפוש
-        </p>
+        <div className="space-y-1">
+          <p className="m3-label-medium">
+            {documents.length} מסמכים · {chunkCount} קטעים לחיפוש
+          </p>
+          {chunkCount > 0 && (
+            <p className="m3-label-medium text-xs opacity-80">
+              embeddings: {indexStats.embeddingCount}/{chunkCount}
+              {indexStats.embeddingsOk
+                ? " · חיפוש סמנטי פעיל"
+                : " · חיפוש מילות מפתח בלבד (הגדר OPENAI_API_KEY)"}
+            </p>
+          )}
+        </div>
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={handleReindex}
+            disabled={reindexing || documents.length === 0}
+            className="m3-btn-outlined disabled:opacity-50"
+          >
+            <RotateCcw className={`w-4 h-4 ${reindexing ? "animate-spin" : ""}`} />
+            {reindexing ? "בונה אינדקס…" : "בניית אינדקס מחדש"}
+          </button>
           <label
             className={`m3-btn-outlined cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}
           >

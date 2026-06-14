@@ -95,7 +95,11 @@ export default async function handler(req, res) {
     return json(
       res,
       503,
-      { code: "openai_not_configured", error: "openai_not_configured" },
+      {
+        code: "openai_not_configured",
+        error: "openai_not_configured",
+        message: "הגדר OPENAI_API_KEY ב-Vercel (Environment Variables) ופרוס מחדש.",
+      },
       req,
     );
   }

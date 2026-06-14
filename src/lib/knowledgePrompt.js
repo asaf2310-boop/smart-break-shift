@@ -15,7 +15,7 @@ When relevant, mention which document or section the answer is based on.`;
 export const KNOWLEDGE_ANSWER_FORMAT_HINT = `Structure every answer as:
 תשובה קצרה וברורה
 (optional) פירוט לפי סעיפים אם צריך — רק מידע שקשור ישירות לשאלה
-מקור: שם המסמך / עמוד / כותרת`;
+מקור: שם המסמך / עמוד / כותרת (חובה — ציין את מספר הסימוכין [1], [2] מההקשר אם רלוונטי)`;
 
 export const KNOWLEDGE_LOW_RELEVANCE_ANSWER =
   "לא מצאתי תשובה מתאימה במסמכים. אפשר לנסח את השאלה אחרת?";

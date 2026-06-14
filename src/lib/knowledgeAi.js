@@ -31,8 +31,10 @@ const MIN_KEYWORD_SCORE = 4;
 const MIN_KEYWORD_RELATIVE_RATIO = 0.55;
 const MIN_KEYWORD_MATCHES_FOR_EMBEDDING = 1;
 
-const MAX_CONTEXT_CHARS = 2400;
-const MAX_SNIPPET_CHARS = 420;
+const MAX_CONTEXT_CHARS = 2800;
+const MAX_SNIPPET_CHARS = 480;
+const EMBED_BATCH_SIZE = 64;
+const MAX_CHUNKS_PER_DOCUMENT = 2;
 
 const STOP_WORDS = new Set([
   "מה",
@@ -373,43 +375,96 @@ function ensureKnowledgeSanitizeMigration() {
 
 let indexBuildPromise = null;
 
-async function fetchEmbeddingsBatch(texts) {
-  if (!texts.length) return [];
-  try {
-    const res = await fetch("/api/knowledge-embed", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ inputs: texts }),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return Array.isArray(data.embeddings) ? data.embeddings : null;
-  } catch {
-    return null;
-  }
+/** Text sent to the embedding model — includes doc metadata for better retrieval. */
+function buildEmbeddingInput(chunk) {
+  const meta = [
+    chunk.documentName || chunk.documentTitle,
+    chunk.category ? `קטגוריה: ${chunk.category}` : null,
+    chunk.sectionTitle ? `סעיף: ${chunk.sectionTitle}` : null,
+    chunk.pageNumber != null ? `עמוד ${chunk.pageNumber}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return meta ? `${meta}\n${chunk.text}` : chunk.text;
 }
 
-/** Rebuild localStorage chunk index (with optional OpenAI embeddings). */
-export async function rebuildKnowledgeChunkIndex() {
+function statsFromChunks(chunks) {
+  const totalCount = chunks.length;
+  const embeddingCount = chunks.filter(
+    (c) => Array.isArray(c.embedding) && c.embedding.length,
+  ).length;
+  return {
+    chunkCount: totalCount,
+    embeddingCount,
+    embeddingsOk: totalCount > 0 && embeddingCount === totalCount,
+    embeddingCoverage: totalCount ? embeddingCount / totalCount : 0,
+  };
+}
+
+export function getKnowledgeIndexStats() {
+  return statsFromChunks(getAllChunks());
+}
+
+async function fetchEmbeddingsBatch(texts) {
+  if (!texts.length) return { embeddings: [], error: null };
+
+  const allEmbeddings = [];
+  for (let offset = 0; offset < texts.length; offset += EMBED_BATCH_SIZE) {
+    const batch = texts.slice(offset, offset + EMBED_BATCH_SIZE);
+    try {
+      const res = await fetch("/api/knowledge-embed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inputs: batch }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        return {
+          embeddings: null,
+          error: data.error || data.code || `http_${res.status}`,
+        };
+      }
+      const data = await res.json();
+      if (!Array.isArray(data.embeddings)) {
+        return { embeddings: null, error: "invalid_response" };
+      }
+      allEmbeddings.push(...data.embeddings);
+    } catch {
+      return { embeddings: null, error: "network" };
+    }
+  }
+
+  return { embeddings: allEmbeddings, error: null };
+}
+
+/**
+ * Rebuild localStorage chunk index (with optional OpenAI embeddings).
+ * @returns {Promise<{ chunks: Array, chunkCount: number, embeddingCount: number, embeddingsOk: boolean, embeddingError: string | null }>}
+ */
+export async function rebuildKnowledgeChunkIndex({ force = false } = {}) {
   await hydrateKnowledgeStore();
   ensureKnowledgeSanitizeMigration();
   const documents = listKnowledgeDocuments();
   const fingerprint = getKnowledgeDocumentsFingerprint(documents);
   const existing = readKnowledgeChunkIndex();
-  if (existing?.fingerprint === fingerprint && existing.chunks?.length) {
-    return existing.chunks;
+  if (
+    !force &&
+    existing?.fingerprint === fingerprint &&
+    existing.chunks?.length
+  ) {
+    return { chunks: existing.chunks, embeddingError: null, ...statsFromChunks(existing.chunks) };
   }
 
   if (!documents.length) {
     if (existing?.chunks?.length) {
       writeKnowledgeChunkIndex([], fingerprint);
     }
-    return [];
+    return { chunks: [], embeddingError: null, ...statsFromChunks([]) };
   }
 
   const rawChunks = documents.flatMap(chunkDocument);
-  const texts = rawChunks.map((c) => c.text);
-  const embeddings = await fetchEmbeddingsBatch(texts);
+  const texts = rawChunks.map(buildEmbeddingInput);
+  const { embeddings, error: embeddingError } = await fetchEmbeddingsBatch(texts);
 
   const chunks = rawChunks.map((chunk, i) => ({
     ...chunk,
@@ -417,7 +472,7 @@ export async function rebuildKnowledgeChunkIndex() {
   }));
 
   writeKnowledgeChunkIndex(chunks, fingerprint);
-  return chunks;
+  return { chunks, embeddingError, ...statsFromChunks(chunks) };
 }
 
 function ensureChunkIndexReady() {
@@ -516,8 +571,37 @@ function scoreChunkKeyword(chunk, tokens) {
 }
 
 async function embedQuery(text) {
-  const result = await fetchEmbeddingsBatch([text]);
-  return result?.[0] ?? null;
+  const enriched = `שאלה: ${normalizeText(text)}`;
+  const { embeddings } = await fetchEmbeddingsBatch([enriched]);
+  return embeddings?.[0] ?? null;
+}
+
+/** Prefer diverse sources — cap chunks per document before filling remaining slots. */
+function diversifyHits(hits, topK, maxPerDocument = MAX_CHUNKS_PER_DOCUMENT) {
+  const picked = [];
+  const pickedIds = new Set();
+  const docCounts = new Map();
+
+  for (const hit of hits) {
+    if (picked.length >= topK) break;
+    const docId = hit.chunk.documentId;
+    const count = docCounts.get(docId) || 0;
+    if (count >= maxPerDocument) continue;
+    docCounts.set(docId, count + 1);
+    picked.push(hit);
+    pickedIds.add(hit.chunk.id);
+  }
+
+  if (picked.length < topK) {
+    for (const hit of hits) {
+      if (picked.length >= topK) break;
+      if (pickedIds.has(hit.chunk.id)) continue;
+      picked.push(hit);
+      pickedIds.add(hit.chunk.id);
+    }
+  }
+
+  return picked;
 }
 
 /**
@@ -562,7 +646,10 @@ export async function searchKnowledgeChunksWithScores(query, limit = RETRIEVAL_T
 
       const topScore = ranked[0].score;
       const minRelative = topScore * MIN_EMBEDDING_RELATIVE_RATIO;
-      const filtered = ranked.filter((row) => row.score >= minRelative).slice(0, topK);
+      const filtered = diversifyHits(
+        ranked.filter((row) => row.score >= minRelative),
+        topK,
+      );
 
       return {
         chunks: filtered.map((r) => r.chunk),
@@ -593,7 +680,10 @@ export async function searchKnowledgeChunksWithScores(query, limit = RETRIEVAL_T
 
   const topScore = ranked[0].score;
   const minRelative = topScore * MIN_KEYWORD_RELATIVE_RATIO;
-  const filtered = ranked.filter((row) => row.score >= minRelative).slice(0, topK);
+  const filtered = diversifyHits(
+    ranked.filter((row) => row.score >= minRelative),
+    topK,
+  );
 
   return {
     chunks: filtered.map((r) => r.chunk),
@@ -679,9 +769,22 @@ export function isOpenAiConfigured() {
 }
 
 let openAiProbeCache = null;
+let openAiProbeAt = 0;
+const OPENAI_PROBE_TTL_MS = 60_000;
 
-export async function probeOpenAiAvailability() {
-  if (openAiProbeCache) return openAiProbeCache;
+export function resetOpenAiProbeCache() {
+  openAiProbeCache = null;
+  openAiProbeAt = 0;
+}
+
+export async function probeOpenAiAvailability({ force = false } = {}) {
+  if (
+    !force &&
+    openAiProbeCache &&
+    Date.now() - openAiProbeAt < OPENAI_PROBE_TTL_MS
+  ) {
+    return openAiProbeCache;
+  }
 
   try {
     const res = await fetch("/api/knowledge-chat?health=1");
@@ -689,6 +792,7 @@ export async function probeOpenAiAvailability() {
       const data = await res.json().catch(() => ({}));
       if (data.ok) {
         openAiProbeCache = { available: true, source: "server" };
+        openAiProbeAt = Date.now();
         return openAiProbeCache;
       }
     }
@@ -698,10 +802,12 @@ export async function probeOpenAiAvailability() {
 
   if (hasClientOpenAiKey()) {
     openAiProbeCache = { available: true, source: "client" };
+    openAiProbeAt = Date.now();
     return openAiProbeCache;
   }
 
   openAiProbeCache = { available: false, source: null };
+  openAiProbeAt = Date.now();
   return openAiProbeCache;
 }
 
@@ -723,6 +829,20 @@ export function formatOpenAiError(err) {
     return "שגיאה ב-OpenAI — נסה שוב מאוחר יותר.";
   }
   return "לא ניתן להפעיל GPT כרגע.";
+}
+
+export function formatEmbeddingError(code) {
+  const msg = String(code || "");
+  if (msg.includes("openai_not_configured")) {
+    return "Embeddings לא זמינים — הגדר OPENAI_API_KEY ב-Vercel. החיפוש יעבוד במצב מילות מפתח בלבד.";
+  }
+  if (msg.includes("429")) {
+    return "מגבלת קצב ב-OpenAI — נסה לבנות אינדекс שוב בעוד רגע.";
+  }
+  if (msg === "network") {
+    return "בעיית רשת בעת יצירת embeddings — בדוק חיבור או הרץ vercel dev.";
+  }
+  return "יצירת embeddings נכשלה — החיפוש יעבוד במצב מילות מפתח בלבד.";
 }
 
 async function callOpenAiViaServer(query, chunks, context) {
@@ -923,6 +1043,7 @@ export async function askKnowledgeBase(query) {
       const result = await callOpenAi(trimmed, chunks, context);
       return { ...result, chunks, images: pageImages, debug };
     } catch (err) {
+      resetOpenAiProbeCache();
       return {
         answer: buildLocalStructuredAnswer(chunks),
         citations: uniqueCitations(chunks),

@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { BookOpen, ChevronDown, ChevronUp, Loader2, Send, Sparkles } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronUp, Loader2, RefreshCw, Send, Sparkles } from "lucide-react";
 import {
   askKnowledgeBase,
-  getAllChunks,
+  getKnowledgeIndexStats,
   probeOpenAiAvailability,
   rebuildKnowledgeChunkIndex,
+  resetOpenAiProbeCache,
 } from "@/lib/knowledgeAi";
 import { demoModeEnabled } from "@/api/demoClient";
 import {
@@ -88,7 +89,7 @@ function RetrievalDebugPanel({ debug, expanded, onToggle }) {
   );
 }
 
-function MessageBubble({ message, showDebug }) {
+function MessageBubble({ message, showDebug, onRetry }) {
   const isUser = message.role === "user";
   const [debugOpen, setDebugOpen] = useState(false);
 
@@ -170,10 +171,27 @@ function MessageBubble({ message, showDebug }) {
         {!isUser && message.mode === "local_fallback" && (
           <p className="mt-2 text-[10px] text-on-surface-variant opacity-80">תשובה מקומית מהקטעים</p>
         )}
-        {!isUser && message.openAiFailed && (
-          <p className="mt-2 text-[10px] text-amber-700 dark:text-amber-400 opacity-90">
-            {message.openAiError || "GPT לא זמין — תשובה מקומית"}
+        {!isUser && message.mode === "low_relevance" && (
+          <p className="mt-2 text-[10px] text-on-surface-variant opacity-90">
+            לא נמצאו קטעים רלוונטים מספיק — נסה לנסח אחרת או להוסיף מילות מפתח מהמסמך.
           </p>
+        )}
+        {!isUser && message.openAiFailed && (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <p className="text-[10px] text-amber-700 dark:text-amber-400 opacity-90 m-0">
+              {message.openAiError || "GPT לא זמין — תשובה מקומית"}
+            </p>
+            {onRetry && message.retryQuery && (
+              <button
+                type="button"
+                onClick={() => onRetry(message.retryQuery)}
+                className="text-[10px] inline-flex items-center gap-1 text-primary hover:underline"
+              >
+                <RefreshCw className="w-3 h-3" />
+                נסה שוב עם GPT
+              </button>
+            )}
+          </div>
         )}
         {showDebug && !isUser && message.debug && (
           <RetrievalDebugPanel
@@ -203,7 +221,8 @@ export default function KnowledgeChat({ compact = false }) {
   const [indexing, setIndexing] = useState(false);
   const listRef = useRef(null);
   const { toast } = useToast();
-  const [chunkCount, setChunkCount] = useState(() => getAllChunks().length);
+  const [chunkCount, setChunkCount] = useState(() => getKnowledgeIndexStats().chunkCount);
+  const [embeddingsOk, setEmbeddingsOk] = useState(() => getKnowledgeIndexStats().embeddingsOk);
   const [openAiOn, setOpenAiOn] = useState(false);
   const showDebug = isDebugPanelEnabled();
 
@@ -211,7 +230,11 @@ export default function KnowledgeChat({ compact = false }) {
     let cancelled = false;
 
     const refreshChunkCount = () => {
-      if (!cancelled) setChunkCount(getAllChunks().length);
+      if (!cancelled) {
+        const stats = getKnowledgeIndexStats();
+        setChunkCount(stats.chunkCount);
+        setEmbeddingsOk(stats.embeddingsOk);
+      }
     };
 
     const syncIndex = async ({ forceRebuild = false } = {}) => {
@@ -256,18 +279,21 @@ export default function KnowledgeChat({ compact = false }) {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
-  const handleSend = async (e) => {
-    e?.preventDefault?.();
-    const text = input.trim();
-    if (!text || loading) return;
+  const submitQuery = async (text, { isRetry = false } = {}) => {
+    const trimmed = text.trim();
+    if (!trimmed || loading) return;
 
-    const userMsg = { id: `u_${Date.now()}`, role: "user", content: text };
-    setMessages((prev) => [...prev, userMsg]);
-    setInput("");
+    if (!isRetry) {
+      const userMsg = { id: `u_${Date.now()}`, role: "user", content: trimmed };
+      setMessages((prev) => [...prev, userMsg]);
+      setInput("");
+    }
+
     setLoading(true);
 
     try {
-      const result = await askKnowledgeBase(text);
+      if (isRetry) resetOpenAiProbeCache();
+      const result = await askKnowledgeBase(trimmed);
       if (result.openAiFailed) {
         toast({
           title: "GPT לא זמין",
@@ -286,6 +312,7 @@ export default function KnowledgeChat({ compact = false }) {
           mode: result.mode,
           openAiFailed: result.openAiFailed,
           openAiError: result.openAiError,
+          retryQuery: result.openAiFailed ? trimmed : undefined,
           debug: showDebug ? result.debug : undefined,
         },
       ]);
@@ -298,12 +325,20 @@ export default function KnowledgeChat({ compact = false }) {
           content: "אירעה שגיאה בעיבוד השאלה. נסה שוב.",
           citations: [],
           mode: "error",
+          retryQuery: trimmed,
         },
       ]);
     } finally {
       setLoading(false);
     }
   };
+
+  const handleSend = async (e) => {
+    e?.preventDefault?.();
+    await submitQuery(input);
+  };
+
+  const handleRetry = (query) => submitQuery(query, { isRetry: true });
 
   return (
     <div
@@ -324,6 +359,9 @@ export default function KnowledgeChat({ compact = false }) {
         ) : (
           <span className="m3-badge text-[10px] opacity-80">ללא GPT · חיפוש מקומי</span>
         )}
+        {chunkCount > 0 && !embeddingsOk && (
+          <span className="m3-badge text-[10px] opacity-80">ללא embeddings</span>
+        )}
       </div>
 
       <div
@@ -333,7 +371,7 @@ export default function KnowledgeChat({ compact = false }) {
         }`}
       >
         {messages.map((m) => (
-          <MessageBubble key={m.id} message={m} showDebug={showDebug} />
+          <MessageBubble key={m.id} message={m} showDebug={showDebug} onRetry={handleRetry} />
         ))}
         {loading && (
           <div className="flex justify-end">
