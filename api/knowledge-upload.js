@@ -1,0 +1,103 @@
+/** Vercel serverless — document ingest / delete / list for pgvector RAG. */
+
+import { json, readJsonBody, handleOptions, isSameOrigin } from "./lib/knowledge/httpUtils.js";
+import { isPgVectorConfigured } from "./lib/knowledge/supabaseAdmin.js";
+import {
+  ingestDocument,
+  deleteDocument,
+  listDocumentsWithChunkCounts,
+  reprocessDocument,
+  getTotalChunkCount,
+} from "./lib/knowledge/documentIngestService.js";
+
+export default async function handler(req, res) {
+  if (req.method === "OPTIONS") {
+    handleOptions(req, res);
+    return;
+  }
+
+  if (!isSameOrigin(req)) {
+    return json(res, 403, { error: "forbidden" }, req);
+  }
+
+  if (!isPgVectorConfigured()) {
+    return json(
+      res,
+      503,
+      {
+        error: "pgvector_not_configured",
+        message: "הגדר VITE_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY ב-Vercel והרץ supabase/knowledge_pgvector.sql",
+      },
+      req,
+    );
+  }
+
+  if (req.method === "GET") {
+    const url = new URL(req.url || "/", "http://localhost");
+    if (url.searchParams.get("health") === "1") {
+      return json(res, 200, { ok: true, pgvector: true }, req);
+    }
+
+    const { documents, error } = await listDocumentsWithChunkCounts();
+    const totalChunks = await getTotalChunkCount();
+    if (error) return json(res, 500, { error }, req);
+    return json(res, 200, { documents, totalChunks }, req);
+  }
+
+  if (req.method === "DELETE") {
+    let body = {};
+    try {
+      body = await readJsonBody(req);
+    } catch {
+      return json(res, 400, { error: "invalid_json" }, req);
+    }
+    const documentId = String(body.documentId || body.id || "").trim();
+    if (!documentId) return json(res, 400, { error: "document_id_required" }, req);
+
+    const result = await deleteDocument(documentId);
+    if (!result.ok) return json(res, 500, { error: result.error }, req);
+    return json(res, 200, { ok: true, documentId }, req);
+  }
+
+  if (req.method !== "POST") {
+    return json(res, 405, { error: "method_not_allowed" }, req);
+  }
+
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    return json(res, 400, { error: "invalid_json" }, req);
+  }
+
+  const action = String(body.action || "ingest").trim();
+
+  if (action === "delete") {
+    const documentId = String(body.documentId || body.id || "").trim();
+    if (!documentId) return json(res, 400, { error: "document_id_required" }, req);
+    const result = await deleteDocument(documentId);
+    if (!result.ok) return json(res, 500, { error: result.error }, req);
+    return json(res, 200, { ok: true, documentId }, req);
+  }
+
+  if (action === "reprocess") {
+    const documentId = String(body.documentId || body.id || "").trim();
+    if (!documentId) return json(res, 400, { error: "document_id_required" }, req);
+    const result = await reprocessDocument(documentId);
+    if (!result.ok) return json(res, 500, { error: result.error, ...result }, req);
+    return json(res, 200, result, req);
+  }
+
+  const doc = body.document;
+  if (!doc?.id || !doc?.title || !doc?.content) {
+    return json(res, 400, { error: "document_id_title_content_required" }, req);
+  }
+
+  if (typeof doc.content === "string" && doc.content.length > 2_000_000) {
+    return json(res, 400, { error: "document_too_large" }, req);
+  }
+
+  const result = await ingestDocument(doc);
+  if (!result.ok) return json(res, 500, { error: result.error, ...result }, req);
+  return json(res, 200, result, req);
+}

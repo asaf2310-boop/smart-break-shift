@@ -13,6 +13,7 @@ import {
   KNOWLEDGE_NO_CONTEXT_ANSWER,
   KNOWLEDGE_SYSTEM_PROMPT,
 } from "@/lib/knowledgePrompt";
+import { askKnowledgeServer, shouldUseServerRag, getKnowledgeTenantId } from "@/lib/knowledge/knowledgeClient";
 
 /** ~500–800 tokens at ~4 chars/token (Hebrew) */
 const CHUNK_TARGET_CHARS = 2600;
@@ -1231,6 +1232,25 @@ export async function askKnowledgeBase(query, { onPhase } = {}) {
   const trimmed = normalizeText(query);
   if (!trimmed) {
     return { answer: "נא להקליד שאלה.", citations: [], chunks: [], images: [], mode: "empty", debug: null };
+  }
+
+  if (shouldUseServerRag()) {
+    try {
+      return await askKnowledgeServer(trimmed, { onPhase, tenantId: getKnowledgeTenantId() });
+    } catch (err) {
+      return {
+        answer: formatOpenAiError(err, err?.retryAfterSec),
+        citations: [],
+        chunks: [],
+        images: [],
+        mode: "error",
+        openAiFailed: true,
+        openAiError: formatOpenAiError(err, err?.retryAfterSec),
+        rateLimited: err?.rateLimited,
+        retryAfterSec: err?.retryAfterSec,
+        debug: null,
+      };
+    }
   }
 
   const retrieval = await searchKnowledgeChunksWithScores(trimmed, RETRIEVAL_TOP_K, { onPhase });

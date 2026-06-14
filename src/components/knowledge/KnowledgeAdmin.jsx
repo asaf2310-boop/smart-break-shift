@@ -11,26 +11,33 @@ import {
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import {
-  deleteKnowledgeDocument,
   listKnowledgeCategories,
   listKnowledgeDocuments,
   resetKnowledgeToSeed,
   subscribeKnowledgeStore,
-  upsertKnowledgeDocument,
   hydrateKnowledgeStore,
 } from "@/lib/knowledgeStore";
 import {
   getKnowledgeIndexStats,
   rebuildKnowledgeChunkIndex,
-  sanitizeMarkdownIngestText,
   formatEmbeddingError,
   getOpenAiRateLimitRetrySec,
   isOpenAiRateLimited,
 } from "@/lib/knowledgeAi";
-import { extractTextFromFile } from "@/lib/knowledgeFileExtract";
+import { extractTextFromFile } from "@/lib/knowledge/textExtractionService";
+import {
+  saveKnowledgeDocument,
+  removeKnowledgeDocument,
+  reprocessKnowledgeDocument,
+} from "@/lib/knowledge/documentUploadService";
+import {
+  shouldUseServerRag,
+  listServerDocuments,
+  probeServerRagHealth,
+} from "@/lib/knowledge/knowledgeClient";
 
 const ACCEPT_UPLOAD =
-  ".txt,.md,.pdf,.docx,text/plain,text/markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  ".txt,.md,.html,.htm,.pdf,.docx,.png,.jpg,.jpeg,.webp,text/plain,text/markdown,text/html,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,image/webp";
 
 export default function KnowledgeAdmin() {
   const { toast } = useToast();
@@ -42,26 +49,55 @@ export default function KnowledgeAdmin() {
     content: "",
     category: "כללי",
     pages: null,
+    images: null,
   });
   const [uploading, setUploading] = useState(false);
   const [reindexing, setReindexing] = useState(false);
+  const [reprocessingId, setReprocessingId] = useState(null);
   const [indexStats, setIndexStats] = useState(() => getKnowledgeIndexStats());
+  const [serverRag, setServerRag] = useState(false);
+  const [serverChunkCounts, setServerChunkCounts] = useState({});
+  const [totalServerChunks, setTotalServerChunks] = useState(0);
+
+  const refreshServerStats = useCallback(async () => {
+    if (!shouldUseServerRag()) return;
+    try {
+      const data = await listServerDocuments();
+      const counts = {};
+      for (const doc of data.documents || []) {
+        counts[doc.id] = doc.chunkCount ?? 0;
+      }
+      setServerChunkCounts(counts);
+      setTotalServerChunks(data.totalChunks ?? 0);
+    } catch {
+      // server may be unavailable in local dev
+    }
+  }, []);
 
   const refresh = useCallback(() => {
     setDocuments(listKnowledgeDocuments());
     setCategories(listKnowledgeCategories());
     setIndexStats(getKnowledgeIndexStats());
-  }, []);
+    refreshServerStats();
+  }, [refreshServerStats]);
 
   useEffect(() => {
+    setServerRag(shouldUseServerRag());
     hydrateKnowledgeStore().then(refresh);
+    if (shouldUseServerRag()) {
+      probeServerRagHealth().then((h) => setServerRag(h.pgvector));
+    }
     return subscribeKnowledgeStore(refresh);
   }, [refresh]);
 
-  const chunkCount = indexStats.chunkCount;
+  const chunkCount = serverRag ? totalServerChunks : indexStats.chunkCount;
+
+  const getDocChunkCount = (docId) =>
+    serverRag ? (serverChunkCounts[docId] ?? 0) : null;
 
   const notifyIndexResult = (result) => {
     setIndexStats(getKnowledgeIndexStats());
+    refreshServerStats();
     if (result?.embeddingError) {
       toast({
         title: "אינדקס נשמר — embeddings חלקיים",
@@ -70,7 +106,7 @@ export default function KnowledgeAdmin() {
       });
       return;
     }
-    if (result && !result.embeddingsOk && result.chunkCount > 0) {
+    if (result && !result.embeddingsOk && result.chunkCount > 0 && !serverRag) {
       toast({
         title: "אינדקס נשמר — ללא embeddings",
         description: formatEmbeddingError("openai_not_configured"),
@@ -80,6 +116,31 @@ export default function KnowledgeAdmin() {
 
   const handleReindex = async () => {
     if (reindexing) return;
+    if (serverRag) {
+      setReindexing(true);
+      try {
+        let total = 0;
+        for (const doc of listKnowledgeDocuments()) {
+          const result = await reprocessKnowledgeDocument(doc.id, doc);
+          total += result?.chunkCount ?? 0;
+        }
+        refresh();
+        toast({
+          title: "כל המסמכים עובדו מחדש",
+          description: `${total} קטעים ב-pgvector`,
+        });
+      } catch (err) {
+        toast({
+          title: "שגיאה",
+          description: err.message || "לא ניתן לעבד מחדש",
+          variant: "destructive",
+        });
+      } finally {
+        setReindexing(false);
+      }
+      return;
+    }
+
     if (isOpenAiRateLimited()) {
       const waitSec = getOpenAiRateLimitRetrySec();
       toast({
@@ -102,14 +163,35 @@ export default function KnowledgeAdmin() {
         notifyIndexResult(result);
       }
     } catch {
-      toast({ title: "שגיאה", description: "לא ניתן לבנות אינדекс", variant: "destructive" });
+      toast({ title: "שגיאה", description: "לא ניתן לבנות אינדקס", variant: "destructive" });
     } finally {
       setReindexing(false);
     }
   };
 
+  const handleReprocessDoc = async (doc) => {
+    if (reprocessingId) return;
+    setReprocessingId(doc.id);
+    try {
+      const result = await reprocessKnowledgeDocument(doc.id, doc);
+      refresh();
+      toast({
+        title: "המסמך עובד מחדש",
+        description: `${result?.chunkCount ?? 0} קטעים`,
+      });
+    } catch (err) {
+      toast({
+        title: "שגיאה",
+        description: err.message || "לא ניתן לעבד מחדש",
+        variant: "destructive",
+      });
+    } finally {
+      setReprocessingId(null);
+    }
+  };
+
   const openCreate = () => {
-    setForm({ title: "", content: "", category: categories[0] || "כללי", pages: null });
+    setForm({ title: "", content: "", category: categories[0] || "כללי", pages: null, images: null });
     setDialog({ mode: "create" });
   };
 
@@ -119,6 +201,7 @@ export default function KnowledgeAdmin() {
       content: doc.content,
       category: doc.category || "כללי",
       pages: doc.pages || null,
+      images: doc.images || null,
     });
     setDialog({ mode: "edit", id: doc.id });
   };
@@ -126,24 +209,36 @@ export default function KnowledgeAdmin() {
   const handleSave = async (e) => {
     e.preventDefault();
     try {
-      upsertKnowledgeDocument({
+      const { ingestResult } = await saveKnowledgeDocument({
         id: dialog.mode === "edit" ? dialog.id : undefined,
         title: form.title,
-        content: sanitizeMarkdownIngestText(form.content),
+        content: form.content,
         category: form.category,
         sourceType: dialog.sourceType || "text",
         fileName: dialog.fileName,
         pages: form.pages,
+        images: form.images,
       });
       setDialog(null);
       refresh();
-      const result = await rebuildKnowledgeChunkIndex();
-      notifyIndexResult(result);
-      toast({ title: "נשמר בהצלחה", description: "אינדקס החיפוש עודכן" });
+
+      if (serverRag) {
+        toast({
+          title: "נשמר בהצלחה",
+          description: `${ingestResult?.chunkCount ?? 0} קטעים נשמרו ב-pgvector`,
+        });
+      } else {
+        const result = await rebuildKnowledgeChunkIndex();
+        notifyIndexResult(result);
+        toast({ title: "נשמר בהצלחה", description: "אינדקס החיפוש עודכן" });
+      }
     } catch (err) {
       toast({
         title: "שגיאה",
-        description: err.message === "title_and_content_required" ? "נדרשים כותרת ותוכן" : "לא ניתן לשמור",
+        description:
+          err.message === "title_and_content_required"
+            ? "נדרשים כותרת ותוכן"
+            : err.message || "לא ניתן לשמור",
         variant: "destructive",
       });
     }
@@ -152,13 +247,19 @@ export default function KnowledgeAdmin() {
   const handleDelete = async (doc) => {
     if (!window.confirm(`למחוק את «${doc.title}»?`)) return;
     try {
-      deleteKnowledgeDocument(doc.id);
+      await removeKnowledgeDocument(doc.id);
       refresh();
-      const result = await rebuildKnowledgeChunkIndex();
-      notifyIndexResult(result);
+      if (!serverRag) {
+        const result = await rebuildKnowledgeChunkIndex();
+        notifyIndexResult(result);
+      }
       toast({ title: "המסמך נמחק" });
-    } catch {
-      toast({ title: "שגיאה", description: "לא ניתן למחוק", variant: "destructive" });
+    } catch (err) {
+      toast({
+        title: "שגיאה",
+        description: err.message || "לא ניתן למחוק",
+        variant: "destructive",
+      });
     }
   };
 
@@ -169,7 +270,7 @@ export default function KnowledgeAdmin() {
 
     setUploading(true);
     try {
-      const { text, title, error, pages } = await extractTextFromFile(file);
+      const { text, title, error, pages, images } = await extractTextFromFile(file);
       if (error) {
         toast({ title: "שגיאה בהעלאה", description: error, variant: "destructive" });
         return;
@@ -179,6 +280,7 @@ export default function KnowledgeAdmin() {
         content: text,
         category: form.category || "כללי",
         pages: pages || null,
+        images: images || null,
       });
       const thumbCount = pages?.filter((p) => p?.thumbnail).length || 0;
       setDialog({ mode: "create", sourceType: "upload", fileName: file.name });
@@ -198,19 +300,26 @@ export default function KnowledgeAdmin() {
     if (!window.confirm("לאפס את בסיס הידע לנתוני הדמו? פעולה זו תמחק את כל המסמכים הנוכחיים.")) return;
     resetKnowledgeToSeed();
     refresh();
-    const result = await rebuildKnowledgeChunkIndex();
-    notifyIndexResult(result);
+    if (!serverRag) {
+      const result = await rebuildKnowledgeChunkIndex();
+      notifyIndexResult(result);
+    }
     toast({ title: "בסיס הידע אופס לדמו" });
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir="rtl">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <p className="m3-label-medium">
             {documents.length} מסמכים · {chunkCount} קטעים לחיפוש
           </p>
-          {chunkCount > 0 && (
+          {serverRag && (
+            <p className="m3-label-medium text-xs opacity-80">
+              pgvector פעיל — embeddings וחיפוש בשרת
+            </p>
+          )}
+          {!serverRag && chunkCount > 0 && (
             <p className="m3-label-medium text-xs opacity-80">
               embeddings: {indexStats.embeddingCount}/{chunkCount}
               {indexStats.embeddingsOk
@@ -227,7 +336,7 @@ export default function KnowledgeAdmin() {
             className="m3-btn-outlined disabled:opacity-50"
           >
             <RotateCcw className={`w-4 h-4 ${reindexing ? "animate-spin" : ""}`} />
-            {reindexing ? "בונה אינדקס…" : "בניית אינדקס מחדש"}
+            {reindexing ? "בונה אינדקס…" : serverRag ? "עיבוד מחדש לכל המסמכים" : "בניית אינדקס מחדש"}
           </button>
           <label
             className={`m3-btn-outlined cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}
@@ -262,54 +371,75 @@ export default function KnowledgeAdmin() {
           <BookOpen className="w-10 h-10 mx-auto text-on-surface-variant mb-3" />
           <p className="m3-label-large">אין מסמכים עדיין</p>
           <p className="m3-label-medium mt-1">
-            הוסף טקסט או העלה קובץ txt, md, pdf או docx כדי להתחיל
+            הוסף טקסט או העלה קובץ txt, md, html, pdf, docx, png, jpg או webp כדי להתחיל
           </p>
         </div>
       ) : (
         <ul className="space-y-3">
-          {documents.map((doc, i) => (
-            <motion.li
-              key={doc.id}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.04 }}
-              className="m3-card p-4 flex flex-col sm:flex-row sm:items-center gap-3"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="m3-label-large">{doc.title}</span>
-                  {doc.category && (
-                    <span className="m3-badge text-[10px] py-0.5">{doc.category}</span>
-                  )}
-                  {doc.sourceType === "upload" && doc.fileName && (
-                    <span className="m3-label-medium">· {doc.fileName}</span>
-                  )}
+          {documents.map((doc, i) => {
+            const docChunks = getDocChunkCount(doc.id);
+            return (
+              <motion.li
+                key={doc.id}
+                id={`doc-${doc.id}`}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.04 }}
+                className="m3-card p-4 flex flex-col sm:flex-row sm:items-center gap-3"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="m3-label-large">{doc.title}</span>
+                    {doc.category && (
+                      <span className="m3-badge text-[10px] py-0.5">{doc.category}</span>
+                    )}
+                    {docChunks != null && (
+                      <span className="m3-badge text-[10px] py-0.5">{docChunks} קטעים</span>
+                    )}
+                    {doc.sourceType === "upload" && doc.fileName && (
+                      <span className="m3-label-medium">· {doc.fileName}</span>
+                    )}
+                  </div>
+                  <p className="m3-label-medium mt-1 line-clamp-2">{doc.content}</p>
+                  <p className="m3-label-medium mt-1 opacity-70">
+                    עודכן {new Date(doc.updatedAt).toLocaleString("he-IL")}
+                  </p>
                 </div>
-                <p className="m3-label-medium mt-1 line-clamp-2">{doc.content}</p>
-                <p className="m3-label-medium mt-1 opacity-70">
-                  עודכן {new Date(doc.updatedAt).toLocaleString("he-IL")}
-                </p>
-              </div>
-              <div className="flex gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => openEdit(doc)}
-                  className="m3-btn-outlined py-2 px-3"
-                  aria-label="עריכה"
-                >
-                  <Pencil className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(doc)}
-                  className="m3-btn-outlined py-2 px-3 text-destructive border-destructive/40 hover:bg-destructive/10"
-                  aria-label="מחיקה"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </motion.li>
-          ))}
+                <div className="flex gap-2 shrink-0">
+                  {serverRag && (
+                    <button
+                      type="button"
+                      onClick={() => handleReprocessDoc(doc)}
+                      disabled={reprocessingId === doc.id}
+                      className="m3-btn-outlined py-2 px-3"
+                      aria-label="עיבוד מחדש"
+                      title="עיבוד מחדש"
+                    >
+                      <RotateCcw
+                        className={`w-4 h-4 ${reprocessingId === doc.id ? "animate-spin" : ""}`}
+                      />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => openEdit(doc)}
+                    className="m3-btn-outlined py-2 px-3"
+                    aria-label="עריכה"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(doc)}
+                    className="m3-btn-outlined py-2 px-3 text-destructive border-destructive/40 hover:bg-destructive/10"
+                    aria-label="מחיקה"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </motion.li>
+            );
+          })}
         </ul>
       )}
 

@@ -15,7 +15,7 @@ export const MAX_KNOWLEDGE_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_PAGE_THUMBNAILS = 24;
 const THUMBNAIL_MAX_WIDTH = 520;
 
-const SUPPORTED_EXTENSIONS = new Set(["txt", "md", "pdf", "docx"]);
+const SUPPORTED_EXTENSIONS = new Set(["txt", "md", "pdf", "docx", "html", "htm", "png", "jpg", "jpeg", "webp"]);
 
 function getExtension(fileName) {
   const match = String(fileName || "").match(/\.([^.]+)$/i);
@@ -30,6 +30,30 @@ export function sanitizeKnowledgeText(raw) {
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+async function readImageAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function extractImageFile(file) {
+  const dataUrl = await readImageAsDataUrl(file);
+  return {
+    text: "",
+    pages: [
+      {
+        pageNumber: 1,
+        text: "",
+        thumbnail: dataUrl,
+      },
+    ],
+    images: [{ pageNumber: 1, imageData: dataUrl, fileName: file.name }],
+  };
 }
 
 function titleFromFileName(fileName) {
@@ -148,6 +172,15 @@ async function extractDocxText(file) {
   return result.value || "";
 }
 
+function extractHtmlText(rawHtml) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(String(rawHtml || ""), "text/html");
+  doc.querySelectorAll("script, style, noscript").forEach((el) => el.remove());
+  const title = doc.querySelector("title")?.textContent?.trim() || null;
+  const bodyText = doc.body?.innerText || doc.documentElement?.textContent || "";
+  return { text: bodyText, title };
+}
+
 /**
  * @param {File} file
  * @returns {Promise<{ text: string, title: string, error: string | null, pages?: Array<{ pageNumber: number, text: string, thumbnail?: string }> }>}
@@ -180,22 +213,35 @@ export async function extractTextFromFile(file) {
     return {
       text: "",
       title,
-      error: "סוג קובץ לא נתמך. ניתן להעלות: txt, md, pdf, docx",
+      error: "סוג קובץ לא נתמך. ניתן להעלות: txt, md, html, pdf, docx, png, jpg, webp",
     };
   }
 
   try {
     let rawText = "";
     let pages = null;
+    let images = null;
+
+    let htmlTitle = null;
 
     if (ext === "txt" || ext === "md") {
       rawText = await file.text();
+    } else if (ext === "html" || ext === "htm") {
+      const htmlRaw = await file.text();
+      const parsed = extractHtmlText(htmlRaw);
+      rawText = parsed.text;
+      htmlTitle = parsed.title;
     } else if (ext === "docx") {
       rawText = await extractDocxText(file);
     } else if (ext === "pdf") {
       const pdfResult = await extractPdfText(file);
       rawText = pdfResult.text;
       pages = pdfResult.pages;
+    } else if (ext === "png" || ext === "jpg" || ext === "jpeg" || ext === "webp") {
+      const imgResult = await extractImageFile(file);
+      rawText = imgResult.text;
+      pages = imgResult.pages;
+      images = imgResult.images;
     }
 
     const cleaned = sanitizeKnowledgeText(rawText);
@@ -205,7 +251,10 @@ export async function extractTextFromFile(file) {
         : ext === "txt" || ext === "docx"
           ? sanitizeChunkText(cleaned, { preserveLines: true })
           : sanitizeChunkText(cleaned);
-    if (!text) {
+
+    const hasImages = pages?.some((p) => p?.thumbnail) || images?.length > 0;
+
+    if (!text && !hasImages) {
       return {
         text: "",
         title,
@@ -213,13 +262,22 @@ export async function extractTextFromFile(file) {
       };
     }
 
-    return { text, title, error: null, pages: pages || undefined };
+    return {
+      text: text || `[תמונה: ${title}]`,
+      title: htmlTitle || title,
+      error: null,
+      pages: pages || undefined,
+      images: images || undefined,
+    };
   } catch {
     if (ext === "pdf") {
       return { text: "", title, error: "שגיאה בקריאת קובץ PDF" };
     }
     if (ext === "docx") {
       return { text: "", title, error: "שגיאה בקריאת קובץ Word" };
+    }
+    if (ext === "png" || ext === "jpg" || ext === "jpeg" || ext === "webp") {
+      return { text: "", title, error: "שגיאה בקריאת קובץ תמונה" };
     }
     return { text: "", title, error: "שגיאה בקריאת הקובץ" };
   }

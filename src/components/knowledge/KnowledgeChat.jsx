@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { BookOpen, ChevronDown, ChevronUp, Loader2, RefreshCw, Send, Sparkles } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronUp, Copy, ExternalLink, Loader2, RefreshCw, Send, Sparkles, ThumbsDown } from "lucide-react";
 import {
   askKnowledgeBase,
   getKnowledgeIndexStats,
@@ -10,6 +10,7 @@ import {
   rebuildKnowledgeChunkIndex,
   resetOpenAiProbeCache,
 } from "@/lib/knowledgeAi";
+import { shouldUseServerRag, probeServerRagHealth, listServerDocuments, submitKnowledgeFeedback } from "@/lib/knowledge/knowledgeClient";
 import { demoModeEnabled } from "@/api/demoClient";
 import {
   getKnowledgeDocumentsFingerprint,
@@ -91,9 +92,28 @@ function RetrievalDebugPanel({ debug, expanded, onToggle }) {
   );
 }
 
-function MessageBubble({ message, showDebug, onRetry }) {
+function MessageBubble({ message, showDebug, onRetry, onFeedback, feedbackSending }) {
   const isUser = message.role === "user";
   const [debugOpen, setDebugOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(message.content || "");
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // ignore
+    }
+  };
+
+  const primaryCitation = message.citations?.[0];
+  const sourceHref = primaryCitation?.documentId
+    ? `/admin/knowledge#doc-${primaryCitation.documentId}`
+    : "/admin/knowledge";
+
+  const showConfidenceBadge =
+    showDebug || (message.confidence != null && message.confidence < 0.65);
 
   return (
     <motion.div
@@ -104,6 +124,7 @@ function MessageBubble({ message, showDebug, onRetry }) {
       <div
         dir="rtl"
         lang="he"
+        style={{ unicodeBidi: "embed" }}
         className={`knowledge-chat-message max-w-[92%] sm:max-w-[85%] rounded-2xl px-4 py-3 text-sm ${
           isUser
             ? "bg-primary text-primary-foreground rounded-br-md"
@@ -153,9 +174,9 @@ function MessageBubble({ message, showDebug, onRetry }) {
           <div className="mt-3 pt-3 border-t border-outline/20">
             <p className="m3-label-medium mb-1.5 flex items-center gap-1">
               <BookOpen className="w-3.5 h-3.5" />
-              מקורות
+              מקורות לתשובה
             </p>
-            <ul className="space-y-1">
+            <ul className="space-y-1.5">
               {message.citations.map((c) => (
                 <li key={c.documentId} className="text-xs text-on-surface-variant">
                   <span className="font-semibold text-primary">{c.title}</span>
@@ -165,6 +186,43 @@ function MessageBubble({ message, showDebug, onRetry }) {
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+        {!isUser && message.mode !== "system" && message.mode !== "error" && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="text-[11px] inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-outline/20 hover:bg-surface-container-high/80"
+            >
+              <Copy className="w-3 h-3" />
+              {copied ? "הועתק" : "העתק תשובה"}
+            </button>
+            {primaryCitation && (
+              <a
+                href={sourceHref}
+                className="text-[11px] inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-outline/20 hover:bg-surface-container-high/80 text-primary"
+              >
+                <ExternalLink className="w-3 h-3" />
+                פתח מקור
+              </a>
+            )}
+            {onFeedback && message.userQuestion && (
+              <button
+                type="button"
+                disabled={feedbackSending || message.feedbackSent}
+                onClick={() => onFeedback(message)}
+                className="text-[11px] inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-outline/20 hover:bg-surface-container-high/80 disabled:opacity-50"
+              >
+                <ThumbsDown className="w-3 h-3" />
+                {message.feedbackSent ? "המשוב נשלח" : "התשובה לא עזרה"}
+              </button>
+            )}
+            {showConfidenceBadge && message.confidence != null && (
+              <span className="text-[10px] m3-badge opacity-90">
+                ביטחון: {(message.confidence * 100).toFixed(0)}%
+              </span>
+            )}
           </div>
         )}
         {!isUser && message.mode === "openai" && (
@@ -227,6 +285,8 @@ export default function KnowledgeChat({ compact = false }) {
   const [chunkCount, setChunkCount] = useState(() => getKnowledgeIndexStats().chunkCount);
   const [embeddingsOk, setEmbeddingsOk] = useState(() => getKnowledgeIndexStats().embeddingsOk);
   const [openAiOn, setOpenAiOn] = useState(false);
+  const [serverRag, setServerRag] = useState(false);
+  const [feedbackSending, setFeedbackSending] = useState(false);
   const showDebug = isDebugPanelEnabled();
 
   useEffect(() => {
@@ -243,6 +303,24 @@ export default function KnowledgeChat({ compact = false }) {
     const syncIndex = async ({ forceRebuild = false } = {}) => {
       await hydrateKnowledgeStore();
       if (cancelled) return;
+
+      if (shouldUseServerRag()) {
+        try {
+          const health = await probeServerRagHealth();
+          if (!cancelled) {
+            setServerRag(health.pgvector);
+            setOpenAiOn(health.available);
+          }
+          const data = await listServerDocuments();
+          if (!cancelled) {
+            setChunkCount(data.totalChunks ?? 0);
+            setEmbeddingsOk(health.embeddings);
+          }
+        } catch {
+          if (!cancelled) setChunkCount(0);
+        }
+        return;
+      }
 
       const fingerprint = getKnowledgeDocumentsFingerprint();
       const existing = readKnowledgeChunkIndex();
@@ -349,7 +427,9 @@ export default function KnowledgeChat({ compact = false }) {
           content: result.answer,
           citations: result.citations,
           images: result.images || [],
+          confidence: result.confidence ?? result.debug?.confidence ?? null,
           mode: result.mode,
+          userQuestion: trimmed,
           openAiFailed: result.openAiFailed,
           openAiError: result.openAiError,
           retryQuery: result.openAiFailed ? trimmed : undefined,
@@ -381,6 +461,27 @@ export default function KnowledgeChat({ compact = false }) {
 
   const handleRetry = (query) => submitQuery(query, { isRetry: true });
 
+  const handleFeedback = async (message) => {
+    if (feedbackSending || message.feedbackSent) return;
+    setFeedbackSending(true);
+    try {
+      await submitKnowledgeFeedback({
+        question: message.userQuestion,
+        answer: message.content,
+        helpful: false,
+        confidence: message.confidence,
+      });
+      setMessages((prev) =>
+        prev.map((m) => (m.id === message.id ? { ...m, feedbackSent: true } : m)),
+      );
+      toast({ title: "תודה על המשוב", description: "השאלה נרשמה לבדיקת מנהל." });
+    } catch {
+      toast({ title: "שגיאה בשליחת משוב", variant: "destructive" });
+    } finally {
+      setFeedbackSending(false);
+    }
+  };
+
   return (
     <div
       className={`flex flex-col ${compact ? "h-full min-h-0" : "min-h-[min(70vh,32rem)]"}`}
@@ -396,7 +497,7 @@ export default function KnowledgeChat({ compact = false }) {
               : "אין תוכן בבסיס הידע"}
         </p>
         {openAiOn ? (
-          <span className="m3-badge text-[10px]">GPT פעיל</span>
+          <span className="m3-badge text-[10px]">{serverRag ? "RAG בשרת" : "GPT פעיל"}</span>
         ) : (
           <span className="m3-badge text-[10px] opacity-80">ללא GPT · חיפוש מקומי</span>
         )}
@@ -412,7 +513,14 @@ export default function KnowledgeChat({ compact = false }) {
         }`}
       >
         {messages.map((m) => (
-          <MessageBubble key={m.id} message={m} showDebug={showDebug} onRetry={handleRetry} />
+          <MessageBubble
+            key={m.id}
+            message={m}
+            showDebug={showDebug}
+            onRetry={handleRetry}
+            onFeedback={shouldUseServerRag() ? handleFeedback : undefined}
+            feedbackSending={feedbackSending}
+          />
         ))}
         {loading && (
           <div className="flex justify-end">
