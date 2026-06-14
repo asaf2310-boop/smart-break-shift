@@ -318,7 +318,16 @@ export default function KnowledgeChat({ compact = false }) {
         }
       }
 
-      const result = await askKnowledgeBase(trimmed);
+      const result = await askKnowledgeBase(trimmed, {
+        onPhase: (phase, sec) => {
+          if (phase === "searching") setLoadingHint("מחפש בבסיס הידע…");
+          else if (phase === "embedding") setLoadingHint("מנתח את השאלה…");
+          else if (phase === "gpt") setLoadingHint("מכין תשובה עם GPT…");
+          else if (phase === "waiting_rate_limit") {
+            setLoadingHint(`מגבלת קצב OpenAI — ממתין ${sec} שניות…`);
+          }
+        },
+      });
       if (result.openAiFailed) {
         toast({
           title: result.rateLimited ? "מגבלת קצב OpenAI" : "GPT לא זמין",

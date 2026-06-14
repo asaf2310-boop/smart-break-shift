@@ -35,9 +35,11 @@ const MAX_CONTEXT_CHARS = 2800;
 const MAX_SNIPPET_CHARS = 480;
 const EMBED_BATCH_SIZE = 48;
 const EMBED_BATCH_DELAY_MS = 750;
-const EMBED_CLIENT_MAX_RETRIES = 2;
-const CHAT_CLIENT_MAX_RETRIES = 1;
+const EMBED_CLIENT_MAX_RETRIES = 1;
+const CHAT_CLIENT_MAX_RETRIES = 0;
 const MAX_CHUNKS_PER_DOCUMENT = 2;
+const API_FETCH_TIMEOUT_MS = 22_000;
+const QUERY_RATE_LIMIT_WAIT_CAP_MS = 12_000;
 
 const STOP_WORDS = new Set([
   "מה",
@@ -382,6 +384,21 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function fetchWithTimeout(url, options = {}, timeoutMs = API_FETCH_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      throw new Error("request_timeout");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function isRateLimitCode(code, status) {
   const msg = String(code || "");
   return status === 429 || msg.includes("429") || msg.includes("rate_limited");
@@ -453,7 +470,7 @@ async function fetchEmbedBatchWithRetry(inputs) {
     }
 
     try {
-      const res = await fetch("/api/knowledge-embed", {
+      const res = await fetchWithTimeout("/api/knowledge-embed", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ inputs }),
@@ -621,10 +638,8 @@ async function rebuildKnowledgeChunkIndexInner({ force = false } = {}) {
 }
 
 function ensureChunkIndexReady() {
-  const documents = listKnowledgeDocuments();
-  const fingerprint = getKnowledgeDocumentsFingerprint(documents);
   const existing = readKnowledgeChunkIndex();
-  if (existing?.fingerprint === fingerprint && existing.chunks?.length) {
+  if (existing?.chunks?.length) {
     return Promise.resolve(existing.chunks);
   }
   return rebuildKnowledgeChunkIndex();
@@ -764,57 +779,7 @@ function diversifyHits(hits, topK, maxPerDocument = MAX_CHUNKS_PER_DOCUMENT) {
  * Retrieve top-k chunks with scores (embedding-first, keyword fallback).
  * @returns {Promise<{ chunks: Array, hits: Array<{ chunk, score, method }>, method: string }>}
  */
-export async function searchKnowledgeChunksWithScores(query, limit = RETRIEVAL_TOP_K) {
-  const tokens = tokenize(query);
-  const trimmed = normalizeText(query);
-  if (!trimmed) return { chunks: [], hits: [], method: "empty" };
-
-  await ensureChunkIndexReady();
-  const all = getAllChunks();
-  if (!all.length) return { chunks: [], hits: [], method: "no_index" };
-
-  const topK = Math.min(RETRIEVAL_TOP_K_MAX, Math.max(RETRIEVAL_TOP_K_MIN, limit));
-  const withEmbeddings = all.filter((c) => Array.isArray(c.embedding) && c.embedding.length);
-
-  if (withEmbeddings.length) {
-    const queryEmbedding = await embedQuery(trimmed);
-    if (queryEmbedding) {
-      const ranked = withEmbeddings
-        .map((chunk) => {
-          const embScore = cosineEmbedding(queryEmbedding, chunk.embedding);
-          const keywordScore = scoreChunkKeyword(chunk, tokens);
-          const keywordBoost = Math.min(keywordScore / 14, 1);
-          const score = embScore * 0.84 + keywordBoost * 0.16;
-          return { chunk, score, embScore, keywordScore, method: "embedding" };
-        })
-        .filter((row) => {
-          if (row.embScore < MIN_EMBEDDING_SCORE - 0.06) return false;
-          if (tokens.length >= 2 && row.keywordScore < MIN_KEYWORD_MATCHES_FOR_EMBEDDING) {
-            return false;
-          }
-          return row.score >= MIN_EMBEDDING_SCORE;
-        })
-        .sort((a, b) => b.score - a.score);
-
-      if (!ranked.length) {
-        return { chunks: [], hits: [], method: "embedding" };
-      }
-
-      const topScore = ranked[0].score;
-      const minRelative = topScore * MIN_EMBEDDING_RELATIVE_RATIO;
-      const filtered = diversifyHits(
-        ranked.filter((row) => row.score >= minRelative),
-        topK,
-      );
-
-      return {
-        chunks: filtered.map((r) => r.chunk),
-        hits: filtered,
-        method: "embedding",
-      };
-    }
-  }
-
+function searchByKeywordTfidf(all, tokens, topK) {
   if (!tokens.length) return { chunks: [], hits: [], method: "no_tokens" };
 
   const vocabulary = [...new Set(tokens)];
@@ -846,6 +811,63 @@ export async function searchKnowledgeChunksWithScores(query, limit = RETRIEVAL_T
     hits: filtered,
     method: "keyword_tfidf",
   };
+}
+
+export async function searchKnowledgeChunksWithScores(query, limit = RETRIEVAL_TOP_K, { onPhase } = {}) {
+  const tokens = tokenize(query);
+  const trimmed = normalizeText(query);
+  if (!trimmed) return { chunks: [], hits: [], method: "empty" };
+
+  onPhase?.("searching");
+  await ensureChunkIndexReady();
+  const all = getAllChunks();
+  if (!all.length) return { chunks: [], hits: [], method: "no_index" };
+
+  const topK = Math.min(RETRIEVAL_TOP_K_MAX, Math.max(RETRIEVAL_TOP_K_MIN, limit));
+  const indexStats = statsFromChunks(all);
+  const canUseEmbeddings =
+    indexStats.embeddingsOk && !isOpenAiRateLimited();
+
+  if (canUseEmbeddings) {
+    onPhase?.("embedding");
+    const queryEmbedding = await embedQuery(trimmed);
+    if (queryEmbedding) {
+      const withEmbeddings = all.filter((c) => Array.isArray(c.embedding) && c.embedding.length);
+      const ranked = withEmbeddings
+        .map((chunk) => {
+          const embScore = cosineEmbedding(queryEmbedding, chunk.embedding);
+          const keywordScore = scoreChunkKeyword(chunk, tokens);
+          const keywordBoost = Math.min(keywordScore / 14, 1);
+          const score = embScore * 0.84 + keywordBoost * 0.16;
+          return { chunk, score, embScore, keywordScore, method: "embedding" };
+        })
+        .filter((row) => {
+          if (row.embScore < MIN_EMBEDDING_SCORE - 0.06) return false;
+          if (tokens.length >= 2 && row.keywordScore < MIN_KEYWORD_MATCHES_FOR_EMBEDDING) {
+            return false;
+          }
+          return row.score >= MIN_EMBEDDING_SCORE;
+        })
+        .sort((a, b) => b.score - a.score);
+
+      if (ranked.length) {
+        const topScore = ranked[0].score;
+        const minRelative = topScore * MIN_EMBEDDING_RELATIVE_RATIO;
+        const filtered = diversifyHits(
+          ranked.filter((row) => row.score >= minRelative),
+          topK,
+        );
+
+        return {
+          chunks: filtered.map((r) => r.chunk),
+          hits: filtered,
+          method: "embedding",
+        };
+      }
+    }
+  }
+
+  return searchByKeywordTfidf(all, tokens, topK);
 }
 
 /** @deprecated use searchKnowledgeChunksWithScores */
@@ -957,7 +979,7 @@ export async function probeOpenAiAvailability({ force = false } = {}) {
   }
 
   try {
-    const res = await fetch("/api/knowledge-chat?health=1");
+    const res = await fetchWithTimeout("/api/knowledge-chat?health=1", {}, 8000);
     if (res.ok) {
       const data = await res.json().catch(() => ({}));
       if (data.ok) {
@@ -996,8 +1018,8 @@ export function formatOpenAiError(err, retryAfterSec) {
     }
     return "מגבלת קצב ב-OpenAI — המתן כדקה ונסה שוב, או שדרג את מסלול החיוב ב-OpenAI.";
   }
-  if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
-    return "בעיית רשת בחיבור ל-GPT — בדוק חיבור או הרץ vercel dev עם OPENAI_API_KEY.";
+  if (msg.includes("Failed to fetch") || msg.includes("NetworkError") || msg.includes("request_timeout")) {
+    return "בעיית רשת או זמן תגובה ארוך מ-GPT — נסה שוב או השתמש בתשובה המקומית.";
   }
   if (msg.startsWith("openai_error:")) {
     return "שגיאה ב-OpenAI — נסה שוב מאוחר יותר.";
@@ -1032,7 +1054,7 @@ async function callOpenAiViaServer(query, chunks, context) {
       await sleep(waitMs);
     }
 
-    const res = await fetch("/api/knowledge-chat", {
+    const res = await fetchWithTimeout("/api/knowledge-chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1205,13 +1227,13 @@ function buildDebugPayload(query, retrieval, context) {
 /**
  * Retrieve relevant chunks and produce an answer (OpenAI or low-relevance message).
  */
-export async function askKnowledgeBase(query) {
+export async function askKnowledgeBase(query, { onPhase } = {}) {
   const trimmed = normalizeText(query);
   if (!trimmed) {
     return { answer: "נא להקליד שאלה.", citations: [], chunks: [], images: [], mode: "empty", debug: null };
   }
 
-  const retrieval = await searchKnowledgeChunksWithScores(trimmed);
+  const retrieval = await searchKnowledgeChunksWithScores(trimmed, RETRIEVAL_TOP_K, { onPhase });
   const { chunks, hits, method } = retrieval;
 
   const contextBlocks = buildContextBlocks(chunks);
@@ -1234,6 +1256,7 @@ export async function askKnowledgeBase(query) {
 
   const pageImages = resolvePageImages(chunks);
 
+  onPhase?.("gpt");
   const probe = await probeOpenAiAvailability();
   if (probe.available && !probe.rateLimited) {
     try {
@@ -1246,8 +1269,14 @@ export async function askKnowledgeBase(query) {
       const rateLimited = err?.rateLimited || isRateLimitCode(err?.message, 429);
 
       if (rateLimited && retryAfterSec > 0) {
-        await sleep(retryAfterSec * 1000);
+        const waitMs = Math.min(retryAfterSec * 1000, QUERY_RATE_LIMIT_WAIT_CAP_MS);
+        const waitSec = Math.ceil(waitMs / 1000);
+        for (let sec = waitSec; sec > 0; sec -= 1) {
+          onPhase?.("waiting_rate_limit", sec);
+          await sleep(1000);
+        }
         try {
+          onPhase?.("gpt");
           resetOpenAiProbeCache();
           const retryResult = await callOpenAi(trimmed, chunks, context);
           return { ...retryResult, chunks, images: pageImages, debug, retriedAfterRateLimit: true };
