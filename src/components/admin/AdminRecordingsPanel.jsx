@@ -14,6 +14,8 @@ import {
 
   Play,
 
+  Download,
+
   Search,
 
   User,
@@ -54,7 +56,7 @@ import {
 
 import { demoModeEnabled } from "@/api/demoClient";
 
-import { getRecordingBlob, listStoredRecordingRefs } from "@/lib/demoRecordingStorage";
+import { getRecordingBlob, downloadRecordingBlob, listStoredRecordingRefs } from "@/lib/demoRecordingStorage";
 
 import {
 
@@ -69,7 +71,7 @@ import {
 } from "@/lib/supportSessionsLog";
 
 import { recordingUploadStatusLabel } from "@/lib/recordingUpload";
-import { buildRecordingPlayId } from "@/lib/screenShareStore";
+import { buildRecordingPlayId, markRecordingDownloaded } from "@/lib/screenShareStore";
 import { cloudSessionSyncEnabled } from "@/lib/supportSessionsSync";
 import {
   CLOUD_RECORDING_RETENTION_DAYS,
@@ -243,7 +245,7 @@ function SessionTypeBadge({ sessionType }) {
 
 
 
-function RecordingRow({ recording, hasBlob, hasCloud, onPlay }) {
+function RecordingRow({ recording, hasBlob, hasCloud, onPlay, onDownload, downloading }) {
   const canPlay = hasCloud || hasBlob;
   const status = recording.cloudUploadStatus;
   const statusLabel = status ? recordingUploadStatusLabel(status) : null;
@@ -288,6 +290,21 @@ function RecordingRow({ recording, hasBlob, hasCloud, onPlay }) {
               <Play className="w-3 h-3" />
               נגן
             </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1 text-[11px]"
+              disabled={downloading}
+              onClick={() => onDownload(recording)}
+            >
+              {downloading ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Download className="w-3 h-3" />
+              )}
+              {downloading ? "מוריד…" : "הורדה"}
+            </Button>
             <Link
               to={`/admin/recordings/play?id=${buildRecordingPlayId(
                 recording.sessionId || "",
@@ -313,7 +330,7 @@ function RecordingRow({ recording, hasBlob, hasCloud, onPlay }) {
 
 
 
-function AgentSessionsList({ group, blobKeys, cloudKeys, onPlayRecording }) {
+function AgentSessionsList({ group, blobKeys, cloudKeys, onPlayRecording, onDownloadRecording, downloadingKey }) {
 
   const sessionCount = group.sessions.length;
 
@@ -439,9 +456,9 @@ function AgentSessionsList({ group, blobKeys, cloudKeys, onPlayRecording }) {
                         cloudKeys.has(`${session.id}::${rec.id}`)
                       }
                       onPlay={(r) => onPlayRecording(session.id, r)}
-
+                      onDownload={(r) => onDownloadRecording(session.id, r)}
+                      downloading={downloadingKey === `${session.id}::${rec.id}`}
                     />
-
                   ))}
 
                 </div>
@@ -526,6 +543,9 @@ export default function AdminRecordingsPanel() {
 
   const playUrlRef = useRef(null);
   const playUrlIsBlobRef = useRef(false);
+
+  const [downloadingKey, setDownloadingKey] = useState("");
+  const [downloadError, setDownloadError] = useState("");
 
   const filteredGroups = useMemo(
 
@@ -693,6 +713,46 @@ export default function AdminRecordingsPanel() {
 
     setPlayOpen(open);
 
+  };
+
+  const resolveRecordingBlob = async (sessionId, rec) => {
+    if (rec.cloudReady && rec.storagePath) {
+      const signedUrl = await getSignedRecordingUrl(rec.storagePath);
+      if (signedUrl) {
+        const response = await fetch(signedUrl);
+        if (!response.ok) {
+          throw new Error("לא הצלחנו להוריד מהענן");
+        }
+        return response.blob();
+      }
+    }
+
+    const blob = await getRecordingBlob(sessionId, rec.id);
+    if (!blob?.size) {
+      throw new Error(
+        cloudRecordingUploadEnabled()
+          ? recordingUploadStatusLabel(rec.cloudUploadStatus || "pending")
+          : "אין קובץ וידאו במכשיר זה — ההקלטה נשמרה בדפדפן הנציג"
+      );
+    }
+    return blob;
+  };
+
+  const handleDownload = async (sessionId, rec) => {
+    const key = `${sessionId}::${rec.id}`;
+    setDownloadingKey(key);
+    setDownloadError("");
+
+    try {
+      const blob = await resolveRecordingBlob(sessionId, rec);
+      const fileName = rec.fileName || `recording-${sessionId}-${rec.id}.webm`;
+      await downloadRecordingBlob(blob, fileName);
+      markRecordingDownloaded(sessionId, rec.id);
+    } catch (err) {
+      setDownloadError(err?.message || "לא ניתן להוריד את ההקלטה");
+    } finally {
+      setDownloadingKey("");
+    }
   };
 
 
@@ -1003,6 +1063,12 @@ export default function AdminRecordingsPanel() {
 
       ) : (
 
+        <>
+          {downloadError ? (
+            <p className="mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-center">
+              {downloadError}
+            </p>
+          ) : null}
         <AgentSessionsList
 
           group={selectedGroup}
@@ -1010,8 +1076,11 @@ export default function AdminRecordingsPanel() {
           blobKeys={blobKeys}
           cloudKeys={cloudKeys}
           onPlayRecording={handlePlay}
+          onDownloadRecording={handleDownload}
+          downloadingKey={downloadingKey}
 
         />
+        </>
 
       )}
 
