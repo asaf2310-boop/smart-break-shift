@@ -1,6 +1,6 @@
 /** OpenAI chat completion for RAG answers (chunks only — no full documents). */
 
-import { fetchOpenAiWithRetry, getRetryAfterSec } from "../../openaiRetry.js";
+import { fetchOpenAiWithRetry, getRetryAfterSec } from "../openaiRetry.js";
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 

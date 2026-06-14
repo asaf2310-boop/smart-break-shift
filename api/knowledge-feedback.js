@@ -1,14 +1,14 @@
 /** Vercel serverless — knowledge gaps + agent feedback. */
 
-import { json, readJsonBody, handleOptions, isSameOrigin } from "./lib/knowledge/httpUtils.js";
-import { isPgVectorConfigured } from "./lib/knowledge/supabaseAdmin.js";
+import { json, readJsonBody, handleOptions, isSameOrigin } from "../server/knowledge/httpUtils.js";
+import { isPgVectorConfigured } from "../server/knowledge/supabaseAdmin.js";
 import {
   logKnowledgeGap,
   submitKnowledgeFeedback,
   listKnowledgeGaps,
   updateKnowledgeGap,
   listKnowledgeFeedback,
-} from "./lib/knowledge/gapFeedbackService.js";
+} from "../server/knowledge/gapFeedbackService.js";
 
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") {

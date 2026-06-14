@@ -1,6 +1,6 @@
 /** Vercel serverless — OpenAI embeddings for knowledge RAG (OPENAI_API_KEY only) */
 
-import { fetchOpenAiWithRetry, getRetryAfterSec } from "./openaiRetry.js";
+import { fetchOpenAiWithRetry, getRetryAfterSec } from "../server/openaiRetry.js";
 
 const OPENAI_EMBED_URL = "https://api.openai.com/v1/embeddings";
 const DEFAULT_MODEL = "text-embedding-3-small";

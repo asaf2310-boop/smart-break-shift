@@ -1,6 +1,6 @@
 /** OpenAI embeddings for server-side RAG ingest and query. */
 
-import { fetchOpenAiWithRetry, getRetryAfterSec } from "../../openaiRetry.js";
+import { fetchOpenAiWithRetry, getRetryAfterSec } from "../openaiRetry.js";
 
 const OPENAI_EMBED_URL = "https://api.openai.com/v1/embeddings";
 const DEFAULT_MODEL = "text-embedding-3-small";

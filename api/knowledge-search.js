@@ -1,10 +1,10 @@
 /** Vercel serverless — vector similarity search (debug / admin). */
 
-import { json, readJsonBody, handleOptions, isSameOrigin } from "./lib/knowledge/httpUtils.js";
-import { isPgVectorConfigured } from "./lib/knowledge/supabaseAdmin.js";
-import { embedQuery, isEmbeddingConfigured } from "./lib/knowledge/embeddingService.js";
-import { searchKnowledgeChunks } from "./lib/knowledge/vectorSearchService.js";
-import { truncateSnippet } from "./lib/knowledge/chatAnswerService.js";
+import { json, readJsonBody, handleOptions, isSameOrigin } from "../server/knowledge/httpUtils.js";
+import { isPgVectorConfigured } from "../server/knowledge/supabaseAdmin.js";
+import { embedQuery, isEmbeddingConfigured } from "../server/knowledge/embeddingService.js";
+import { searchKnowledgeChunks } from "../server/knowledge/vectorSearchService.js";
+import { truncateSnippet } from "../server/knowledge/chatAnswerService.js";
 
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") {

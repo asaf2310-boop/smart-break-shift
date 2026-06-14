@@ -1,6 +1,6 @@
 /** OpenAI Vision OCR — extract Hebrew text + short caption from images. */
 
-import { fetchOpenAiWithRetry, getRetryAfterSec } from "../../openaiRetry.js";
+import { fetchOpenAiWithRetry, getRetryAfterSec } from "../openaiRetry.js";
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 const VISION_MODEL = "gpt-4o-mini";

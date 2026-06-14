@@ -1,14 +1,14 @@
 /** Vercel serverless — document ingest / delete / list for pgvector RAG. */
 
-import { json, readJsonBody, handleOptions, isSameOrigin } from "./lib/knowledge/httpUtils.js";
-import { isPgVectorConfigured } from "./lib/knowledge/supabaseAdmin.js";
+import { json, readJsonBody, handleOptions, isSameOrigin } from "../server/knowledge/httpUtils.js";
+import { isPgVectorConfigured } from "../server/knowledge/supabaseAdmin.js";
 import {
   ingestDocument,
   deleteDocument,
   listDocumentsWithChunkCounts,
   reprocessDocument,
   getTotalChunkCount,
-} from "./lib/knowledge/documentIngestService.js";
+} from "../server/knowledge/documentIngestService.js";
 
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") {
