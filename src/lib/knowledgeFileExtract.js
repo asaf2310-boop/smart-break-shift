@@ -73,11 +73,19 @@ function pdfItemsToText(items) {
     const transform = item.transform || [1, 0, 0, 1, 0, 0];
     const x = transform[4];
     const y = transform[5];
-    const yKey = Math.round(y / 4) * 4;
-    const width = item.width ?? item.str.length * 5;
+    const fontSize = Math.max(Math.hypot(transform[0], transform[1]), Math.abs(transform[3]), 8);
+    const yKey = Math.round(y / Math.max(fontSize * 0.85, 4));
+    const itemWidth = item.width ?? Math.max(item.str.length * fontSize * 0.45, fontSize * 0.35);
 
     if (!lineMap.has(yKey)) lineMap.set(yKey, []);
-    lineMap.get(yKey).push({ x, str: item.str, width, endX: x + width });
+    lineMap.get(yKey).push({
+      x,
+      str: item.str,
+      width: itemWidth,
+      endX: x + itemWidth,
+      fontSize,
+      hasEOL: Boolean(item.hasEOL),
+    });
   }
 
   const lines = [...lineMap.keys()].sort((a, b) => b - a);
@@ -87,23 +95,44 @@ function pdfItemsToText(items) {
     const row = lineMap.get(yKey).sort((a, b) => b.x - a.x);
     let lineText = "";
     let prevStartX = null;
+    let prevFontSize = 12;
 
-    for (const { x, str, endX } of row) {
+    for (const { x, str, endX, fontSize, hasEOL } of row) {
       if (prevStartX !== null) {
         const gap = prevStartX - endX;
-        if (gap > 1.2) {
-          lineText += gap > 2.5 || /[\u0590-\u05FF]$/.test(lineText) ? " " : "";
+        const threshold = Math.max(1.2, Math.min(prevFontSize, fontSize) * 0.2);
+        if (gap > threshold) {
+          lineText += " ";
         }
       }
       lineText += str;
+      if (hasEOL && !lineText.endsWith("\n")) {
+        lineText += "\n";
+      }
       prevStartX = x;
+      prevFontSize = fontSize;
     }
 
-    const trimmed = lineText.trim();
+    const trimmed = lineText.replace(/\n+$/, "").trim();
     if (trimmed) parts.push(trimmed);
   }
 
-  return parts.join("\n");
+  return repairMergedHebrewWords(parts.join("\n"));
+}
+
+/** Insert missing spaces between glued Hebrew words from PDF glyph runs. */
+function repairMergedHebrewWords(text) {
+  return String(text || "")
+    .split("\n")
+    .map((line) => {
+      let s = line;
+      // Common glued patterns: "...ההת..." → "...ה הת..."
+      s = s.replace(/([\u0590-\u05FF]{2,})(ה(?:ת|ג|פ|ס|נ|ר|ע|ל|מ|ש|ב|כ|ו)[\u0590-\u05FF]+)/g, "$1 $2");
+      // Word boundary before common section prefixes after 3+ chars
+      s = s.replace(/([\u0590-\u05FF]{3,})(שלב|פרמ|מער|ניה|הגדר|כרט|תפריט|ממשק)/g, "$1 $2");
+      return s.replace(/[ \t]{2,}/g, " ").trim();
+    })
+    .join("\n");
 }
 
 async function renderPageThumbnail(page) {
@@ -132,8 +161,8 @@ async function extractPdfText(file) {
 
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
     const page = await pdf.getPage(pageNum);
-    const content = await page.getTextContent();
-    const pageText = normalizeHebrewText(pdfItemsToText(content.items));
+    const content = await page.getTextContent({ disableCombineTextItems: true });
+    const pageText = normalizeHebrewText(pdfItemsToText(content.items), { preserveLines: true });
     let thumbnail = null;
 
     if (pageText && pageNum <= MAX_PAGE_THUMBNAILS) {
@@ -248,7 +277,7 @@ export async function extractTextFromFile(file) {
     const text =
       ext === "md"
         ? sanitizeMarkdownIngestText(cleaned)
-        : ext === "txt" || ext === "docx"
+        : ext === "txt" || ext === "docx" || ext === "pdf"
           ? sanitizeChunkText(cleaned, { preserveLines: true })
           : sanitizeChunkText(cleaned);
 

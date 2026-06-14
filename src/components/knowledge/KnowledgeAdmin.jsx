@@ -247,13 +247,17 @@ export default function KnowledgeAdmin() {
   const handleDelete = async (doc) => {
     if (!window.confirm(`למחוק את «${doc.title}»?`)) return;
     try {
-      await removeKnowledgeDocument(doc.id);
+      const { serverWarning } = await removeKnowledgeDocument(doc.id);
       refresh();
       if (!serverRag) {
         const result = await rebuildKnowledgeChunkIndex();
         notifyIndexResult(result);
       }
-      toast({ title: "המסמך נמחק" });
+      if (serverWarning) {
+        toast({ title: "המסמך נמחק", description: serverWarning });
+      } else {
+        toast({ title: "המסמך נמחק" });
+      }
     } catch (err) {
       toast({
         title: "שגיאה",
@@ -324,7 +328,7 @@ export default function KnowledgeAdmin() {
               embeddings: {indexStats.embeddingCount}/{chunkCount}
               {indexStats.embeddingsOk
                 ? " · חיפוש סמנטי פעיל"
-                : " · חיפוש מילות מפתח בלבד (הגדר OPENAI_API_KEY)"}
+                : " · חיפוש מילות מפתח בלבד (הגדר GEMINI_API_KEY + SUPABASE_SERVICE_ROLE_KEY ב-Vercel)"}
             </p>
           )}
         </div>

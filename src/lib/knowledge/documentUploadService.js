@@ -40,10 +40,27 @@ export async function saveKnowledgeDocument(payload) {
 }
 
 export async function removeKnowledgeDocument(id) {
+  let serverWarning = null;
+
   if (shouldUseServerRag()) {
-    await deleteServerDocument(id);
+    try {
+      await deleteServerDocument(id);
+    } catch (err) {
+      const msg = String(err?.message || err || "");
+      const serverUnavailable =
+        msg.includes("pgvector_not_configured") ||
+        msg.includes("delete_failed") ||
+        msg.includes("503") ||
+        msg.includes("network") ||
+        msg.includes("fetch");
+      if (!serverUnavailable) throw err;
+      serverWarning =
+        "המסמך נמחק מהממשק. שרת RAG לא זמין — הגדר SUPABASE_SERVICE_ROLE_KEY ב-Vercel.";
+    }
   }
+
   deleteKnowledgeDocument(id);
+  return { serverWarning };
 }
 
 export async function reprocessKnowledgeDocument(id, docFromStore) {
