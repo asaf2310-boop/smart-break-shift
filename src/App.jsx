@@ -11,6 +11,7 @@ import AppLoadError from '@/components/AppLoadError';
 import AdminGate from '@/components/admin/AdminGate';
 import ModuleGate from '@/components/auth/ModuleGate';
 import DemoGate from '@/components/DemoGate';
+import KnowledgeGate from '@/components/KnowledgeGate';
 import CustomerChatGate from '@/components/CustomerChatGate';
 import Home from './pages/Home';
 import BreakScheduler from './pages/BreakScheduler';
@@ -121,9 +122,9 @@ const AuthenticatedApp = () => {
         <Route path="/j/:token" element={<RouteErrorBoundary><GuestJoinRedirectPage /></RouteErrorBoundary>} />
         <Route path="/support/consent/:token" element={<RouteErrorBoundary><RemoteSupportConsentPage /></RouteErrorBoundary>} />
         <Route path="/support/screen/:sessionId" element={<RouteErrorBoundary><ScreenShareGuestPage /></RouteErrorBoundary>} />
-        <Route path="/knowledge" element={<ModuleGate module="knowledge"><DemoGate><KnowledgePage /></DemoGate></ModuleGate>} />
+        <Route path="/knowledge" element={<ModuleGate module="knowledge"><KnowledgeGate><KnowledgePage /></KnowledgeGate></ModuleGate>} />
         <Route path="/admin" element={<AdminGate><AdminDashboard /></AdminGate>} />
-        <Route path="/admin/knowledge" element={<DemoGate><AdminGate><AdminKnowledge /></AdminGate></DemoGate>} />
+        <Route path="/admin/knowledge" element={<KnowledgeGate><AdminGate><AdminKnowledge /></AdminGate></KnowledgeGate>} />
         <Route path="/admin/customer-chat" element={<CustomerChatGate><AdminGate><AdminCustomerChat /></AdminGate></CustomerChatGate>} />
         <Route path="/admin/shifts" element={<AdminGate><AdminShifts /></AdminGate>} />
         <Route path="/admin/users" element={<AdminGate><AdminUsers /></AdminGate>} />

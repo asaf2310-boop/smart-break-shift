@@ -116,6 +116,8 @@ const ENTITY_TABLES = {
   Agent: "agents",
   TrainingScheduleSettings: "training_schedule_settings",
   TrainingPresentationMeta: "training_presentation_meta",
+  KnowledgeDocument: "knowledge_documents",
+  KnowledgeIndex: "knowledge_index",
 };
 
 export function createSupabaseDataClient() {

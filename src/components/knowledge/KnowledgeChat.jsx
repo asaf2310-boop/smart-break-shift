@@ -8,7 +8,7 @@ import {
   rebuildKnowledgeChunkIndex,
 } from "@/lib/knowledgeAi";
 import { demoModeEnabled } from "@/api/demoClient";
-import { subscribeKnowledgeStore } from "@/lib/knowledgeStore";
+import { subscribeKnowledgeStore, hydrateKnowledgeStore } from "@/lib/knowledgeStore";
 import { useToast } from "@/components/ui/use-toast";
 
 function isDebugPanelEnabled() {
@@ -205,7 +205,10 @@ export default function KnowledgeChat({ compact = false }) {
     };
   }, []);
 
-  useEffect(() => subscribeKnowledgeStore(() => setChunkCount(getAllChunks().length)), []);
+  useEffect(() => {
+    hydrateKnowledgeStore().then(() => setChunkCount(getAllChunks().length));
+    return subscribeKnowledgeStore(() => setChunkCount(getAllChunks().length));
+  }, []);
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });

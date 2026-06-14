@@ -1,15 +1,18 @@
-import { customerChatEnabled, demoModeEnabled } from "@/api/demoClient";
+import { customerChatEnabled, demoModeEnabled, knowledgeEnabled } from "@/api/demoClient";
 
 const PRODUCTION_TOP_NAV_PATHS = ["/breaks", "/shifts", "/training", "/metrics", "/remote-support"];
 
 const DEMO_TOP_NAV_PATHS = ["/crm", "/knowledge", "/customer-chat"];
 
-const LIVE_CUSTOMER_CHAT_PATHS = customerChatEnabled && !demoModeEnabled ? ["/customer-chat"] : [];
+const LIVE_OPTIONAL_NAV_PATHS = [
+  ...(customerChatEnabled && !demoModeEnabled ? ["/customer-chat"] : []),
+  ...(knowledgeEnabled && !demoModeEnabled ? ["/knowledge"] : []),
+];
 
 /** Routes that show the main tab bar (logo is embedded in AppNav). */
 export const TOP_NAV_PATHS = new Set([
   ...PRODUCTION_TOP_NAV_PATHS,
-  ...LIVE_CUSTOMER_CHAT_PATHS,
+  ...LIVE_OPTIONAL_NAV_PATHS,
   ...(demoModeEnabled ? DEMO_TOP_NAV_PATHS : []),
 ]);
 

@@ -1,4 +1,4 @@
-import { customerChatEnabled, demoModeEnabled } from "@/api/demoClient";
+import { customerChatEnabled, demoModeEnabled, knowledgeEnabled } from "@/api/demoClient";
 
 const ADMIN_DEV_ROUTES_CORE = [
   { path: "/admin", label: "דשבורד מנהל" },
@@ -8,7 +8,7 @@ const ADMIN_DEV_ROUTES_CORE = [
   { path: "/admin/metrics", label: "מדדים" },
 ];
 
-const ADMIN_DEV_ROUTES_DEMO_ONLY = [{ path: "/admin/knowledge", label: "ניהול ידע" }];
+const ADMIN_DEV_ROUTES_KNOWLEDGE = [{ path: "/admin/knowledge", label: "ניהול ידע" }];
 
 const ADMIN_DEV_ROUTES_CUSTOMER_CHAT = [
   { path: "/admin/customer-chat", label: "בוט צ'אט לקוחות" },
@@ -19,7 +19,7 @@ const ADMIN_DEV_ROUTES_CUSTOMER_CHAT = [
 /** Admin routes from App.jsx — keep in sync when adding /admin/* pages. */
 export const ADMIN_DEV_ROUTES = [
   ...ADMIN_DEV_ROUTES_CORE,
-  ...(demoModeEnabled ? ADMIN_DEV_ROUTES_DEMO_ONLY : []),
+  ...(demoModeEnabled || knowledgeEnabled ? ADMIN_DEV_ROUTES_KNOWLEDGE : []),
   ...(customerChatEnabled ? ADMIN_DEV_ROUTES_CUSTOMER_CHAT : []),
 ];
 

@@ -7,6 +7,7 @@ import {
 import { demoModeEnabled } from "./demoMode";
 
 export { demoModeEnabled } from "./demoMode";
+export { knowledgeEnabled } from "./knowledgeMode";
 export { remoteSupportEnabled } from "./remoteSupportMode";
 export { customerChatEnabled } from "./customerChatMode";
 
@@ -59,6 +60,8 @@ const ENTITY_KEYS = {
   ChatSettings: "chatSettings",
   TrainingScheduleSettings: "trainingScheduleSettings",
   TrainingPresentationMeta: "trainingPresentationMeta",
+  KnowledgeDocument: "knowledgeDocuments",
+  KnowledgeIndex: "knowledgeIndex",
 };
 
 function pad(value) {

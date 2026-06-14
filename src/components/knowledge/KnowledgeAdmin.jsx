@@ -17,6 +17,7 @@ import {
   resetKnowledgeToSeed,
   subscribeKnowledgeStore,
   upsertKnowledgeDocument,
+  hydrateKnowledgeStore,
 } from "@/lib/knowledgeStore";
 import {
   getAllChunks,
@@ -47,7 +48,7 @@ export default function KnowledgeAdmin() {
   }, []);
 
   useEffect(() => {
-    refresh();
+    hydrateKnowledgeStore().then(refresh);
     return subscribeKnowledgeStore(refresh);
   }, [refresh]);
 

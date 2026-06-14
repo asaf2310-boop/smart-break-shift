@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { BarChart3, BookOpen, CalendarClock, CalendarDays, Contact, Film, GraduationCap, Home, MessageCircle, Monitor, ShieldCheck } from "lucide-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useAgentModules } from "@/hooks/useAgentModules";
-import { customerChatEnabled, demoModeEnabled } from "@/api/demoClient";
+import { customerChatEnabled, demoModeEnabled, knowledgeEnabled } from "@/api/demoClient";
 import { brandVisualEnabled } from "@/lib/brandShell";
 
 /** גובה שורת הניווט העליונה — משמש גם ל-FloatingChatWidget */
@@ -94,6 +94,12 @@ export default function AppNav() {
               צ&apos;אט לקוחות
             </Link>
           )}
+          {knowledgeEnabled && !demoModeEnabled && showTab("knowledge") && (
+            <Link to="/knowledge" className={tabClass(isKnowledge)}>
+              <BookOpen className="w-4 h-4" />
+              בסיס ידע
+            </Link>
+          )}
           {demoModeEnabled && (
             <>
               {showTab("crm") && (
@@ -144,7 +150,7 @@ export default function AppNav() {
                 <BarChart3 className="w-4 h-4" />
                 מדדים
               </Link>
-              {demoModeEnabled && (
+              {(demoModeEnabled || knowledgeEnabled) && (
                 <Link to="/admin/knowledge" className={tabClass(location.pathname === "/admin/knowledge")}>
                   <BookOpen className="w-4 h-4" />
                   ניהול ידע

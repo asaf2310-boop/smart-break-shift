@@ -36,6 +36,8 @@ const TABLE_QUERY_PREFIXES = {
   chat_settings: ["chat-branding"],
   training_schedule_settings: ["training-schedule"],
   training_presentation_meta: ["training-presentation-meta"],
+  knowledge_documents: ["knowledge-documents"],
+  knowledge_index: ["knowledge-index"],
 };
 
 const TRAINING_REALTIME_HANDLERS = {
@@ -47,6 +49,16 @@ const TRAINING_REALTIME_HANDLERS = {
   training_presentation_meta: () => {
     import("@/lib/trainingPresentations").then(({ invalidateTrainingPresentationCache }) => {
       invalidateTrainingPresentationCache();
+    });
+  },
+  knowledge_documents: () => {
+    import("@/lib/knowledgeStore").then(({ invalidateKnowledgeStoreCache }) => {
+      invalidateKnowledgeStoreCache();
+    });
+  },
+  knowledge_index: () => {
+    import("@/lib/knowledgeStore").then(({ invalidateKnowledgeStoreCache }) => {
+      invalidateKnowledgeStoreCache();
     });
   },
 };
