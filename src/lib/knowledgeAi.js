@@ -402,7 +402,7 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = API_FETCH_TIMEOUT
 
 function isRateLimitCode(code, status) {
   const msg = String(code || "");
-  return status === 429 || msg.includes("429") || msg.includes("rate_limited");
+  return status === 429 || msg.includes("429") || msg.includes("rate_limited") || msg.includes("ai_error:429");
 }
 
 let rateLimitUntil = 0;
@@ -617,7 +617,7 @@ async function rebuildKnowledgeChunkIndexInner({ force = false } = {}) {
     if (reused) embeddingsByIndex.set(i, reused);
   }
 
-  if (needEmbedTexts.length) {
+  if (needEmbedTexts.length && !isOpenAiRateLimited()) {
     const { embeddings, error, rateLimited } = await fetchEmbeddingsBatch(needEmbedTexts);
     embeddingError = error;
     if (embeddings?.length) {
@@ -627,6 +627,8 @@ async function rebuildKnowledgeChunkIndexInner({ force = false } = {}) {
     } else if (rateLimited) {
       markRateLimited((getOpenAiRateLimitRetrySec() || 30) * 1000);
     }
+  } else if (needEmbedTexts.length) {
+    embeddingError = "openai_error:429";
   }
 
   const chunks = rawChunks.map((chunk, i) => ({
@@ -1007,17 +1009,17 @@ export async function probeOpenAiAvailability({ force = false } = {}) {
 export function formatOpenAiError(err, retryAfterSec) {
   const msg = String(err?.message || err || "");
   const waitSec = retryAfterSec ?? getOpenAiRateLimitRetrySec();
-  if (msg.includes("openai_not_configured") || msg.includes("openai_error:503")) {
-    return "שירות GPT לא מוגדר בשרת. הוסף OPENAI_API_KEY ב-Vercel → Environment Variables ופרוס מחדש.";
+  if (msg.includes("ai_not_configured") || msg.includes("openai_not_configured") || msg.includes("openai_error:503")) {
+    return "שירות AI לא מוגדר בשרת. הוסף GEMINI_API_KEY (או OPENAI_API_KEY) ב-Vercel ופרוס מחדש.";
   }
-  if (msg.includes("openai_error:401") || msg.includes("openai_error:403")) {
-    return "מפתח OpenAI לא תקין או חסר הרשאה. בדוק את OPENAI_API_KEY ב-Vercel ופרוס מחדש.";
+  if (msg.includes("openai_error:401") || msg.includes("openai_error:403") || msg.includes("ai_error:401") || msg.includes("ai_error:403")) {
+    return "מפתח AI לא תקין או חסר הרשאה. בדוק את GEMINI_API_KEY / OPENAI_API_KEY ב-Vercel.";
   }
-  if (msg.includes("openai_error:429") || msg.includes("429")) {
+  if (msg.includes("openai_error:429") || msg.includes("ai_error:429") || msg.includes("429")) {
     if (waitSec > 0) {
-      return `מגבלת קצב ב-OpenAI — ניסיון חוזר אוטומטי בעוד ${waitSec} שניות. אפשר גם להמתין וללחוץ «נסה שוב עם GPT».`;
+      return `מגבלת קצב ב-AI — ניסיון חוזר אוטומטי בעוד ${waitSec} שניות.`;
     }
-    return "מגבלת קצב ב-OpenAI — המתן כדקה ונסה שוב, או שדרג את מסלול החיוב ב-OpenAI.";
+    return "מגבלת קצב ב-AI — המתן כדקה ונסה שוב.";
   }
   if (msg.includes("Failed to fetch") || msg.includes("NetworkError") || msg.includes("request_timeout") || msg === "network") {
     return "בעיית רשת או זמן תגובה ארוך — נסה שוב.";
@@ -1034,10 +1036,10 @@ export function formatOpenAiError(err, retryAfterSec) {
   if (msg.includes("http_400") || msg.includes("http_500") || msg.includes("http_503")) {
     return "שגיאת שרת בבסיס הידע — נסה שוב בעוד רגע.";
   }
-  if (msg.startsWith("openai_error:")) {
-    return "שגיאה ב-OpenAI — נסה שוב מאוחר יותר.";
+  if (msg.startsWith("openai_error:") || msg.startsWith("ai_error:")) {
+    return "שגיאה ב-AI — נסה שוב מאוחר יותר.";
   }
-  return "לא ניתן להפעיל GPT כרגע.";
+  return "לא ניתן להפעיל AI כרגע.";
 }
 
 export function formatEmbeddingError(code, retryAfterSec) {
@@ -1203,19 +1205,64 @@ function formatSourceLine(chunk) {
   return parts.join(" / ");
 }
 
-/** Structured Hebrew answer without GPT (demo / missing API key). */
-function buildLocalStructuredAnswer(chunks) {
-  const lead = truncateSnippet(chunks[0]?.text || "", 320);
+/** Pick sentences from chunk text that match the user's question. */
+function extractRelevantSentences(text, queryTokens, maxSentences = 4) {
+  const cleaned = sanitizeChunkText(text, { preserveLines: true });
+  const sentences = cleaned
+    .split(/(?<=[.!?…\n])\s+|\n+/)
+    .map((s) => s.replace(/\s+/g, " ").trim())
+    .filter((s) => s.length >= 12 && /[\u0590-\u05FFa-zA-Z]/.test(s));
+
+  if (!sentences.length) return [truncateSnippet(cleaned, 280)];
+
+  const scored = sentences.map((sentence) => {
+    const hay = sentence.toLowerCase();
+    let score = 0;
+    for (const token of queryTokens) {
+      if (hay.includes(token)) score += token.length >= 4 ? 3 : 2;
+    }
+    return { sentence, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  const picked = scored.filter((r) => r.score > 0).slice(0, maxSentences);
+  if (picked.length) return picked.map((r) => r.sentence);
+
+  return sentences.slice(0, Math.min(2, sentences.length));
+}
+
+/** Structured Hebrew answer without GPT — keyword-focused excerpts. */
+function buildLocalStructuredAnswer(chunks, query = "") {
+  const queryTokens = tokenize(query);
+  const sentences = [];
+  const seen = new Set();
+
+  for (const chunk of chunks.slice(0, 3)) {
+    for (const sentence of extractRelevantSentences(chunk.text, queryTokens, 3)) {
+      const key = sentence.slice(0, 80);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      sentences.push(sentence);
+      if (sentences.length >= 4) break;
+    }
+    if (sentences.length >= 4) break;
+  }
+
+  if (!sentences.length) {
+    sentences.push(truncateSnippet(chunks[0]?.text || "", 320));
+  }
+
+  const lead = sanitizeAssistantAnswer(sentences[0]);
   const detail =
-    chunks.length > 1
-      ? chunks
-          .slice(1, 3)
-          .map((c, i) => `${i + 1}. ${truncateSnippet(c.text, 200)}`)
+    sentences.length > 1
+      ? sentences
+          .slice(1)
+          .map((s, i) => `${i + 1}. ${sanitizeAssistantAnswer(s)}`)
           .join("\n")
       : "";
 
   const source = formatSourceLine(chunks[0]);
-  const parts = [`תשובה קצרה וברורה\n${lead}`];
+  const parts = [lead];
   if (detail) parts.push(`פירוט:\n${detail}`);
   if (source) parts.push(`מקור: ${source}`);
   return parts.join("\n\n");
@@ -1245,8 +1292,10 @@ async function askKnowledgeLocal(query, { onPhase } = {}) {
 
   await hydrateKnowledgeStore();
   const existing = readKnowledgeChunkIndex();
-  if (!existing?.chunks?.length && listKnowledgeDocuments().length > 0) {
+  if (!existing?.chunks?.length && listKnowledgeDocuments().length > 0 && !isOpenAiRateLimited()) {
     onPhase?.("indexing");
+    await rebuildKnowledgeChunkIndex().catch(() => {});
+  } else if (!existing?.chunks?.length && listKnowledgeDocuments().length > 0) {
     await rebuildKnowledgeChunkIndex().catch(() => {});
   }
 
@@ -1272,6 +1321,18 @@ async function askKnowledgeLocal(query, { onPhase } = {}) {
   }
 
   const pageImages = resolvePageImages(chunks);
+  const localAnswer = () => ({
+    answer: buildLocalStructuredAnswer(chunks, trimmed),
+    citations: uniqueCitations(chunks),
+    chunks,
+    images: pageImages,
+    mode: "local_fallback",
+    debug,
+  });
+
+  if (isOpenAiRateLimited()) {
+    return { ...localAnswer(), gptSkipped: true, gptSkipReason: "rate_limit" };
+  }
 
   onPhase?.("gpt");
   const probe = await probeOpenAiAvailability();
@@ -1285,57 +1346,27 @@ async function askKnowledgeLocal(query, { onPhase } = {}) {
       const retryAfterSec = err?.retryAfterSec ?? getOpenAiRateLimitRetrySec();
       const rateLimited = err?.rateLimited || isRateLimitCode(err?.message, 429);
 
-      if (rateLimited && retryAfterSec > 0) {
-        const waitMs = Math.min(retryAfterSec * 1000, QUERY_RATE_LIMIT_WAIT_CAP_MS);
-        const waitSec = Math.ceil(waitMs / 1000);
-        for (let sec = waitSec; sec > 0; sec -= 1) {
-          onPhase?.("waiting_rate_limit", sec);
-          await sleep(1000);
-        }
-        try {
-          onPhase?.("gpt");
-          resetOpenAiProbeCache();
-          const retryResult = await callOpenAi(trimmed, chunks, context);
-          return { ...retryResult, chunks, images: pageImages, debug, retriedAfterRateLimit: true };
-        } catch (retryErr) {
-          return {
-            answer: buildLocalStructuredAnswer(chunks),
-            citations: uniqueCitations(chunks),
-            chunks,
-            images: pageImages,
-            mode: "local_fallback",
-            openAiFailed: true,
-            openAiError: formatOpenAiError(retryErr, retryErr?.retryAfterSec),
-            rateLimited: true,
-            retryAfterSec: retryErr?.retryAfterSec ?? getOpenAiRateLimitRetrySec(),
-            debug,
-          };
-        }
+      if (rateLimited) {
+        markRateLimited((retryAfterSec || 45) * 1000);
+        return {
+          ...localAnswer(),
+          gptSkipped: true,
+          gptSkipReason: "rate_limit",
+          retryAfterSec,
+        };
       }
 
       return {
-        answer: buildLocalStructuredAnswer(chunks),
-        citations: uniqueCitations(chunks),
-        chunks,
-        images: pageImages,
-        mode: "local_fallback",
+        ...localAnswer(),
         openAiFailed: true,
         openAiError: formatOpenAiError(err, retryAfterSec),
         rateLimited,
         retryAfterSec,
-        debug,
       };
     }
   }
 
-  return {
-    answer: buildLocalStructuredAnswer(chunks),
-    citations: uniqueCitations(chunks),
-    chunks,
-    images: pageImages,
-    mode: "local_fallback",
-    debug,
-  };
+  return localAnswer();
 }
 
 /**
@@ -1351,6 +1382,9 @@ export async function askKnowledgeBase(query, { onPhase } = {}) {
     try {
       return await askKnowledgeServer(trimmed, { onPhase, tenantId: getKnowledgeTenantId() });
     } catch (err) {
+      if (err?.rateLimited || isRateLimitCode(err?.message, 429)) {
+        markRateLimited((err?.retryAfterSec || 45) * 1000);
+      }
       if (import.meta.env.DEV) {
         console.warn("[knowledge] server RAG failed, falling back to local", err?.message || err);
       }

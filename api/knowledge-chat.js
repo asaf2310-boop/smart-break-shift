@@ -18,14 +18,19 @@ import {
   truncateSnippet,
 } from "../server/knowledge/chatAnswerService.js";
 import { logKnowledgeQuery } from "../server/knowledge/loggingService.js";
-import { fetchOpenAiWithRetry, getRetryAfterSec } from "../server/openaiRetry.js";
+import {
+  getAiProvider,
+  isAiConfigured,
+  getChatModel,
+  getEmbedModel,
+  getEmbeddingDimensions,
+  generateText,
+} from "../server/ai/aiProvider.js";
 import {
   KNOWLEDGE_SYSTEM_PROMPT,
   KNOWLEDGE_ANSWER_FORMAT_HINT,
   KNOWLEDGE_NO_CONTEXT_ANSWER,
 } from "../server/knowledge/chatAnswerService.js";
-
-const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
 function resolveTenantId(body) {
   const fromBody = body.tenantId ?? body.tenant_id ?? null;
@@ -51,8 +56,6 @@ function rejectsFullDocumentPayload(body) {
 
 /** Legacy mode: client sends pre-retrieved context (demo / fallback). */
 async function handleLegacyChat(req, res, body) {
-  const apiKey = String(process.env.OPENAI_API_KEY || "").trim();
-  const model = String(process.env.OPENAI_MODEL || "gpt-4o-mini").trim();
   const query = String(body.query || "").trim();
   const context = String(body.context || "").trim();
 
@@ -60,52 +63,37 @@ async function handleLegacyChat(req, res, body) {
     return json(res, 400, { error: "query_and_context_required" }, req);
   }
 
+  if (!isAiConfigured()) {
+    return json(res, 503, { error: "ai_not_configured" }, req);
+  }
+
   const howTo = isHowToQuestion(query);
   const user = `קטעי הקשר (היחידים המותרים לשימוש):\n${context}\n\nשאלת הנציג: ${query}\n\n${KNOWLEDGE_ANSWER_FORMAT_HINT}${
     howTo ? "\n\nסוג שאלה: הדרכה / תהליך — השתמש בפירוט לפי סעיפים." : ""
   }`;
 
-  const openaiRes = await fetchOpenAiWithRetry(OPENAI_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.2,
-      max_tokens: howTo ? 480 : 380,
-      messages: [
-        {
-          role: "system",
-          content: `${KNOWLEDGE_SYSTEM_PROMPT}\n\n${KNOWLEDGE_ANSWER_FORMAT_HINT}`,
-        },
-        { role: "user", content: user },
-      ],
-    }),
+  const result = await generateText({
+    system: `${KNOWLEDGE_SYSTEM_PROMPT}\n\n${KNOWLEDGE_ANSWER_FORMAT_HINT}`,
+    user,
+    maxTokens: howTo ? 480 : 380,
+    temperature: 0.2,
   });
 
-  if (!openaiRes.ok) {
-    const errText = await openaiRes.text().catch(() => "");
-    const retryAfterSec = openaiRes.status === 429 ? getRetryAfterSec(openaiRes) : null;
+  if (result.error) {
     return json(
       res,
-      openaiRes.status,
+      result.rateLimited ? 429 : 503,
       {
-        error: `openai_error:${openaiRes.status}`,
-        detail: errText.slice(0, 200),
-        retryAfterSec,
-        rateLimited: openaiRes.status === 429,
+        error: result.error,
+        retryAfterSec: result.retryAfterSec,
+        rateLimited: result.rateLimited,
       },
       req,
     );
   }
 
-  const data = await openaiRes.json();
-  const answer =
-    data.choices?.[0]?.message?.content?.trim() || KNOWLEDGE_NO_CONTEXT_ANSWER;
-
-  return json(res, 200, { answer, mode: "openai" }, req);
+  const answer = result.text?.trim() || KNOWLEDGE_NO_CONTEXT_ANSWER;
+  return json(res, 200, { answer, mode: getAiProvider() }, req);
 }
 
 async function handleServerRag(req, res, body) {
@@ -122,7 +110,7 @@ async function handleServerRag(req, res, body) {
   }
 
   if (!isEmbeddingConfigured()) {
-    return json(res, 503, { error: "openai_not_configured" }, req);
+    return json(res, 503, { error: "ai_not_configured" }, req);
   }
 
   const { embedding, error: embedErr, retryAfterSec } = await embedQuery(query);
@@ -259,7 +247,7 @@ async function handleServerRag(req, res, body) {
       })),
       images,
       confidence,
-      mode: "openai",
+      mode: getAiProvider(),
       debug,
     },
     req,
@@ -272,8 +260,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  const apiKey = String(process.env.OPENAI_API_KEY || "").trim();
-  const model = String(process.env.OPENAI_MODEL || "gpt-4o-mini").trim();
+  const provider = getAiProvider();
 
   if (req.method === "GET") {
     const url = new URL(req.url || "/", "http://localhost");
@@ -282,8 +269,11 @@ export default async function handler(req, res) {
         res,
         200,
         {
-          ok: Boolean(apiKey),
-          model: apiKey ? model : null,
+          ok: isAiConfigured(),
+          provider,
+          model: isAiConfigured() ? getChatModel() : null,
+          embedModel: isAiConfigured() ? getEmbedModel() : null,
+          embeddingDimensions: getEmbeddingDimensions(),
           pgvector: isPgVectorConfigured(),
           embeddings: isEmbeddingConfigured(),
           minConfidence: MIN_CONFIDENCE,
@@ -333,14 +323,14 @@ export default async function handler(req, res) {
     return handleServerRag(req, res, body);
   }
 
-  if (!apiKey) {
+  if (!isAiConfigured()) {
     return json(
       res,
       503,
       {
-        code: "openai_not_configured",
-        error: "openai_not_configured",
-        message: "הגדר OPENAI_API_KEY ב-Vercel (Environment Variables) ופרוס מחדש.",
+        code: "ai_not_configured",
+        error: "ai_not_configured",
+        message: "הגדר GEMINI_API_KEY (או OPENAI_API_KEY) ב-Vercel → Environment Variables ופרוס מחדש.",
       },
       req,
     );

@@ -226,18 +226,24 @@ function MessageBubble({ message, showDebug, onRetry, onFeedback, feedbackSendin
             )}
           </div>
         )}
-        {!isUser && message.mode === "openai" && (
-          <p className="mt-2 text-[10px] text-on-surface-variant opacity-80">GPT</p>
+        {!isUser && (message.mode === "openai" || message.mode === "gemini") && (
+          <p className="mt-2 text-[10px] text-on-surface-variant opacity-80">
+            {message.mode === "gemini" ? "Gemini" : "AI"}
+          </p>
         )}
         {!isUser && message.mode === "local_fallback" && (
-          <p className="mt-2 text-[10px] text-on-surface-variant opacity-80">תשובה מקומית מהקטעים</p>
+          <p className="mt-2 text-[10px] text-on-surface-variant opacity-80">
+            {message.gptSkipped
+              ? "תשובה מהמסמכים (GPT מושהה זמנית)"
+              : "תשובה מהמסמכים"}
+          </p>
         )}
         {!isUser && message.mode === "low_relevance" && (
           <p className="mt-2 text-[10px] text-on-surface-variant opacity-90">
             לא נמצאו קטעים רלוונטים מספיק — נסה לנסח אחרת או להוסיף מילות מפתח מהמסמך.
           </p>
         )}
-        {!isUser && message.openAiFailed && (
+        {!isUser && message.openAiFailed && !message.gptSkipped && (
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <p className="text-[10px] text-amber-700 dark:text-amber-400 opacity-90 m-0">
               {message.openAiError || "GPT לא זמין — תשובה מקומית"}
@@ -287,6 +293,7 @@ export default function KnowledgeChat({ compact = false }) {
   const [docCount, setDocCount] = useState(() => listKnowledgeDocuments().length);
   const [embeddingsOk, setEmbeddingsOk] = useState(() => getKnowledgeIndexStats().embeddingsOk);
   const [openAiOn, setOpenAiOn] = useState(false);
+  const [aiProvider, setAiProvider] = useState(null);
   const [serverRag, setServerRag] = useState(false);
   const [feedbackSending, setFeedbackSending] = useState(false);
   const showDebug = isDebugPanelEnabled();
@@ -313,6 +320,7 @@ export default function KnowledgeChat({ compact = false }) {
           if (!cancelled) {
             setServerRag(health.pgvector);
             setOpenAiOn(health.available);
+            setAiProvider(health.provider);
           }
           const data = await listServerDocuments();
           if (!cancelled) {
@@ -398,15 +406,16 @@ export default function KnowledgeChat({ compact = false }) {
     setLoadingHint("");
 
     try {
-      if (isRetry) resetOpenAiProbeCache();
-
-      if (isOpenAiRateLimited()) {
-        const waitSec = getOpenAiRateLimitRetrySec();
-        if (waitSec > 0) {
-          setLoadingHint(`מגבלת קצב OpenAI — ממתין ${waitSec} שניות לפני ניסיון חוזר…`);
-          for (let sec = waitSec; sec > 0; sec -= 1) {
-            setLoadingHint(`מגבלת קצב OpenAI — ממתין ${sec} שניות לפני ניסיון חוזר…`);
-            await new Promise((resolve) => setTimeout(resolve, 1000));
+      if (isRetry) {
+        resetOpenAiProbeCache();
+        if (isOpenAiRateLimited()) {
+          const waitSec = getOpenAiRateLimitRetrySec();
+          if (waitSec > 0) {
+            setLoadingHint(`מגבלת קצב OpenAI — ממתין ${waitSec} שניות…`);
+            for (let sec = waitSec; sec > 0; sec -= 1) {
+              setLoadingHint(`מגבלת קצב OpenAI — ממתין ${sec} שניות…`);
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+            }
           }
         }
       }
@@ -423,19 +432,25 @@ export default function KnowledgeChat({ compact = false }) {
           }
         },
       });
-      if (result.openAiFailed) {
+      if (result.openAiFailed && !result.gptSkipped) {
         toast({
-          title: result.rateLimited ? "מגבלת קצב OpenAI" : "GPT לא זמין",
+          title: result.rateLimited ? "מגבלת קצב AI" : "AI לא זמין",
           description: result.openAiError,
           variant: "destructive",
         });
+      } else if (result.gptSkipped && result.gptSkipReason === "rate_limit") {
+        toast({
+          title: "תשובה מהמסמכים",
+          description: "GPT מושהה זמנית — ניתן לנסות שוב בעוד דקה.",
+        });
       } else if (result.retriedAfterRateLimit) {
         toast({
-          title: "GPT חזר לפעול",
+          title: "AI חזר לפעול",
           description: "התשובה התקבלה לאחר המתנה קצרה בגלל מגבלת קצב.",
         });
       }
-      setOpenAiOn(!result.openAiFailed && result.mode === "openai");
+      setOpenAiOn(!result.openAiFailed && (result.mode === "openai" || result.mode === "gemini"));
+      if (result.mode === "gemini" || result.mode === "openai") setAiProvider(result.mode);
       setMessages((prev) => [
         ...prev,
         {
@@ -449,7 +464,9 @@ export default function KnowledgeChat({ compact = false }) {
           userQuestion: trimmed,
           openAiFailed: result.openAiFailed,
           openAiError: result.openAiError,
-          retryQuery: result.openAiFailed ? trimmed : undefined,
+          gptSkipped: result.gptSkipped,
+          gptSkipReason: result.gptSkipReason,
+          retryQuery: result.openAiFailed && !result.gptSkipped ? trimmed : undefined,
           debug: showDebug ? result.debug : undefined,
         },
       ]);
@@ -515,10 +532,14 @@ export default function KnowledgeChat({ compact = false }) {
                 ? `${docCount} מסמכים — ממתין לאינדוקס`
                 : "אין תוכן בבסיס הידע"}
         </p>
-        {openAiOn ? (
-          <span className="m3-badge text-[10px]">{serverRag ? "RAG בשרת" : "GPT פעיל"}</span>
+        {openAiOn && !isOpenAiRateLimited() ? (
+          <span className="m3-badge text-[10px]">
+            {aiProvider === "gemini" ? "Gemini פעיל" : serverRag ? "RAG בשרת" : "AI פעיל"}
+          </span>
+        ) : isOpenAiRateLimited() ? (
+          <span className="m3-badge text-[10px] opacity-80">AI מושהה · חיפוש במסמכים</span>
         ) : (
-          <span className="m3-badge text-[10px] opacity-80">ללא GPT · חיפוש מקומי</span>
+          <span className="m3-badge text-[10px] opacity-80">חיפוש במסמכים</span>
         )}
         {chunkCount > 0 && !embeddingsOk && (
           <span className="m3-badge text-[10px] opacity-80">ללא embeddings</span>

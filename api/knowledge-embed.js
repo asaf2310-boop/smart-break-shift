@@ -1,9 +1,8 @@
-/** Vercel serverless — OpenAI embeddings for knowledge RAG (OPENAI_API_KEY only) */
+/** Vercel serverless — AI embeddings for knowledge RAG (Gemini / OpenAI) */
 
-import { fetchOpenAiWithRetry, getRetryAfterSec } from "../server/openaiRetry.js";
+import { embedTexts, getEmbedModelName, isEmbeddingConfigured } from "../server/knowledge/embeddingService.js";
+import { getAiProvider, getEmbeddingDimensions } from "../server/ai/aiProvider.js";
 
-const OPENAI_EMBED_URL = "https://api.openai.com/v1/embeddings";
-const DEFAULT_MODEL = "text-embedding-3-small";
 const MAX_BATCH = 64;
 
 function getSiteOrigin(req) {
@@ -74,13 +73,20 @@ export default async function handler(req, res) {
     return;
   }
 
-  const apiKey = String(process.env.OPENAI_API_KEY || "").trim();
-  const model = String(process.env.OPENAI_EMBED_MODEL || DEFAULT_MODEL).trim();
-
   if (req.method === "GET") {
     const url = new URL(req.url || "/", "http://localhost");
     if (url.searchParams.get("health") === "1") {
-      return json(res, 200, { ok: Boolean(apiKey), model: apiKey ? model : null }, req);
+      return json(
+        res,
+        200,
+        {
+          ok: isEmbeddingConfigured(),
+          provider: getAiProvider(),
+          model: isEmbeddingConfigured() ? getEmbedModelName() : null,
+          dimensions: getEmbeddingDimensions(),
+        },
+        req,
+      );
     }
     return json(res, 405, { error: "method_not_allowed" }, req);
   }
@@ -93,14 +99,14 @@ export default async function handler(req, res) {
     return json(res, 403, { error: "forbidden" }, req);
   }
 
-  if (!apiKey) {
+  if (!isEmbeddingConfigured()) {
     return json(
       res,
       503,
       {
-        code: "openai_not_configured",
-        error: "openai_not_configured",
-        message: "הגדר OPENAI_API_KEY ב-Vercel (Environment Variables) ופרוס מחדש.",
+        code: "ai_not_configured",
+        error: "ai_not_configured",
+        message: "הגדר GEMINI_API_KEY (או OPENAI_API_KEY) ב-Vercel ופרוס מחדש.",
       },
       req,
     );
@@ -123,35 +129,26 @@ export default async function handler(req, res) {
     return json(res, 400, { error: "batch_too_large", max: MAX_BATCH }, req);
   }
 
-  const openaiRes = await fetchOpenAiWithRetry(OPENAI_EMBED_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({ model, input: inputs }),
-  });
+  const { embeddings, error, retryAfterSec } = await embedTexts(inputs);
 
-  if (!openaiRes.ok) {
-    const errText = await openaiRes.text().catch(() => "");
-    const retryAfterSec = openaiRes.status === 429 ? getRetryAfterSec(openaiRes) : null;
+  if (error || !embeddings) {
+    const rateLimited = String(error || "").includes("429");
     return json(
       res,
-      openaiRes.status,
+      rateLimited ? 429 : 503,
       {
-        error: `openai_error:${openaiRes.status}`,
-        detail: errText.slice(0, 200),
+        error: error || "embedding_failed",
         retryAfterSec,
-        rateLimited: openaiRes.status === 429,
+        rateLimited,
       },
       req,
     );
   }
 
-  const data = await openaiRes.json();
-  const embeddings = (data.data || [])
-    .sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
-    .map((row) => row.embedding);
-
-  return json(res, 200, { embeddings, model, mode: "openai" }, req);
+  return json(
+    res,
+    200,
+    { embeddings, model: getEmbedModelName(), mode: getAiProvider(), dimensions: getEmbeddingDimensions() },
+    req,
+  );
 }

@@ -18,7 +18,7 @@ export default function KnowledgeGate({ children, redirect = true }) {
         <p className="text-sm text-on-surface-variant mb-6">
           הוסיפו{" "}
           <code className="text-xs bg-surface-container px-1 rounded-md">VITE_KNOWLEDGE_ENABLED=true</code>{" "}
-          ב-Vercel, <code className="text-xs bg-surface-container px-1 rounded-md">OPENAI_API_KEY</code> בשרת,
+          ב-Vercel, <code className="text-xs bg-surface-container px-1 rounded-md">GEMINI_API_KEY</code> בשרת,
           והריצו <code className="text-xs bg-surface-container px-1 rounded-md">supabase/knowledge.sql</code>.
         </p>
         <Link to="/" className="text-primary font-medium text-sm hover:underline">

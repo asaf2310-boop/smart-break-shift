@@ -42,7 +42,7 @@ export default async function handler(req, res) {
   }
 
   if (!isEmbeddingConfigured()) {
-    return json(res, 503, { error: "openai_not_configured" }, req);
+    return json(res, 503, { error: "ai_not_configured" }, req);
   }
 
   let body;
