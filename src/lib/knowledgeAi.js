@@ -1019,8 +1019,20 @@ export function formatOpenAiError(err, retryAfterSec) {
     }
     return "מגבלת קצב ב-OpenAI — המתן כדקה ונסה שוב, או שדרג את מסלול החיוב ב-OpenAI.";
   }
-  if (msg.includes("Failed to fetch") || msg.includes("NetworkError") || msg.includes("request_timeout")) {
-    return "בעיית רשת או זמן תגובה ארוך מ-GPT — נסה שוב או השתמש בתשובה המקומית.";
+  if (msg.includes("Failed to fetch") || msg.includes("NetworkError") || msg.includes("request_timeout") || msg === "network") {
+    return "בעיית רשת או זמן תגובה ארוך — נסה שוב.";
+  }
+  if (msg.includes("pgvector_not_configured")) {
+    return "pgvector לא מוגדר — הוסף SUPABASE_SERVICE_ROLE_KEY ב-Vercel והרץ knowledge_pgvector.sql.";
+  }
+  if (msg.includes("query_and_context_required")) {
+    return "שגיאת שרת — חיפוש מקומי יופעל אוטומטית.";
+  }
+  if (msg.includes("search_failed") || msg.includes("embedding_failed")) {
+    return "שגיאה בחיפוש בשרת — נסה שוב או בדוק הגדרות Supabase.";
+  }
+  if (msg.includes("http_400") || msg.includes("http_500") || msg.includes("http_503")) {
+    return "שגיאת שרת בבסיס הידע — נסה שוב בעוד רגע.";
   }
   if (msg.startsWith("openai_error:")) {
     return "שגיאה ב-OpenAI — נסה שוב מאוחר יותר.";
@@ -1226,31 +1238,16 @@ function buildDebugPayload(query, retrieval, context) {
 }
 
 /**
- * Retrieve relevant chunks and produce an answer (OpenAI or low-relevance message).
+ * Client-side RAG — local index + GPT via /api/knowledge-chat (with context).
  */
-export async function askKnowledgeBase(query, { onPhase } = {}) {
+async function askKnowledgeLocal(query, { onPhase } = {}) {
   const trimmed = normalizeText(query);
-  if (!trimmed) {
-    return { answer: "נא להקליד שאלה.", citations: [], chunks: [], images: [], mode: "empty", debug: null };
-  }
 
-  if (shouldUseServerRag()) {
-    try {
-      return await askKnowledgeServer(trimmed, { onPhase, tenantId: getKnowledgeTenantId() });
-    } catch (err) {
-      return {
-        answer: formatOpenAiError(err, err?.retryAfterSec),
-        citations: [],
-        chunks: [],
-        images: [],
-        mode: "error",
-        openAiFailed: true,
-        openAiError: formatOpenAiError(err, err?.retryAfterSec),
-        rateLimited: err?.rateLimited,
-        retryAfterSec: err?.retryAfterSec,
-        debug: null,
-      };
-    }
+  await hydrateKnowledgeStore();
+  const existing = readKnowledgeChunkIndex();
+  if (!existing?.chunks?.length && listKnowledgeDocuments().length > 0) {
+    onPhase?.("indexing");
+    await rebuildKnowledgeChunkIndex().catch(() => {});
   }
 
   const retrieval = await searchKnowledgeChunksWithScores(trimmed, RETRIEVAL_TOP_K, { onPhase });
@@ -1339,6 +1336,29 @@ export async function askKnowledgeBase(query, { onPhase } = {}) {
     mode: "local_fallback",
     debug,
   };
+}
+
+/**
+ * Retrieve relevant chunks and produce an answer (OpenAI or low-relevance message).
+ */
+export async function askKnowledgeBase(query, { onPhase } = {}) {
+  const trimmed = normalizeText(query);
+  if (!trimmed) {
+    return { answer: "נא להקליד שאלה.", citations: [], chunks: [], images: [], mode: "empty", debug: null };
+  }
+
+  if (shouldUseServerRag()) {
+    try {
+      return await askKnowledgeServer(trimmed, { onPhase, tenantId: getKnowledgeTenantId() });
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.warn("[knowledge] server RAG failed, falling back to local", err?.message || err);
+      }
+      onPhase?.("fallback_local");
+    }
+  }
+
+  return askKnowledgeLocal(trimmed, { onPhase });
 }
 
 export { KNOWLEDGE_SYSTEM_PROMPT, KNOWLEDGE_LOW_RELEVANCE_ANSWER };

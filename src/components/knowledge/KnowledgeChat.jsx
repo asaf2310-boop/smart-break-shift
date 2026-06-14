@@ -416,6 +416,8 @@ export default function KnowledgeChat({ compact = false }) {
           if (phase === "searching") setLoadingHint("מחפש בבסיס הידע…");
           else if (phase === "embedding") setLoadingHint("מנתח את השאלה…");
           else if (phase === "gpt") setLoadingHint("מכין תשובה עם GPT…");
+          else if (phase === "fallback_local") setLoadingHint("מחפש במאגר מקומי…");
+          else if (phase === "indexing") setLoadingHint("מכין אינדקס מקומי…");
           else if (phase === "waiting_rate_limit") {
             setLoadingHint(`מגבלת קצב OpenAI — ממתין ${sec} שניות…`);
           }

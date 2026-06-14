@@ -317,7 +317,19 @@ export default async function handler(req, res) {
     return json(res, 400, { error: "full_documents_not_allowed" }, req);
   }
 
-  if (ragMode && isPgVectorConfigured() && query && !context) {
+  if (ragMode && query && !context) {
+    if (!isPgVectorConfigured()) {
+      return json(
+        res,
+        503,
+        {
+          error: "pgvector_not_configured",
+          message: "הגדר SUPABASE_SERVICE_ROLE_KEY והרץ knowledge_pgvector.sql",
+          fallback: "client",
+        },
+        req,
+      );
+    }
     return handleServerRag(req, res, body);
   }
 
