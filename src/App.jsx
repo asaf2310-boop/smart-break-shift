@@ -36,6 +36,7 @@ import CrmCustomerDetail from './pages/CrmCustomerDetail';
 import CrmLookupDeepLink from './pages/CrmLookupDeepLink';
 import KnowledgePage from './pages/KnowledgePage';
 import AdminKnowledge from './pages/AdminKnowledge';
+import AdminKnowledgeGaps from './pages/AdminKnowledgeGaps';
 import AdminCustomerChat from './pages/AdminCustomerChat';
 import FloatingKnowledgeWidget from '@/components/knowledge/FloatingKnowledgeWidget';
 import AdminLocalhostLinksFloating from '@/components/admin/AdminLocalhostLinksFloating';
@@ -125,6 +126,7 @@ const AuthenticatedApp = () => {
         <Route path="/knowledge" element={<ModuleGate module="knowledge"><KnowledgeGate><KnowledgePage /></KnowledgeGate></ModuleGate>} />
         <Route path="/admin" element={<AdminGate><AdminDashboard /></AdminGate>} />
         <Route path="/admin/knowledge" element={<KnowledgeGate><AdminGate><AdminKnowledge /></AdminGate></KnowledgeGate>} />
+        <Route path="/admin/knowledge/gaps" element={<KnowledgeGate><AdminGate><AdminKnowledgeGaps /></AdminGate></KnowledgeGate>} />
         <Route path="/admin/customer-chat" element={<CustomerChatGate><AdminGate><AdminCustomerChat /></AdminGate></CustomerChatGate>} />
         <Route path="/admin/shifts" element={<AdminGate><AdminShifts /></AdminGate>} />
         <Route path="/admin/users" element={<AdminGate><AdminUsers /></AdminGate>} />

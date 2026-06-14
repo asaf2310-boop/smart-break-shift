@@ -21,11 +21,14 @@ export default function AdminKnowledge() {
             <div>
               <h1 className="text-xl font-extrabold text-slate-800">ניהול ידע</h1>
               <p className="text-sm text-slate-500">
-                העלאה ועריכת מסמכים (txt, md, PDF, Word docx) לבסיס הידע של הנציגים
+                העלאה ועריכת מסמכים (txt, md, PDF, Word docx, PNG, JPG, WEBP) לבסיס הידע של הנציגים
               </p>
             </div>
           </div>
           <div className="flex flex-col items-end gap-1">
+            <Link to="/admin/knowledge/gaps" className="text-xs text-amber-700 hover:underline">
+              פערי ידע
+            </Link>
             <Link to="/admin" className="text-sm text-slate-500 hover:text-slate-800 flex items-center gap-1">
               <ArrowRight className="w-4 h-4" />
               חזרה
