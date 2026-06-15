@@ -298,6 +298,46 @@ export async function askKnowledgeWebSearch(query, { onPhase } = {}) {
 }
 
 /**
+ * Load page thumbnails when API returned chunks but no image URLs.
+ */
+async function hydrateKnowledgeImagesFromChunks(existingImages, chunks) {
+  if (existingImages?.length) return existingImages;
+  if (!chunks?.length) return [];
+
+  const byDoc = new Map();
+  for (const c of chunks) {
+    if (!c?.documentId) continue;
+    if (!byDoc.has(c.documentId)) byDoc.set(c.documentId, new Set());
+    if (c.pageNumber != null) byDoc.get(c.documentId).add(c.pageNumber);
+  }
+
+  const images = [];
+  for (const [documentId, pageSet] of byDoc) {
+    try {
+      const pages = await fetchServerDocumentPageImages(documentId);
+      const picked = pageSet.size
+        ? pages.filter((p) => pageSet.has(p.pageNumber))
+        : pages;
+      for (const p of picked.slice(0, 5)) {
+        if (!p?.thumbnail) continue;
+        images.push({
+          url: p.thumbnail,
+          src: p.thumbnail,
+          documentId,
+          documentName: null,
+          documentTitle: null,
+          pageNumber: p.pageNumber ?? null,
+          caption: p.sectionTitle || null,
+        });
+      }
+    } catch {
+      /* optional hydration */
+    }
+  }
+  return images;
+}
+
+/**
  * Full server-side RAG — query only, no document bodies.
  * @param {string} query
  * @param {{ onPhase?: Function, tenantId?: string | null }} [options]
@@ -345,12 +385,9 @@ export async function askKnowledgeServer(query, { onPhase, tenantId } = {}) {
 
   onPhase?.("gpt");
 
-  return {
-    answer: data.answer || KNOWLEDGE_LOW_RELEVANCE_ANSWER,
-    citations: data.citations || [],
-    sources: data.sources || [],
-    chunks: data.chunks || [],
-    images: (data.images || []).map((img) => ({
+  const chunks = data.chunks || [];
+  const images = await hydrateKnowledgeImagesFromChunks(
+    (data.images || []).map((img) => ({
       id: img.id ?? null,
       url: img.url || img.src,
       src: img.src || img.url,
@@ -361,6 +398,15 @@ export async function askKnowledgeServer(query, { onPhase, tenantId } = {}) {
       caption: img.caption || img.description || null,
       label: img.label ?? null,
     })),
+    chunks,
+  );
+
+  return {
+    answer: data.answer || KNOWLEDGE_LOW_RELEVANCE_ANSWER,
+    citations: data.citations || [],
+    sources: data.sources || [],
+    chunks,
+    images,
     confidence: data.confidence ?? null,
     grounded: data.grounded === true,
     mode: data.mode || "openai",

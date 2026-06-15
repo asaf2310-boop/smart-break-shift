@@ -206,18 +206,31 @@ export async function fetchImagesForChunks(chunkRefs, { tenantId = null, limit =
     }
 
     const { data } = await query.maybeSingle();
-    if (!data) continue;
+    let row = data;
+    if (!row) {
+      const { data: fallbackRows } = await supabase
+        .from("knowledge_images")
+        .select("id, document_id, document_name, page_number, image_data, storage_url, description")
+        .eq("document_id", ref.documentId)
+        .order("page_number", { ascending: true })
+        .limit(12);
+      row =
+        (fallbackRows || []).find((r) => r.page_number === ref.pageNumber) ||
+        (fallbackRows || [])[0] ||
+        null;
+    }
+    if (!row) continue;
 
-    const src = data.storage_url || data.image_data;
+    const src = row.storage_url || row.image_data;
     if (!src) continue;
 
     images.push({
-      id: data.id,
-      documentId: data.document_id,
-      documentTitle: data.document_name,
-      documentName: data.document_name,
-      pageNumber: data.page_number,
-      description: data.description,
+      id: row.id,
+      documentId: row.document_id,
+      documentTitle: row.document_name,
+      documentName: row.document_name,
+      pageNumber: row.page_number,
+      description: row.description,
       src,
     });
   }

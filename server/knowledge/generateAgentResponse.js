@@ -4,7 +4,7 @@ import { embedQuery, isEmbeddingConfigured } from "./embeddingService.js";
 import { hybridSearch, MIN_CONFIDENCE } from "./hybridSearchService.js";
 import { directChunkSearch } from "./simpleRetrievalService.js";
 import { fetchImagesForChunks } from "./imageIngestService.js";
-import { generateGeminiKnowledgeAnswer, mergeRelevantImages, buildKnowledgeSources } from "./geminiChatService.js";
+import { generateGeminiKnowledgeAnswer, mergeRelevantImages, buildKnowledgeSources, normalizeKnowledgeImages } from "./geminiChatService.js";
 import { buildContextBlocks, truncateSnippet, uniqueCitations } from "./chatAnswerService.js";
 import { KNOWLEDGE_MISSING_ANSWER, isMissingKnowledgeAnswer } from "./geminiKnowledgePrompt.js";
 import { buildChunkFallbackAnswer } from "./chunkFallbackAnswerService.js";
@@ -12,6 +12,34 @@ import { logKnowledgeGap } from "./gapFeedbackService.js";
 import { logKnowledgeQuery } from "./loggingService.js";
 import { RETRIEVAL_TOP_K_DEFAULT } from "./vectorSearchService.js";
 import { isPgVectorConfigured } from "./supabaseAdmin.js";
+
+function uniqueChunkPageRefs(chunks, max = 5) {
+  const seen = new Set();
+  const refs = [];
+  for (const c of chunks || []) {
+    if (c?.pageNumber == null || !c?.documentId) continue;
+    const key = `${c.documentId}:${c.pageNumber}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    refs.push({ documentId: c.documentId, pageNumber: c.pageNumber });
+    if (refs.length >= max) break;
+  }
+  return refs;
+}
+
+function formatImagesForResponse(images = [], limit = 5) {
+  return normalizeKnowledgeImages(images, limit).map((img) => ({
+    id: img.id ?? null,
+    url: img.url || img.src,
+    src: img.src || img.url,
+    documentId: img.documentId,
+    documentName: img.documentName || img.documentTitle,
+    documentTitle: img.documentTitle || img.documentName,
+    pageNumber: img.pageNumber ?? null,
+    caption: img.caption || img.description || null,
+    label: img.label ?? null,
+  }));
+}
 
 function buildRetrievalDebug(query, searchResult, hits, context, extra = {}) {
   return {
@@ -133,12 +161,10 @@ export async function generateAgentResponse(userQuery, options = {}) {
     },
   );
 
-  const chunkRefs = chunks.map((c) => ({
-    documentId: c.documentId,
-    pageNumber: c.pageNumber,
-  }));
-  const fetchedImages = await fetchImagesForChunks(chunkRefs, { tenantId, limit: topK });
+  const pageRefs = uniqueChunkPageRefs(chunks, topK);
+  const fetchedImages = await fetchImagesForChunks(pageRefs, { tenantId, limit: topK });
   const relevantImages = mergeRelevantImages(fetchedImages, searchResult.imageHits || [], topK);
+  const responseImages = formatImagesForResponse(relevantImages, topK);
 
   if (!chunks.length || !passesThreshold) {
     if (process.env.NODE_ENV !== "production" || process.env.KNOWLEDGE_DEBUG === "1") {
@@ -186,13 +212,14 @@ export async function generateAgentResponse(userQuery, options = {}) {
     if (chunks.length) {
       const fallback = buildChunkFallbackAnswer(query, chunks, {
         rateLimited: result.rateLimited || String(result.error || "").includes("429"),
+        imageCount: responseImages.length,
       });
       const citations = result.citations?.length ? result.citations : uniqueCitations(chunks);
       return {
         answer: fallback.answer,
         citations,
         sources: buildKnowledgeSources(citations, relevantImages),
-        images: [],
+        images: responseImages,
         chunks: chunks.map((c) => ({
           documentId: c.documentId,
           documentName: c.documentName,
@@ -256,7 +283,7 @@ export async function generateAgentResponse(userQuery, options = {}) {
     answer: result.answer,
     citations: result.citations,
     sources: result.sources,
-    images: result.images?.length ? result.images : [],
+    images: result.images?.length ? formatImagesForResponse(result.images, topK) : responseImages,
     chunks: chunks.map((c) => ({
       documentId: c.documentId,
       documentName: c.documentName,
