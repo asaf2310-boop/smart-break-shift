@@ -2,7 +2,8 @@
 
 import { getSupabaseAdmin } from "./supabaseAdmin.js";
 import { chunkDocument } from "./chunkingService.js";
-import { buildEmbeddingInput, embedTexts, getEmbeddingDimensions } from "./embeddingService.js";
+import { buildEmbeddingInput, embedTexts } from "./embeddingService.js";
+import { getEmbeddingDimensions } from "../ai/aiProvider.js";
 import { ingestDocumentImages, deleteDocumentImages } from "./imageIngestService.js";
 import { buildPdfDocumentContent, cleanPdfPageText } from "./pdfTextQuality.js";
 
