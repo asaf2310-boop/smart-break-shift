@@ -22,8 +22,21 @@ export function getGeminiWebSearchModel() {
   return "gemini-2.5-flash";
 }
 
+const DEPRECATED_GEMINI_EMBED_MODELS = new Set(["text-embedding-004", "embedding-001"]);
+
 export function getGeminiEmbedModel() {
-  return String(process.env.GEMINI_EMBED_MODEL || "text-embedding-004").trim();
+  const raw = String(process.env.GEMINI_EMBED_MODEL || "gemini-embedding-001").trim();
+  const name = raw.replace(/^models\//, "");
+  if (DEPRECATED_GEMINI_EMBED_MODELS.has(name)) {
+    return "gemini-embedding-001";
+  }
+  return name;
+}
+
+/** Keep pgvector column width (768) when using gemini-embedding-001 (default 3072). */
+export function getGeminiEmbedOutputDimensionality() {
+  const n = Number(process.env.GEMINI_EMBED_DIMENSIONS || 768);
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : 768;
 }
 
 export function isGeminiConfigured() {
@@ -225,6 +238,15 @@ export async function geminiGenerateMultimodal({ system, userParts, maxTokens = 
 /**
  * @param {string[]} texts
  */
+function extractEmbeddingVectors(embeddingsPayload) {
+  return (embeddingsPayload || []).map((row) => {
+    if (Array.isArray(row)) return row;
+    if (Array.isArray(row?.values)) return row.values;
+    if (Array.isArray(row?.embedding?.values)) return row.embedding.values;
+    return [];
+  });
+}
+
 export async function geminiEmbedTexts(texts) {
   const apiKey = getApiKey();
   if (!apiKey) {
@@ -237,8 +259,39 @@ export async function geminiEmbedTexts(texts) {
   }
 
   const model = getGeminiEmbedModel();
+  const outputDimensionality = getGeminiEmbedOutputDimensionality();
   const allEmbeddings = [];
   const BATCH = 20;
+
+  const ai = getSdkClient();
+  if (ai) {
+    try {
+      for (let offset = 0; offset < inputs.length; offset += BATCH) {
+        const batch = inputs.slice(offset, offset + BATCH);
+        const result = await ai.models.embedContent({
+          model,
+          contents: batch,
+          config: { outputDimensionality },
+        });
+        const vectors = extractEmbeddingVectors(result.embeddings);
+        if (vectors.length !== batch.length || vectors.some((v) => !v.length)) {
+          throw new Error("invalid_sdk_embedding_response");
+        }
+        allEmbeddings.push(...vectors);
+      }
+      return { embeddings: allEmbeddings, error: null, retryAfterSec: null };
+    } catch (err) {
+      const status = err?.status ?? err?.code ?? 500;
+      if (status === 429) {
+        return {
+          embeddings: null,
+          error: `ai_error:429:${String(err?.message || "").slice(0, 120)}`,
+          retryAfterSec: getRetryAfterSec({ headers: { get: () => err?.headers?.["retry-after"] } }),
+        };
+      }
+      console.warn("[geminiEmbedTexts] SDK failed, trying REST", String(err?.message || err).slice(0, 160));
+    }
+  }
 
   for (let offset = 0; offset < inputs.length; offset += BATCH) {
     const batch = inputs.slice(offset, offset + BATCH);
@@ -251,6 +304,7 @@ export async function geminiEmbedTexts(texts) {
           requests: batch.map((text) => ({
             model: modelPath(model),
             content: { parts: [{ text }] },
+            outputDimensionality,
           })),
         }),
       },
@@ -266,7 +320,7 @@ export async function geminiEmbedTexts(texts) {
     }
 
     const data = await res.json();
-    const batchEmbeddings = (data.embeddings || []).map((row) => row.values || []);
+    const batchEmbeddings = extractEmbeddingVectors(data.embeddings);
     allEmbeddings.push(...batchEmbeddings);
   }
 

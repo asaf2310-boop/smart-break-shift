@@ -11,7 +11,7 @@ import { logKnowledgeQuery } from "./loggingService.js";
 import { RETRIEVAL_TOP_K_DEFAULT } from "./vectorSearchService.js";
 import { isPgVectorConfigured } from "./supabaseAdmin.js";
 
-function buildRetrievalDebug(query, searchResult, hits, context) {
+function buildRetrievalDebug(query, searchResult, hits, context, extra = {}) {
   return {
     question: query,
     retrievalMethod: searchResult.retrievalMethod,
@@ -19,6 +19,9 @@ function buildRetrievalDebug(query, searchResult, hits, context) {
     minConfidence: MIN_CONFIDENCE,
     passesThreshold: searchResult.passesThreshold,
     searchTerms: searchResult.searchTerms || [],
+    embeddingAvailable: searchResult.embeddingAvailable !== false,
+    embeddingError: extra.embeddingError ?? null,
+    missReason: extra.missReason ?? null,
     imageHitCount: (searchResult.imageHits || []).length,
     hitCount: hits.length,
     retrievedChunks: hits.map((h) => ({
@@ -76,7 +79,8 @@ export async function generateAgentResponse(userQuery, options = {}) {
   }
 
   const { embedding, error: embedErr, retryAfterSec } = await embedQuery(query);
-  if (embedErr || !embedding) {
+  const embeddingFailed = Boolean(embedErr || !embedding);
+  if (embeddingFailed && embedErr?.includes("429")) {
     return {
       ...emptyAgentResult({ error: embedErr || "embedding_failed", retryAfterSec }),
       answer: null,
@@ -93,7 +97,17 @@ export async function generateAgentResponse(userQuery, options = {}) {
   const chunks = hits.map((h) => h.chunk);
   const contextBlocks = buildContextBlocks(chunks);
   const context = contextBlocks.join("\n\n");
-  const debug = buildRetrievalDebug(query, searchResult, hits, context);
+  let missReason = null;
+  if (!chunks.length) {
+    missReason = embeddingFailed ? "no_hits_embedding_failed" : "no_hits";
+  } else if (!searchResult.passesThreshold) {
+    missReason = "below_threshold";
+  }
+
+  const debug = buildRetrievalDebug(query, searchResult, hits, context, {
+    missReason,
+    embeddingError: embeddingFailed ? embedErr || "embedding_failed" : null,
+  });
 
   const chunkRefs = chunks.map((c) => ({
     documentId: c.documentId,
@@ -107,6 +121,8 @@ export async function generateAgentResponse(userQuery, options = {}) {
       console.warn("[generateAgentResponse] retrieval_miss", {
         query,
         hitCount: hits.length,
+        missReason,
+        embeddingFailed,
         passesThreshold: searchResult.passesThreshold,
         confidence,
         searchTerms: searchResult.searchTerms,

@@ -126,4 +126,4 @@ begin
   end if;
 end $$;
 
-comment on column knowledge_chunks.embedding is 'Gemini text-embedding-004 (768 dims)';
+comment on column knowledge_chunks.embedding is 'Gemini gemini-embedding-001 (768 dims via outputDimensionality)';

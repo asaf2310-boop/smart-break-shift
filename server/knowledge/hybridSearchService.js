@@ -27,13 +27,18 @@ const MAX_CHUNKS_PER_DOCUMENT = 2;
 export async function hybridSearch(query, queryEmbedding, options = {}) {
   const topK = options.topK ?? RETRIEVAL_TOP_K_DEFAULT;
   const tenantId = options.tenantId ?? null;
+  const hasEmbedding = Array.isArray(queryEmbedding) && queryEmbedding.length > 0;
 
   const searchTerms = extractSearchTerms(query);
 
   const [vectorResult, keywordHits, imageResult] = await Promise.all([
-    searchKnowledgeChunks(queryEmbedding, { topK: topK * 2, tenantId, forHybrid: true }),
+    hasEmbedding
+      ? searchKnowledgeChunks(queryEmbedding, { topK: topK * 2, tenantId, forHybrid: true })
+      : Promise.resolve({ hits: [], error: null }),
     searchKeywordChunks(query, { topK: topK * 2, tenantId, searchTerms }),
-    searchKnowledgeImages(queryEmbedding, { topK, tenantId }),
+    hasEmbedding
+      ? searchKnowledgeImages(queryEmbedding, { topK, tenantId })
+      : Promise.resolve({ hits: [], error: null }),
   ]);
 
   const merged = mergeAndRerank(
@@ -56,8 +61,9 @@ export async function hybridSearch(query, queryEmbedding, options = {}) {
     confidence,
     passesThreshold: passesHybridThreshold(merged, query),
     searchTerms,
-    retrievalMethod: "hybrid",
-    error: vectorResult.error || imageResult.error || null,
+    retrievalMethod: hasEmbedding ? "hybrid" : "keyword_only",
+    embeddingAvailable: hasEmbedding,
+    error: hasEmbedding ? vectorResult.error || imageResult.error || null : null,
   };
 }
 
