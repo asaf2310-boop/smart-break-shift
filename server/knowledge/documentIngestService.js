@@ -247,6 +247,9 @@ export async function listDocumentsWithChunkCounts() {
     if (/relation.*does not exist/i.test(error.message)) {
       return { documents: [], error: "knowledge_schema_not_migrated" };
     }
+    if (/fetch failed|ECONNREFUSED|ENOTFOUND|ETIMEDOUT/i.test(error.message)) {
+      return { documents: [], error: "supabase_connection_failed" };
+    }
     return { documents: [], error: error.message };
   }
 

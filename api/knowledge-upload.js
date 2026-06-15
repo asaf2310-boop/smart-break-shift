@@ -1,7 +1,7 @@
 /** Vercel serverless — document ingest / delete / list for pgvector RAG. */
 
 import { json, readJsonBody, handleOptions, isSameOrigin } from "../server/knowledge/httpUtils.js";
-import { isPgVectorConfigured } from "../server/knowledge/supabaseAdmin.js";
+import { isPgVectorConfigured, getSupabaseUrl, getSupabaseAdmin } from "../server/knowledge/supabaseAdmin.js";
 import {
   ingestDocument,
   deleteDocument,
@@ -37,7 +37,30 @@ export default async function handler(req, res) {
   if (req.method === "GET") {
     const url = new URL(req.url || "/", "http://localhost");
     if (url.searchParams.get("health") === "1") {
-      return json(res, 200, { ok: true, pgvector: true }, req);
+      let dbOk = false;
+      let dbError = null;
+      try {
+        const supabase = getSupabaseAdmin();
+        if (supabase) {
+          const { error } = await supabase.from("knowledge_documents").select("id").limit(1);
+          dbOk = !error;
+          dbError = error?.message || null;
+        }
+      } catch (err) {
+        dbError = err?.message || "db_probe_failed";
+      }
+      return json(
+        res,
+        200,
+        {
+          ok: isPgVectorConfigured() && dbOk,
+          pgvector: isPgVectorConfigured(),
+          db: dbOk,
+          dbError,
+          supabaseUrl: getSupabaseUrl() ? `${getSupabaseUrl().slice(0, 28)}…` : null,
+        },
+        req,
+      );
     }
 
     const documentId = String(url.searchParams.get("documentId") || "").trim();
@@ -58,6 +81,20 @@ export default async function handler(req, res) {
           totalChunks: 0,
           schemaWarning: error,
           message: "הרץ supabase/knowledge.sql ואז knowledge_pgvector.sql ב-Supabase",
+        },
+        req,
+      );
+    }
+    if (error === "supabase_connection_failed") {
+      return json(
+        res,
+        503,
+        {
+          error,
+          documents: [],
+          totalChunks: 0,
+          message:
+            "לא ניתן להתחבר ל-Supabase מהשרת. בדקו ב-Vercel: SUPABASE_URL (או VITE_SUPABASE_URL) ו-SUPABASE_SERVICE_ROLE_KEY — מפתח service_role, לא anon.",
         },
         req,
       );

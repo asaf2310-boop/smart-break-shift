@@ -3,7 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 let adminClient = null;
 
 export function getSupabaseUrl() {
-  return String(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "").trim();
+  const raw = String(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").trim();
+  return raw.replace(/\/+$/, "");
 }
 
 export function getSupabaseServiceKey() {
