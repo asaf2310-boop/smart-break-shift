@@ -16,6 +16,7 @@ import {
   resetKnowledgeToSeed,
   subscribeKnowledgeStore,
   hydrateKnowledgeStore,
+  findKnowledgeDocumentByFileName,
 } from "@/lib/knowledgeStore";
 import {
   getKnowledgeIndexStats,
@@ -37,6 +38,17 @@ import {
   listServerDocuments,
   probeServerRagHealth,
 } from "@/lib/knowledge/knowledgeClient";
+import { cleanPdfPageText, isPdfExtractedTextReadable } from "@/lib/knowledge/pdfTextQuality";
+
+function documentPreviewText(doc) {
+  const raw = String(doc.content || "").trim();
+  const cleaned = cleanPdfPageText(raw);
+  if (cleaned) return cleaned;
+  if (raw && !isPdfExtractedTextReadable(raw)) {
+    return "טקסט לא נקרא מהקובץ — לחצו «עיבוד מחדש» או העלו מחדש.";
+  }
+  return raw;
+}
 
 const ACCEPT_UPLOAD =
   ".txt,.md,.html,.htm,.pdf,.docx,.png,.jpg,.jpeg,.webp,text/plain,text/markdown,text/html,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,image/webp";
@@ -61,6 +73,7 @@ export default function KnowledgeAdmin() {
   const [serverRag, setServerRag] = useState(false);
   const [serverChunkCounts, setServerChunkCounts] = useState({});
   const [totalServerChunks, setTotalServerChunks] = useState(0);
+  const [storeReady, setStoreReady] = useState(false);
 
   const refreshServerStats = useCallback(async () => {
     if (!shouldUseServerRag()) return;
@@ -86,7 +99,9 @@ export default function KnowledgeAdmin() {
 
   useEffect(() => {
     setServerRag(shouldUseServerRag());
-    hydrateKnowledgeStore().then(refresh);
+    hydrateKnowledgeStore()
+      .then(refresh)
+      .finally(() => setStoreReady(true));
     if (shouldUseServerRag()) {
       probeServerRagHealth().then((h) => setServerRag(h.pgvector));
     }
@@ -315,15 +330,18 @@ export default function KnowledgeAdmin() {
         needsServerOcr: needsServerOcr === true,
       });
       const thumbCount = pages?.filter((p) => p?.thumbnail).length || 0;
+      const existing = findKnowledgeDocumentByFileName(file.name);
       setDialog({
-        mode: "create",
+        mode: existing ? "edit" : "create",
+        id: existing?.id,
         sourceType: "upload",
         fileName: file.name,
       });
       toast({
-        title: "הקובץ נקרא בהצלחה",
-        description:
-          thumbCount > 0
+        title: existing ? "קובץ קיים — מעדכן" : "הקובץ נקרא בהצלחה",
+        description: existing
+          ? `«${file.name}» כבר ברשימה — השמירה תחליף את הגרסה הקודמת.`
+          : thumbCount > 0
             ? needsServerOcr
               ? `נשמרו ${thumbCount} עמודים כתמונות. לאחר שמירה יופעל OCR בשרת לחילוץ טקסט עברי.`
               : `נשמרו ${thumbCount} עמודים כתמונות. בדקו את התצוגה ולחצו שמירה.`
@@ -413,10 +431,19 @@ export default function KnowledgeAdmin() {
       {documents.length === 0 ? (
         <div className="m3-surface-container p-8 text-center">
           <BookOpen className="w-10 h-10 mx-auto text-on-surface-variant mb-3" />
-          <p className="m3-label-large">אין מסמכים עדיין</p>
-          <p className="m3-label-medium mt-1">
-            הוסף טקסט או העלה קובץ txt, md, html, pdf, docx, png, jpg או webp כדי להתחיל
-          </p>
+          {!storeReady ? (
+            <>
+              <p className="m3-label-large">טוען מסמכים…</p>
+              <p className="m3-label-medium mt-1">מסנכרן מהדפדפן ומהשרת</p>
+            </>
+          ) : (
+            <>
+              <p className="m3-label-large">אין מסמכים עדיין</p>
+              <p className="m3-label-medium mt-1">
+                הוסף טקסט או העלה קובץ txt, md, html, pdf, docx, png, jpg או webp כדי להתחיל
+              </p>
+            </>
+          )}
         </div>
       ) : (
         <ul className="space-y-3">
@@ -453,7 +480,7 @@ export default function KnowledgeAdmin() {
                       PDF · {pdfPageCount} עמודים (תצוגה ויזואלית)
                     </p>
                   ) : (
-                    <p className="m3-label-medium mt-1 line-clamp-2">{doc.content}</p>
+                    <p className="m3-label-medium mt-1 line-clamp-2">{documentPreviewText(doc)}</p>
                   )}
                   <p className="m3-label-medium mt-1 opacity-70">
                     עודכן {new Date(doc.updatedAt).toLocaleString("he-IL")}

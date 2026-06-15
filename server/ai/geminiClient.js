@@ -13,6 +13,15 @@ export function getGeminiChatModel() {
   return String(process.env.GEMINI_CHAT_MODEL || "gemini-2.0-flash").trim();
 }
 
+/** Model for Google Search grounding — prefers 2.5 flash when unset. */
+export function getGeminiWebSearchModel() {
+  const explicit = String(process.env.GEMINI_WEB_SEARCH_MODEL || "").trim();
+  if (explicit) return explicit;
+  const chat = getGeminiChatModel();
+  if (/gemini-2\.5|gemini-3/i.test(chat)) return chat;
+  return "gemini-2.5-flash";
+}
+
 export function getGeminiEmbedModel() {
   return String(process.env.GEMINI_EMBED_MODEL || "text-embedding-004").trim();
 }
@@ -264,10 +273,158 @@ export async function geminiEmbedTexts(texts) {
   return { embeddings: allEmbeddings, error: null, retryAfterSec: null };
 }
 
+/** Parse grounding chunks into { title, url } for the agent UI. */
+export function extractWebSourcesFromGroundingMetadata(groundingMetadata) {
+  const chunks = groundingMetadata?.groundingChunks || [];
+  const seen = new Set();
+  const sources = [];
+
+  for (const chunk of chunks) {
+    const web = chunk?.web;
+    if (!web?.uri) continue;
+    const url = String(web.uri).trim();
+    const key = url.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    sources.push({
+      title: String(web.title || web.domain || url).trim() || url,
+      url,
+    });
+  }
+
+  return sources;
+}
+
 /**
- * @param {string} imageDataUrl
- * @param {{ fileName?: string, pageNumber?: number }} meta
+ * Gemini answer with Google Search grounding (live web).
+ * @param {{ systemInstruction: string, userQuery: string, model?: string, maxOutputTokens?: number, temperature?: number }}
  */
+export async function geminiGenerateWebSearchAnswer({
+  systemInstruction,
+  userQuery,
+  model,
+  maxOutputTokens = 720,
+  temperature = 0.2,
+}) {
+  const query = String(userQuery || "").trim();
+  if (!query) {
+    return {
+      text: null,
+      webSources: [],
+      groundingMetadata: null,
+      error: "query_required",
+      retryAfterSec: null,
+      rateLimited: false,
+    };
+  }
+
+  const ai = getSdkClient();
+  const searchModel = model || getGeminiWebSearchModel();
+
+  if (ai) {
+    try {
+      const response = await ai.models.generateContent({
+        model: searchModel,
+        contents: [{ role: "user", parts: [{ text: query }] }],
+        config: {
+          systemInstruction,
+          tools: [{ googleSearch: {} }],
+          temperature,
+          maxOutputTokens,
+        },
+      });
+
+      const text = String(response.text || "").trim();
+      const groundingMetadata =
+        response.candidates?.[0]?.groundingMetadata ?? response.groundingMetadata ?? null;
+      const webSources = extractWebSourcesFromGroundingMetadata(groundingMetadata);
+
+      if (!text) {
+        return {
+          text: null,
+          webSources,
+          groundingMetadata,
+          error: "empty_response",
+          retryAfterSec: null,
+          rateLimited: false,
+        };
+      }
+
+      return { text, webSources, groundingMetadata, error: null, retryAfterSec: null, rateLimited: false };
+    } catch (err) {
+      const status = err?.status ?? err?.code ?? 500;
+      const is429 = status === 429;
+      return {
+        text: null,
+        webSources: [],
+        groundingMetadata: null,
+        error: `ai_error:${status}:${String(err?.message || "").slice(0, 120)}`,
+        retryAfterSec: is429 ? getRetryAfterSec({ headers: { get: () => err?.headers?.["retry-after"] } }) : null,
+        rateLimited: is429,
+      };
+    }
+  }
+
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    return {
+      text: null,
+      webSources: [],
+      groundingMetadata: null,
+      error: "ai_not_configured",
+      retryAfterSec: null,
+      rateLimited: false,
+    };
+  }
+
+  const res = await fetchOpenAiWithRetry(
+    geminiUrl(searchModel, "generateContent"),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemInstruction }] },
+        contents: [{ role: "user", parts: [{ text: query }] }],
+        tools: [{ google_search: {} }],
+        generationConfig: {
+          temperature,
+          maxOutputTokens,
+        },
+      }),
+    },
+  );
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    return {
+      text: null,
+      webSources: [],
+      groundingMetadata: null,
+      error: parseGeminiError(res.status, errText),
+      retryAfterSec: res.status === 429 ? getRetryAfterSec(res) : null,
+      rateLimited: res.status === 429,
+    };
+  }
+
+  const data = await res.json();
+  const text =
+    data.candidates?.[0]?.content?.parts
+      ?.map((p) => p.text || "")
+      .join("")
+      .trim() || null;
+  const groundingMetadata = data.candidates?.[0]?.groundingMetadata ?? null;
+  const webSources = extractWebSourcesFromGroundingMetadata(groundingMetadata);
+
+  return {
+    text,
+    webSources,
+    groundingMetadata,
+    error: text ? null : "empty_response",
+    retryAfterSec: null,
+    rateLimited: false,
+  };
+}
+
 export async function geminiOcrImage(imageDataUrl, meta = {}) {
   const apiKey = getApiKey();
   if (!apiKey) {

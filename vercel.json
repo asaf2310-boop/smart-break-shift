@@ -4,7 +4,8 @@
   "framework": "vite",
   "functions": {
     "api/knowledge-upload.js": { "maxDuration": 60 },
-    "api/knowledge-chat.js": { "maxDuration": 60 }
+    "api/knowledge-chat.js": { "maxDuration": 60 },
+    "api/ask-web.js": { "maxDuration": 60 }
   },
   "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }]
 }

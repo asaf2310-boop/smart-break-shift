@@ -196,6 +196,69 @@ export async function submitKnowledgeFeedback({ question, answer, helpful, confi
 }
 
 /**
+ * Web search fallback — Gemini + Google Search grounding (no local RAG).
+ * @param {string} query
+ * @param {{ onPhase?: Function }} [options]
+ */
+export async function askKnowledgeWebSearch(query, { onPhase } = {}) {
+  const trimmed = String(query || "").replace(/\s+/g, " ").trim();
+  if (!trimmed) {
+    return {
+      answer: "נא להקליד שאלה.",
+      citations: [],
+      webSources: [],
+      chunks: [],
+      images: [],
+      confidence: 0,
+      mode: "empty",
+      grounded: false,
+      debug: null,
+    };
+  }
+
+  onPhase?.("web_search");
+
+  let res;
+  try {
+    res = await fetchWithTimeout("/api/knowledge-chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: trimmed,
+        useWebSearch: true,
+      }),
+    });
+  } catch {
+    throw new Error("network");
+  }
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    const err = new Error(data.error || `http_${res.status}`);
+    err.retryAfterSec = data.retryAfterSec;
+    err.rateLimited = data.rateLimited || res.status === 429;
+    throw err;
+  }
+
+  onPhase?.("gpt");
+
+  return {
+    answer: data.hebrewAnswerMarkdown || data.answer || "לא התקבלה תשובה.",
+    citations: [],
+    webSources: data.webSources || [],
+    sources: data.sources || [],
+    chunks: [],
+    images: [],
+    confidence: null,
+    grounded: false,
+    mode: data.mode || "web_search",
+    debug: data.debug || null,
+    openAiFailed: false,
+  };
+}
+
+/**
  * Full server-side RAG — query only, no document bodies.
  * @param {string} query
  * @param {{ onPhase?: Function, tenantId?: string | null }} [options]

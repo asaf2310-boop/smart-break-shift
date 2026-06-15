@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import ReactMarkdown from "react-markdown";
-import { BookOpen, ChevronDown, ChevronUp, Copy, ExternalLink, Loader2, RefreshCw, Send, Sparkles, ThumbsDown } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronUp, Copy, ExternalLink, Globe, Loader2, RefreshCw, Send, Sparkles, ThumbsDown } from "lucide-react";
 import {
   askKnowledgeBase,
   formatAssistantDisplayMarkdown,
@@ -12,7 +12,7 @@ import {
   rebuildKnowledgeChunkIndex,
   resetOpenAiProbeCache,
 } from "@/lib/knowledgeAi";
-import { shouldUseServerRag, probeServerRagHealth, listServerDocuments, submitKnowledgeFeedback } from "@/lib/knowledge/knowledgeClient";
+import { shouldUseServerRag, probeServerRagHealth, listServerDocuments, submitKnowledgeFeedback, askKnowledgeWebSearch } from "@/lib/knowledge/knowledgeClient";
 import { demoModeEnabled } from "@/api/demoClient";
 import {
   getKnowledgeDocumentsFingerprint,
@@ -149,8 +149,17 @@ function MessageBubble({ message, showDebug, onRetry, onFeedback, feedbackSendin
       >
         {!isUser && message.mode !== "system" && message.mode !== "error" && (
           <div className="knowledge-chat-assistant-label mb-2 flex items-center gap-1.5 text-[11px] font-medium text-primary/90">
-            <Sparkles className="h-3.5 w-3.5 shrink-0" />
-            <span>תשובה מהידע</span>
+            {message.mode === "web_search" ? (
+              <>
+                <Globe className="h-3.5 w-3.5 shrink-0" />
+                <span>תשובה מחיפוש ברשת</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-3.5 w-3.5 shrink-0" />
+                <span>תשובה מהידע</span>
+              </>
+            )}
           </div>
         )}
         {isUser ? (
@@ -175,6 +184,30 @@ function MessageBubble({ message, showDebug, onRetry, onFeedback, feedbackSendin
                 </figcaption>
               </figure>
             ))}
+          </div>
+        )}
+        {!isUser && message.webSources?.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-outline/20">
+            <p className="m3-label-medium mb-1.5 flex items-center gap-1">
+              <Globe className="w-3.5 h-3.5" />
+              מקורות מהרשת
+            </p>
+            <ul className="space-y-1.5">
+              {message.webSources.map((s) => (
+                <li key={s.url} className="text-xs">
+                  <a
+                    href={s.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    dir="ltr"
+                    className="inline-flex items-center gap-1 text-primary hover:underline"
+                  >
+                    <ExternalLink className="w-3 h-3 shrink-0" />
+                    <span className="font-semibold">{s.title || s.url}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
         {!isUser && message.citations?.length > 0 && (
@@ -388,6 +421,62 @@ export default function KnowledgeChat({ compact = false }) {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
+  const submitWebSearch = async (text) => {
+    const trimmed = text.trim();
+    if (!trimmed || loading) return;
+
+    const userMsg = { id: `u_${Date.now()}`, role: "user", content: trimmed, webSearch: true };
+    setMessages((prev) => [...prev, userMsg]);
+    setInput("");
+    setLoading(true);
+    setLoadingHint("");
+
+    try {
+      const result = await askKnowledgeWebSearch(trimmed, {
+        onPhase: (phase) => {
+          if (phase === "web_search") setLoadingHint("מחפש ברשת…");
+          else if (phase === "gpt") setLoadingHint("מכין תשובה…");
+        },
+      });
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `a_${Date.now()}`,
+          role: "assistant",
+          content: result.answer,
+          citations: [],
+          webSources: result.webSources || [],
+          sources: result.sources || [],
+          images: [],
+          grounded: false,
+          mode: "web_search",
+          userQuestion: trimmed,
+          debug: showDebug ? result.debug : undefined,
+        },
+      ]);
+    } catch (err) {
+      toast({
+        title: err?.rateLimited ? "מגבלת קצב AI" : "חיפוש ברשת נכשל",
+        description: err?.message === "network" ? "בעיית רשת — נסו שוב." : err?.message || "שגיאה לא ידועה",
+        variant: "destructive",
+      });
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `err_${Date.now()}`,
+          role: "assistant",
+          content: "חיפוש ברשת נכשל. נסו שוב או חפשו במאגר הידע.",
+          citations: [],
+          mode: "error",
+          retryQuery: trimmed,
+        },
+      ]);
+    } finally {
+      setLoading(false);
+      setLoadingHint("");
+    }
+  };
+
   const submitQuery = async (text, { isRetry = false } = {}) => {
     const trimmed = text.trim();
     if (!trimmed || loading) return;
@@ -589,6 +678,17 @@ export default function KnowledgeChat({ compact = false }) {
           disabled={loading}
           dir="auto"
         />
+        <button
+          type="button"
+          onClick={() => submitWebSearch(input)}
+          disabled={loading || !input.trim()}
+          className="m3-btn-outlined shrink-0 px-3 sm:px-4 gap-1.5 inline-flex items-center disabled:opacity-50"
+          title="חיפוש ברשת — Google Search"
+          aria-label="חיפוש ברשת"
+        >
+          <Globe className="w-5 h-5" />
+          <span className="hidden sm:inline text-sm">חיפוש ברשת</span>
+        </button>
         <button
           type="submit"
           disabled={loading || !input.trim()}

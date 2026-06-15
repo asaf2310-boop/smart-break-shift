@@ -6,6 +6,7 @@ import { isEmbeddingConfigured } from "../server/knowledge/embeddingService.js";
 import { MIN_CONFIDENCE } from "../server/knowledge/hybridSearchService.js";
 import { buildKnowledgeSources } from "../server/knowledge/geminiChatService.js";
 import { generateAgentResponse } from "../server/knowledge/generateAgentResponse.js";
+import { generateWebSearchAnswer } from "../server/knowledge/webSearchService.js";
 import {
   getAiProvider,
   isAiConfigured,
@@ -14,6 +15,7 @@ import {
   getEmbeddingDimensions,
   generateText,
 } from "../server/ai/aiProvider.js";
+import { isGeminiConfigured } from "../server/ai/geminiClient.js";
 import {
   KNOWLEDGE_SYSTEM_PROMPT,
   KNOWLEDGE_ANSWER_FORMAT_HINT,
@@ -24,6 +26,7 @@ function buildAgentResponse({
   answer,
   citations = [],
   sources = null,
+  webSources = null,
   images = [],
   chunks = [],
   confidence = null,
@@ -45,14 +48,18 @@ function buildAgentResponse({
 
   const normalizedSources =
     sources ||
-    buildKnowledgeSources(citations, normalizedImages);
+    (webSources?.length
+      ? webSources.map((s) => ({ type: "web", title: s.title, url: s.url }))
+      : buildKnowledgeSources(citations, normalizedImages));
 
   return {
     answer,
+    hebrewAnswerMarkdown: answer,
     grounded,
     confidence,
     mode,
     sources: normalizedSources,
+    webSources: webSources || [],
     citations,
     images: normalizedImages,
     chunks,
@@ -132,6 +139,69 @@ async function handleLegacyChat(req, res, body) {
       confidence: null,
       mode: getAiProvider(),
       grounded: true,
+    }),
+    req,
+  );
+}
+
+async function handleWebSearch(req, res, body) {
+  const query = String(body.query || "").trim();
+
+  if (!query) {
+    return json(res, 400, { error: "query_required" }, req);
+  }
+
+  if (!isGeminiConfigured()) {
+    return json(
+      res,
+      503,
+      {
+        error: "gemini_required_for_web_search",
+        message: "חיפוש ברשת דורש GEMINI_API_KEY ומודל Gemini שתומך ב-Google Search.",
+      },
+      req,
+    );
+  }
+
+  const result = await generateWebSearchAnswer(query);
+
+  if (result.error === "query_required") {
+    return json(res, 400, { error: "query_required" }, req);
+  }
+
+  if (result.error === "ai_not_configured") {
+    return json(res, 503, { error: "ai_not_configured" }, req);
+  }
+
+  if (result.error) {
+    const is429 = result.rateLimited || String(result.error).includes("429");
+    return json(
+      res,
+      is429 ? 429 : 503,
+      {
+        error: result.error,
+        retryAfterSec: result.retryAfterSec,
+        rateLimited: result.rateLimited,
+      },
+      req,
+    );
+  }
+
+  return json(
+    res,
+    200,
+    buildAgentResponse({
+      answer: result.hebrewAnswerMarkdown,
+      citations: [],
+      webSources: result.webSources,
+      images: [],
+      chunks: [],
+      confidence: null,
+      mode: "web_search",
+      grounded: false,
+      debug: result.webSearchQueries?.length
+        ? { webSearchQueries: result.webSearchQueries }
+        : null,
     }),
     req,
   );
@@ -258,10 +328,15 @@ export default async function handler(req, res) {
 
   const query = String(body.query || "").trim();
   const context = String(body.context || "").trim();
-  const ragMode = body.rag === true || body.mode === "rag" || (!context && query);
+  const useWebSearch = body.useWebSearch === true || body.webSearch === true;
+  const ragMode = !useWebSearch && (body.rag === true || body.mode === "rag" || (!context && query));
 
   if (rejectsFullDocumentPayload(body)) {
     return json(res, 400, { error: "full_documents_not_allowed" }, req);
+  }
+
+  if (useWebSearch && query) {
+    return handleWebSearch(req, res, body);
   }
 
   if (ragMode && query && !context) {

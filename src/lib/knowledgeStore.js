@@ -154,7 +154,37 @@ function mergeKnowledgeDocuments(localDocs, cloudDocs) {
     merged.set(local.id, local);
   }
 
-  return [...merged.values()];
+  return dedupeDocumentsByFileName([...merged.values()]);
+}
+
+function normalizeFileNameKey(fileName) {
+  return String(fileName || "").trim().toLowerCase();
+}
+
+/** Keep newest upload per file name — prevents duplicate rows from retries. */
+export function dedupeDocumentsByFileName(documents) {
+  const withoutFile = [];
+  const byFile = new Map();
+
+  for (const doc of documents || []) {
+    const key = normalizeFileNameKey(doc.fileName);
+    if (!key) {
+      withoutFile.push(doc);
+      continue;
+    }
+    const existing = byFile.get(key);
+    if (!existing || new Date(doc.updatedAt) >= new Date(existing.updatedAt)) {
+      byFile.set(key, doc);
+    }
+  }
+
+  return [...withoutFile, ...byFile.values()];
+}
+
+export function findKnowledgeDocumentByFileName(fileName) {
+  const key = normalizeFileNameKey(fileName);
+  if (!key) return null;
+  return listKnowledgeDocuments().find((d) => normalizeFileNameKey(d.fileName) === key) || null;
 }
 
 function writeRaw(store) {
@@ -328,7 +358,17 @@ export function subscribeKnowledgeStore(callback) {
 
 export function listKnowledgeDocuments() {
   const { documents } = readRaw();
-  return [...documents].sort(
+  const deduped = dedupeDocumentsByFileName(documents);
+  if (deduped.length !== documents.length && typeof window !== "undefined") {
+    const keptIds = new Set(deduped.map((d) => d.id));
+    for (const doc of documents) {
+      if (!keptIds.has(doc.id) && !demoModeEnabled && isSupabaseBackend() && dataClient.entities.KnowledgeDocument) {
+        dataClient.entities.KnowledgeDocument.delete(doc.id).catch(() => {});
+      }
+    }
+    writeRaw({ version: 1, documents: deduped });
+  }
+  return [...deduped].sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
   );
 }
