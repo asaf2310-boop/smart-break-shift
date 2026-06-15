@@ -1,6 +1,6 @@
 /** Server mirror — keep in sync with src/lib/knowledge/assistantBidi.js */
 
-import { sanitizeHebrewText } from "./sanitizeHebrewText.js";
+import { sanitizeHebrewText, advancedHebrewSanitizer } from "./sanitizeHebrewText.js";
 
 export const KNOWLEDGE_BIDI_RULES_HE = `
 כללי BiDi עברית–אנגלית (מחייבים):
@@ -179,7 +179,9 @@ export function formatAssistantBidiText(text) {
 }
 
 export function sanitizeAssistantAnswer(text) {
-  return cleanHebrewMarkdownArtifacts(formatAssistantBidiText(sanitizeHebrewText(text)));
+  return cleanHebrewMarkdownArtifacts(
+    formatAssistantBidiText(sanitizeHebrewText(advancedHebrewSanitizer(text))),
+  );
 }
 
 export { sanitizeHebrewText };

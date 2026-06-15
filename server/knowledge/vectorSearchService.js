@@ -4,7 +4,11 @@ import { getSupabaseAdmin } from "./supabaseAdmin.js";
 
 export const RETRIEVAL_TOP_K_MIN = 3;
 export const RETRIEVAL_TOP_K_MAX = 6;
-export const RETRIEVAL_TOP_K_DEFAULT = 5;
+/** Final chunks injected into Gemini after rerank. */
+export const RETRIEVAL_RERANK_TOP_N = 3;
+/** Broad candidate pool before Cohere rerank. */
+export const RETRIEVAL_RERANK_CANDIDATES = 15;
+export const RETRIEVAL_TOP_K_DEFAULT = RETRIEVAL_RERANK_TOP_N;
 export const MIN_EMBEDDING_SCORE = 0.58;
 /** Hybrid merge applies its own threshold — keep more vector candidates. */
 export const MIN_EMBEDDING_SCORE_HYBRID = 0.38;
@@ -21,11 +25,11 @@ export async function searchKnowledgeChunks(queryEmbedding, options = {}) {
     return { hits: [], error: "supabase_not_configured" };
   }
 
-  const topK = Math.min(
-    RETRIEVAL_TOP_K_MAX,
-    Math.max(RETRIEVAL_TOP_K_MIN, options.topK ?? RETRIEVAL_TOP_K_DEFAULT),
-  );
   const forHybrid = options.forHybrid === true;
+  const requested = options.topK ?? RETRIEVAL_TOP_K_DEFAULT;
+  const topK = forHybrid
+    ? Math.min(requested, RETRIEVAL_RERANK_CANDIDATES)
+    : Math.min(RETRIEVAL_TOP_K_MAX, Math.max(RETRIEVAL_TOP_K_MIN, requested));
   const minScore = forHybrid ? MIN_EMBEDDING_SCORE_HYBRID : MIN_EMBEDDING_SCORE;
   const threshold = options.threshold ?? minScore - 0.06;
 

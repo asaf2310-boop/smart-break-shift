@@ -4,6 +4,7 @@ import { ArrowRight, BookOpen, Loader2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { fetchKnowledgeDocumentView, shouldUseServerRag } from "@/lib/knowledge/knowledgeClient";
 import { getKnowledgeDocument } from "@/lib/knowledgeStore";
+import { formatAssistantDisplayMarkdown } from "@/lib/knowledge/assistantBidi";
 import { m3PageClass } from "@/lib/hypPage";
 
 function normalizePages(pages = []) {
@@ -145,8 +146,8 @@ export default function KnowledgeDocumentViewPage() {
             {hasText && (
               <section className="m3-card p-4 sm:p-6">
                 <h2 className="m3-title-medium mb-4">תוכן המסמך</h2>
-                <div className="knowledge-markdown agent-response-container prose prose-sm max-w-none">
-                  <ReactMarkdown>{doc.content}</ReactMarkdown>
+                <div className="chat-response-markdown knowledge-markdown agent-response-container prose prose-sm max-w-none">
+                  <ReactMarkdown>{formatAssistantDisplayMarkdown(doc.content)}</ReactMarkdown>
                 </div>
               </section>
             )}

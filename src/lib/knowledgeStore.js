@@ -451,7 +451,7 @@ export function resetKnowledgeToSeed() {
 }
 
 /** Bump when chunking / ingest logic changes so indexes rebuild automatically. */
-const KNOWLEDGE_INDEX_VERSION = "rag-v4";
+const KNOWLEDGE_INDEX_VERSION = "rag-v6";
 
 export function getKnowledgeDocumentsFingerprint(documents = listKnowledgeDocuments()) {
   const pageThumbCount = (d) =>

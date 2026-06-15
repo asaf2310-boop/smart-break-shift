@@ -9,7 +9,7 @@ import {
   GEMINI_WEB_SEARCH_ENGLISH_SYSTEM_PROMPT,
   GEMINI_WEB_SEARCH_HEBREW_LOCALIZE_SYSTEM_PROMPT,
 } from "./geminiKnowledgePrompt.js";
-import { sanitizeAssistantAnswer, sanitizeHebrewText } from "./assistantBidi.js";
+import { sanitizeAssistantAnswer } from "./assistantBidi.js";
 import { formatGeminiUserError, isGeminiHighDemandError, isGeminiRateLimitError } from "./geminiErrorMessages.js";
 
 function buildWebSearchError(result, partial = {}) {
@@ -83,9 +83,7 @@ export async function generateWebSearchAnswer(query) {
     );
   }
 
-  const hebrewAnswerMarkdown = sanitizeAssistantAnswer(
-    sanitizeHebrewText(hebrewResult.text || ""),
-  );
+  const hebrewAnswerMarkdown = sanitizeAssistantAnswer(hebrewResult.text || "");
 
   return {
     hebrewAnswerMarkdown: hebrewAnswerMarkdown || "לא התקבלה תשובה מחיפוש ברשת. נסו שוב.",

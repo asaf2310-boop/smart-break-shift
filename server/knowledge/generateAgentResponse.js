@@ -54,6 +54,10 @@ function buildRetrievalDebug(query, searchResult, hits, context, extra = {}) {
     embeddingError: extra.embeddingError ?? null,
     missReason: extra.missReason ?? null,
     imageHitCount: (searchResult.imageHits || []).length,
+    candidateCount: searchResult.candidateCount ?? hits.length,
+    rerankApplied: searchResult.rerankApplied ?? false,
+    rerankModel: searchResult.rerankModel ?? null,
+    rerankError: searchResult.rerankError ?? null,
     hitCount: hits.length,
     retrievedChunks: hits.map((h) => ({
       documentName: h.chunk.documentName,
@@ -61,6 +65,7 @@ function buildRetrievalDebug(query, searchResult, hits, context, extra = {}) {
       pageNumber: h.chunk.pageNumber,
       sectionTitle: h.chunk.sectionTitle,
       score: Number(h.score.toFixed(4)),
+      rerankScore: h.rerankScore != null ? Number(h.rerankScore.toFixed(4)) : null,
       vectorScore: h.vectorScore != null ? Number(h.vectorScore.toFixed(4)) : null,
       keywordScore: h.keywordScore != null ? Number(h.keywordScore.toFixed(4)) : null,
       snippet: truncateSnippet(h.chunk.text, 160),

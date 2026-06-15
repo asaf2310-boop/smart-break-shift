@@ -4,7 +4,9 @@
  */
 export {
   chunkDocument,
+  splitIntoSemanticBlocks,
   sanitizeChunkText,
   normalizeHebrewText,
   sanitizeMarkdownIngestText,
 } from "@/lib/knowledgeAi";
+export { normalizeExtractedDocumentText } from "@/lib/knowledge/textExtractionNormalize";

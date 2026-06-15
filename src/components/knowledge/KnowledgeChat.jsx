@@ -42,7 +42,7 @@ const MARKDOWN_COMPONENTS = {
   ul: ({ children }) => <ul className="knowledge-md-ul">{children}</ul>,
   ol: ({ children }) => <ol className="knowledge-md-ol">{children}</ol>,
   li: ({ children }) => <li className="knowledge-md-li">{children}</li>,
-  code: ({ children }) => <code className="knowledge-md-code">{children}</code>,
+  code: ({ children }) => <code className="knowledge-md-code en-terms">{children}</code>,
   a: ({ href, children }) => (
     <a
       href={href}
@@ -60,7 +60,7 @@ function AssistantMarkdown({ content }) {
   const formatted = formatAssistantDisplayMarkdown(content);
 
   return (
-    <div className="agent-response-container knowledge-markdown">
+    <div className="chat-response-markdown agent-response-container knowledge-markdown">
       <ReactMarkdown components={MARKDOWN_COMPONENTS}>{formatted}</ReactMarkdown>
     </div>
   );

@@ -1,6 +1,6 @@
 /** Strict Hebrew–English BiDi rules for knowledge assistant answers (display + prompts). */
 
-import { sanitizeHebrewText } from "./sanitizeHebrewText.js";
+import { sanitizeHebrewText, advancedHebrewSanitizer } from "./sanitizeHebrewText.js";
 
 export const KNOWLEDGE_BIDI_RULES_HE = `
 כללי BiDi עברית–אנגלית (מחייבים):
@@ -175,7 +175,9 @@ function formatLineForBidi(line) {
  * Preserves markdown structure (lists, bold, code).
  */
 export function formatAssistantBidiText(text) {
-  let s = sanitizeHebrewText(String(text || "").replace(/\r\n/g, "\n").trim());
+  let s = sanitizeHebrewText(
+    advancedHebrewSanitizer(String(text || "").replace(/\r\n/g, "\n").trim()),
+  );
   if (!s) return "";
 
   const lines = s.split("\n");

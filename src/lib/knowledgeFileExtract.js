@@ -1,11 +1,12 @@
 import mammoth from "mammoth";
 import * as pdfjsLib from "pdfjs-dist";
 import {
-  normalizeHebrewText,
   sanitizeChunkText,
   sanitizeMarkdownIngestText,
 } from "@/lib/knowledgeAi";
 import { cleanPdfPageText, isPdfExtractedTextReadable } from "@/lib/knowledge/pdfTextQuality";
+import { normalizeExtractedDocumentText } from "@/lib/knowledge/textExtractionNormalize";
+import { appendTextSegment, joinTextParagraphs } from "@/lib/knowledge/documentTextAssembly";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
@@ -102,13 +103,7 @@ function getExtension(fileName) {
 }
 
 export function sanitizeKnowledgeText(raw) {
-  return String(raw || "")
-    .replace(/\u0000/g, "")
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "")
-    .replace(/\r\n/g, "\n")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  return normalizeExtractedDocumentText(raw);
 }
 
 async function readImageAsDataUrl(file) {
@@ -141,77 +136,38 @@ function titleFromFileName(fileName) {
     .trim() || "מסמך מועלה";
 }
 
-/** Group PDF text items into lines, sort RTL, and insert word spaces from glyph gaps. */
+/** Group PDF text items in reading order — always separate runs/lines with space or \\n. */
 function pdfItemsToText(items) {
   if (!items?.length) return "";
 
-  const lineMap = new Map();
+  let text = "";
+  let lastY = null;
 
   for (const item of items) {
     if (!("str" in item) || !item.str) continue;
+
+    const str = String(item.str);
     const transform = item.transform || [1, 0, 0, 1, 0, 0];
-    const x = transform[4];
     const y = transform[5];
     const fontSize = Math.max(Math.hypot(transform[0], transform[1]), Math.abs(transform[3]), 8);
-    const yKey = Math.round(y / Math.max(fontSize * 0.85, 4));
-    const itemWidth = item.width ?? Math.max(item.str.length * fontSize * 0.45, fontSize * 0.35);
+    const lineTolerance = Math.max(fontSize * 0.55, 4);
+    const sameLine = lastY !== null && Math.abs(y - lastY) <= lineTolerance;
+    const separator = !text.length ? null : sameLine ? " " : "\n";
 
-    if (!lineMap.has(yKey)) lineMap.set(yKey, []);
-    lineMap.get(yKey).push({
-      x,
-      str: item.str,
-      width: itemWidth,
-      endX: x + itemWidth,
-      fontSize,
-      hasEOL: Boolean(item.hasEOL),
-    });
-  }
-
-  const lines = [...lineMap.keys()].sort((a, b) => b - a);
-  const parts = [];
-
-  for (const yKey of lines) {
-    const row = lineMap.get(yKey).sort((a, b) => b.x - a.x);
-    let lineText = "";
-    let prevStartX = null;
-    let prevFontSize = 12;
-
-    for (const { x, str, endX, fontSize, hasEOL } of row) {
-      if (prevStartX !== null) {
-        const gap = prevStartX - endX;
-        const threshold = Math.max(1.2, Math.min(prevFontSize, fontSize) * 0.2);
-        if (gap > threshold) {
-          lineText += " ";
-        }
-      }
-      lineText += str;
-      if (hasEOL && !lineText.endsWith("\n")) {
-        lineText += "\n";
-      }
-      prevStartX = x;
-      prevFontSize = fontSize;
+    if (separator) {
+      text = appendTextSegment(text, str, separator);
+    } else {
+      text = str;
     }
 
-    const trimmed = lineText.replace(/\n+$/, "").trim();
-    if (trimmed) parts.push(trimmed);
+    if (item.hasEOL && !text.endsWith("\n")) {
+      text += "\n";
+    }
+
+    lastY = y;
   }
 
-  return repairMergedHebrewWords(parts.join("\n"));
-}
-
-/** Insert missing spaces between glued Hebrew words from PDF glyph runs. */
-function repairMergedHebrewWords(text) {
-  return String(text || "")
-    .split("\n")
-    .map((line) => {
-      let s = line;
-      // Common glued patterns: "...ההת..." → "...ה הת..."
-      s = s.replace(/([\u0590-\u05FF]{2,})(ה(?:ת|ג|פ|ס|נ|ר|ע|ל|מ|ש|ב|כ|ו)[\u0590-\u05FF]+)/g, "$1 $2");
-      // Word boundary before common section prefixes after 3+ chars
-      s = s.replace(/([\u0590-\u05FF]{3,})(שלב|פרמ|מער|ניה|הגדר|כרט|תפריט|ממשק)/g, "$1 $2");
-      return s.replace(/[ \t]{2,}/g, " ").trim();
-    })
-    .join("\n");
+  return text.replace(/\n{3,}/g, "\n\n").trim();
 }
 
 async function renderPageThumbnail(page) {
@@ -255,7 +211,7 @@ async function extractPdfText(file, docTitle) {
     const page = await pdf.getPage(pageNum);
     const content = await page.getTextContent({ disableCombineTextItems: true });
     const pageText = cleanPdfPageText(
-      normalizeHebrewText(pdfItemsToText(content.items), { preserveLines: true }),
+      normalizeExtractedDocumentText(pdfItemsToText(content.items)),
     );
     let thumbnail = null;
 
@@ -284,8 +240,43 @@ async function extractPdfText(file, docTitle) {
   };
 }
 
+const DOCX_BLOCK_TAGS = new Set(["P", "H1", "H2", "H3", "H4", "H5", "H6", "LI", "TD", "TH"]);
+
+function collectDocxBlocks(root) {
+  const blocks = [];
+
+  const walk = (node) => {
+    if (!node) return;
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const tag = node.tagName;
+      if (DOCX_BLOCK_TAGS.has(tag)) {
+        const text = node.textContent?.replace(/\s+/g, " ").trim();
+        if (text) blocks.push(text);
+        return;
+      }
+      for (const child of node.children) walk(child);
+    }
+  };
+
+  walk(root);
+  return blocks;
+}
+
+function docxHtmlToText(html) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(String(html || ""), "text/html");
+  const blocks = collectDocxBlocks(doc.body);
+  if (blocks.length) return joinTextParagraphs(blocks);
+  const fallback = doc.body?.textContent?.replace(/\s+/g, " ").trim();
+  return fallback || "";
+}
+
 async function extractDocxText(file) {
   const arrayBuffer = await file.arrayBuffer();
+  const htmlResult = await mammoth.convertToHtml({ arrayBuffer });
+  const fromHtml = docxHtmlToText(htmlResult.value);
+  if (fromHtml) return fromHtml;
+
   const result = await mammoth.extractRawText({ arrayBuffer });
   if (result.messages?.length) {
     const hasErrors = result.messages.some((m) => m.type === "error");
@@ -293,7 +284,8 @@ async function extractDocxText(file) {
       throw new Error("docx_parse_failed");
     }
   }
-  return result.value || "";
+
+  return joinTextParagraphs(String(result.value || "").split(/\n+/));
 }
 
 function extractHtmlText(rawHtml) {
@@ -357,7 +349,7 @@ export async function extractTextFromFile(file) {
       rawText = parsed.text;
       htmlTitle = parsed.title;
     } else if (ext === "docx") {
-      rawText = await extractDocxText(file);
+      rawText = normalizeExtractedDocumentText(await extractDocxText(file));
     } else if (ext === "pdf") {
       const pdfResult = await extractPdfText(file, title);
       rawText = pdfResult.text;
@@ -370,7 +362,10 @@ export async function extractTextFromFile(file) {
       images = imgResult.images;
     }
 
-    const cleaned = sanitizeKnowledgeText(rawText);
+    const cleaned =
+      ext === "docx" || ext === "pdf"
+        ? rawText
+        : normalizeExtractedDocumentText(sanitizeKnowledgeText(rawText));
     const text =
       ext === "md"
         ? sanitizeMarkdownIngestText(cleaned)

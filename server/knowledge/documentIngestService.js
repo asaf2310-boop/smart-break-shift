@@ -2,6 +2,7 @@
 
 import { getSupabaseAdmin } from "./supabaseAdmin.js";
 import { chunkDocument } from "./chunkingService.js";
+import { normalizeExtractedDocumentText } from "./textExtractionNormalize.js";
 import { buildEmbeddingInput, embedTexts } from "./embeddingService.js";
 import { getEmbeddingDimensions } from "../ai/aiProvider.js";
 import { ingestDocumentImages, deleteDocumentImages } from "./imageIngestService.js";
@@ -80,7 +81,7 @@ function pagesForDocumentRow(pages) {
   return pages.map((p) => ({
     pageNumber: p.pageNumber ?? p.page_number ?? null,
     sectionTitle: p.sectionTitle ?? p.section_title ?? null,
-    text: p.text || "",
+    text: normalizeExtractedDocumentText(p.text || ""),
     hasThumbnail: Boolean(p.thumbnail || p.hasThumbnail || p.imageData),
   }));
 }
@@ -98,15 +99,16 @@ export async function ingestDocument(document) {
 
   const dbDoc = mapDocToDb(document);
   const pagesForChunking = dbDoc.pages;
+  const normalizedContent = normalizeExtractedDocumentText(dbDoc.content);
   const chunks = chunkDocument({
     id: dbDoc.id,
     title: dbDoc.title,
     category: dbDoc.category,
-    content: dbDoc.content,
+    content: normalizedContent,
     pages: pagesForChunking,
   });
 
-  const dbDocRow = { ...dbDoc, pages: pagesForDocumentRow(pagesForChunking) };
+  const dbDocRow = { ...dbDoc, content: normalizedContent, pages: pagesForDocumentRow(pagesForChunking) };
 
   const upsertErr = await upsertKnowledgeDocumentRow(supabase, dbDocRow);
   if (upsertErr) {

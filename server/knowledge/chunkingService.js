@@ -1,23 +1,10 @@
-/** Server-side document chunking for RAG ingest. Mirrors src/lib/knowledge/chunkingService.js */
+/** Server-side semantic chunking for RAG ingest. Mirrors src/lib/knowledgeAi.js chunking. */
 
 import { cleanPdfPageText } from "./pdfTextQuality.js";
+import { normalizeExtractedDocumentText } from "./textExtractionNormalize.js";
 
-const CHUNK_TARGET_CHARS = 900;
-const CHUNK_MIN_CHARS = 800;
-const CHUNK_MAX_CHARS = 1000;
-const CHUNK_OVERLAP_CHARS = 200;
-
-function normalizeText(text) {
-  return String(text || "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function separateHebrewLatinGlue(s) {
-  return String(s || "")
-    .replace(/([\u0590-\u05FF])([A-Za-z0-9])/g, "$1 $2")
-    .replace(/([A-Za-z0-9])([\u0590-\u05FF])/g, "$1 $2");
-}
+const MARKDOWN_HEADING = /^#{1,6}\s+\S/;
+const NUMBERED_SECTION_HEADING = /^\d+\.\s+\S/;
 
 function stripBrokenMarkdownLinks(s) {
   let out = String(s || "");
@@ -27,152 +14,121 @@ function stripBrokenMarkdownLinks(s) {
   return out;
 }
 
-function stripAggressiveMarkdownFormatting(s) {
-  let out = String(s || "");
-  out = out.replace(/#{1,6}(?=\s|[\u0590-\u05FF])/g, " ");
-  out = out.replace(/^#{1,6}\s*/gm, "");
-  out = out.replace(/^\s*[-*+]\s+/gm, "");
-  out = out.replace(/\*\*([^*\n]+)\*\*/g, "$1");
-  out = out.replace(/__([^_\n]+)__/g, "$1");
-  out = out.replace(/`([^`\n]+)`/g, "$1");
-  out = out.replace(/<\/?[a-z][^>]*>/gi, " ");
-  return out;
-}
-
-function normalizeHebrewTextSingleLine(text) {
-  let s = String(text || "")
-    .replace(/[ \t]+/g, " ")
-    .trim();
-  if (!s) return "";
-  s = s.replace(/[ \t]+([,.;:!?…])/g, "$1");
-  s = s.replace(/([,.;:!?…])(?=[\u0590-\u05FF])/g, "$1 ");
-  return s.replace(/[ \t]+/g, " ").trim();
-}
-
-function normalizeHebrewText(text, options = {}) {
-  if (options.preserveLines === true) {
-    return String(text || "")
-      .split("\n")
-      .map((line) => normalizeHebrewTextSingleLine(line))
-      .join("\n")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
-  }
-  return normalizeHebrewTextSingleLine(normalizeText(text));
-}
-
-function sanitizeChunkText(text, options = {}) {
-  const preserveLines = options.preserveLines === true;
-  const keepMarkdown = options.keepMarkdown === true;
-  let s = String(text || "");
-  s = stripBrokenMarkdownLinks(s);
-  if (!keepMarkdown) s = stripAggressiveMarkdownFormatting(s);
-  s = separateHebrewLatinGlue(s);
-  return normalizeHebrewText(s, { preserveLines });
-}
-
 function contentLooksLikeMarkdown(content) {
   const s = String(content || "");
-  return /^#{1,6}\s/m.test(s) || /\[[^\]\n]{1,160}\]\([^)\n]+\)/.test(s);
+  return MARKDOWN_HEADING.test(s) || /\[[^\]\n]{1,160}\]\([^)\n]+\)/.test(s);
 }
 
-function detectSectionTitle(line) {
-  const t = String(line || "").trim();
-  if (!t) return null;
-  if (/^#{1,6}\s+/.test(t)) return t.replace(/^#{1,6}\s+/, "").trim();
-  if (t.length >= 4 && t.length <= 72 && /^[\u0590-\u05FF]/.test(t) && !/[.!?…]$/.test(t)) {
-    return t;
+function prepareIngestText(text, options = {}) {
+  const keepMarkdown = options.keepMarkdown === true;
+  let s = normalizeExtractedDocumentText(text);
+  s = stripBrokenMarkdownLinks(s);
+  if (!keepMarkdown) {
+    s = s
+      .replace(/^#{1,6}\s+/gm, "")
+      .replace(/^\s*[-*+]\s+/gm, "")
+      .replace(/\*\*([^*\n]+)\*\*/g, "$1")
+      .replace(/__([^_\n]+)__/g, "$1")
+      .replace(/`([^`\n]+)`/g, "$1");
   }
+  return s.trim();
+}
+
+function isStructuralHeadingLine(line) {
+  const t = String(line || "").trim();
+  if (!t) return false;
+  return MARKDOWN_HEADING.test(t) || NUMBERED_SECTION_HEADING.test(t);
+}
+
+function headingTitle(line) {
+  const t = String(line || "").trim();
+  if (MARKDOWN_HEADING.test(t)) return t.replace(/^#{1,6}\s+/, "").trim();
+  if (NUMBERED_SECTION_HEADING.test(t)) return t;
   return null;
 }
 
-function isMarkdownHeaderLine(line) {
-  return /^#{1,6}\s+\S/.test(String(line || "").trim());
-}
+/**
+ * Split text into semantic blocks — markdown/numbered headings or double newlines only.
+ * Each block stays intact (no character-based sub-splitting).
+ */
+export function splitIntoSemanticBlocks(text) {
+  const normalized = String(text || "").trim();
+  if (!normalized) return [];
 
-function splitTextIntoSections(text) {
-  const lines = String(text || "").split(/\n+/);
-  const sections = [];
-  let currentTitle = null;
-  let buffer = [];
+  const hasStructuralHeadings = normalized
+    .split("\n")
+    .some((line) => isStructuralHeadingLine(line));
 
-  const flush = () => {
-    const body = buffer.join("\n").trim();
-    if (body) sections.push({ sectionTitle: currentTitle, text: body });
-    buffer = [];
-  };
+  if (hasStructuralHeadings) {
+    const lines = normalized.split("\n");
+    const blocks = [];
+    let current = [];
 
-  for (const line of lines) {
-    if (isMarkdownHeaderLine(line)) {
-      if (buffer.length > 0) flush();
-      currentTitle = detectSectionTitle(line);
-      buffer.push(line);
-      continue;
+    const flush = () => {
+      const body = current.join("\n").trim();
+      if (!body) return;
+      const first = current.find((l) => l.trim())?.trim() || "";
+      blocks.push({
+        sectionTitle: headingTitle(first),
+        text: body,
+      });
+      current = [];
+    };
+
+    for (const line of lines) {
+      if (isStructuralHeadingLine(line) && current.length > 0) {
+        flush();
+      }
+      current.push(line);
     }
-
-    const title = detectSectionTitle(line);
-    if (title && buffer.length === 0) {
-      currentTitle = title;
-      continue;
-    }
-    if (title && buffer.length > 0) {
-      flush();
-      currentTitle = title;
-      continue;
-    }
-    buffer.push(line);
+    flush();
+    return blocks;
   }
-  flush();
 
-  if (!sections.length && text.trim()) {
-    return [{ sectionTitle: null, text: text.trim() }];
-  }
-  return sections;
-}
-
-function findChunkBreak(slice, maxLen) {
-  if (slice.length <= maxLen) return slice.length;
-  const window = slice.slice(0, maxLen);
-  const minBreak = Math.min(320, Math.floor(CHUNK_MIN_CHARS * 0.35));
-
-  const paragraph = window.lastIndexOf("\n\n");
-  if (paragraph >= minBreak) return paragraph;
-
-  const sentence = Math.max(
-    window.lastIndexOf(". "),
-    window.lastIndexOf("! "),
-    window.lastIndexOf("? "),
-    window.lastIndexOf("… "),
-    window.lastIndexOf(".\n"),
-    window.lastIndexOf("!\n"),
-    window.lastIndexOf("?\n"),
-  );
-  if (sentence >= minBreak) return sentence + 1;
-
-  const newline = window.lastIndexOf("\n");
-  if (newline >= minBreak) return newline + 1;
-
-  const space = window.lastIndexOf(" ");
-  if (space >= minBreak) return space;
-
-  return maxLen;
+  return normalized
+    .split(/\n\n+/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block) => ({
+      sectionTitle: headingTitle(block.split("\n")[0]?.trim() || "") || null,
+      text: block,
+    }));
 }
 
 function pageSectionText(page, docTitle) {
-  const sanitized = sanitizeChunkText(cleanPdfPageText(page.text), { preserveLines: true });
+  const raw = cleanPdfPageText(page.text);
+  const sanitized = raw ? prepareIngestText(raw, { keepMarkdown: true }) : "";
   if (sanitized) return sanitized;
   if (page.thumbnail || page.hasThumbnail || page.pageNumber != null) {
     const n = page.pageNumber ?? "?";
     const name = docTitle || "מסמך";
-    return normalizeHebrewText(`עמוד ${n} — תוכן ויזואלי מהמסמך "${name}"`);
+    return `עמוד ${n} — תוכן ויזואלי מהמסמך "${name}"`;
   }
   return "";
+}
+
+function pushChunk(chunks, document, section, globalIndex) {
+  const chunkText = String(section.text || "").trim();
+  if (!chunkText) return globalIndex;
+
+  chunks.push({
+    id: `${document.id}_c${globalIndex}`,
+    documentId: document.id,
+    documentName: document.title,
+    documentTitle: document.title,
+    category: document.category || "כללי",
+    chunkIndex: globalIndex,
+    pageNumber: section.pageNumber ?? null,
+    sectionTitle: section.sectionTitle || null,
+    text: chunkText,
+  });
+  return globalIndex + 1;
 }
 
 /** @param {{ id: string, title: string, category?: string, content: string, pages?: Array }} document */
 export function chunkDocument(document) {
   const keepMarkdown = contentLooksLikeMarkdown(document.content);
-  const text = sanitizeChunkText(document.content, { preserveLines: true, keepMarkdown });
+  const text = prepareIngestText(document.content, { preserveLines: true, keepMarkdown });
   const hasVisualPages =
     Array.isArray(document.pages) && document.pages.some((p) => p?.thumbnail || p?.hasThumbnail);
   if (!text && !hasVisualPages) return [];
@@ -188,72 +144,47 @@ export function chunkDocument(document) {
         .filter((p) => p.text || p.thumbnail || p.hasThumbnail)
     : null;
 
-  const sections = pageSections?.length
-    ? pageSections.map((p) => ({
-        sectionTitle: p.sectionTitle,
-        pageNumber: p.pageNumber,
-        text: p.text,
-      }))
-    : splitTextIntoSections(text).map((s) => ({ ...s, pageNumber: null }));
-
   const chunks = [];
   let globalIndex = 0;
 
-  for (const section of sections) {
-    const sectionText = section.text;
+  if (pageSections?.length) {
+    for (const page of pageSections) {
+      const pageBlocks = splitIntoSemanticBlocks(page.text);
+      const blocks =
+        pageBlocks.length > 0
+          ? pageBlocks
+          : page.text
+            ? [{ sectionTitle: page.sectionTitle, text: page.text }]
+            : [];
 
-    if (sectionText.length <= CHUNK_MAX_CHARS) {
-      const chunkText = normalizeHebrewText(sectionText);
-      if (chunkText) {
-        chunks.push({
-          id: `${document.id}_c${globalIndex}`,
-          documentId: document.id,
-          documentName: document.title,
-          documentTitle: document.title,
-          category: document.category || "כללי",
-          chunkIndex: globalIndex,
-          pageNumber: section.pageNumber ?? null,
-          sectionTitle: section.sectionTitle || null,
-          text: chunkText,
-        });
-        globalIndex += 1;
+      for (const block of blocks) {
+        globalIndex = pushChunk(chunks, document, {
+          ...block,
+          pageNumber: page.pageNumber,
+          sectionTitle: block.sectionTitle || page.sectionTitle,
+        }, globalIndex);
       }
-      continue;
     }
+    return chunks;
+  }
 
-    let start = 0;
-
-    while (start < sectionText.length) {
-      const maxEnd = Math.min(start + CHUNK_MAX_CHARS, sectionText.length);
-      let end = findChunkBreak(sectionText.slice(start, maxEnd), CHUNK_MAX_CHARS);
-      if (end < CHUNK_MIN_CHARS && maxEnd < sectionText.length) {
-        end = Math.min(CHUNK_TARGET_CHARS, maxEnd - start);
-      }
-      if (end <= 0) end = Math.min(CHUNK_TARGET_CHARS, sectionText.length - start);
-
-      const slice = sectionText.slice(start, start + end);
-      const chunkText = normalizeHebrewText(slice);
-      if (chunkText) {
-        chunks.push({
-          id: `${document.id}_c${globalIndex}`,
-          documentId: document.id,
-          documentName: document.title,
-          documentTitle: document.title,
-          category: document.category || "כללי",
-          chunkIndex: globalIndex,
-          pageNumber: section.pageNumber ?? null,
-          sectionTitle: section.sectionTitle || null,
-          text: chunkText,
-        });
-        globalIndex += 1;
-      }
-
-      if (start + end >= sectionText.length) break;
-      start += Math.max(end - CHUNK_OVERLAP_CHARS, 1);
-    }
+  for (const block of splitIntoSemanticBlocks(text)) {
+    globalIndex = pushChunk(chunks, document, { ...block, pageNumber: null }, globalIndex);
   }
 
   return chunks;
 }
 
-export { sanitizeChunkText, normalizeHebrewText };
+/** @deprecated Use prepareIngestText — kept for callers that import sanitizeChunkText */
+export function sanitizeChunkText(text, options = {}) {
+  return prepareIngestText(text, options);
+}
+
+/** Light per-line space normalization for display paths */
+export function normalizeHebrewText(text, options = {}) {
+  const normalized = normalizeExtractedDocumentText(text);
+  if (options.preserveLines !== true) {
+    return normalized.replace(/\n+/g, " ").replace(/[ ]+/g, " ").trim();
+  }
+  return normalized;
+}

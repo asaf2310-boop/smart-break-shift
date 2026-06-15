@@ -1,9 +1,14 @@
-/** Hybrid RAG search — pgvector + keyword + image embeddings, reranked. */
+/** Hybrid RAG search — pgvector + keyword + image embeddings + optional Cohere rerank. */
 
 import { getSupabaseAdmin } from "./supabaseAdmin.js";
-import { searchKnowledgeChunks, RETRIEVAL_TOP_K_DEFAULT } from "./vectorSearchService.js";
+import {
+  searchKnowledgeChunks,
+  RETRIEVAL_RERANK_CANDIDATES,
+  RETRIEVAL_RERANK_TOP_N,
+} from "./vectorSearchService.js";
 import { searchKnowledgeImages } from "./imageIngestService.js";
 import { KNOWLEDGE_MISSING_ANSWER } from "./geminiKnowledgePrompt.js";
+import { rerankKnowledgeHits, isCohereRerankConfigured } from "./cohereRerankService.js";
 import {
   extractSearchTerms,
   scoreChunkKeywordMatch,
@@ -25,7 +30,8 @@ const MAX_CHUNKS_PER_DOCUMENT = 2;
  * @param {{ topK?: number, tenantId?: string | null }} [options]
  */
 export async function hybridSearch(query, queryEmbedding, options = {}) {
-  const topK = options.topK ?? RETRIEVAL_TOP_K_DEFAULT;
+  const finalTopK = options.topK ?? RETRIEVAL_RERANK_TOP_N;
+  const candidateK = options.candidateK ?? RETRIEVAL_RERANK_CANDIDATES;
   const tenantId = options.tenantId ?? null;
   const hasEmbedding = Array.isArray(queryEmbedding) && queryEmbedding.length > 0;
 
@@ -33,11 +39,11 @@ export async function hybridSearch(query, queryEmbedding, options = {}) {
 
   const [vectorResult, keywordHits, imageResult] = await Promise.all([
     hasEmbedding
-      ? searchKnowledgeChunks(queryEmbedding, { topK: topK * 2, tenantId, forHybrid: true })
+      ? searchKnowledgeChunks(queryEmbedding, { topK: candidateK, tenantId, forHybrid: true })
       : Promise.resolve({ hits: [], error: null }),
-    searchKeywordChunks(query, { topK: topK * 2, tenantId, searchTerms }),
+    searchKeywordChunks(query, { topK: candidateK, tenantId, searchTerms }),
     hasEmbedding
-      ? searchKnowledgeImages(queryEmbedding, { topK, tenantId })
+      ? searchKnowledgeImages(queryEmbedding, { topK: finalTopK, tenantId })
       : Promise.resolve({ hits: [], error: null }),
   ]);
 
@@ -45,24 +51,36 @@ export async function hybridSearch(query, queryEmbedding, options = {}) {
     vectorResult.hits || [],
     keywordHits,
     imageResult.hits || [],
-    topK,
+    candidateK,
     query,
     searchTerms,
   );
 
-  const top = merged[0];
+  const rerankResult = await rerankKnowledgeHits(query, merged, { topN: finalTopK });
+  const hits = rerankResult.hits;
+
+  const top = hits[0];
   const confidence = top
-    ? Math.max(top.vectorScore || 0, top.keywordScore || 0, top.score || 0)
+    ? Math.max(top.rerankScore || 0, top.vectorScore || 0, top.keywordScore || 0, top.score || 0)
     : 0;
 
   return {
-    hits: merged,
+    hits,
     imageHits: imageResult.hits || [],
     confidence,
-    passesThreshold: passesHybridThreshold(merged, query),
+    passesThreshold: passesHybridThreshold(hits, query),
     searchTerms,
-    retrievalMethod: hasEmbedding ? "hybrid" : "keyword_only",
+    retrievalMethod: hasEmbedding
+      ? rerankResult.reranked
+        ? "hybrid_cohere_rerank"
+        : "hybrid"
+      : "keyword_only",
     embeddingAvailable: hasEmbedding,
+    rerankApplied: rerankResult.reranked,
+    rerankModel: rerankResult.rerankModel,
+    rerankError: rerankResult.error,
+    candidateCount: merged.length,
+    cohereConfigured: isCohereRerankConfigured(),
     error: hasEmbedding ? vectorResult.error || imageResult.error || null : null,
   };
 }
@@ -78,7 +96,9 @@ export function passesHybridThreshold(hits, query = "") {
   const keywordScore = top.keywordScore || 0;
   const imageScore = top.imageScore || 0;
   const combined = top.score || 0;
+  const rerankScore = top.rerankScore || 0;
 
+  if (rerankScore >= 0.42) return true;
   if (hasStrongKeywordMatch(query, top.chunk)) return true;
   if (vectorScore >= MIN_CONFIDENCE) return true;
   // Keyword-only or keyword-dominant — do not require high vector score

@@ -1,5 +1,26 @@
 import { cleanHebrewMarkdownArtifacts } from "../server/knowledge/assistantBidi.js";
-import { sanitizeHebrewText } from "../server/knowledge/sanitizeHebrewText.js";
+import {
+  sanitizeHebrewText,
+  ultimateHebrewSanitizer,
+  advancedHebrewSanitizer,
+} from "../server/knowledge/sanitizeHebrewText.js";
+
+const advancedCases = [
+  { in: "הלקוחנדרש להזין פרטים", want: "הלקוח נדרש להזין פרטים" },
+  { in: "לאכל הלקוחות", want: "לא כל הלקוחות" },
+  { in: "הואראשי בתהליך", want: "הוא ראשי בתהליך" },
+  { in: "כרטיס הונאות**).", want: "כרטיס הונאות**)." },
+];
+
+const ultimateCases = [
+  { in: "בשלבזה מתבצע", want: "בשלב זה מתבצע" },
+  { in: "תיבותשל הנתונים", want: "תיבות של הנתונים" },
+  { in: "האחריותע וברת לבנק", want: "האחריות עוברת לבנק" },
+  { in: "אימותש עברה בהצלחה", want: "אימות שעברה בהצלחה" },
+  { in: "הגדרותהנתונים במערכת", want: "הגדרות הנתונים במערכת" },
+  { in: "שהלקוחסולק את העסקה", want: "שהלקוח סולק את העסקה" },
+  { in: "לאלבית העסק", want: "לבית העסק" },
+];
 
 const sanitizeCases = [
   { in: "הואראשי בתהליך", want: "הוא ראשי בתהליך" },
@@ -49,6 +70,28 @@ const markdownCases = [
 
 let failed = 0;
 
+for (const { in: input, want } of advancedCases) {
+  const got = advancedHebrewSanitizer(input);
+  const ok = got === want;
+  if (!ok) {
+    failed += 1;
+    console.error("advanced FAIL:", { input, want, got });
+  } else {
+    console.log("advanced OK:", input);
+  }
+}
+
+for (const { in: input, want } of ultimateCases) {
+  const got = ultimateHebrewSanitizer(input);
+  const ok = got === want;
+  if (!ok) {
+    failed += 1;
+    console.error("ultimate FAIL:", { input, want, got });
+  } else {
+    console.log("ultimate OK:", input);
+  }
+}
+
 for (const { in: input, want } of sanitizeCases) {
   const got = sanitizeHebrewText(input);
   const ok = got === want;
@@ -74,4 +117,4 @@ for (const { in: input, want } of markdownCases) {
 if (failed) {
   process.exit(1);
 }
-console.log(`All ${sanitizeCases.length + markdownCases.length} cases passed.`);
+console.log(`All ${advancedCases.length + ultimateCases.length + sanitizeCases.length + markdownCases.length} cases passed.`);

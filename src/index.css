@@ -1858,26 +1858,51 @@ html.app-hyp-demo .customer-chat-bubble--staff {
 }
 
 .knowledge-chat-message--assistant {
-  /* BiDi handled by .agent-response-container */
+  /* BiDi handled by .chat-response-markdown */
+}
+
+.chat-response-markdown {
+  direction: rtl;
+  text-align: right;
+  white-space: pre-wrap;
+  line-height: 1.6;
+  font-size: 15px;
+  unicode-bidi: plaintext;
+}
+
+.chat-response-markdown code {
+  direction: ltr;
+  display: inline-block;
+  unicode-bidi: embed;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background-color: #f4f4f5;
+  padding: 2px 4px;
+  border-radius: 4px;
 }
 
 .agent-response-container {
   direction: rtl;
   text-align: right;
+  white-space: pre-wrap;
+  line-height: 1.6;
+  font-size: 15px;
   unicode-bidi: plaintext;
 }
 
+.chat-response-markdown span.en-terms,
 .agent-response-container code,
 .knowledge-md-code {
   direction: ltr;
   display: inline-block;
+  unicode-bidi: embed;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   background-color: #f4f4f5;
   padding: 2px 4px;
   border-radius: 4px;
-  unicode-bidi: isolate;
 }
 
+.dark .chat-response-markdown code,
+.dark .chat-response-markdown span.en-terms,
 .dark .agent-response-container code,
 .dark .knowledge-md-code {
   background-color: hsl(var(--surface-container-high));
@@ -1890,8 +1915,6 @@ html.app-hyp-demo .customer-chat-bubble--staff {
 .knowledge-markdown {
   direction: rtl;
   text-align: right;
-  font-size: 0.875rem;
-  line-height: 1.75;
 }
 
 .knowledge-md-p {
