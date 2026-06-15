@@ -2,10 +2,11 @@
 
 import { embedQuery, isEmbeddingConfigured } from "./embeddingService.js";
 import { hybridSearch, MIN_CONFIDENCE } from "./hybridSearchService.js";
+import { directChunkSearch } from "./simpleRetrievalService.js";
 import { fetchImagesForChunks } from "./imageIngestService.js";
 import { generateGeminiKnowledgeAnswer, mergeRelevantImages } from "./geminiChatService.js";
-import { buildContextBlocks, truncateSnippet } from "./chatAnswerService.js";
-import { KNOWLEDGE_MISSING_ANSWER } from "./geminiKnowledgePrompt.js";
+import { buildContextBlocks, truncateSnippet, uniqueCitations } from "./chatAnswerService.js";
+import { KNOWLEDGE_MISSING_ANSWER, isMissingKnowledgeAnswer } from "./geminiKnowledgePrompt.js";
 import { logKnowledgeGap } from "./gapFeedbackService.js";
 import { logKnowledgeQuery } from "./loggingService.js";
 import { RETRIEVAL_TOP_K_DEFAULT } from "./vectorSearchService.js";
@@ -88,26 +89,48 @@ export async function generateAgentResponse(userQuery, options = {}) {
   }
 
   const searchResult = await hybridSearch(query, embedding, { topK, tenantId });
-  if (searchResult.error) {
+
+  let hits = searchResult.hits || [];
+  let passesThreshold = searchResult.passesThreshold;
+  let retrievalMethod = searchResult.retrievalMethod;
+
+  if (!passesThreshold || !hits.length) {
+    const direct = await directChunkSearch(query, { topK, tenantId });
+    if (direct.hits?.length) {
+      hits = direct.hits;
+      passesThreshold = direct.passesThreshold;
+      retrievalMethod = direct.passesThreshold ? "direct" : retrievalMethod;
+      searchResult.searchTerms = direct.searchTerms;
+    }
+  }
+
+  if (searchResult.error && !hits.length) {
     return { ...emptyAgentResult({ error: "search_failed" }), detail: searchResult.error };
   }
 
-  const hits = searchResult.hits || [];
-  const confidence = searchResult.confidence;
+  const confidence = hits[0]
+    ? Math.max(hits[0].vectorScore || 0, hits[0].keywordScore || 0, hits[0].score || 0)
+    : searchResult.confidence;
   const chunks = hits.map((h) => h.chunk);
   const contextBlocks = buildContextBlocks(chunks);
   const context = contextBlocks.join("\n\n");
   let missReason = null;
   if (!chunks.length) {
     missReason = embeddingFailed ? "no_hits_embedding_failed" : "no_hits";
-  } else if (!searchResult.passesThreshold) {
+  } else if (!passesThreshold) {
     missReason = "below_threshold";
   }
 
-  const debug = buildRetrievalDebug(query, searchResult, hits, context, {
-    missReason,
-    embeddingError: embeddingFailed ? embedErr || "embedding_failed" : null,
-  });
+  const debug = buildRetrievalDebug(
+    query,
+    { ...searchResult, confidence, passesThreshold, retrievalMethod },
+    hits,
+    context,
+    {
+      missReason,
+      embeddingError: embeddingFailed ? embedErr || "embedding_failed" : null,
+    },
+  );
 
   const chunkRefs = chunks.map((c) => ({
     documentId: c.documentId,
@@ -116,14 +139,14 @@ export async function generateAgentResponse(userQuery, options = {}) {
   const fetchedImages = await fetchImagesForChunks(chunkRefs, { tenantId, limit: topK });
   const relevantImages = mergeRelevantImages(fetchedImages, searchResult.imageHits || [], topK);
 
-  if (!chunks.length || !searchResult.passesThreshold) {
+  if (!chunks.length || !passesThreshold) {
     if (process.env.NODE_ENV !== "production" || process.env.KNOWLEDGE_DEBUG === "1") {
       console.warn("[generateAgentResponse] retrieval_miss", {
         query,
         hitCount: hits.length,
         missReason,
         embeddingFailed,
-        passesThreshold: searchResult.passesThreshold,
+        passesThreshold,
         confidence,
         searchTerms: searchResult.searchTerms,
         top: hits[0]
@@ -175,12 +198,23 @@ export async function generateAgentResponse(userQuery, options = {}) {
     };
   }
 
-  if (!result.citations?.length) {
+  if (!result.citations?.length && chunks.length) {
+    result.citations = uniqueCitations(chunks);
+  }
+
+  if (
+    !result.citations?.length &&
+    (!result.answer || isMissingKnowledgeAnswer(result.answer))
+  ) {
     return emptyAgentResult({
       confidence,
       mode: "no_citation",
       debug,
     });
+  }
+
+  if (!result.citations?.length) {
+    result.citations = uniqueCitations(chunks);
   }
 
   await logKnowledgeQuery({

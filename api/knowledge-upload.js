@@ -146,7 +146,7 @@ export default async function handler(req, res) {
     try {
       const result = await reprocessDocument(documentId);
       if (!result.ok) return json(res, 500, { error: result.error, ...result }, req);
-      return json(res, 200, result, req);
+      return json(res, 200, { ...result, ocrMerged: result.ocrMerged ?? false }, req);
     } catch (err) {
       console.error("[knowledge-upload] reprocess", err);
       return json(res, 500, { error: err?.message || "ingest_exception" }, req);

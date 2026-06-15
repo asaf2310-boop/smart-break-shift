@@ -145,6 +145,7 @@ begin
     select lower(trim(t))
     from unnest(regexp_split_to_array(coalesce(search_query, ''), '\s+')) as t
     where length(trim(t)) >= 2
+       or trim(t) ~ '^[a-z0-9]{2,8}$'
     limit 8
   );
 
@@ -167,12 +168,14 @@ begin
       select count(*)::float
       from unnest(terms) as t
       where lower(kc.chunk_text) like '%' || t || '%'
+         or lower(coalesce(kc.document_name, '')) like '%' || t || '%'
     ) as keyword_score
   from knowledge_chunks kc
   where (filter_tenant_id is null or kc.tenant_id is null or kc.tenant_id = filter_tenant_id)
     and exists (
       select 1 from unnest(terms) as t
       where lower(kc.chunk_text) like '%' || t || '%'
+         or lower(coalesce(kc.document_name, '')) like '%' || t || '%'
     )
   order by keyword_score desc, kc.chunk_index
   limit greatest(match_count, 1);

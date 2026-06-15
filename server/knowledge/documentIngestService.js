@@ -324,7 +324,7 @@ export async function reprocessDocument(documentId) {
 
   if (error || !data) return { ok: false, error: error?.message || "not_found" };
 
-  return ingestDocument({
+  const ingestResult = await ingestDocument({
     id: data.id,
     title: data.title,
     category: data.category,
@@ -336,6 +336,15 @@ export async function reprocessDocument(documentId) {
     createdAt: data.created_at,
     updatedAt: data.updated_at,
   });
+
+  if (!ingestResult.ok) return ingestResult;
+
+  const ocrMerge = await syncDocumentChunksFromOcr(documentId);
+  if (ocrMerge.ok && ocrMerge.ocrMerged) {
+    return { ...ocrMerge, reprocessed: true };
+  }
+
+  return { ...ingestResult, reprocessed: true, ocrMerged: false };
 }
 
 /**

@@ -119,9 +119,13 @@ export function hasStrongKeywordMatch(query, chunk) {
   const terms = extractSearchTerms(query);
   if (!terms.length || !chunk) return false;
   const raw = scoreChunkKeywordMatch(chunk, terms);
+  const hay = `${chunk.documentName || chunk.documentTitle || ""} ${chunk.fileName || ""} ${chunk.text || ""} ${chunk.ocrText || ""}`
+    .toLowerCase()
+    .replace(/([\u0590-\u05ff])([a-z0-9])/gi, "$1 $2")
+    .replace(/([a-z0-9])([\u0590-\u05ff])/gi, "$1 $2");
   const acronyms = terms.filter((t) => /\d/.test(t) || /^[a-z0-9]{2,8}$/i.test(t));
-  if (acronyms.some((t) => String(chunk.text || "").toLowerCase().includes(t))) {
-    return raw >= 2;
+  if (acronyms.some((t) => hay.includes(t))) {
+    return raw >= 1.5;
   }
   return raw >= 3 || (terms.length === 1 && raw >= 2);
 }
