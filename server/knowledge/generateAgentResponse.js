@@ -4,9 +4,10 @@ import { embedQuery, isEmbeddingConfigured } from "./embeddingService.js";
 import { hybridSearch, MIN_CONFIDENCE } from "./hybridSearchService.js";
 import { directChunkSearch } from "./simpleRetrievalService.js";
 import { fetchImagesForChunks } from "./imageIngestService.js";
-import { generateGeminiKnowledgeAnswer, mergeRelevantImages } from "./geminiChatService.js";
+import { generateGeminiKnowledgeAnswer, mergeRelevantImages, buildKnowledgeSources } from "./geminiChatService.js";
 import { buildContextBlocks, truncateSnippet, uniqueCitations } from "./chatAnswerService.js";
 import { KNOWLEDGE_MISSING_ANSWER, isMissingKnowledgeAnswer } from "./geminiKnowledgePrompt.js";
+import { buildChunkFallbackAnswer } from "./chunkFallbackAnswerService.js";
 import { logKnowledgeGap } from "./gapFeedbackService.js";
 import { logKnowledgeQuery } from "./loggingService.js";
 import { RETRIEVAL_TOP_K_DEFAULT } from "./vectorSearchService.js";
@@ -182,6 +183,32 @@ export async function generateAgentResponse(userQuery, options = {}) {
   });
 
   if (result.error) {
+    if (chunks.length) {
+      const fallback = buildChunkFallbackAnswer(query, chunks, {
+        rateLimited: result.rateLimited || String(result.error || "").includes("429"),
+      });
+      const citations = result.citations?.length ? result.citations : uniqueCitations(chunks);
+      return {
+        answer: fallback.answer,
+        citations,
+        sources: buildKnowledgeSources(citations, relevantImages),
+        images: [],
+        chunks: chunks.map((c) => ({
+          documentId: c.documentId,
+          documentName: c.documentName,
+          pageNumber: c.pageNumber,
+          sectionTitle: c.sectionTitle,
+        })),
+        confidence,
+        grounded: fallback.grounded,
+        mode: result.rateLimited ? "chunk_fallback_rate_limit" : "chunk_fallback",
+        debug: { ...debug, geminiError: result.error },
+        error: null,
+        retryAfterSec: result.retryAfterSec,
+        rateLimited: result.rateLimited,
+      };
+    }
+
     return {
       answer: null,
       citations: result.citations || [],
