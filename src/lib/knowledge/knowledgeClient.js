@@ -166,6 +166,25 @@ export async function fetchServerDocumentPageImages(documentId) {
   return data.pages || [];
 }
 
+/** Public read-only document viewer URL (opens in new tab from chat citations). */
+export function buildKnowledgeDocumentViewUrl(documentId, pageNumber) {
+  const id = String(documentId || "").trim();
+  if (!id) return "/knowledge";
+  const base = `/knowledge/document/${encodeURIComponent(id)}`;
+  const page = Number(pageNumber);
+  if (Number.isFinite(page) && page > 0) return `${base}?page=${page}`;
+  return base;
+}
+
+export async function fetchKnowledgeDocumentView(documentId) {
+  const id = String(documentId || "").trim();
+  if (!id) throw new Error("document_id_required");
+  const res = await fetchWithTimeout(`/api/knowledge-upload?documentId=${encodeURIComponent(id)}&view=1`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "document_view_failed");
+  return data;
+}
+
 export { PAGE_INGEST_BATCH };
 
 export async function reprocessServerDocument(documentId) {

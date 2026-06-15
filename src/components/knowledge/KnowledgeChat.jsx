@@ -13,7 +13,7 @@ import {
   resetOpenAiProbeCache,
   KNOWLEDGE_LOW_RELEVANCE_ANSWER,
 } from "@/lib/knowledgeAi";
-import { shouldUseServerRag, probeServerRagHealth, listServerDocuments, submitKnowledgeFeedback, askKnowledgeWebSearch } from "@/lib/knowledge/knowledgeClient";
+import { shouldUseServerRag, probeServerRagHealth, listServerDocuments, submitKnowledgeFeedback, askKnowledgeWebSearch, buildKnowledgeDocumentViewUrl } from "@/lib/knowledge/knowledgeClient";
 import { demoModeEnabled } from "@/api/demoClient";
 import {
   getKnowledgeDocumentsFingerprint,
@@ -120,6 +120,14 @@ function isFailedLocalKnowledgeAnswer(message) {
   return text === KNOWLEDGE_LOW_RELEVANCE_ANSWER || text.includes(KNOWLEDGE_LOW_RELEVANCE_ANSWER);
 }
 
+function canOfferWebSearch(message) {
+  if (message.role !== "assistant") return false;
+  if (message.webSearchOffered || message.mode === "web_search" || message.mode === "system" || message.mode === "error") {
+    return false;
+  }
+  return Boolean(message.userQuestion);
+}
+
 function MessageBubble({ message, showDebug, onRetry, onFeedback, onWebSearch, feedbackSending, webSearchLoading }) {
   const isUser = message.role === "user";
   const [debugOpen, setDebugOpen] = useState(false);
@@ -137,8 +145,8 @@ function MessageBubble({ message, showDebug, onRetry, onFeedback, onWebSearch, f
 
   const primaryCitation = message.citations?.[0];
   const sourceHref = primaryCitation?.documentId
-    ? `/admin/knowledge#doc-${primaryCitation.documentId}`
-    : "/admin/knowledge";
+    ? buildKnowledgeDocumentViewUrl(primaryCitation.documentId, primaryCitation.pageNumber)
+    : null;
 
   const showConfidenceBadge =
     showDebug || (message.confidence != null && message.confidence < 0.65);
@@ -249,14 +257,27 @@ function MessageBubble({ message, showDebug, onRetry, onFeedback, onWebSearch, f
               <Copy className="w-3 h-3" />
               {copied ? "הועתק" : "העתק תשובה"}
             </button>
-            {primaryCitation && (
+            {sourceHref && (
               <a
                 href={sourceHref}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="text-[11px] inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-outline/20 hover:bg-surface-container-high/80 text-primary"
               >
                 <ExternalLink className="w-3 h-3" />
                 פתח מקור
               </a>
+            )}
+            {onWebSearch && canOfferWebSearch(message) && (
+              <button
+                type="button"
+                disabled={webSearchLoading}
+                onClick={() => onWebSearch(message.userQuestion, message.id)}
+                className="text-[11px] inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 disabled:opacity-50"
+              >
+                {webSearchLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Globe className="w-3 h-3" />}
+                חיפוש ברשת
+              </button>
             )}
             {onFeedback && message.userQuestion && (
               <button
@@ -293,21 +314,10 @@ function MessageBubble({ message, showDebug, onRetry, onFeedback, onWebSearch, f
             לא נמצאו קטעים רלוונטים מספיק — נסה לנסח אחרת או להוסיף מילות מפתח מהמסמך.
           </p>
         )}
-        {!isUser && isFailedLocalKnowledgeAnswer(message) && onWebSearch && message.userQuestion && (
-          <div className="mt-3 pt-3 border-t border-outline/20">
-            <p className="text-[11px] text-on-surface-variant mb-2">
-              לא נמצא מידע במאגר הידע. אפשר לחפש תשובה ברשת.
-            </p>
-            <button
-              type="button"
-              disabled={webSearchLoading}
-              onClick={() => onWebSearch(message.userQuestion, message.id)}
-              className="text-[11px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 disabled:opacity-50"
-            >
-              {webSearchLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Globe className="w-3 h-3" />}
-              חיפוש ברשת
-            </button>
-          </div>
+        {!isUser && isFailedLocalKnowledgeAnswer(message) && (
+          <p className="mt-3 pt-3 border-t border-outline/20 text-[11px] text-on-surface-variant">
+            לא נמצא מידע במאגר הידע. אפשר לחפש תשובה ברשת באמצעות הכפתור למעלה.
+          </p>
         )}
         {!isUser && message.openAiFailed && !message.gptSkipped && (
           <div className="mt-2 flex flex-wrap items-center gap-2">

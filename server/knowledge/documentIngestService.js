@@ -251,6 +251,43 @@ export async function deleteDocument(documentId) {
   return { ok: true };
 }
 
+export async function getDocumentForView(documentId) {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return { document: null, error: "supabase_not_configured" };
+
+  const id = String(documentId || "").trim();
+  if (!id) return { document: null, error: "document_id_required" };
+
+  const { data, error } = await supabase
+    .from("knowledge_documents")
+    .select("id, title, category, content, file_name, pages, source_type, created_at, updated_at")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    if (/relation.*does not exist/i.test(error.message)) {
+      return { document: null, error: "knowledge_schema_not_migrated" };
+    }
+    return { document: null, error: error.message };
+  }
+  if (!data) return { document: null, error: "not_found" };
+
+  return {
+    document: {
+      id: data.id,
+      title: data.title,
+      category: data.category || "כללי",
+      content: data.content || "",
+      fileName: data.file_name,
+      pages: Array.isArray(data.pages) ? data.pages : [],
+      sourceType: data.source_type || "text",
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    },
+    error: null,
+  };
+}
+
 export async function listDocumentsWithChunkCounts() {
   const supabase = getSupabaseAdmin();
   if (!supabase) return { documents: [], error: "supabase_not_configured" };

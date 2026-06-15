@@ -5,6 +5,7 @@ import { isPgVectorConfigured, getSupabaseUrl, getSupabaseAdmin } from "../serve
 import {
   ingestDocument,
   deleteDocument,
+  getDocumentForView,
   listDocumentsWithChunkCounts,
   reprocessDocument,
   getTotalChunkCount,
@@ -65,6 +66,14 @@ export default async function handler(req, res) {
     }
 
     const documentId = String(url.searchParams.get("documentId") || "").trim();
+    if (documentId && url.searchParams.get("view") === "1") {
+      const { document, error } = await getDocumentForView(documentId);
+      if (error === "not_found") return json(res, 404, { error }, req);
+      if (error) return json(res, 500, { error }, req);
+      const { pages, error: imgErr } = await listDocumentPageImages(documentId);
+      if (imgErr) return json(res, 500, { error: imgErr }, req);
+      return json(res, 200, { document, pages: pages || [] }, req);
+    }
     if (documentId && url.searchParams.get("images") === "1") {
       const { pages, error } = await listDocumentPageImages(documentId);
       if (error) return json(res, 500, { error }, req);

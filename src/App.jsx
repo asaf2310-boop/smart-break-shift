@@ -36,6 +36,7 @@ import CrmDashboard from './pages/CrmDashboard';
 import CrmCustomerDetail from './pages/CrmCustomerDetail';
 import CrmLookupDeepLink from './pages/CrmLookupDeepLink';
 import KnowledgePage from './pages/KnowledgePage';
+import KnowledgeDocumentViewPage from './pages/KnowledgeDocumentViewPage';
 import AdminKnowledge from './pages/AdminKnowledge';
 import AdminKnowledgeGaps from './pages/AdminKnowledgeGaps';
 import AdminCustomerChat from './pages/AdminCustomerChat';
@@ -126,6 +127,7 @@ const AuthenticatedApp = () => {
         <Route path="/support/consent/:token" element={<RouteErrorBoundary><RemoteSupportConsentPage /></RouteErrorBoundary>} />
         <Route path="/support/screen/:sessionId" element={<RouteErrorBoundary><ScreenShareGuestPage /></RouteErrorBoundary>} />
         <Route path="/knowledge" element={<ModuleGate module="knowledge"><KnowledgeGate><KnowledgePage /></KnowledgeGate></ModuleGate>} />
+        <Route path="/knowledge/document/:documentId" element={<ModuleGate module="knowledge"><KnowledgeGate><KnowledgeDocumentViewPage /></KnowledgeGate></ModuleGate>} />
         <Route path="/admin" element={<AdminGate><AdminDashboard /></AdminGate>} />
         <Route path="/admin/knowledge" element={<KnowledgeGate><AdminGate><AdminKnowledge /></AdminGate></KnowledgeGate>} />
         <Route path="/admin/knowledge/gaps" element={<KnowledgeGate><AdminGate><AdminKnowledgeGaps /></AdminGate></KnowledgeGate>} />
