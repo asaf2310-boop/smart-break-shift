@@ -9,9 +9,11 @@ import {
 import {
   shouldUseServerRag,
   ingestServerDocument,
+  ingestServerDocumentPages,
   deleteServerDocument,
   reprocessServerDocument,
   getKnowledgeTenantId,
+  PAGE_INGEST_BATCH,
 } from "@/lib/knowledge/knowledgeClient";
 
 export function formatKnowledgeIngestError(err) {
@@ -21,6 +23,9 @@ export function formatKnowledgeIngestError(err) {
   }
   if (msg === "ingest_network" || msg.includes("fetch failed") || msg === "network") {
     return "שגיאת רשת בשמירה לשרת. המסמך נשמר מקומית — נסו «עיבוד מחדש» מהרשימה.";
+  }
+  if (msg === "ingest_pages_failed") {
+    return "טקסט נשמר בשרת אך העלאת תמונות העמודים נכשלה. נסו «עיבוד מחדש».";
   }
   if (msg === "document_too_large") {
     return "המסמך גדול מדי לשרת (הקטינו PDF או פצלו לקבצים קטנים יותר).";
@@ -34,6 +39,28 @@ export function formatKnowledgeIngestError(err) {
   return msg || "לא ניתן לעבד בשרת";
 }
 
+async function uploadPageThumbnailsToServer(doc, pagesWithThumbs) {
+  if (!pagesWithThumbs?.length) return 0;
+
+  const tenantId = doc.tenantId ?? getKnowledgeTenantId();
+  let totalImages = 0;
+
+  for (let offset = 0; offset < pagesWithThumbs.length; offset += PAGE_INGEST_BATCH) {
+    const batch = pagesWithThumbs.slice(offset, offset + PAGE_INGEST_BATCH);
+    const result = await ingestServerDocumentPages({
+      documentId: doc.id,
+      title: doc.title,
+      fileName: doc.fileName,
+      tenantId,
+      pages: batch,
+      replaceAll: offset === 0,
+    });
+    totalImages += result?.imageCount ?? 0;
+  }
+
+  return totalImages;
+}
+
 /**
  * Save document locally and ingest to pgvector when server RAG is active.
  */
@@ -42,6 +69,7 @@ export async function saveKnowledgeDocument(payload) {
     ? await slimPageThumbnailsForUpload(payload.pages)
     : null;
   const pagesForStorage = stripPageThumbnailsForStorage(pagesForIngest || payload.pages);
+  const pagesWithThumbs = pagesForIngest?.filter((p) => p?.thumbnail) || [];
 
   const doc = upsertKnowledgeDocument({
     ...payload,
@@ -61,12 +89,22 @@ export async function saveKnowledgeDocument(payload) {
       category: doc.category,
       sourceType: doc.sourceType,
       fileName: doc.fileName,
-      pages: pagesForIngest,
+      pages: pagesForStorage,
       images: payload.images,
       tenantId: payload.tenantId ?? getKnowledgeTenantId(),
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
+      skipImages: true,
     });
+
+    if (pagesWithThumbs.length) {
+      try {
+        ingestResult.imageCount = await uploadPageThumbnailsToServer(doc, pagesWithThumbs);
+      } catch (pageErr) {
+        return { doc, ingestResult, ingestError: pageErr };
+      }
+    }
+
     return { doc, ingestResult, ingestError: null };
   } catch (err) {
     return { doc, ingestResult: null, ingestError: err };
@@ -97,20 +135,32 @@ export async function removeKnowledgeDocument(id) {
   return { serverWarning };
 }
 
-export async function reprocessKnowledgeDocument(id, docFromStore) {
+export async function reprocessKnowledgeDocument(id, docFromStore, { pagesWithThumbnails } = {}) {
   if (shouldUseServerRag()) {
     if (docFromStore) {
-      return ingestServerDocument({
+      const pagesForStorage = stripPageThumbnailsForStorage(
+        pagesWithThumbnails || docFromStore.pages,
+      );
+      const result = await ingestServerDocument({
         id: docFromStore.id,
         title: docFromStore.title,
         content: docFromStore.content,
         category: docFromStore.category,
         sourceType: docFromStore.sourceType,
         fileName: docFromStore.fileName,
-        pages: docFromStore.pages,
+        pages: pagesForStorage,
         createdAt: docFromStore.createdAt,
         updatedAt: docFromStore.updatedAt,
+        skipImages: true,
       });
+
+      const thumbs = pagesWithThumbnails?.filter((p) => p?.thumbnail) || [];
+      if (thumbs.length) {
+        const slim = await slimPageThumbnailsForUpload(thumbs);
+        result.imageCount = await uploadPageThumbnailsToServer(docFromStore, slim);
+      }
+
+      return result;
     }
     return reprocessServerDocument(id);
   }

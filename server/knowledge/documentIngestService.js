@@ -74,14 +74,17 @@ export async function ingestDocument(document) {
       .update({ chunk_count: 0, updated_at: new Date().toISOString() })
       .eq("id", dbDoc.id);
 
-    const imageResult = await ingestDocumentImages({
-      id: dbDoc.id,
-      title: dbDoc.title,
-      fileName: dbDoc.file_name,
-      pages: document.pages,
-      images: document.images,
-      tenantId: dbDoc.tenant_id,
-    });
+    const imageResult = document.skipImages
+      ? { imageCount: 0 }
+      : await ingestDocumentImages({
+          id: dbDoc.id,
+          title: dbDoc.title,
+          fileName: dbDoc.file_name,
+          pages: document.pages,
+          images: document.images,
+          tenantId: dbDoc.tenant_id,
+          skipOcr: true,
+        });
 
     return {
       ok: true,
@@ -125,14 +128,17 @@ export async function ingestDocument(document) {
     })
     .eq("id", dbDoc.id);
 
-  const imageResult = await ingestDocumentImages({
-    id: dbDoc.id,
-    title: dbDoc.title,
-    fileName: dbDoc.file_name,
-    pages: document.pages,
-    images: document.images,
-    tenantId: dbDoc.tenant_id,
-  });
+  const imageResult = document.skipImages
+    ? { imageCount: 0 }
+    : await ingestDocumentImages({
+        id: dbDoc.id,
+        title: dbDoc.title,
+        fileName: dbDoc.file_name,
+        pages: document.pages,
+        images: document.images,
+        tenantId: dbDoc.tenant_id,
+        skipOcr: true,
+      });
 
   return {
     ok: true,

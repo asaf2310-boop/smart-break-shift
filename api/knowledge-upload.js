@@ -9,6 +9,7 @@ import {
   reprocessDocument,
   getTotalChunkCount,
 } from "../server/knowledge/documentIngestService.js";
+import { ingestDocumentImages } from "../server/knowledge/imageIngestService.js";
 
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") {
@@ -83,9 +84,45 @@ export default async function handler(req, res) {
   if (action === "reprocess") {
     const documentId = String(body.documentId || body.id || "").trim();
     if (!documentId) return json(res, 400, { error: "document_id_required" }, req);
-    const result = await reprocessDocument(documentId);
-    if (!result.ok) return json(res, 500, { error: result.error, ...result }, req);
-    return json(res, 200, result, req);
+    try {
+      const result = await reprocessDocument(documentId);
+      if (!result.ok) return json(res, 500, { error: result.error, ...result }, req);
+      return json(res, 200, result, req);
+    } catch (err) {
+      console.error("[knowledge-upload] reprocess", err);
+      return json(res, 500, { error: err?.message || "ingest_exception" }, req);
+    }
+  }
+
+  if (action === "ingest_pages") {
+    const documentId = String(body.documentId || "").trim();
+    if (!documentId) return json(res, 400, { error: "document_id_required" }, req);
+    const pages = Array.isArray(body.pages) ? body.pages : [];
+    if (!pages.length) return json(res, 400, { error: "pages_required" }, req);
+
+    const pageBodyBytes = Buffer.byteLength(JSON.stringify(body), "utf8");
+    if (pageBodyBytes > 3_500_000) {
+      return json(res, 413, { error: "document_too_large" }, req);
+    }
+
+    try {
+      const result = await ingestDocumentImages(
+        {
+          id: documentId,
+          title: body.title,
+          fileName: body.fileName,
+          tenantId: body.tenantId ?? null,
+          pages,
+          skipOcr: true,
+        },
+        { replaceAll: body.replaceAll === true, skipOcr: true },
+      );
+      if (!result.ok) return json(res, 500, { error: result.error }, req);
+      return json(res, 200, result, req);
+    } catch (err) {
+      console.error("[knowledge-upload] ingest_pages", err);
+      return json(res, 500, { error: err?.message || "ingest_exception" }, req);
+    }
   }
 
   const doc = body.document;
@@ -102,7 +139,12 @@ export default async function handler(req, res) {
     return json(res, 413, { error: "document_too_large" }, req);
   }
 
-  const result = await ingestDocument(doc);
-  if (!result.ok) return json(res, 500, { error: result.error, ...result }, req);
-  return json(res, 200, result, req);
+  try {
+    const result = await ingestDocument(doc);
+    if (!result.ok) return json(res, 500, { error: result.error, ...result }, req);
+    return json(res, 200, result, req);
+  } catch (err) {
+    console.error("[knowledge-upload] ingest", err);
+    return json(res, 500, { error: err?.message || "ingest_exception" }, req);
+  }
 }

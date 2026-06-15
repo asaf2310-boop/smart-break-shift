@@ -14,7 +14,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 export const MAX_KNOWLEDGE_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_PDF_PAGES = 30;
 const PAGE_RENDER_MAX_WIDTH = 960;
-const UPLOAD_THUMB_MAX_WIDTH = 640;
+const UPLOAD_THUMB_MAX_WIDTH = 480;
 
 /** Metadata only — thumbnails live on server in knowledge_images. */
 export function stripPageThumbnailsForStorage(pages) {
@@ -58,7 +58,7 @@ export async function slimPageThumbnailsForUpload(pages) {
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, w, h);
       ctx.drawImage(img, 0, 0, w, h);
-      out.push({ ...page, thumbnail: canvas.toDataURL("image/jpeg", 0.62) });
+      out.push({ ...page, thumbnail: canvas.toDataURL("image/jpeg", 0.55) });
     } catch {
       out.push(page);
     }

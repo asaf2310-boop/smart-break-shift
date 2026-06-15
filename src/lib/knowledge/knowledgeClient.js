@@ -9,6 +9,20 @@ import { KNOWLEDGE_LOW_RELEVANCE_ANSWER } from "@/lib/knowledgePrompt";
 
 const API_TIMEOUT_MS = 25_000;
 const INGEST_TIMEOUT_MS = 120_000;
+const PAGE_INGEST_TIMEOUT_MS = 90_000;
+const PAGE_INGEST_BATCH = 2;
+
+function postKnowledgeUpload(body, timeoutMs = API_TIMEOUT_MS) {
+  return fetchWithTimeout(
+    "/api/knowledge-upload",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+    timeoutMs,
+  );
+}
 
 function fetchWithTimeout(url, options = {}, timeoutMs = API_TIMEOUT_MS) {
   const controller = new AbortController();
@@ -58,15 +72,10 @@ export async function listServerDocuments() {
 export async function ingestServerDocument(document) {
   let res;
   try {
-    res = await fetchWithTimeout(
-      "/api/knowledge-upload",
+    res = await postKnowledgeUpload(
       {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "ingest",
-          document: { ...document, tenantId: document.tenantId ?? getKnowledgeTenantId() },
-        }),
+        action: "ingest",
+        document: { ...document, tenantId: document.tenantId ?? getKnowledgeTenantId() },
       },
       INGEST_TIMEOUT_MS,
     );
@@ -78,6 +87,42 @@ export async function ingestServerDocument(document) {
   if (!res.ok) throw new Error(data.error || "ingest_failed");
   return data;
 }
+
+/**
+ * Upload PDF page thumbnails in a small batch (after text ingest).
+ */
+export async function ingestServerDocumentPages({
+  documentId,
+  title,
+  fileName,
+  tenantId,
+  pages,
+  replaceAll = false,
+}) {
+  let res;
+  try {
+    res = await postKnowledgeUpload(
+      {
+        action: "ingest_pages",
+        documentId,
+        title,
+        fileName,
+        tenantId: tenantId ?? getKnowledgeTenantId(),
+        pages,
+        replaceAll,
+      },
+      PAGE_INGEST_TIMEOUT_MS,
+    );
+  } catch (err) {
+    if (err?.name === "AbortError") throw new Error("ingest_timeout");
+    throw new Error("ingest_network");
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "ingest_pages_failed");
+  return data;
+}
+
+export { PAGE_INGEST_BATCH };
 
 export async function reprocessServerDocument(documentId) {
   const res = await fetchWithTimeout("/api/knowledge-upload", {

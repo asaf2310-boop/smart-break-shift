@@ -235,8 +235,10 @@ export default function KnowledgeAdmin() {
 
       if (ingestError) {
         toast({
-          title: "נשמר מקומית — שגיאה בשרת",
-          description: formatKnowledgeIngestError(ingestError),
+          title: ingestResult?.chunkCount ? "נשמר חלקית בשרת" : "נשמר מקומית — שגיאה בשרת",
+          description: ingestResult?.chunkCount
+            ? `${ingestResult.chunkCount} קטעים נשמרו. ${formatKnowledgeIngestError(ingestError)}`
+            : formatKnowledgeIngestError(ingestError),
           variant: "destructive",
         });
         return;

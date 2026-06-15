@@ -21,9 +21,12 @@ function sleep(ms) {
 /**
  * @param {object} document — id, title, fileName, pages, tenantId, images[]
  */
-export async function ingestDocumentImages(document) {
+export async function ingestDocumentImages(document, options = {}) {
   const supabase = getSupabaseAdmin();
   if (!supabase) return { ok: false, error: "supabase_not_configured", imageCount: 0 };
+
+  const replaceAll = options.replaceAll !== false;
+  const skipOcr = document.skipOcr === true || options.skipOcr === true;
 
   const docId = document.id;
   const docName = document.title || document.fileName || "מסמך";
@@ -58,14 +61,25 @@ export async function ingestDocumentImages(document) {
     return { ok: true, imageCount: 0 };
   }
 
-  await supabase.from("knowledge_images").delete().eq("document_id", docId);
+  if (replaceAll) {
+    await supabase.from("knowledge_images").delete().eq("document_id", docId);
+  } else {
+    for (const cand of candidates) {
+      if (cand.pageNumber == null) continue;
+      await supabase
+        .from("knowledge_images")
+        .delete()
+        .eq("document_id", docId)
+        .eq("page_number", cand.pageNumber);
+    }
+  }
 
   const rows = [];
   for (const cand of candidates) {
     let ocrText = "";
     let description = "";
 
-    if (isOcrConfigured()) {
+    if (isOcrConfigured() && !skipOcr) {
       const ocr = await ocrImage(cand.imageData, {
         fileName: cand.fileName || fileName,
         pageNumber: cand.pageNumber,
