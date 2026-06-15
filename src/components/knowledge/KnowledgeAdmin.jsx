@@ -37,6 +37,7 @@ import {
   shouldUseServerRag,
   listServerDocuments,
   probeServerRagHealth,
+  fetchServerDocumentPageImages,
 } from "@/lib/knowledge/knowledgeClient";
 import { cleanPdfPageText, isPdfExtractedTextReadable } from "@/lib/knowledge/pdfTextQuality";
 
@@ -213,16 +214,39 @@ export default function KnowledgeAdmin() {
     setDialog({ mode: "create" });
   };
 
-  const openEdit = (doc) => {
+  const openEdit = async (doc) => {
+    let pages = doc.pages || null;
+    const needsThumbsFromServer =
+      serverRag &&
+      Array.isArray(pages) &&
+      pages.length > 0 &&
+      !pages.some((p) => p?.thumbnail) &&
+      pages.some((p) => p?.hasThumbnail);
+
+    if (needsThumbsFromServer) {
+      try {
+        const serverPages = await fetchServerDocumentPageImages(doc.id);
+        if (serverPages.length) {
+          const byNum = new Map(serverPages.map((p) => [p.pageNumber, p]));
+          pages = pages.map((p) => {
+            const fromServer = byNum.get(p.pageNumber);
+            return fromServer?.thumbnail ? { ...p, thumbnail: fromServer.thumbnail } : p;
+          });
+        }
+      } catch {
+        // preview stays metadata-only
+      }
+    }
+
     setForm({
       title: doc.title,
       content: doc.content,
       category: doc.category || "כללי",
-      pages: doc.pages || null,
+      pages,
       images: doc.images || null,
       needsServerOcr: false,
     });
-    setDialog({ mode: "edit", id: doc.id });
+    setDialog({ mode: "edit", id: doc.id, fileName: doc.fileName });
   };
 
   const handleSave = async (e) => {

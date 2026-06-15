@@ -10,7 +10,7 @@ import {
   getTotalChunkCount,
   syncDocumentChunksFromOcr,
 } from "../server/knowledge/documentIngestService.js";
-import { ingestDocumentImages } from "../server/knowledge/imageIngestService.js";
+import { ingestDocumentImages, listDocumentPageImages } from "../server/knowledge/imageIngestService.js";
 
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") {
@@ -38,6 +38,13 @@ export default async function handler(req, res) {
     const url = new URL(req.url || "/", "http://localhost");
     if (url.searchParams.get("health") === "1") {
       return json(res, 200, { ok: true, pgvector: true }, req);
+    }
+
+    const documentId = String(url.searchParams.get("documentId") || "").trim();
+    if (documentId && url.searchParams.get("images") === "1") {
+      const { pages, error } = await listDocumentPageImages(documentId);
+      if (error) return json(res, 500, { error }, req);
+      return json(res, 200, { pages }, req);
     }
 
     const { documents, error } = await listDocumentsWithChunkCounts();
@@ -117,7 +124,7 @@ export default async function handler(req, res) {
           pages,
           skipOcr: !runOcr,
         },
-        { replaceAll: body.replaceAll === true, skipOcr: !runOcr },
+        { replaceAll: body.replaceAll === true, skipOcr: !runOcr, skipEmbeddings: true },
       );
       if (!result.ok) return json(res, 500, { error: result.error }, req);
 

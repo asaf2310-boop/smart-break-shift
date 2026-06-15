@@ -22,7 +22,13 @@ export function formatKnowledgeIngestError(err) {
     return "העיבוד בשרת ארך זמן רב מדי. נסו שוב או המתינו דקה ולחצו «עיבוד מחדש».";
   }
   if (msg === "ingest_network" || msg.includes("fetch failed") || msg === "network") {
-    return "שגיאת רשת בשמירה לשרת. המסמך נשמר מקומית — נסו «עיבוד מחדש» מהרשימה.";
+    return "שגיאת רשת בשמירה לשרת. בדקו חיבור, נסו שוב, או לחצו «עיבוד מחדש». אם הבעיה חוזרת — ודאו ש-GEMINI_API_KEY ו-SUPABASE_SERVICE_ROLE_KEY מוגדרים ב-Vercel.";
+  }
+  if (msg === "forbidden" || msg === "pgvector_not_configured") {
+    return "שרת הידע לא מוגדר או נחסם (בדקו משתני סביבה ב-Vercel ופריסה מחדש).";
+  }
+  if (msg.startsWith("ingest_http_403")) {
+    return "הגישה לשרת נחסמה — רעננו את הדף ונסו שוב.";
   }
   if (msg === "ingest_pages_failed") {
     return "טקסט נשמר בשרת אך העלאת תמונות העמודים נכשלה. נסו «עיבוד מחדש».";
@@ -39,7 +45,7 @@ export function formatKnowledgeIngestError(err) {
   return msg || "לא ניתן לעבד בשרת";
 }
 
-async function uploadPageThumbnailsToServer(doc, pagesWithThumbs) {
+async function uploadPageThumbnailsToServer(doc, pagesWithThumbs, { runOcr = true } = {}) {
   if (!pagesWithThumbs?.length) return { imageCount: 0, chunkCount: null };
 
   const tenantId = doc.tenantId ?? getKnowledgeTenantId();
@@ -55,7 +61,7 @@ async function uploadPageThumbnailsToServer(doc, pagesWithThumbs) {
       tenantId,
       pages: batch,
       replaceAll: offset === 0,
-      runOcr: Boolean(doc.needsServerOcr),
+      runOcr,
     });
     totalImages += result?.imageCount ?? 0;
     if (result?.chunkCount != null) lastChunkCount = result.chunkCount;
@@ -104,9 +110,10 @@ export async function saveKnowledgeDocument(payload) {
 
     if (pagesWithThumbs.length) {
       try {
-        const pageUpload = await uploadPageThumbnailsToServer(
+    const pageUpload = await uploadPageThumbnailsToServer(
           { ...doc, needsServerOcr },
           pagesWithThumbs,
+          { runOcr: needsServerOcr },
         );
         ingestResult.imageCount = pageUpload.imageCount;
         if (pageUpload.chunkCount != null) {

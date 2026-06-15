@@ -10,20 +10,42 @@ export function getSiteOrigin(req) {
   return `${proto}://${host}`;
 }
 
+function normalizeHost(hostname) {
+  return String(hostname || "").toLowerCase().replace(/^www\./, "");
+}
+
+function originsMatch(a, b) {
+  if (!a || !b) return false;
+  try {
+    const ua = new URL(a);
+    const ub = new URL(b);
+    return normalizeHost(ua.hostname) === normalizeHost(ub.hostname) && ua.protocol === ub.protocol;
+  } catch {
+    return a === b;
+  }
+}
+
 export function isSameOrigin(req) {
   const siteOrigin = getSiteOrigin(req);
   if (!siteOrigin) return false;
   const origin = req.headers.origin;
-  if (typeof origin === "string" && origin === siteOrigin) return true;
+  if (typeof origin === "string" && originsMatch(origin, siteOrigin)) return true;
   const referer = req.headers.referer;
-  if (typeof referer === "string" && referer.startsWith(siteOrigin)) return true;
+  if (typeof referer === "string") {
+    try {
+      const refOrigin = new URL(referer).origin;
+      if (originsMatch(refOrigin, siteOrigin)) return true;
+    } catch {
+      if (referer.startsWith(siteOrigin)) return true;
+    }
+  }
   return false;
 }
 
 export function corsHeaders(req) {
   const siteOrigin = getSiteOrigin(req);
   const origin = req.headers.origin;
-  if (siteOrigin && typeof origin === "string" && origin === siteOrigin) {
+  if (siteOrigin && typeof origin === "string" && originsMatch(origin, siteOrigin)) {
     return {
       "Access-Control-Allow-Origin": origin,
       "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
@@ -42,6 +64,19 @@ export function json(res, status, body, req) {
 }
 
 export function readJsonBody(req) {
+  if (req.body !== undefined && req.body !== null) {
+    if (typeof req.body === "string") {
+      try {
+        return Promise.resolve(req.body ? JSON.parse(req.body) : {});
+      } catch {
+        return Promise.reject(new Error("invalid_json"));
+      }
+    }
+    if (typeof req.body === "object") {
+      return Promise.resolve(req.body);
+    }
+  }
+
   return new Promise((resolve, reject) => {
     const chunks = [];
     req.on("data", (chunk) => chunks.push(chunk));

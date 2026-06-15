@@ -10,7 +10,25 @@ import { KNOWLEDGE_LOW_RELEVANCE_ANSWER } from "@/lib/knowledgePrompt";
 const API_TIMEOUT_MS = 25_000;
 const INGEST_TIMEOUT_MS = 120_000;
 const PAGE_INGEST_TIMEOUT_MS = 120_000;
-const PAGE_INGEST_BATCH = 2;
+const PAGE_INGEST_BATCH = 1;
+const INGEST_RETRY_ATTEMPTS = 2;
+
+async function postKnowledgeUploadWithRetry(body, timeoutMs = API_TIMEOUT_MS) {
+  let lastErr;
+  for (let attempt = 0; attempt < INGEST_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      return await postKnowledgeUpload(body, timeoutMs);
+    } catch (err) {
+      lastErr = err;
+      if (err?.name === "AbortError") throw new Error("ingest_timeout");
+      if (attempt + 1 < INGEST_RETRY_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+        continue;
+      }
+    }
+  }
+  throw new Error("ingest_network");
+}
 
 function postKnowledgeUpload(body, timeoutMs = API_TIMEOUT_MS) {
   return fetchWithTimeout(
@@ -72,7 +90,7 @@ export async function listServerDocuments() {
 export async function ingestServerDocument(document) {
   let res;
   try {
-    res = await postKnowledgeUpload(
+    res = await postKnowledgeUploadWithRetry(
       {
         action: "ingest",
         document: { ...document, tenantId: document.tenantId ?? getKnowledgeTenantId() },
@@ -80,11 +98,15 @@ export async function ingestServerDocument(document) {
       INGEST_TIMEOUT_MS,
     );
   } catch (err) {
-    if (err?.name === "AbortError") throw new Error("ingest_timeout");
+    if (err?.message === "ingest_timeout" || err?.name === "AbortError") throw new Error("ingest_timeout");
     throw new Error("ingest_network");
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "ingest_failed");
+  if (!res.ok) {
+    const err = new Error(data.error || data.message || `ingest_http_${res.status}`);
+    err.httpStatus = res.status;
+    throw err;
+  }
   return data;
 }
 
@@ -102,7 +124,7 @@ export async function ingestServerDocumentPages({
 }) {
   let res;
   try {
-    res = await postKnowledgeUpload(
+    res = await postKnowledgeUploadWithRetry(
       {
         action: "ingest_pages",
         documentId,
@@ -116,12 +138,28 @@ export async function ingestServerDocumentPages({
       PAGE_INGEST_TIMEOUT_MS,
     );
   } catch (err) {
-    if (err?.name === "AbortError") throw new Error("ingest_timeout");
+    if (err?.message === "ingest_timeout" || err?.name === "AbortError") throw new Error("ingest_timeout");
     throw new Error("ingest_network");
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "ingest_pages_failed");
+  if (!res.ok) {
+    const err = new Error(data.error || data.message || `ingest_pages_http_${res.status}`);
+    err.httpStatus = res.status;
+    throw err;
+  }
   return data;
+}
+
+/**
+ * Load page thumbnails stored on server (for admin edit preview).
+ */
+export async function fetchServerDocumentPageImages(documentId) {
+  const id = String(documentId || "").trim();
+  if (!id) return [];
+  const res = await fetchWithTimeout(`/api/knowledge-upload?documentId=${encodeURIComponent(id)}&images=1`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "page_images_failed");
+  return data.pages || [];
 }
 
 export { PAGE_INGEST_BATCH };

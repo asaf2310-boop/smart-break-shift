@@ -121,10 +121,13 @@ export async function ingestDocumentImages(document, options = {}) {
   }
 
   const embedInputs = rows.map(buildImageEmbeddingInput);
-  const { embeddings } = await embedTexts(embedInputs);
-  rows.forEach((row, i) => {
-    row.embedding = embeddings?.[i] ?? null;
-  });
+  const skipEmbeddings = options.skipEmbeddings === true;
+  if (!skipEmbeddings) {
+    const { embeddings } = await embedTexts(embedInputs);
+    rows.forEach((row, i) => {
+      row.embedding = embeddings?.[i] ?? null;
+    });
+  }
 
   const BATCH = 20;
   for (let offset = 0; offset < rows.length; offset += BATCH) {
@@ -140,6 +143,32 @@ export async function deleteDocumentImages(documentId) {
   const supabase = getSupabaseAdmin();
   if (!supabase) return;
   await supabase.from("knowledge_images").delete().eq("document_id", documentId);
+}
+
+/** Page thumbnails for admin UI (no full OCR payload). */
+export async function listDocumentPageImages(documentId) {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return { pages: [], error: "supabase_not_configured" };
+
+  const { data, error } = await supabase
+    .from("knowledge_images")
+    .select("page_number, image_data, storage_url, description")
+    .eq("document_id", documentId)
+    .order("page_number", { ascending: true });
+
+  if (error) return { pages: [], error: error.message };
+
+  const pages = (data || [])
+    .filter((row) => row.image_data || row.storage_url)
+    .map((row) => ({
+      pageNumber: row.page_number,
+      thumbnail: row.storage_url || row.image_data,
+      sectionTitle: row.page_number != null ? `עמוד ${row.page_number}` : null,
+      text: "",
+      hasThumbnail: true,
+    }));
+
+  return { pages, error: null };
 }
 
 /**

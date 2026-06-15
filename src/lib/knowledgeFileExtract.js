@@ -218,18 +218,31 @@ async function renderPageThumbnail(page) {
   const baseViewport = page.getViewport({ scale: 1 });
   if (!baseViewport.width) return null;
 
-  const scale = Math.min(PAGE_RENDER_MAX_WIDTH / baseViewport.width, 2);
-  const viewport = page.getViewport({ scale });
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.floor(viewport.width);
-  canvas.height = Math.floor(viewport.height);
-  const ctx = canvas.getContext("2d", { alpha: false });
-  if (!ctx) return null;
+  const scales = [
+    Math.min(PAGE_RENDER_MAX_WIDTH / baseViewport.width, 2),
+    1.25,
+    1,
+  ];
 
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  await page.render({ canvasContext: ctx, viewport }).promise;
-  return canvas.toDataURL("image/jpeg", 0.78);
+  for (const scale of scales) {
+    try {
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.floor(viewport.width);
+      canvas.height = Math.floor(viewport.height);
+      const ctx = canvas.getContext("2d", { alpha: false });
+      if (!ctx) continue;
+
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({ canvasContext: ctx, viewport, intent: "display" }).promise;
+      return canvas.toDataURL("image/jpeg", 0.78);
+    } catch {
+      // try lower scale / simpler render path
+    }
+  }
+
+  return null;
 }
 
 async function extractPdfText(file, docTitle) {
