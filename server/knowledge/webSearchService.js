@@ -2,7 +2,7 @@
 
 import { isGeminiConfigured, geminiGenerateWebSearchAnswer } from "../ai/geminiClient.js";
 import { GEMINI_WEB_SEARCH_SYSTEM_PROMPT } from "./geminiKnowledgePrompt.js";
-import { sanitizeAssistantAnswer } from "./assistantBidi.js";
+import { sanitizeAssistantAnswer, sanitizeHebrewText } from "./assistantBidi.js";
 
 /**
  * @param {string} query
@@ -33,7 +33,7 @@ export async function generateWebSearchAnswer(query) {
     };
   }
 
-  const hebrewAnswerMarkdown = sanitizeAssistantAnswer(result.text || "");
+  const hebrewAnswerMarkdown = sanitizeAssistantAnswer(sanitizeHebrewText(result.text || ""));
 
   return {
     hebrewAnswerMarkdown: hebrewAnswerMarkdown || "לא התקבלה תשובה מחיפוש ברשת. נסו שוב.",

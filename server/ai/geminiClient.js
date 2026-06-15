@@ -2,6 +2,7 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { fetchOpenAiWithRetry, getRetryAfterSec } from "../openaiRetry.js";
+import { sanitizeHebrewText } from "../knowledge/sanitizeHebrewText.js";
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 
@@ -111,6 +112,9 @@ export async function geminiGenerateStructuredAgentResponse({
 
     try {
       const parsed = JSON.parse(text);
+      if (parsed?.hebrewAnswerMarkdown) {
+        parsed.hebrewAnswerMarkdown = sanitizeHebrewText(parsed.hebrewAnswerMarkdown);
+      }
       return { parsed, text, error: null, retryAfterSec: null, rateLimited: false };
     } catch {
       return { parsed: null, text, error: "json_parse_failed", retryAfterSec: null, rateLimited: false };
@@ -140,6 +144,15 @@ function geminiUrl(model, action) {
 
 function parseGeminiError(status, bodyText) {
   return `ai_error:${status}:${String(bodyText || "").slice(0, 120)}`;
+}
+
+function extractGeminiResponseText(data) {
+  const raw =
+    data?.candidates?.[0]?.content?.parts
+      ?.map((p) => p.text || "")
+      .join("")
+      .trim() || "";
+  return raw ? sanitizeHebrewText(raw) : null;
 }
 
 /**
@@ -179,11 +192,7 @@ export async function geminiGenerateText({ system, user, maxTokens = 480, temper
   }
 
   const data = await res.json();
-  const text =
-    data.candidates?.[0]?.content?.parts
-      ?.map((p) => p.text || "")
-      .join("")
-      .trim() || null;
+  const text = extractGeminiResponseText(data);
 
   return { text, error: null, retryAfterSec: null, rateLimited: false };
 }
@@ -226,11 +235,7 @@ export async function geminiGenerateMultimodal({ system, userParts, maxTokens = 
   }
 
   const data = await res.json();
-  const text =
-    data.candidates?.[0]?.content?.parts
-      ?.map((p) => p.text || "")
-      .join("")
-      .trim() || null;
+  const text = extractGeminiResponseText(data);
 
   return { text, error: null, retryAfterSec: null, rateLimited: false };
 }
@@ -388,7 +393,7 @@ export async function geminiGenerateWebSearchAnswer({
         },
       });
 
-      const text = String(response.text || "").trim();
+      const text = sanitizeHebrewText(String(response.text || "").trim());
       const groundingMetadata =
         response.candidates?.[0]?.groundingMetadata ?? response.groundingMetadata ?? null;
       const webSources = extractWebSourcesFromGroundingMetadata(groundingMetadata);
@@ -461,11 +466,7 @@ export async function geminiGenerateWebSearchAnswer({
   }
 
   const data = await res.json();
-  const text =
-    data.candidates?.[0]?.content?.parts
-      ?.map((p) => p.text || "")
-      .join("")
-      .trim() || null;
+  const text = extractGeminiResponseText(data);
   const groundingMetadata = data.candidates?.[0]?.groundingMetadata ?? null;
   const webSources = extractWebSourcesFromGroundingMetadata(groundingMetadata);
 

@@ -1,5 +1,7 @@
 /** Server mirror — keep in sync with src/lib/knowledge/assistantBidi.js */
 
+import { sanitizeHebrewText } from "./sanitizeHebrewText.js";
+
 export const KNOWLEDGE_BIDI_RULES_HE = `
 כללי BiDi עברית–אנגלית (מחייבים):
 1. לעולם אל תערבב עברית ואנגלית באותה שורה בלי עיצוב Markdown מתאים.
@@ -7,7 +9,8 @@ export const KNOWLEDGE_BIDI_RULES_HE = `
 3. טקסט מ-OCR/PDF: פלט עברית נקייה וטבעית בלבד. אל תעתיק מילים שבורות או מחוברות (כמו "מתקדסבשה"). אם קטע מקור מקולקל — נסח מחדש בעברית תקינה על בסיס ההקשר.
 4. פיסוק: סימני קריאה וסוגריים בתוך ההקשר העברי — לדוגמה "שימו לב!" ולא "!שימו לב".
 5. ריווח מילים: רווח ברור בין כל מילה עברית (נכון: "נוספת בעת", "בשם המלא" — שגוי: "נוספתבעת", "בשמהמלא").
-6. Markdown bold: אל תצמיד סימני פיסוק או סוגריים לכוכביות **. עטוף בסוגריים מחוץ ל-bold: (**הפחתת הונאות**) ולא הפחתת הונאות**).`;
+6. Markdown bold: אל תצמיד סימני פיסוק או סוגריים לכוכביות **. עטוף בסוגריים מחוץ ל-bold: (**הפחתת הונאות**) ולא הפחתת הונאות**).
+7. CRITICAL: כתוב תמיד רווח נפרד בין כל מילה עברית. ודא שמילים לא נדבקות (למשל "מוסיףשכבת" שגוי — נכון: "מוסיף שכבת").`;
 
 export const KNOWLEDGE_BIDI_FORMAT_HINT = `${KNOWLEDGE_BIDI_RULES_HE}
 Markdown:
@@ -164,5 +167,7 @@ export function formatAssistantBidiText(text) {
 }
 
 export function sanitizeAssistantAnswer(text) {
-  return cleanHebrewMarkdownArtifacts(formatAssistantBidiText(text));
+  return cleanHebrewMarkdownArtifacts(formatAssistantBidiText(sanitizeHebrewText(text)));
 }
+
+export { sanitizeHebrewText };

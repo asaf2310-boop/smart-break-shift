@@ -24,6 +24,7 @@ import {
 } from "./geminiKnowledgePrompt.js";
 
 import { sanitizeAssistantAnswer } from "./assistantBidi.js";
+import { sanitizeHebrewText } from "./sanitizeHebrewText.js";
 
 /** Assign stable [IMG-N] labels for prompt + response parsing. */
 export function assignImageLabels(images = []) {
@@ -328,7 +329,7 @@ async function generateGeminiFetchKnowledgeAnswer(query, chunks, options = {}) {
     };
   }
 
-  const rawAnswer = result.text || "";
+  const rawAnswer = sanitizeHebrewText(result.text || "");
   const selectedLabels = parseRelevantImageLabels(rawAnswer);
   let answer = sanitizeAssistantAnswer(stripRelevantImagesMarker(rawAnswer));
   const grounded = !isMissingKnowledgeAnswer(answer);

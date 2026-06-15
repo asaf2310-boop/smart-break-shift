@@ -15,6 +15,7 @@ import {
 } from "@/lib/knowledgePrompt";
 import { askKnowledgeServer, shouldUseServerRag, getKnowledgeTenantId } from "@/lib/knowledge/knowledgeClient";
 import { formatAssistantDisplayMarkdown as applyBidiDisplayMarkdown } from "@/lib/knowledge/assistantBidi";
+import { sanitizeHebrewText } from "@/lib/knowledge/sanitizeHebrewText";
 
 /** ~500–800 tokens at ~4 chars/token (Hebrew) */
 import { cleanPdfPageText } from "@/lib/knowledge/pdfTextQuality";
@@ -85,7 +86,7 @@ const KNOWLEDGE_SANITIZE_STORAGE_KEY = "knowledge-content-sanitize-v5";
 
 /** Light sanitize for GPT answers — preserves spacing; fixes Hebrew OCR/PDF artifacts. */
 export function sanitizeAssistantAnswer(text) {
-  let s = String(text || "").replace(/\r\n/g, "\n").trim();
+  let s = sanitizeHebrewText(String(text || "").replace(/\r\n/g, "\n").trim());
   if (!s) return "";
 
   s = stripBrokenMarkdownLinks(s);
