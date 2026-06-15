@@ -6,6 +6,8 @@ export const RETRIEVAL_TOP_K_MIN = 3;
 export const RETRIEVAL_TOP_K_MAX = 6;
 export const RETRIEVAL_TOP_K_DEFAULT = 5;
 export const MIN_EMBEDDING_SCORE = 0.58;
+/** Hybrid merge applies its own threshold — keep more vector candidates. */
+export const MIN_EMBEDDING_SCORE_HYBRID = 0.38;
 export const MIN_EMBEDDING_RELATIVE_RATIO = 0.72;
 export const MAX_CHUNKS_PER_DOCUMENT = 2;
 
@@ -23,7 +25,9 @@ export async function searchKnowledgeChunks(queryEmbedding, options = {}) {
     RETRIEVAL_TOP_K_MAX,
     Math.max(RETRIEVAL_TOP_K_MIN, options.topK ?? RETRIEVAL_TOP_K_DEFAULT),
   );
-  const threshold = options.threshold ?? MIN_EMBEDDING_SCORE - 0.06;
+  const forHybrid = options.forHybrid === true;
+  const minScore = forHybrid ? MIN_EMBEDDING_SCORE_HYBRID : MIN_EMBEDDING_SCORE;
+  const threshold = options.threshold ?? minScore - 0.06;
 
   const { data, error } = await supabase.rpc("match_knowledge_chunks", {
     query_embedding: queryEmbedding,
@@ -53,7 +57,7 @@ export async function searchKnowledgeChunks(queryEmbedding, options = {}) {
       score: row.similarity,
       method: "pgvector",
     }))
-    .filter((row) => row.score >= MIN_EMBEDDING_SCORE)
+    .filter((row) => row.score >= minScore)
     .sort((a, b) => b.score - a.score);
 
   const diversified = diversifyHits(ranked, topK);

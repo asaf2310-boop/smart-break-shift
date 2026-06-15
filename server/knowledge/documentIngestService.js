@@ -383,9 +383,19 @@ export async function syncDocumentChunksFromOcr(documentId) {
     if (!existing) {
       page.text = ocr;
       changed = true;
-    } else if (!existing.includes(ocr.slice(0, Math.min(48, ocr.length)))) {
-      page.text = `${existing}\n\n${ocr}`;
-      changed = true;
+    } else {
+      const ocrSnippet = ocr.slice(0, Math.min(48, ocr.length)).toLowerCase();
+      const existingLower = existing.toLowerCase();
+      const hebrewInOcr = (ocr.match(/[\u0590-\u05FF]/g) || []).length;
+      const hebrewInExisting = (existing.match(/[\u0590-\u05FF]/g) || []).length;
+      // Corrupted PDF extract may pass length checks but lack real Hebrew — prefer OCR.
+      if (hebrewInOcr >= 8 && hebrewInExisting < hebrewInOcr * 0.35) {
+        page.text = ocr;
+        changed = true;
+      } else if (ocrSnippet && !existingLower.includes(ocrSnippet)) {
+        page.text = `${existing}\n\n${ocr}`;
+        changed = true;
+      }
     }
     page.hasThumbnail = true;
   }

@@ -17,7 +17,10 @@ function buildRetrievalDebug(query, searchResult, hits, context) {
     retrievalMethod: searchResult.retrievalMethod,
     confidence: Number(searchResult.confidence.toFixed(4)),
     minConfidence: MIN_CONFIDENCE,
+    passesThreshold: searchResult.passesThreshold,
+    searchTerms: searchResult.searchTerms || [],
     imageHitCount: (searchResult.imageHits || []).length,
+    hitCount: hits.length,
     retrievedChunks: hits.map((h) => ({
       documentName: h.chunk.documentName,
       chunkIndex: h.chunk.chunkIndex,
@@ -100,6 +103,23 @@ export async function generateAgentResponse(userQuery, options = {}) {
   const relevantImages = mergeRelevantImages(fetchedImages, searchResult.imageHits || [], topK);
 
   if (!chunks.length || !searchResult.passesThreshold) {
+    if (process.env.NODE_ENV !== "production" || process.env.KNOWLEDGE_DEBUG === "1") {
+      console.warn("[generateAgentResponse] retrieval_miss", {
+        query,
+        hitCount: hits.length,
+        passesThreshold: searchResult.passesThreshold,
+        confidence,
+        searchTerms: searchResult.searchTerms,
+        top: hits[0]
+          ? {
+              vectorScore: hits[0].vectorScore,
+              keywordScore: hits[0].keywordScore,
+              combined: hits[0].score,
+              snippet: truncateSnippet(hits[0].chunk?.text, 80),
+            }
+          : null,
+      });
+    }
     await logKnowledgeQuery({
       question: query,
       tenantId,

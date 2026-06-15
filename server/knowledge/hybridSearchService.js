@@ -4,6 +4,12 @@ import { getSupabaseAdmin } from "./supabaseAdmin.js";
 import { searchKnowledgeChunks, RETRIEVAL_TOP_K_DEFAULT } from "./vectorSearchService.js";
 import { searchKnowledgeImages } from "./imageIngestService.js";
 import { KNOWLEDGE_MISSING_ANSWER } from "./geminiKnowledgePrompt.js";
+import {
+  extractSearchTerms,
+  scoreChunkKeywordMatch,
+  normalizeKeywordScore,
+  hasStrongKeywordMatch,
+} from "./queryTermsService.js";
 
 export const MIN_CONFIDENCE = 0.58;
 export const KNOWLEDGE_NO_SOURCE_ANSWER = KNOWLEDGE_MISSING_ANSWER;
@@ -22,9 +28,11 @@ export async function hybridSearch(query, queryEmbedding, options = {}) {
   const topK = options.topK ?? RETRIEVAL_TOP_K_DEFAULT;
   const tenantId = options.tenantId ?? null;
 
+  const searchTerms = extractSearchTerms(query);
+
   const [vectorResult, keywordHits, imageResult] = await Promise.all([
-    searchKnowledgeChunks(queryEmbedding, { topK: topK * 2, tenantId }),
-    searchKeywordChunks(query, { topK: topK * 2, tenantId }),
+    searchKnowledgeChunks(queryEmbedding, { topK: topK * 2, tenantId, forHybrid: true }),
+    searchKeywordChunks(query, { topK: topK * 2, tenantId, searchTerms }),
     searchKnowledgeImages(queryEmbedding, { topK, tenantId }),
   ]);
 
@@ -33,6 +41,8 @@ export async function hybridSearch(query, queryEmbedding, options = {}) {
     keywordHits,
     imageResult.hits || [],
     topK,
+    query,
+    searchTerms,
   );
 
   const top = merged[0];
@@ -44,7 +54,8 @@ export async function hybridSearch(query, queryEmbedding, options = {}) {
     hits: merged,
     imageHits: imageResult.hits || [],
     confidence,
-    passesThreshold: passesHybridThreshold(merged),
+    passesThreshold: passesHybridThreshold(merged, query),
+    searchTerms,
     retrievalMethod: "hybrid",
     error: vectorResult.error || imageResult.error || null,
   };
@@ -54,7 +65,7 @@ export async function hybridSearch(query, queryEmbedding, options = {}) {
  * MIN_CONFIDENCE targets raw embedding similarity; hybrid combined scores are weighted
  * (vector-only max ≈ VECTOR_WEIGHT). Check component scores, not combined alone.
  */
-export function passesHybridThreshold(hits) {
+export function passesHybridThreshold(hits, query = "") {
   if (!hits.length) return false;
   const top = hits[0];
   const vectorScore = top.vectorScore || 0;
@@ -62,18 +73,25 @@ export function passesHybridThreshold(hits) {
   const imageScore = top.imageScore || 0;
   const combined = top.score || 0;
 
+  if (hasStrongKeywordMatch(query, top.chunk)) return true;
   if (vectorScore >= MIN_CONFIDENCE) return true;
-  if (keywordScore >= 0.55 && vectorScore >= MIN_CONFIDENCE - 0.18) return true;
+  // Keyword-only or keyword-dominant — do not require high vector score
+  if (keywordScore >= 0.42) return true;
+  if (keywordScore >= 0.32 && vectorScore >= 0.18) return true;
+  if (keywordScore >= 0.55 && vectorScore >= MIN_CONFIDENCE - 0.22) return true;
   if (imageScore >= 0.5 && vectorScore >= MIN_CONFIDENCE - 0.15) return true;
-  return combined >= MIN_CONFIDENCE * VECTOR_WEIGHT;
+  return combined >= MIN_CONFIDENCE * VECTOR_WEIGHT * 0.9;
 }
 
-async function searchKeywordChunks(query, { topK = 5, tenantId = null } = {}) {
+async function searchKeywordChunks(query, { topK = 5, tenantId = null, searchTerms = null } = {}) {
   const supabase = getSupabaseAdmin();
   if (!supabase) return [];
 
+  const terms = searchTerms?.length ? searchTerms : extractSearchTerms(query);
+  const keywordQuery = terms.length ? terms.join(" ") : query;
+
   const { data, error } = await supabase.rpc("search_knowledge_chunks_keyword", {
-    search_query: query,
+    search_query: keywordQuery,
     match_count: topK,
     filter_tenant_id: tenantId,
   });
@@ -83,10 +101,8 @@ async function searchKeywordChunks(query, { topK = 5, tenantId = null } = {}) {
     return [];
   }
 
-  const maxScore = Math.max(...(data || []).map((r) => r.keyword_score || 0), 1);
-
-  return (data || []).map((row) => ({
-    chunk: {
+  return (data || []).map((row) => {
+    const chunk = {
       id: row.id,
       documentId: row.document_id,
       documentName: row.document_name,
@@ -96,13 +112,20 @@ async function searchKeywordChunks(query, { topK = 5, tenantId = null } = {}) {
       pageNumber: row.page_number,
       sectionTitle: row.section_title,
       text: row.chunk_text,
-    },
-    score: (row.keyword_score || 0) / maxScore,
-    method: "keyword",
-  }));
+    };
+    const rawScore = scoreChunkKeywordMatch(chunk, terms);
+    const rpcScore = row.keyword_score || 0;
+    const blendedRaw = Math.max(rawScore, rpcScore * 1.5);
+    return {
+      chunk,
+      score: normalizeKeywordScore(blendedRaw, terms),
+      method: "keyword",
+    };
+  });
 }
 
-function mergeAndRerank(vectorHits, keywordHits, imageHits, topK) {
+function mergeAndRerank(vectorHits, keywordHits, imageHits, topK, query = "", searchTerms = []) {
+  const terms = searchTerms?.length ? searchTerms : extractSearchTerms(query);
   const scoreMap = new Map();
 
   for (const hit of vectorHits) {
@@ -130,6 +153,8 @@ function mergeAndRerank(vectorHits, keywordHits, imageHits, topK) {
   for (const entry of scoreMap.values()) {
     const key = `${entry.chunk.documentId}:${entry.chunk.pageNumber ?? ""}`;
     entry.imageScore = imageBoostByDocPage.get(key) || 0;
+    const localKeyword = normalizeKeywordScore(scoreChunkKeywordMatch(entry.chunk, terms), terms);
+    entry.keywordScore = Math.max(entry.keywordScore, localKeyword);
     entry.combinedScore =
       entry.vectorScore * VECTOR_WEIGHT +
       entry.keywordScore * KEYWORD_WEIGHT +
