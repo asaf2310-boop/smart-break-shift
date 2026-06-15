@@ -156,7 +156,12 @@ export async function listDocumentPageImages(documentId) {
     .eq("document_id", documentId)
     .order("page_number", { ascending: true });
 
-  if (error) return { pages: [], error: error.message };
+  if (error) {
+    if (/relation.*does not exist/i.test(error.message)) {
+      return { pages: [], error: null };
+    }
+    return { pages: [], error: error.message };
+  }
 
   const pages = (data || [])
     .filter((row) => row.image_data || row.storage_url)

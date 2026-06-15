@@ -49,6 +49,19 @@ export default async function handler(req, res) {
 
     const { documents, error } = await listDocumentsWithChunkCounts();
     const totalChunks = await getTotalChunkCount();
+    if (error === "knowledge_schema_not_migrated") {
+      return json(
+        res,
+        200,
+        {
+          documents: [],
+          totalChunks: 0,
+          schemaWarning: error,
+          message: "הרץ supabase/knowledge.sql ואז knowledge_pgvector.sql ב-Supabase",
+        },
+        req,
+      );
+    }
     if (error) return json(res, 500, { error }, req);
     return json(res, 200, { documents, totalChunks }, req);
   }
@@ -157,7 +170,22 @@ export default async function handler(req, res) {
 
   try {
     const result = await ingestDocument(doc);
-    if (!result.ok) return json(res, 500, { error: result.error, ...result }, req);
+    if (!result.ok) {
+      const status = result.error === "knowledge_schema_not_migrated" ? 503 : 500;
+      return json(
+        res,
+        status,
+        {
+          error: result.error,
+          message:
+            result.error === "knowledge_schema_not_migrated"
+              ? "הרץ supabase/knowledge.sql, knowledge_pgvector.sql ו-knowledge_gemini_migration.sql ב-Supabase SQL Editor"
+              : undefined,
+          ...result,
+        },
+        req,
+      );
+    }
     return json(res, 200, result, req);
   } catch (err) {
     console.error("[knowledge-upload] ingest", err);

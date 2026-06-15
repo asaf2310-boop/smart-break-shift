@@ -24,6 +24,9 @@ export function formatKnowledgeIngestError(err) {
   if (msg === "ingest_network" || msg.includes("fetch failed") || msg === "network") {
     return "שגיאת רשת בשמירה לשרת. בדקו חיבור, נסו שוב, או לחצו «עיבוד מחדש». אם הבעיה חוזרת — ודאו ש-GEMINI_API_KEY ו-SUPABASE_SERVICE_ROLE_KEY מוגדרים ב-Vercel.";
   }
+  if (msg === "knowledge_schema_not_migrated") {
+    return "טבלאות בסיס הידע חסרות ב-Supabase — הרץ knowledge.sql, knowledge_pgvector.sql ו-knowledge_gemini_migration.sql ב-SQL Editor.";
+  }
   if (msg === "forbidden" || msg === "pgvector_not_configured") {
     return "שרת הידע לא מוגדר או נחסם (בדקו משתני סביבה ב-Vercel ופריסה מחדש).";
   }

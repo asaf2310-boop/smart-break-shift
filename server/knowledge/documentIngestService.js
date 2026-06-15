@@ -2,7 +2,7 @@
 
 import { getSupabaseAdmin } from "./supabaseAdmin.js";
 import { chunkDocument } from "./chunkingService.js";
-import { buildEmbeddingInput, embedTexts } from "./embeddingService.js";
+import { buildEmbeddingInput, embedTexts, getEmbeddingDimensions } from "./embeddingService.js";
 import { ingestDocumentImages, deleteDocumentImages } from "./imageIngestService.js";
 import { buildPdfDocumentContent, cleanPdfPageText } from "./pdfTextQuality.js";
 
@@ -22,8 +22,55 @@ function mapDocToDb(doc) {
   };
 }
 
+function isSchemaColumnError(message) {
+  return /column|chunk_count|tenant_id|does not exist|relation.*knowledge_/i.test(String(message || ""));
+}
+
+function isVectorDimensionError(message) {
+  return /dimension|vector|expected.*dimensions/i.test(String(message || ""));
+}
+
+async function upsertKnowledgeDocumentRow(supabase, dbDocRow) {
+  let payload = { ...dbDocRow };
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const { error } = await supabase.from("knowledge_documents").upsert(payload, { onConflict: "id" });
+    if (!error) return null;
+    if (!isSchemaColumnError(error.message)) return error.message;
+    if ("tenant_id" in payload) {
+      const { tenant_id, ...rest } = payload;
+      payload = rest;
+      continue;
+    }
+    return error.message;
+  }
+  return "schema_upsert_failed";
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function insertChunkBatches(supabase, rows, documentId) {
+  const BATCH = 40;
+
+  async function runInsert(batchRows) {
+    for (let offset = 0; offset < batchRows.length; offset += BATCH) {
+      const batch = batchRows.slice(offset, offset + BATCH);
+      const { error } = await supabase.from("knowledge_chunks").insert(batch);
+      if (error) return error;
+      if (offset + BATCH < batchRows.length) await sleep(200);
+    }
+    return null;
+  }
+
+  let err = await runInsert(rows);
+  if (!err) return null;
+  if (!isVectorDimensionError(err.message)) return err.message;
+
+  await supabase.from("knowledge_chunks").delete().eq("document_id", documentId);
+  const withoutEmbeddings = rows.map((row) => ({ ...row, embedding: null }));
+  err = await runInsert(withoutEmbeddings);
+  return err?.message || null;
 }
 
 /** Store page metadata in knowledge_documents; binary thumbnails go to knowledge_images. */
@@ -60,11 +107,13 @@ export async function ingestDocument(document) {
 
   const dbDocRow = { ...dbDoc, pages: pagesForDocumentRow(pagesForChunking) };
 
-  const { error: upsertErr } = await supabase.from("knowledge_documents").upsert(dbDocRow, {
-    onConflict: "id",
-  });
+  const upsertErr = await upsertKnowledgeDocumentRow(supabase, dbDocRow);
   if (upsertErr) {
-    return { ok: false, error: upsertErr.message, chunkCount: 0 };
+    return {
+      ok: false,
+      error: isSchemaColumnError(upsertErr) ? "knowledge_schema_not_migrated" : upsertErr,
+      chunkCount: 0,
+    };
   }
 
   await supabase.from("knowledge_chunks").delete().eq("document_id", dbDoc.id);
@@ -97,37 +146,46 @@ export async function ingestDocument(document) {
 
   const embedInputs = chunks.map(buildEmbeddingInput);
   const { embeddings, error: embedErr } = await embedTexts(embedInputs);
+  const expectedDims = getEmbeddingDimensions();
 
-  const rows = chunks.map((chunk, i) => ({
-    tenant_id: dbDoc.tenant_id,
-    document_id: dbDoc.id,
-    document_name: chunk.documentName,
-    chunk_text: chunk.text,
-    chunk_index: chunk.chunkIndex,
-    page_number: chunk.pageNumber,
-    section_title: chunk.sectionTitle,
-    category: chunk.category,
-    embedding: embeddings?.[i] ?? null,
-  }));
+  const rows = chunks.map((chunk, i) => {
+    const vec = embeddings?.[i];
+    const embedding =
+      Array.isArray(vec) && vec.length === expectedDims ? vec : null;
+    return {
+      tenant_id: dbDoc.tenant_id,
+      document_id: dbDoc.id,
+      document_name: chunk.documentName,
+      chunk_text: chunk.text,
+      chunk_index: chunk.chunkIndex,
+      page_number: chunk.pageNumber,
+      section_title: chunk.sectionTitle,
+      category: chunk.category,
+      embedding,
+    };
+  });
 
-  const BATCH = 40;
-  for (let offset = 0; offset < rows.length; offset += BATCH) {
-    const batch = rows.slice(offset, offset + BATCH);
-    const { error: insertErr } = await supabase.from("knowledge_chunks").insert(batch);
-    if (insertErr) {
-      return { ok: false, error: insertErr.message, chunkCount: 0 };
-    }
-    if (offset + BATCH < rows.length) await sleep(200);
+  const insertErr = await insertChunkBatches(supabase, rows, dbDoc.id);
+  if (insertErr) {
+    return {
+      ok: false,
+      error: isSchemaColumnError(insertErr) ? "knowledge_schema_not_migrated" : insertErr,
+      chunkCount: 0,
+    };
   }
 
   const embeddedCount = rows.filter((r) => r.embedding).length;
-  await supabase
+  const updatePayload = { updated_at: new Date().toISOString(), chunk_count: rows.length };
+  const { error: countErr } = await supabase
     .from("knowledge_documents")
-    .update({
-      chunk_count: rows.length,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updatePayload)
     .eq("id", dbDoc.id);
+  if (countErr && isSchemaColumnError(countErr.message)) {
+    await supabase
+      .from("knowledge_documents")
+      .update({ updated_at: updatePayload.updated_at })
+      .eq("id", dbDoc.id);
+  }
 
   const imageResult = document.skipImages
     ? { imageCount: 0 }
@@ -166,12 +224,30 @@ export async function listDocumentsWithChunkCounts() {
   const supabase = getSupabaseAdmin();
   if (!supabase) return { documents: [], error: "supabase_not_configured" };
 
-  const { data, error } = await supabase
-    .from("knowledge_documents")
-    .select("id, title, category, source_type, file_name, chunk_count, tenant_id, created_at, updated_at")
-    .order("updated_at", { ascending: false });
+  const fullSelect =
+    "id, title, category, source_type, file_name, chunk_count, tenant_id, created_at, updated_at";
+  const baseSelect = "id, title, category, source_type, file_name, created_at, updated_at";
 
-  if (error) return { documents: [], error: error.message };
+  let data;
+  let error;
+  ({ data, error } = await supabase
+    .from("knowledge_documents")
+    .select(fullSelect)
+    .order("updated_at", { ascending: false }));
+
+  if (error && isSchemaColumnError(error.message)) {
+    ({ data, error } = await supabase
+      .from("knowledge_documents")
+      .select(baseSelect)
+      .order("updated_at", { ascending: false }));
+  }
+
+  if (error) {
+    if (/relation.*does not exist/i.test(error.message)) {
+      return { documents: [], error: "knowledge_schema_not_migrated" };
+    }
+    return { documents: [], error: error.message };
+  }
 
   return {
     documents: (data || []).map((row) => ({
@@ -195,7 +271,10 @@ export async function getTotalChunkCount() {
   const { count, error } = await supabase
     .from("knowledge_chunks")
     .select("id", { count: "exact", head: true });
-  if (error) return 0;
+  if (error) {
+    if (/relation.*does not exist/i.test(error.message)) return 0;
+    return 0;
+  }
   return count ?? 0;
 }
 
