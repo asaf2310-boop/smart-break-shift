@@ -3,6 +3,7 @@
 import { json, readJsonBody, handleOptions, isSameOrigin } from "../server/knowledge/httpUtils.js";
 import { isGeminiConfigured } from "../server/ai/geminiClient.js";
 import { generateWebSearchAnswer } from "../server/knowledge/webSearchService.js";
+import { formatGeminiUserError } from "../server/knowledge/geminiErrorMessages.js";
 
 function buildWebSearchResponse(result) {
   const webSources = result.webSources || [];
@@ -76,8 +77,13 @@ export default async function handler(req, res) {
       is429 ? 429 : 503,
       {
         error: result.error,
+        message: result.userMessage || formatGeminiUserError(result.error, {
+          rateLimited: result.rateLimited,
+          highDemand: result.highDemand,
+        }),
         retryAfterSec: result.retryAfterSec,
         rateLimited: result.rateLimited,
+        highDemand: result.highDemand,
       },
       req,
     );

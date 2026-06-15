@@ -3,6 +3,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { fetchOpenAiWithRetry, getRetryAfterSec } from "../openaiRetry.js";
 import { sanitizeHebrewText } from "../knowledge/sanitizeHebrewText.js";
+import { isGeminiHighDemandError, isGeminiRateLimitError } from "../knowledge/geminiErrorMessages.js";
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 
@@ -14,13 +15,34 @@ export function getGeminiChatModel() {
   return String(process.env.GEMINI_CHAT_MODEL || "gemini-2.0-flash").trim();
 }
 
-/** Model for Google Search grounding — prefers 2.5 flash when unset. */
+/** Model for Google Search grounding — stable default with optional override. */
 export function getGeminiWebSearchModel() {
   const explicit = String(process.env.GEMINI_WEB_SEARCH_MODEL || "").trim();
-  if (explicit) return explicit;
-  const chat = getGeminiChatModel();
+  if (explicit) return explicit.replace(/^models\//, "");
+  const chat = getGeminiChatModel().replace(/^models\//, "");
   if (/gemini-2\.5|gemini-3/i.test(chat)) return chat;
-  return "gemini-2.5-flash";
+  return "gemini-2.0-flash";
+}
+
+/** Models to try for web search when the primary is overloaded (503). */
+export function getGeminiWebSearchModelCandidates() {
+  const seen = new Set();
+  const candidates = [
+    getGeminiWebSearchModel(),
+    "gemini-2.0-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-flash",
+  ];
+  return candidates.filter((model) => {
+    const name = String(model || "").replace(/^models\//, "").trim();
+    if (!name || seen.has(name)) return false;
+    seen.add(name);
+    return true;
+  });
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 const DEPRECATED_GEMINI_EMBED_MODELS = new Set(["text-embedding-004", "embedding-001"]);
@@ -356,6 +378,7 @@ export function extractWebSourcesFromGroundingMetadata(groundingMetadata) {
 
 /**
  * Gemini answer with Google Search grounding (live web).
+ * Retries on 503/429 and falls back across models when overloaded.
  * @param {{ systemInstruction: string, userQuery: string, model?: string, maxOutputTokens?: number, temperature?: number }}
  */
 export async function geminiGenerateWebSearchAnswer({
@@ -374,58 +397,18 @@ export async function geminiGenerateWebSearchAnswer({
       error: "query_required",
       retryAfterSec: null,
       rateLimited: false,
+      highDemand: false,
+      modelsTried: [],
     };
   }
 
+  const models = model
+    ? [String(model).replace(/^models\//, "")]
+    : getGeminiWebSearchModelCandidates();
   const ai = getSdkClient();
-  const searchModel = model || getGeminiWebSearchModel();
-
-  if (ai) {
-    try {
-      const response = await ai.models.generateContent({
-        model: searchModel,
-        contents: [{ role: "user", parts: [{ text: query }] }],
-        config: {
-          systemInstruction,
-          tools: [{ googleSearch: {} }],
-          temperature,
-          maxOutputTokens,
-        },
-      });
-
-      const text = sanitizeHebrewText(String(response.text || "").trim());
-      const groundingMetadata =
-        response.candidates?.[0]?.groundingMetadata ?? response.groundingMetadata ?? null;
-      const webSources = extractWebSourcesFromGroundingMetadata(groundingMetadata);
-
-      if (!text) {
-        return {
-          text: null,
-          webSources,
-          groundingMetadata,
-          error: "empty_response",
-          retryAfterSec: null,
-          rateLimited: false,
-        };
-      }
-
-      return { text, webSources, groundingMetadata, error: null, retryAfterSec: null, rateLimited: false };
-    } catch (err) {
-      const status = err?.status ?? err?.code ?? 500;
-      const is429 = status === 429;
-      return {
-        text: null,
-        webSources: [],
-        groundingMetadata: null,
-        error: `ai_error:${status}:${String(err?.message || "").slice(0, 120)}`,
-        retryAfterSec: is429 ? getRetryAfterSec({ headers: { get: () => err?.headers?.["retry-after"] } }) : null,
-        rateLimited: is429,
-      };
-    }
-  }
-
   const apiKey = getApiKey();
-  if (!apiKey) {
+
+  if (!ai && !apiKey) {
     return {
       text: null,
       webSources: [],
@@ -433,50 +416,175 @@ export async function geminiGenerateWebSearchAnswer({
       error: "ai_not_configured",
       retryAfterSec: null,
       rateLimited: false,
+      highDemand: false,
+      modelsTried: [],
     };
   }
 
-  const res = await fetchOpenAiWithRetry(
-    geminiUrl(searchModel, "generateContent"),
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemInstruction }] },
-        contents: [{ role: "user", parts: [{ text: query }] }],
-        tools: [{ google_search: {} }],
-        generationConfig: {
-          temperature,
-          maxOutputTokens,
-        },
-      }),
-    },
-  );
+  let lastError = null;
+  let lastHighDemand = false;
+  let lastRateLimited = false;
+  let lastRetryAfterSec = null;
+  const modelsTried = [];
 
-  if (!res.ok) {
-    const errText = await res.text().catch(() => "");
-    return {
-      text: null,
-      webSources: [],
-      groundingMetadata: null,
-      error: parseGeminiError(res.status, errText),
-      retryAfterSec: res.status === 429 ? getRetryAfterSec(res) : null,
-      rateLimited: res.status === 429,
-    };
+  for (const searchModel of models) {
+    modelsTried.push(searchModel);
+
+    for (let attempt = 0; attempt <= 2; attempt += 1) {
+      if (ai) {
+        try {
+          const response = await ai.models.generateContent({
+            model: searchModel,
+            contents: [{ role: "user", parts: [{ text: query }] }],
+            config: {
+              systemInstruction,
+              tools: [{ googleSearch: {} }],
+              temperature,
+              maxOutputTokens,
+            },
+          });
+
+          const text = sanitizeHebrewText(String(response.text || "").trim());
+          const groundingMetadata =
+            response.candidates?.[0]?.groundingMetadata ?? response.groundingMetadata ?? null;
+          const webSources = extractWebSourcesFromGroundingMetadata(groundingMetadata);
+
+          if (!text) {
+            return {
+              text: null,
+              webSources,
+              groundingMetadata,
+              error: "empty_response",
+              retryAfterSec: null,
+              rateLimited: false,
+              highDemand: false,
+              modelsTried,
+              modelUsed: searchModel,
+            };
+          }
+
+          return {
+            text,
+            webSources,
+            groundingMetadata,
+            error: null,
+            retryAfterSec: null,
+            rateLimited: false,
+            highDemand: false,
+            modelsTried,
+            modelUsed: searchModel,
+          };
+        } catch (err) {
+          const status = err?.status ?? err?.code ?? 500;
+          const message = String(err?.message || "");
+          const highDemand = isGeminiHighDemandError(status, message);
+          const rateLimited = isGeminiRateLimitError(status, message);
+          lastError = `ai_error:${status}:${message.slice(0, 120)}`;
+          lastHighDemand = highDemand;
+          lastRateLimited = rateLimited;
+          lastRetryAfterSec = rateLimited
+            ? getRetryAfterSec({ headers: { get: () => err?.headers?.["retry-after"] } })
+            : null;
+
+          if ((highDemand || rateLimited) && attempt < 2) {
+            await sleep(1000 * 2 ** attempt);
+            continue;
+          }
+          if (highDemand || rateLimited) break;
+          return {
+            text: null,
+            webSources: [],
+            groundingMetadata: null,
+            error: lastError,
+            retryAfterSec: lastRetryAfterSec,
+            rateLimited,
+            highDemand,
+            modelsTried,
+          };
+        }
+      } else {
+        const res = await fetchOpenAiWithRetry(
+          geminiUrl(searchModel, "generateContent"),
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: systemInstruction }] },
+              contents: [{ role: "user", parts: [{ text: query }] }],
+              tools: [{ google_search: {} }],
+              generationConfig: {
+                temperature,
+                maxOutputTokens,
+              },
+            }),
+          },
+        );
+
+        if (res.ok) {
+          const data = await res.json();
+          const text = extractGeminiResponseText(data);
+          const groundingMetadata = data.candidates?.[0]?.groundingMetadata ?? null;
+          const webSources = extractWebSourcesFromGroundingMetadata(groundingMetadata);
+
+          if (!text) {
+            return {
+              text: null,
+              webSources,
+              groundingMetadata,
+              error: "empty_response",
+              retryAfterSec: null,
+              rateLimited: false,
+              highDemand: false,
+              modelsTried,
+              modelUsed: searchModel,
+            };
+          }
+
+          return {
+            text,
+            webSources,
+            groundingMetadata,
+            error: null,
+            retryAfterSec: null,
+            rateLimited: false,
+            highDemand: false,
+            modelsTried,
+            modelUsed: searchModel,
+          };
+        }
+
+        const errText = await res.text().catch(() => "");
+        const highDemand = isGeminiHighDemandError(res.status, errText);
+        const rateLimited = isGeminiRateLimitError(res.status, errText);
+        lastError = parseGeminiError(res.status, errText);
+        lastHighDemand = highDemand;
+        lastRateLimited = rateLimited;
+        lastRetryAfterSec = rateLimited ? getRetryAfterSec(res) : null;
+
+        if (highDemand || rateLimited) break;
+        return {
+          text: null,
+          webSources: [],
+          groundingMetadata: null,
+          error: lastError,
+          retryAfterSec: lastRetryAfterSec,
+          rateLimited,
+          highDemand,
+          modelsTried,
+        };
+      }
+    }
   }
-
-  const data = await res.json();
-  const text = extractGeminiResponseText(data);
-  const groundingMetadata = data.candidates?.[0]?.groundingMetadata ?? null;
-  const webSources = extractWebSourcesFromGroundingMetadata(groundingMetadata);
 
   return {
-    text,
-    webSources,
-    groundingMetadata,
-    error: text ? null : "empty_response",
-    retryAfterSec: null,
-    rateLimited: false,
+    text: null,
+    webSources: [],
+    groundingMetadata: null,
+    error: lastError || "ai_error:503:all_models_failed",
+    retryAfterSec: lastRetryAfterSec,
+    rateLimited: lastRateLimited,
+    highDemand: lastHighDemand,
+    modelsTried,
   };
 }
 

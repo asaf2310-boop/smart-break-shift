@@ -3,6 +3,7 @@
 import { isGeminiConfigured, geminiGenerateWebSearchAnswer } from "../ai/geminiClient.js";
 import { GEMINI_WEB_SEARCH_SYSTEM_PROMPT } from "./geminiKnowledgePrompt.js";
 import { sanitizeAssistantAnswer, sanitizeHebrewText } from "./assistantBidi.js";
+import { formatGeminiUserError } from "./geminiErrorMessages.js";
 
 /**
  * @param {string} query
@@ -28,8 +29,14 @@ export async function generateWebSearchAnswer(query) {
       hebrewAnswerMarkdown: "",
       webSources: result.webSources || [],
       error: result.error,
+      userMessage: formatGeminiUserError(result.error, {
+        rateLimited: result.rateLimited,
+        highDemand: result.highDemand,
+      }),
       retryAfterSec: result.retryAfterSec,
       rateLimited: result.rateLimited,
+      highDemand: result.highDemand,
+      modelsTried: result.modelsTried || [],
     };
   }
 

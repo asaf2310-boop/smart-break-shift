@@ -296,6 +296,14 @@ export async function askKnowledgeWebSearch(query, { onPhase } = {}) {
     const err = new Error(data.error || `http_${res.status}`);
     err.retryAfterSec = data.retryAfterSec;
     err.rateLimited = data.rateLimited || res.status === 429;
+    err.highDemand = data.highDemand || (!err.rateLimited && res.status === 503);
+    err.userMessage =
+      data.message ||
+      (err.rateLimited
+        ? "מגבלת קצב ב-Gemini — נסו שוב בעוד רגע."
+        : err.highDemand
+          ? "שירות Gemini עמוס זמנית (ביקוש גבוה). נסו שוב בעוד דקה."
+          : "חיפוש ברשת נכשל. נסו שוב בעוד רגע.");
     throw err;
   }
 

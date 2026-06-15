@@ -319,6 +319,19 @@ function MessageBubble({ message, showDebug, onRetry, onFeedback, onWebSearch, f
             לא נמצא מידע במאגר הידע. אפשר לחפש תשובה ברשת באמצעות הכפתור למעלה.
           </p>
         )}
+        {!isUser && message.mode === "error" && message.webSearchRetry && onWebSearch && message.retryQuery && (
+          <div className="mt-2">
+            <button
+              type="button"
+              disabled={webSearchLoading}
+              onClick={() => onWebSearch(message.retryQuery, message.id)}
+              className="text-[11px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 disabled:opacity-50"
+            >
+              {webSearchLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Globe className="w-3 h-3" />}
+              נסה שוב חיפוש ברשת
+            </button>
+          </div>
+        )}
         {!isUser && message.openAiFailed && !message.gptSkipped && (
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <p className="text-[10px] text-amber-700 dark:text-amber-400 opacity-90 m-0">
@@ -501,9 +514,18 @@ export default function KnowledgeChat({ compact = false }) {
         },
       ]);
     } catch (err) {
+      const userMessage =
+        err?.userMessage ||
+        (err?.message === "network"
+          ? "בעיית רשת — נסו שוב."
+          : err?.rateLimited
+            ? "מגבלת קצב ב-Gemini — נסו שוב בעוד רגע."
+            : err?.highDemand
+              ? "שירות Gemini עמוס זמנית (ביקוש גבוה). נסו שוב בעוד דקה."
+              : "חיפוש ברשת נכשל. נסו שוב בעוד רגע.");
       toast({
-        title: err?.rateLimited ? "מגבלת קצב AI" : "חיפוש ברשת נכשל",
-        description: err?.message === "network" ? "בעיית רשת — נסו שוב." : err?.message || "שגיאה לא ידועה",
+        title: err?.rateLimited ? "מגבלת קצב AI" : err?.highDemand ? "שירות AI עמוס" : "חיפוש ברשת נכשל",
+        description: userMessage,
         variant: "destructive",
       });
       setMessages((prev) => [
@@ -511,10 +533,11 @@ export default function KnowledgeChat({ compact = false }) {
         {
           id: `err_${Date.now()}`,
           role: "assistant",
-          content: "חיפוש ברשת נכשל. נסו שוב או חפשו במאגר הידע.",
+          content: userMessage,
           citations: [],
           mode: "error",
           retryQuery: trimmed,
+          webSearchRetry: true,
         },
       ]);
     } finally {

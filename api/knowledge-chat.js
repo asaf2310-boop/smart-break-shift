@@ -7,6 +7,7 @@ import { MIN_CONFIDENCE } from "../server/knowledge/hybridSearchService.js";
 import { buildKnowledgeSources } from "../server/knowledge/geminiChatService.js";
 import { generateAgentResponse } from "../server/knowledge/generateAgentResponse.js";
 import { generateWebSearchAnswer } from "../server/knowledge/webSearchService.js";
+import { formatGeminiUserError } from "../server/knowledge/geminiErrorMessages.js";
 import {
   getAiProvider,
   isAiConfigured,
@@ -182,8 +183,13 @@ async function handleWebSearch(req, res, body) {
       is429 ? 429 : 503,
       {
         error: result.error,
+        message: result.userMessage || formatGeminiUserError(result.error, {
+          rateLimited: result.rateLimited,
+          highDemand: result.highDemand,
+        }),
         retryAfterSec: result.retryAfterSec,
         rateLimited: result.rateLimited,
+        highDemand: result.highDemand,
       },
       req,
     );
