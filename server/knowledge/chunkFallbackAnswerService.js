@@ -1,11 +1,13 @@
 /** Fallback answer from retrieved chunks when Gemini is unavailable. */
 
 import { sanitizeAssistantAnswer } from "./assistantBidi.js";
-import { truncateSnippet } from "./chatAnswerService.js";
+import { KNOWLEDGE_MISSING_ANSWER } from "./geminiKnowledgePrompt.js";
 import { extractSearchTerms } from "./queryTermsService.js";
 
 const VISUAL_PLACEHOLDER =
   /^עמוד\s+\d+\s*[—–-]\s*תוכן ויזואלי/i;
+
+const MIN_SENTENCE_SCORE = 2;
 
 function formatSourceLine(chunk) {
   if (!chunk) return "";
@@ -49,12 +51,12 @@ function pickSentences(text, terms, max = 3) {
   return sentences
     .map((sentence) => ({ sentence, score: scoreSentence(sentence, terms) }))
     .sort((a, b) => b.score - a.score)
-    .filter((row) => row.score > 0)
+    .filter((row) => row.score >= MIN_SENTENCE_SCORE)
     .slice(0, max)
     .map((row) => row.sentence);
 }
 
-function buildVisualIntro(chunks, { rateLimited = false, imageCount = 0 } = {}) {
+function buildVisualIntro(chunks, { imageCount = 0 } = {}) {
   const docName = chunks[0]?.documentName || chunks[0]?.documentTitle || "המסמך";
   const pages = [
     ...new Set(
@@ -71,16 +73,13 @@ function buildVisualIntro(chunks, { rateLimited = false, imageCount = 0 } = {}) 
         ? ` (עמוד ${pages[0]})`
         : "";
 
-  if (rateLimited) {
-    return `**שירות ה-AI זמנית עמוס.** להלן ${imageCount > 1 ? "צילומי העמודים" : "צילום העמוד"} הרלוונטיים ממסמך **${docName}**${pageHint}:`;
-  }
   return `להלן ${imageCount > 1 ? "צילומי העמודים" : "צילום העמוד"} הרלוונטיים ממסמך **${docName}**${pageHint}:`;
 }
 
 /**
  * @param {string} query
  * @param {Array} chunks
- * @param {{ rateLimited?: boolean, imageCount?: number }} [options]
+ * @param {{ imageCount?: number }} [options]
  */
 export function buildChunkFallbackAnswer(query, chunks, options = {}) {
   const terms = extractSearchTerms(query);
@@ -94,31 +93,22 @@ export function buildChunkFallbackAnswer(query, chunks, options = {}) {
       if (seen.has(key)) continue;
       seen.add(key);
       picked.push(sentence);
-      if (picked.length >= 4) break;
+      if (picked.length >= 3) break;
     }
-    if (picked.length >= 4) break;
-  }
-
-  if (!picked.length && chunks?.[0]) {
-    const fallbackText = [chunks[0].ocrText, chunks[0].text]
-      .filter((t) => t && !isVisualPlaceholder(t))
-      .join("\n");
-    if (fallbackText) {
-      picked.push(truncateSnippet(fallbackText, 360));
-    }
+    if (picked.length >= 3) break;
   }
 
   const imageCount = options.imageCount ?? 0;
-  if (!picked.length && imageCount > 0) {
-    return {
-      answer: sanitizeAssistantAnswer(buildVisualIntro(chunks, options)),
-      grounded: true,
-    };
-  }
 
   if (!picked.length) {
+    if (imageCount > 0) {
+      return {
+        answer: sanitizeAssistantAnswer(buildVisualIntro(chunks, { imageCount })),
+        grounded: true,
+      };
+    }
     return {
-      answer: "נמצאו קטעים רלוונטיים במאגר, אך לא ניתן לנסח תשובה כרגע. נסו שוב בעוד דקה.",
+      answer: KNOWLEDGE_MISSING_ANSWER,
       grounded: false,
     };
   }
@@ -132,22 +122,17 @@ export function buildChunkFallbackAnswer(query, chunks, options = {}) {
           .join("\n")
       : "";
   const source = formatSourceLine(chunks[0]);
-  const parts = [];
+  const parts = [lead];
 
-  if (options.rateLimited) {
-    parts.push("**שירות ה-AI זמנית עמוס** — להלן קטעים מהמסמכים:");
-  }
-
-  parts.push(lead);
   if (bullets) parts.push(`**פירוט:**\n${bullets}`);
   if (imageCount > 0) {
-    parts.push(sanitizeAssistantAnswer(buildVisualIntro(chunks, { ...options, rateLimited: false })));
+    parts.push(sanitizeAssistantAnswer(buildVisualIntro(chunks, { imageCount })));
   } else if (source) {
     parts.push(`*מקור: ${source}*`);
   }
 
   return {
-    answer: parts.join("\n\n"),
+    answer: sanitizeAssistantAnswer(parts.join("\n\n")),
     grounded: true,
   };
 }

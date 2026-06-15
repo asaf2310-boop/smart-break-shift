@@ -43,7 +43,7 @@ async function main() {
     });
 
     const debug = data.debug || {};
-    const miss = data.answer === "המידע המבוקש אינו נמצא במאגר הידע";
+    const miss = data.answer === "המידע המבוקש אינו נמצא במאגר הידע הארגוני.";
 
     console.log(`\n--- "${query}" ---`);
     console.log("status:", res.status, "mode:", data.mode);

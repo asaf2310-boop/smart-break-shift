@@ -8,6 +8,7 @@ import { generateGeminiKnowledgeAnswer, mergeRelevantImages, buildKnowledgeSourc
 import { buildContextBlocks, truncateSnippet, uniqueCitations } from "./chatAnswerService.js";
 import { KNOWLEDGE_MISSING_ANSWER, isMissingKnowledgeAnswer } from "./geminiKnowledgePrompt.js";
 import { buildChunkFallbackAnswer } from "./chunkFallbackAnswerService.js";
+import { sanitizeAssistantAnswer } from "./assistantBidi.js";
 import { logKnowledgeGap } from "./gapFeedbackService.js";
 import { logKnowledgeQuery } from "./loggingService.js";
 import { RETRIEVAL_TOP_K_DEFAULT } from "./vectorSearchService.js";
@@ -211,9 +212,15 @@ export async function generateAgentResponse(userQuery, options = {}) {
   if (result.error) {
     if (chunks.length) {
       const fallback = buildChunkFallbackAnswer(query, chunks, {
-        rateLimited: result.rateLimited || String(result.error || "").includes("429"),
         imageCount: responseImages.length,
       });
+      if (!fallback.grounded) {
+        return emptyAgentResult({
+          confidence,
+          debug: { ...debug, geminiError: result.error, chunkFallback: "miss" },
+          mode: "no_citation",
+        });
+      }
       const citations = result.citations?.length ? result.citations : uniqueCitations(chunks);
       return {
         answer: fallback.answer,
@@ -227,8 +234,8 @@ export async function generateAgentResponse(userQuery, options = {}) {
           sectionTitle: c.sectionTitle,
         })),
         confidence,
-        grounded: fallback.grounded,
-        mode: result.rateLimited ? "chunk_fallback_rate_limit" : "chunk_fallback",
+        grounded: true,
+        mode: "chunk_fallback",
         debug: { ...debug, geminiError: result.error },
         error: null,
         retryAfterSec: result.retryAfterSec,
@@ -280,7 +287,7 @@ export async function generateAgentResponse(userQuery, options = {}) {
   });
 
   return {
-    answer: result.answer,
+    answer: sanitizeAssistantAnswer(result.answer),
     citations: result.citations,
     sources: result.sources,
     images: result.images?.length ? formatImagesForResponse(result.images, topK) : responseImages,

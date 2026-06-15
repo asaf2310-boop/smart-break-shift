@@ -2,7 +2,9 @@
 
 import { KNOWLEDGE_BIDI_FORMAT_HINT } from "./assistantBidi.js";
 
-export const KNOWLEDGE_MISSING_ANSWER = "המידע המבוקש אינו נמצא במאגר הידע";
+export const KNOWLEDGE_MISSING_ANSWER = "המידע המבוקש אינו נמצא במאגר הידע הארגוני.";
+
+export const GEMINI_STRICT_GROUNDING_RULE = `אם קטעי ההקשר לא עונים ישירות על השאלה, השב במדויק: "${KNOWLEDGE_MISSING_ANSWER}" אל תנסה לנחש, לאחות מילים שבורות, ולא לטעון שהשירות עמוס.`;
 
 /** Machine-parseable footer — Gemini lists relevant screenshot IDs. */
 export const RELEVANT_IMAGES_JSON_KEY = "relevantImageIds";
@@ -30,7 +32,8 @@ export const GEMINI_AGENT_STRUCTURED_SYSTEM_PROMPT = `אתה עוזר חכם ו�
 1. שפה ועיצוב: השב בעברית טבעית ורהוטה. השתמש במונחים מקצועיים נכונים. מעך את הטקסט לנקודות (Bullet Points) והדגשות (Bold) כדי שהנציג יוכל לקרוא את התשובה תוך כדי שיחה. אל תכתוב פסקאות ארוכות. עטוף מונחים באנגלית ב-backticks.
 2. היצמדות לעובדות: ענה אך ורק על בסיס המידע המצורף (Context). אם המידע לא קיים בטקסט או בתמונות, השב: "${KNOWLEDGE_MISSING_ANSWER}". אל תמציא מידע בשום אופן. אם טקסט המקור מקולקל — נסח מחדש בעברית תקינה.
 3. שילוב תמונות: מצורפים לקוד מזהים וקישורים של צילומי מסך רלוונטיים. אם התשובה דורשת מהנציג לבצע פעולה במערכת וצילום המסך המצורף מציג פעולה זו, ציין בסוף התשובה אילו תמונות רלוונטיות להצגה באמצעות ה-ID שלהן בפורמט ה-JSON המבוקש.
-4. CRITICAL: כתוב תמיד רווח נפרד בין כל מילה עברית. ודא שמילים לא נדבקות (למשל "מוסיףשכבת" שגוי — נכון: "מוסיף שכבת").`;
+4. CRITICAL: כתוב תמיד רווח נפרד בין כל מילה עברית. ודא שמילים לא נדבקות (למשל "מוסיףשכבת" שגוי — נכון: "מוסיף שכבת").
+5. ${GEMINI_STRICT_GROUNDING_RULE}`;
 
 /** Step 1 — Google Search grounding; factual answer in English only. */
 export const GEMINI_WEB_SEARCH_ENGLISH_SYSTEM_PROMPT = `Search the web and provide a comprehensive, factual answer to the user's query.
@@ -68,7 +71,8 @@ export const GEMINI_KNOWLEDGE_SYSTEM_PROMPT = `אתה עוזר חכם ומקצו
 1. שפה ועיצוב: השב בעברית טבעית ורהוטה. השתמש במונחים מקצועיים נכונים. מעך את הטקסט לנקודות (Bullet Points) והדגשות (Bold) כדי שהנציג יוכל לקרוא את התשובה תוך כדי שיחה. אל תכתוב פסקאות ארוכות. עטוף מונחים באנגלית ב-backticks (למשל \`Invoice Options\`).
 2. היצמדות לעובדות: ענה אך ורק על בסיס המידע המצורף (Context). אם המידע לא קיים בטקסט או בתמונות, השב: "${KNOWLEDGE_MISSING_ANSWER}". אל תמציא מידע בשום אופן. אם טקסט המקור מקולקל מ-OCR — נסח מחדש בעברית תקינה, אל תעתיק מילים שבורות.
 3. שילוב תמונות: מצורפים לקוד מזהים וקישורים של צילומי מסך רלוונטיים. אם התשובה דורשת מהנציג לבצע פעולה במערכת וצילום המסך המצורף מציג פעולה זו, ציין בסוף התשובה אילו תמונות רלוונטיות להצגה באמצעות ה-ID שלהן בפורמט ה-JSON המבוקש.${GEMINI_KNOWLEDGE_JSON_IMAGE_INSTRUCTIONS}
-4. CRITICAL: כתוב תמיד רווח נפרד בין כל מילה עברית. ודא שמילים לא נדבקות (למשל "מוסיףשכבת" שגוי — נכון: "מוסיף שכבת").`;
+4. CRITICAL: כתוב תמיד רווח נפרד בין כל מילה עברית. ודא שמילים לא נדבקות (למשל "מוסיףשכבת" שגוי — נכון: "מוסיף שכבת").
+5. ${GEMINI_STRICT_GROUNDING_RULE}`;
 
 /** Short welcome line for knowledge chat — simple Hebrew only (tokenization-safe). */
 export const GEMINI_KNOWLEDGE_WELCOME_SYSTEM_PROMPT = `אתה כותב הודעת פתיחה קצרה לצ'אט ידע של נציגי שירות.
@@ -161,7 +165,7 @@ ${imageSection}
 שאלת הנציג: ${query}
 ${howToHint}${visualHint}${imageFooterHint}
 
-ענה לפי ההנחיות. אם אין מידע — "${KNOWLEDGE_MISSING_ANSWER}"`;
+ענה לפי ההנחיות. ${GEMINI_STRICT_GROUNDING_RULE}`;
 }
 
 /** Detect if model output indicates missing knowledge (for guardrail). */

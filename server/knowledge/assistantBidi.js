@@ -21,6 +21,14 @@ Markdown:
 
 const HEBREW_CHAR = /[\u0590-\u05FF]/u;
 const LATIN_RUN = /[A-Za-z][A-Za-z0-9_.&'/-]*/g;
+
+/** Known technical terms — wrap in backticks even when multi-word. */
+const TECHNICAL_TERM_PATTERNS = [
+  /3D\s+Secure/gi,
+  /WhatsApp/gi,
+  /\bOTP\b/gi,
+  /\b3DS\b/gi,
+];
 const URL_PATTERN = /https?:\/\/[^\s<>\])"]+/g;
 
 function fixRtlPunctuation(line) {
@@ -134,6 +142,10 @@ function wrapEnglishTermsInLine(line) {
   let s = protectSegments(raw, /`[^`\n]+`/g, store);
   s = protectSegments(s, URL_PATTERN, store);
   s = protectSegments(s, /\*\*[^*\n]+\*\*/g, store);
+
+  for (const pattern of TECHNICAL_TERM_PATTERNS) {
+    s = s.replace(pattern, (match) => `\`${match}\``);
+  }
 
   s = s.replace(LATIN_RUN, (match) => {
     if (match.length < 2) return match;

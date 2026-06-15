@@ -20,11 +20,11 @@ import { sanitizeHebrewText } from "@/lib/knowledge/sanitizeHebrewText";
 /** ~500–800 tokens at ~4 chars/token (Hebrew) */
 import { cleanPdfPageText } from "@/lib/knowledge/pdfTextQuality";
 
-const CHUNK_TARGET_CHARS = 2600;
-const CHUNK_MIN_CHARS = 2000;
-const CHUNK_MAX_CHARS = 3200;
-/** ~100–150 tokens overlap */
-const CHUNK_OVERLAP_CHARS = 500;
+const CHUNK_TARGET_CHARS = 900;
+const CHUNK_MIN_CHARS = 800;
+const CHUNK_MAX_CHARS = 1000;
+/** ~50 tokens overlap — keeps section context without huge duplication */
+const CHUNK_OVERLAP_CHARS = 200;
 
 const RETRIEVAL_TOP_K_MIN = 4;
 const RETRIEVAL_TOP_K_MAX = 6;
@@ -264,11 +264,15 @@ function isHowToQuestion(query) {
 function detectSectionTitle(line) {
   const t = String(line || "").trim();
   if (!t) return null;
-  if (/^#{1,4}\s+/.test(t)) return t.replace(/^#{1,4}\s+/, "").trim();
+  if (/^#{1,6}\s+/.test(t)) return t.replace(/^#{1,6}\s+/, "").trim();
   if (t.length >= 4 && t.length <= 72 && /^[\u0590-\u05FF]/.test(t) && !/[.!?…]$/.test(t)) {
     return t;
   }
   return null;
+}
+
+function isMarkdownHeaderLine(line) {
+  return /^#{1,6}\s+\S/.test(String(line || "").trim());
 }
 
 function splitTextIntoSections(text) {
@@ -284,6 +288,13 @@ function splitTextIntoSections(text) {
   };
 
   for (const line of lines) {
+    if (isMarkdownHeaderLine(line)) {
+      if (buffer.length > 0) flush();
+      currentTitle = detectSectionTitle(line);
+      buffer.push(line);
+      continue;
+    }
+
     const title = detectSectionTitle(line);
     if (title && buffer.length === 0) {
       currentTitle = title;
@@ -307,17 +318,28 @@ function splitTextIntoSections(text) {
 function findChunkBreak(slice, maxLen) {
   if (slice.length <= maxLen) return slice.length;
   const window = slice.slice(0, maxLen);
+  const minBreak = Math.min(320, Math.floor(CHUNK_MIN_CHARS * 0.35));
+
   const paragraph = window.lastIndexOf("\n\n");
-  if (paragraph > CHUNK_MIN_CHARS * 0.5) return paragraph;
+  if (paragraph >= minBreak) return paragraph;
+
   const sentence = Math.max(
     window.lastIndexOf(". "),
     window.lastIndexOf("! "),
     window.lastIndexOf("? "),
     window.lastIndexOf("… "),
+    window.lastIndexOf(".\n"),
+    window.lastIndexOf("!\n"),
+    window.lastIndexOf("?\n"),
   );
-  if (sentence > CHUNK_MIN_CHARS * 0.45) return sentence + 1;
+  if (sentence >= minBreak) return sentence + 1;
+
+  const newline = window.lastIndexOf("\n");
+  if (newline >= minBreak) return newline + 1;
+
   const space = window.lastIndexOf(" ");
-  if (space > CHUNK_MIN_CHARS * 0.4) return space;
+  if (space >= minBreak) return space;
+
   return maxLen;
 }
 
@@ -364,6 +386,27 @@ export function chunkDocument(document) {
 
   for (const section of sections) {
     const sectionText = section.text;
+
+    if (sectionText.length <= CHUNK_MAX_CHARS) {
+      const chunkText = normalizeHebrewText(sectionText);
+      if (chunkText) {
+        chunks.push({
+          id: `${document.id}_c${globalIndex}`,
+          documentId: document.id,
+          documentName: document.title,
+          documentTitle: document.title,
+          category: document.category,
+          chunkIndex: globalIndex,
+          pageNumber: section.pageNumber ?? null,
+          sectionTitle: section.sectionTitle || null,
+          index: globalIndex,
+          text: chunkText,
+        });
+        globalIndex += 1;
+      }
+      continue;
+    }
+
     let start = 0;
 
     while (start < sectionText.length) {

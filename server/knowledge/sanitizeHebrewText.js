@@ -27,6 +27,10 @@ const COMMON_HEBREW_TOKEN_FIXES = [
   ["בשמהמלא", "בשם המלא"],
   ["עלבסיס", "על בסיס"],
   ["בתיעסק", "בתי עסק"],
+  ["לאלבית העסק", "לבית העסק"],
+  ["לאלבית", "לבית"],
+  ["האחריותע וברת", "האחריות עוברת"],
+  ["האחריותעוברת", "האחריות עוברת"],
   ["שאלש", "שאלה"],
   ["הואפרוט", "הוא פרוט"],
 ];
@@ -67,3 +71,6 @@ export function sanitizeHebrewText(text) {
 
 /** Alias used in product docs — same as sanitizeHebrewText. */
 export const advancedHebrewPostProcess = sanitizeHebrewText;
+
+/** Alias for RAG pipeline docs — same as sanitizeHebrewText. */
+export const advancedHebrewSanitizer = sanitizeHebrewText;
