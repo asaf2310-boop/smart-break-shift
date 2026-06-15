@@ -11,6 +11,7 @@ import {
   probeOpenAiAvailability,
   rebuildKnowledgeChunkIndex,
   resetOpenAiProbeCache,
+  KNOWLEDGE_LOW_RELEVANCE_ANSWER,
 } from "@/lib/knowledgeAi";
 import { shouldUseServerRag, probeServerRagHealth, listServerDocuments, submitKnowledgeFeedback, askKnowledgeWebSearch } from "@/lib/knowledge/knowledgeClient";
 import { demoModeEnabled } from "@/api/demoClient";
@@ -109,7 +110,17 @@ function RetrievalDebugPanel({ debug, expanded, onToggle }) {
   );
 }
 
-function MessageBubble({ message, showDebug, onRetry, onFeedback, feedbackSending }) {
+function isFailedLocalKnowledgeAnswer(message) {
+  if (message.role !== "assistant") return false;
+  if (message.webSearchOffered || message.mode === "web_search" || message.mode === "system" || message.mode === "error") {
+    return false;
+  }
+  if (message.mode === "low_relevance" || message.mode === "no_citation") return true;
+  const text = String(message.content || "").trim();
+  return text === KNOWLEDGE_LOW_RELEVANCE_ANSWER || text.includes(KNOWLEDGE_LOW_RELEVANCE_ANSWER);
+}
+
+function MessageBubble({ message, showDebug, onRetry, onFeedback, onWebSearch, feedbackSending, webSearchLoading }) {
   const isUser = message.role === "user";
   const [debugOpen, setDebugOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -282,6 +293,22 @@ function MessageBubble({ message, showDebug, onRetry, onFeedback, feedbackSendin
             לא נמצאו קטעים רלוונטים מספיק — נסה לנסח אחרת או להוסיף מילות מפתח מהמסמך.
           </p>
         )}
+        {!isUser && isFailedLocalKnowledgeAnswer(message) && onWebSearch && message.userQuestion && (
+          <div className="mt-3 pt-3 border-t border-outline/20">
+            <p className="text-[11px] text-on-surface-variant mb-2">
+              לא נמצא מידע במאגר הידע. אפשר לחפש תשובה ברשת.
+            </p>
+            <button
+              type="button"
+              disabled={webSearchLoading}
+              onClick={() => onWebSearch(message.userQuestion, message.id)}
+              className="text-[11px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 disabled:opacity-50"
+            >
+              {webSearchLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Globe className="w-3 h-3" />}
+              חיפוש ברשת
+            </button>
+          </div>
+        )}
         {!isUser && message.openAiFailed && !message.gptSkipped && (
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <p className="text-[10px] text-amber-700 dark:text-amber-400 opacity-90 m-0">
@@ -421,13 +448,22 @@ export default function KnowledgeChat({ compact = false }) {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
-  const submitWebSearch = async (text) => {
+  const submitWebSearch = async (text, { skipUserMessage = false, markOfferedMessageId = null } = {}) => {
     const trimmed = text.trim();
     if (!trimmed || loading) return;
 
-    const userMsg = { id: `u_${Date.now()}`, role: "user", content: trimmed, webSearch: true };
-    setMessages((prev) => [...prev, userMsg]);
-    setInput("");
+    if (!skipUserMessage) {
+      const userMsg = { id: `u_${Date.now()}`, role: "user", content: trimmed, webSearch: true };
+      setMessages((prev) => [...prev, userMsg]);
+      setInput("");
+    }
+
+    if (markOfferedMessageId) {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === markOfferedMessageId ? { ...m, webSearchOffered: true } : m)),
+      );
+    }
+
     setLoading(true);
     setLoadingHint("");
 
@@ -585,6 +621,10 @@ export default function KnowledgeChat({ compact = false }) {
     }
   };
 
+  const handleWebSearchFromMessage = (query, messageId) => {
+    submitWebSearch(query, { skipUserMessage: true, markOfferedMessageId: messageId });
+  };
+
   const handleSend = async (e) => {
     e?.preventDefault?.();
     await submitQuery(input);
@@ -656,7 +696,9 @@ export default function KnowledgeChat({ compact = false }) {
             showDebug={showDebug}
             onRetry={handleRetry}
             onFeedback={shouldUseServerRag() ? handleFeedback : undefined}
+            onWebSearch={handleWebSearchFromMessage}
             feedbackSending={feedbackSending}
+            webSearchLoading={loading}
           />
         ))}
         {loading && (
@@ -678,17 +720,6 @@ export default function KnowledgeChat({ compact = false }) {
           disabled={loading}
           dir="auto"
         />
-        <button
-          type="button"
-          onClick={() => submitWebSearch(input)}
-          disabled={loading || !input.trim()}
-          className="m3-btn-outlined shrink-0 px-3 sm:px-4 gap-1.5 inline-flex items-center disabled:opacity-50"
-          title="חיפוש ברשת — Google Search"
-          aria-label="חיפוש ברשת"
-        >
-          <Globe className="w-5 h-5" />
-          <span className="hidden sm:inline text-sm">חיפוש ברשת</span>
-        </button>
         <button
           type="submit"
           disabled={loading || !input.trim()}

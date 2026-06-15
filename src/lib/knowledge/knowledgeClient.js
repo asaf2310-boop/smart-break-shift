@@ -262,13 +262,10 @@ export async function askKnowledgeWebSearch(query, { onPhase } = {}) {
 
   let res;
   try {
-    res = await fetchWithTimeout("/api/knowledge-chat", {
+    res = await fetchWithTimeout("/api/ask-web", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        query: trimmed,
-        useWebSearch: true,
-      }),
+      body: JSON.stringify({ query: trimmed }),
     });
   } catch {
     throw new Error("network");

@@ -5,7 +5,7 @@ import { getSupabaseAdmin } from "./supabaseAdmin.js";
 export const RETRIEVAL_TOP_K_MIN = 3;
 export const RETRIEVAL_TOP_K_MAX = 6;
 export const RETRIEVAL_TOP_K_DEFAULT = 5;
-export const MIN_EMBEDDING_SCORE = 0.62;
+export const MIN_EMBEDDING_SCORE = 0.58;
 export const MIN_EMBEDDING_RELATIVE_RATIO = 0.72;
 export const MAX_CHUNKS_PER_DOCUMENT = 2;
 

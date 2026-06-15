@@ -68,10 +68,12 @@ function buildAgentResponse({
 }
 
 function resolveTenantId(body) {
-  const fromBody = body.tenantId ?? body.tenant_id ?? null;
-  if (fromBody) return fromBody;
-  const envTenant = String(process.env.DEFAULT_TENANT || "").trim();
-  return envTenant || null;
+  const fromBody = body.tenantId ?? body.tenant_id;
+  if (fromBody != null && String(fromBody).trim()) {
+    return String(fromBody).trim();
+  }
+  // Match client getKnowledgeTenantId() — no server-only DEFAULT_TENANT override on search.
+  return null;
 }
 
 function isHowToQuestion(query) {

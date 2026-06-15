@@ -35,16 +35,37 @@ export async function hybridSearch(query, queryEmbedding, options = {}) {
     topK,
   );
 
-  const confidence = merged.length ? merged[0].score : 0;
+  const top = merged[0];
+  const confidence = top
+    ? Math.max(top.vectorScore || 0, top.keywordScore || 0, top.score || 0)
+    : 0;
 
   return {
     hits: merged,
     imageHits: imageResult.hits || [],
     confidence,
-    passesThreshold: confidence >= MIN_CONFIDENCE,
+    passesThreshold: passesHybridThreshold(merged),
     retrievalMethod: "hybrid",
     error: vectorResult.error || imageResult.error || null,
   };
+}
+
+/**
+ * MIN_CONFIDENCE targets raw embedding similarity; hybrid combined scores are weighted
+ * (vector-only max ≈ VECTOR_WEIGHT). Check component scores, not combined alone.
+ */
+export function passesHybridThreshold(hits) {
+  if (!hits.length) return false;
+  const top = hits[0];
+  const vectorScore = top.vectorScore || 0;
+  const keywordScore = top.keywordScore || 0;
+  const imageScore = top.imageScore || 0;
+  const combined = top.score || 0;
+
+  if (vectorScore >= MIN_CONFIDENCE) return true;
+  if (keywordScore >= 0.55 && vectorScore >= MIN_CONFIDENCE - 0.18) return true;
+  if (imageScore >= 0.5 && vectorScore >= MIN_CONFIDENCE - 0.15) return true;
+  return combined >= MIN_CONFIDENCE * VECTOR_WEIGHT;
 }
 
 async function searchKeywordChunks(query, { topK = 5, tenantId = null } = {}) {
@@ -157,5 +178,5 @@ function diversifyHits(hits, topK, maxPerDocument = MAX_CHUNKS_PER_DOCUMENT) {
 }
 
 export function passesConfidenceThreshold(confidence) {
-  return confidence >= MIN_CONFIDENCE;
+  return confidence >= MIN_CONFIDENCE || confidence >= MIN_CONFIDENCE * VECTOR_WEIGHT;
 }
