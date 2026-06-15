@@ -168,12 +168,17 @@ function parseGeminiError(status, bodyText) {
   return `ai_error:${status}:${String(bodyText || "").slice(0, 120)}`;
 }
 
-function extractGeminiResponseText(data) {
+function extractGeminiResponseTextRaw(data) {
   const raw =
     data?.candidates?.[0]?.content?.parts
       ?.map((p) => p.text || "")
       .join("")
       .trim() || "";
+  return raw || null;
+}
+
+function extractGeminiResponseText(data) {
+  const raw = extractGeminiResponseTextRaw(data);
   return raw ? sanitizeHebrewText(raw) : null;
 }
 
@@ -379,7 +384,7 @@ export function extractWebSourcesFromGroundingMetadata(groundingMetadata) {
 /**
  * Gemini answer with Google Search grounding (live web).
  * Retries on 503/429 and falls back across models when overloaded.
- * @param {{ systemInstruction: string, userQuery: string, model?: string, maxOutputTokens?: number, temperature?: number }}
+ * @param {{ systemInstruction: string, userQuery: string, model?: string, maxOutputTokens?: number, temperature?: number, skipHebrewSanitize?: boolean }}
  */
 export async function geminiGenerateWebSearchAnswer({
   systemInstruction,
@@ -387,6 +392,7 @@ export async function geminiGenerateWebSearchAnswer({
   model,
   maxOutputTokens = 720,
   temperature = 0.2,
+  skipHebrewSanitize = false,
 }) {
   const query = String(userQuery || "").trim();
   if (!query) {
@@ -444,7 +450,8 @@ export async function geminiGenerateWebSearchAnswer({
             },
           });
 
-          const text = sanitizeHebrewText(String(response.text || "").trim());
+          const rawText = String(response.text || "").trim();
+          const text = skipHebrewSanitize ? rawText : sanitizeHebrewText(rawText);
           const groundingMetadata =
             response.candidates?.[0]?.groundingMetadata ?? response.groundingMetadata ?? null;
           const webSources = extractWebSourcesFromGroundingMetadata(groundingMetadata);
@@ -522,7 +529,9 @@ export async function geminiGenerateWebSearchAnswer({
 
         if (res.ok) {
           const data = await res.json();
-          const text = extractGeminiResponseText(data);
+          const text = skipHebrewSanitize
+            ? extractGeminiResponseTextRaw(data)
+            : extractGeminiResponseText(data);
           const groundingMetadata = data.candidates?.[0]?.groundingMetadata ?? null;
           const webSources = extractWebSourcesFromGroundingMetadata(groundingMetadata);
 
@@ -586,6 +595,37 @@ export async function geminiGenerateWebSearchAnswer({
     highDemand: lastHighDemand,
     modelsTried,
   };
+}
+
+/**
+ * Step 2 of web search — localize English draft to Hebrew Markdown (no tools).
+ * @param {{ systemInstruction: string, userQuestion: string, englishDraft: string, maxOutputTokens?: number, temperature?: number }}
+ */
+export async function geminiLocalizeWebSearchToHebrew({
+  systemInstruction,
+  userQuestion,
+  englishDraft,
+  maxOutputTokens = 720,
+  temperature = 0.15,
+}) {
+  const question = String(userQuestion || "").trim();
+  const draft = String(englishDraft || "").trim();
+  if (!draft) {
+    return { text: null, error: "empty_english_draft", retryAfterSec: null, rateLimited: false };
+  }
+
+  const user = `User question (may be Hebrew): ${question || "(not provided)"}
+
+English research summary — translate and format for a Hebrew-speaking support agent:
+
+${draft}`;
+
+  return geminiGenerateText({
+    system: systemInstruction,
+    user,
+    maxTokens: maxOutputTokens,
+    temperature,
+  });
 }
 
 export async function geminiOcrImage(imageDataUrl, meta = {}) {

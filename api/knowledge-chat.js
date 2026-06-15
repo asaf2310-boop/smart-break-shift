@@ -9,6 +9,10 @@ import { generateAgentResponse } from "../server/knowledge/generateAgentResponse
 import { generateWebSearchAnswer } from "../server/knowledge/webSearchService.js";
 import { formatGeminiUserError } from "../server/knowledge/geminiErrorMessages.js";
 import {
+  generateKnowledgeWelcomeMessage,
+  getKnowledgeWelcomeFallback,
+} from "../server/knowledge/knowledgeWelcomeService.js";
+import {
   getAiProvider,
   isAiConfigured,
   getChatModel,
@@ -313,6 +317,23 @@ export default async function handler(req, res) {
           embeddings: isEmbeddingConfigured(),
           minConfidence: MIN_CONFIDENCE,
         },
+        req,
+      );
+    }
+    if (url.searchParams.get("welcome") === "1") {
+      if (!isGeminiConfigured()) {
+        return json(
+          res,
+          200,
+          { message: getKnowledgeWelcomeFallback(), source: "fallback" },
+          req,
+        );
+      }
+      const result = await generateKnowledgeWelcomeMessage();
+      return json(
+        res,
+        200,
+        { message: result.message, source: result.source, error: result.error || null },
         req,
       );
     }

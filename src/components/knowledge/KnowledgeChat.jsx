@@ -13,7 +13,8 @@ import {
   resetOpenAiProbeCache,
   KNOWLEDGE_LOW_RELEVANCE_ANSWER,
 } from "@/lib/knowledgeAi";
-import { shouldUseServerRag, probeServerRagHealth, listServerDocuments, submitKnowledgeFeedback, askKnowledgeWebSearch, buildKnowledgeDocumentViewUrl } from "@/lib/knowledge/knowledgeClient";
+import { shouldUseServerRag, probeServerRagHealth, listServerDocuments, submitKnowledgeFeedback, askKnowledgeWebSearch, buildKnowledgeDocumentViewUrl, fetchKnowledgeWelcome } from "@/lib/knowledge/knowledgeClient";
+import { getLocalKnowledgeWelcome } from "@/lib/knowledge/knowledgeWelcome";
 import { demoModeEnabled } from "@/api/demoClient";
 import {
   getKnowledgeDocumentsFingerprint,
@@ -362,12 +363,11 @@ function MessageBubble({ message, showDebug, onRetry, onFeedback, onWebSearch, f
 }
 
 export default function KnowledgeChat({ compact = false }) {
-  const [messages, setMessages] = useState([
+  const [messages, setMessages] = useState(() => [
     {
       id: "welcome",
       role: "assistant",
-      content:
-        "שלום! שאל שאלה על בסיס המסמכים שמנהל המערכת העלה. התשובה תתבסס על קטעים רלוונטיים בלבד, עם ציון מקור.",
+      content: getLocalKnowledgeWelcome(),
       citations: [],
       mode: "system",
     },
@@ -468,6 +468,34 @@ export default function KnowledgeChat({ compact = false }) {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const welcomeText = shouldUseServerRag()
+          ? (await fetchKnowledgeWelcome()).message
+          : getLocalKnowledgeWelcome();
+        if (cancelled || !welcomeText) return;
+        setMessages((prev) =>
+          prev.map((m) => (m.id === "welcome" ? { ...m, content: welcomeText } : m)),
+        );
+      } catch {
+        if (!cancelled) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === "welcome" ? { ...m, content: getLocalKnowledgeWelcome() } : m,
+            ),
+          );
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
@@ -494,6 +522,7 @@ export default function KnowledgeChat({ compact = false }) {
       const result = await askKnowledgeWebSearch(trimmed, {
         onPhase: (phase) => {
           if (phase === "web_search") setLoadingHint("מחפש ברשת…");
+          else if (phase === "localize") setLoadingHint("מתרגם לעברית…");
           else if (phase === "gpt") setLoadingHint("מכין תשובה…");
         },
       });

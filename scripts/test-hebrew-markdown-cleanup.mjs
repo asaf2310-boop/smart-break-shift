@@ -2,6 +2,12 @@ import { cleanHebrewMarkdownArtifacts } from "../server/knowledge/assistantBidi.
 import { sanitizeHebrewText } from "../server/knowledge/sanitizeHebrewText.js";
 
 const sanitizeCases = [
+  { in: "הואראשי בתהליך", want: "הוא ראשי בתהליך" },
+  { in: "אימותנוסף בעת תשלום", want: "אימות נוסף בעת תשלום" },
+  { in: "לאלג וריתם מאובטח", want: "אלגוריתם מאובטח" },
+  { in: "שאלשאלה עלבסיס המסמכים", want: "שאל שאלה על בסיס המסמכים" },
+  { in: "המערכתהעלה מסמכים", want: "המערכת העלה מסמכים" },
+  { in: "התשובה תתבססעל קטעים", want: "התשובה תתבסס על קטעים" },
   { in: "בתיעסק מקבלים תשלום", want: "בתי עסק מקבלים תשלום" },
   { in: "הואפרוט וקול מאובטח", want: "הוא פרוטוקול מאובטח" },
   { in: "שמוסיףשכבת אבטחה", want: "שמוסיף שכבת אבטחה" },

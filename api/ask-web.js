@@ -7,6 +7,16 @@ import { formatGeminiUserError } from "../server/knowledge/geminiErrorMessages.j
 
 function buildWebSearchResponse(result) {
   const webSources = result.webSources || [];
+  const debug = {};
+  if (result.webSearchQueries?.length) {
+    debug.webSearchQueries = result.webSearchQueries;
+  }
+  if (result.pipeline) {
+    debug.pipeline = result.pipeline;
+  }
+  if (result.pipelineStep) {
+    debug.pipelineStep = result.pipelineStep;
+  }
   return {
     answer: result.hebrewAnswerMarkdown,
     hebrewAnswerMarkdown: result.hebrewAnswerMarkdown,
@@ -18,7 +28,7 @@ function buildWebSearchResponse(result) {
     images: [],
     chunks: [],
     confidence: null,
-    debug: result.webSearchQueries?.length ? { webSearchQueries: result.webSearchQueries } : null,
+    debug: Object.keys(debug).length ? debug : null,
   };
 }
 
