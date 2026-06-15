@@ -114,9 +114,9 @@ const AuthenticatedApp = () => {
         <Route path="/chat/guest" element={<CustomerChatGate><CustomerChatGuestPage /></CustomerChatGate>} />
         <Route path="/chat" element={<ChatRoute />} />
         <Route path="/customer-chat" element={<ModuleGate module="customer_chat"><CustomerChatGate><AgentCustomerChatPage /></CustomerChatGate></ModuleGate>} />
-        <Route path="/crm" element={<ModuleGate module="crm"><CrmGate><CrmDashboard /></CrmGate></ModuleGate>} />
-        <Route path="/crm/lookup" element={<ModuleGate module="crm"><CrmGate><CrmLookupDeepLink /></CrmGate></ModuleGate>} />
-        <Route path="/crm/:id" element={<ModuleGate module="crm"><CrmGate><CrmCustomerDetail /></CrmGate></ModuleGate>} />
+        <Route path="/crm" element={<ModuleGate module="crm"><CrmGate><RouteErrorBoundary><CrmDashboard /></RouteErrorBoundary></CrmGate></ModuleGate>} />
+        <Route path="/crm/lookup" element={<ModuleGate module="crm"><CrmGate><RouteErrorBoundary><CrmLookupDeepLink /></RouteErrorBoundary></CrmGate></ModuleGate>} />
+        <Route path="/crm/:id" element={<ModuleGate module="crm"><CrmGate><RouteErrorBoundary><CrmCustomerDetail /></RouteErrorBoundary></CrmGate></ModuleGate>} />
         <Route path="/remote-support" element={<ModuleGate module="remote_support"><RemoteSupportPage /></ModuleGate>} />
         <Route
           path="/remote-support/recordings/play"

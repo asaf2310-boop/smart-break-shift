@@ -14,12 +14,14 @@ import {
   UsersRound,
 } from "lucide-react";
 import { getStoredAgentName } from "@/constants/scheduling";
+import { demoModeEnabled } from "@/api/demoClient";
 import {
   countReferralsHandledTodayByAgent,
   createCustomer,
   crmDemoAvailable,
   getReferralAssignmentLabel,
   getReferralStatusLabel,
+  listCustomers,
   listDepartmentQueuesForAgent,
   listOpenReferralsForAgent,
   searchCustomersByContact,
@@ -115,10 +117,11 @@ export default function CrmDashboard() {
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams, toast]);
 
-  const searchResults = useMemo(
-    () => searchCustomersByContact(query),
-    [query]
-  );
+  const searchResults = useMemo(() => {
+    const q = query.trim();
+    if (!q) return listCustomers();
+    return searchCustomersByContact(q);
+  }, [query]);
 
   const deptOpenCount = useMemo(
     () => departmentQueues.reduce((sum, q) => sum + q.referrals.length, 0),
@@ -210,10 +213,11 @@ export default function CrmDashboard() {
             />
           </div>
           {!hasQuery ? (
-            <p className="m3-label-medium text-center py-2">הקלד לפחות תו אחד לחיפוש לקוח</p>
+            <p className="m3-label-medium mb-2">כל הלקוחות ({searchResults.length})</p>
           ) : searchResults.length === 0 ? (
             <p className="text-center m3-label-medium py-4">לא נמצאו לקוחות</p>
-          ) : (
+          ) : null}
+          {searchResults.length > 0 ? (
             <div className="space-y-2">
               {searchResults.map((c) => (
                 <Link
@@ -244,7 +248,11 @@ export default function CrmDashboard() {
                 </Link>
               ))}
             </div>
-          )}
+          ) : !hasQuery ? (
+            <p className="text-center m3-label-medium py-6 rounded-2xl border border-dashed border-outline/40 bg-surface-container-low/60">
+              אין לקוחות עדיין — לחץ על &quot;לקוח חדש&quot; להוספה
+            </p>
+          ) : null}
         </section>
 
         <div className="grid grid-cols-3 gap-2 mb-6">

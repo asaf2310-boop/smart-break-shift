@@ -283,6 +283,22 @@ function parseStoredCrm(raw) {
   return store;
 }
 
+function seedAndPersistStore() {
+  const seed = createSeedStore();
+  seed.referrals = createSeedReferrals(seed.customers);
+  writeStore(seed);
+  return { ...seed, referrals: seed.referrals };
+}
+
+function isStoreEmpty(store) {
+  return (
+    !store.customers?.length &&
+    !store.callLogs?.length &&
+    !store.emailLogs?.length &&
+    !store.referrals?.length
+  );
+}
+
 function readStore() {
   if (!crmEnabled || typeof window === "undefined") {
     return { customers: [], callLogs: [], emailLogs: [], referrals: [] };
@@ -300,6 +316,9 @@ function readStore() {
     }
     if (raw) {
       const store = parseStoredCrm(raw);
+      if (isStoreEmpty(store)) {
+        return seedAndPersistStore();
+      }
       if (migrateReferralsInStore(store)) {
         writeStore(store);
       }
@@ -308,10 +327,7 @@ function readStore() {
   } catch {
     // ignore
   }
-  const seed = createSeedStore();
-  seed.referrals = createSeedReferrals(seed.customers);
-  localStorage.setItem(CRM_STORAGE_KEY, JSON.stringify(seed));
-  return { ...seed, referrals: seed.referrals };
+  return seedAndPersistStore();
 }
 
 function writeStore(store) {
