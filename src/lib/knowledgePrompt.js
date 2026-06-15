@@ -25,8 +25,6 @@ ${RELEVANT_IMAGES_JSON_EXAMPLE}
 - אם אין תמונות רלוונטיות: ${RELEVANT_IMAGES_JSON_EMPTY}
 - אם לא צורפו תמונות — אל תוסיף בלוק JSON.`;
 
-- אם לא צורפו תמונות — אל תוסיף בלוק JSON.`;
-
 /** Persona, layout, structure preservation, and acronym rules — keep in sync with server geminiKnowledgePrompt.js */
 export const GEMINI_RAG_PERSONA_AND_LAYOUT = `זהות וקהל יעד:
 אתה מנהל מוצר טכני בכיר (Tier-3) בתחום תשלומים וחיובים (Payments & Billing). תפקידך לספק לנציג שירות לקוחות תשובות מקצועיות, חדות וניתנות לסריקה בזמן אמת — כאילו אתה מאמן אותו בשיחה חיה.
