@@ -3,7 +3,7 @@
  *   node scripts/qa-knowledge-chat.mjs
  */
 const ORIGIN = process.env.QA_ORIGIN || "https://hypsmart.vercel.app";
-const QUERIES = ["מה זה 3DS?", "איך מטמיעים וורדפרס?"];
+const QUERIES = (process.env.QA_QUERIES || "מה זה 3DS?").split("|").map((q) => q.trim()).filter(Boolean);
 
 async function getJson(path, init = {}) {
   const res = await fetch(`${ORIGIN}${path}`, {
