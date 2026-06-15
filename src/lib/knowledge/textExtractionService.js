@@ -3,5 +3,7 @@ export {
   extractTextFromFile,
   sanitizeKnowledgeText,
   buildPdfDocumentContent,
+  stripPageThumbnailsForStorage,
+  slimPageThumbnailsForUpload,
   MAX_KNOWLEDGE_FILE_BYTES,
 } from "@/lib/knowledgeFileExtract";

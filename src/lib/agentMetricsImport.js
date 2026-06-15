@@ -335,7 +335,7 @@ export function downloadMetricsTemplate(channel = "phone") {
     "ממוצע משך שיחה",
     "אחוז אי זמינות",
   ];
-  const sample = ["אוראל כליפה", 8.5, "08:22:41", "88%", 42, "6:39", "21%"];
+  const sample = ["אוראל קליפה", 8.5, "08:22:41", "88%", 42, "6:39", "21%"];
   const teamSample = ["ממוצע צוות", 7.8, "07:55:00", "85%", 38, "7:05", "22%"];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([headers, sample, teamSample]), ctx.hebrewMonth);
   XLSX.writeFile(wb, "template-agent-metrics-phone.xlsx");

@@ -30,6 +30,7 @@ import {
   saveKnowledgeDocument,
   removeKnowledgeDocument,
   reprocessKnowledgeDocument,
+  formatKnowledgeIngestError,
 } from "@/lib/knowledge/documentUploadService";
 import {
   shouldUseServerRag,
@@ -219,7 +220,7 @@ export default function KnowledgeAdmin() {
       return;
     }
     try {
-      const { ingestResult } = await saveKnowledgeDocument({
+      const { ingestResult, ingestError } = await saveKnowledgeDocument({
         id: dialog.mode === "edit" ? dialog.id : undefined,
         title: form.title,
         content: content || buildPdfDocumentContent(form.pages, form.title),
@@ -231,6 +232,15 @@ export default function KnowledgeAdmin() {
       });
       setDialog(null);
       refresh();
+
+      if (ingestError) {
+        toast({
+          title: "נשמר מקומית — שגיאה בשרת",
+          description: formatKnowledgeIngestError(ingestError),
+          variant: "destructive",
+        });
+        return;
+      }
 
       if (serverRag) {
         toast({
@@ -248,7 +258,7 @@ export default function KnowledgeAdmin() {
         description:
           err.message === "title_and_content_required"
             ? "נדרשים כותרת ותוכן"
-            : err.message || "לא ניתן לשמור",
+            : formatKnowledgeIngestError(err),
         variant: "destructive",
       });
     }

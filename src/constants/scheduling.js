@@ -10,7 +10,7 @@ export const REAL_AGENT_NAMES = [
   "תהילה קיפרווסר",
   "בני סגל",
   "אופיר דוד",
-  "אוראל כליפה",
+  "אוראל קליפה",
   "הילה שלמה",
   "אורפז דאבוש",
   "בוריס טורבין",
@@ -31,6 +31,21 @@ const DEMO_AGENT_NAMES = [
 ];
 
 export const AGENT_NAMES = demoModeEnabled ? DEMO_AGENT_NAMES : REAL_AGENT_NAMES;
+
+/** כינויים ישנים / שגיאות כתיב → שם קנוני מ-AGENT_NAMES */
+const AGENT_NAME_ALIASES = {
+  "אוראל כליפה": "אוראל קליפה",
+};
+
+/** ממפה שם ממסד/אקסל לשם ברשימת הנציגים (לשיבוץ ואילוצים). */
+export function resolveToCanonicalAgentName(name) {
+  const normalized = String(name || "").trim().replace(/\s+/g, " ");
+  if (!normalized) return "";
+  if (AGENT_NAMES.includes(normalized)) return normalized;
+  const alias = AGENT_NAME_ALIASES[normalized];
+  if (alias && AGENT_NAMES.includes(alias)) return alias;
+  return normalized;
+}
 
 /** רשימת שמות נציגים — בדמו מהרשימה שמנהל מגדיר */
 export function getAgentNamesList() {

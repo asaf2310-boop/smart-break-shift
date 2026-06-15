@@ -8,11 +8,13 @@ import { isSupabaseBackend } from "@/api/dataClient";
 import { KNOWLEDGE_LOW_RELEVANCE_ANSWER } from "@/lib/knowledgePrompt";
 
 const API_TIMEOUT_MS = 25_000;
+const INGEST_TIMEOUT_MS = 120_000;
 
-function fetchWithTimeout(url, options = {}) {
+function fetchWithTimeout(url, options = {}, timeoutMs = API_TIMEOUT_MS) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
-  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timer));
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...options, signal: controller.signal })
+    .finally(() => clearTimeout(timer));
 }
 
 /** Resolve tenant for knowledge isolation — shared (null) when unset. */
@@ -54,14 +56,24 @@ export async function listServerDocuments() {
  * @param {object} document — id, title, content, category, sourceType, fileName, pages, images, tenantId
  */
 export async function ingestServerDocument(document) {
-  const res = await fetchWithTimeout("/api/knowledge-upload", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      action: "ingest",
-      document: { ...document, tenantId: document.tenantId ?? getKnowledgeTenantId() },
-    }),
-  });
+  let res;
+  try {
+    res = await fetchWithTimeout(
+      "/api/knowledge-upload",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "ingest",
+          document: { ...document, tenantId: document.tenantId ?? getKnowledgeTenantId() },
+        }),
+      },
+      INGEST_TIMEOUT_MS,
+    );
+  } catch (err) {
+    if (err?.name === "AbortError") throw new Error("ingest_timeout");
+    throw new Error("ingest_network");
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "ingest_failed");
   return data;

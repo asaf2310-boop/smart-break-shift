@@ -10,6 +10,7 @@ import {
   AGENT_NAMES,
   HOLIDAY_EVE_DATES,
   MAX_MORNING_AUTO_ASSIGNMENTS_PER_WEEK,
+  resolveToCanonicalAgentName,
 } from "@/constants/scheduling";
 import {
   resendScheduleSmsNotifications,
@@ -21,29 +22,29 @@ import { useToast } from "@/components/ui/use-toast";
 import { demoModeEnabled } from "@/api/demoClient";
 
 // Auto-schedule algorithm:
-// - רק נציגים שאישרו אילוצים (אם יש אישורים בשבוע)
-// - לא זמין = סימון "לא זמין" / חופש מאושר לאותה משמרת
+// - כל הנציגים ברשימה — גם אם לא הגישו אילוצים (נחשבים זמינים לשתי המשמרות)
+// - לא זמין = סימון "לא זמין" / חופש מאושר לאותה משמרת (רק מי שהגיש)
 // - עדיפות לערב 09:00–17:00; בוקר 08:00–16:00 רק אם סימנו לא זמין בערב או לכיסוי מינימלי
 // - לכל היותר MAX_MORNING_AUTO_ASSIGNMENTS_PER_WEEK משמרות בוקר לנציג בשבוע
 // - נציג אחד לכל היותר במשמרת אחת ביום
-function buildAutoSchedule(weekDays, unavailabilities, vacationRequests, confirmedAgentNames = new Set()) {
+function buildAutoSchedule(weekDays, unavailabilities, vacationRequests) {
   const schedule = {};
   const agentMorningCount = Object.fromEntries(AGENT_NAMES.map(n => [n, 0]));
   const agentEveningCount = Object.fromEntries(AGENT_NAMES.map(n => [n, 0]));
 
-  const schedulingPool =
-    confirmedAgentNames.size > 0
-      ? AGENT_NAMES.filter((n) => confirmedAgentNames.has(n))
-      : [...AGENT_NAMES];
+  const schedulingPool = [...AGENT_NAMES];
 
   const isShiftUnavailable = (agentName, dateStr, shiftType) => {
     const onVacation = vacationRequests.some(
-      (v) => v.agent_name === agentName && v.date === dateStr && v.status === "approved"
+      (v) =>
+        resolveToCanonicalAgentName(v.agent_name) === agentName &&
+        v.date === dateStr &&
+        v.status === "approved"
     );
     if (onVacation) return true;
     return unavailabilities.some(
       (u) =>
-        u.agent_name === agentName &&
+        resolveToCanonicalAgentName(u.agent_name) === agentName &&
         u.date === dateStr &&
         u.shift_type === shiftType
     );
@@ -57,15 +58,21 @@ function buildAutoSchedule(weekDays, unavailabilities, vacationRequests, confirm
     const isHolidayEve = HOLIDAY_EVE_DATES.includes(dateStr);
 
     if (isHolidayEve) {
-      // Only agents who confirmed constraints AND did not mark themselves unavailable/vacation for either shift
       const isUnavailableHoliday = (agentName) => {
-        const onVacation = vacationRequests.some(v => v.agent_name === agentName && v.date === dateStr && v.status === "approved");
+        const onVacation = vacationRequests.some(
+          (v) =>
+            resolveToCanonicalAgentName(v.agent_name) === agentName &&
+            v.date === dateStr &&
+            v.status === "approved"
+        );
         if (onVacation) return true;
-        return unavailabilities.some(u => u.agent_name === agentName && u.date === dateStr);
+        return unavailabilities.some(
+          (u) =>
+            resolveToCanonicalAgentName(u.agent_name) === agentName &&
+            u.date === dateStr
+        );
       };
-      const available = schedulingPool.filter(
-        (n) => confirmedAgentNames.has(n) && !isUnavailableHoliday(n)
-      );
+      const available = schedulingPool.filter((n) => !isUnavailableHoliday(n));
       schedule[`${dateStr}|holiday_eve`] = available;
       continue;
     }
@@ -376,16 +383,9 @@ export default function AutoScheduleBuilder({ weekStart }) {
     queryFn: () => dataClient.entities.VacationRequest.filter({ status: "approved" }),
   });
 
-  const weekStartStr = format(weekDays[0], "yyyy-MM-dd");
-  const { data: confirmations = [] } = useQuery({
-    queryKey: ["confirmations-builder", weekStartStr],
-    queryFn: () => dataClient.entities.ConstraintConfirmation.filter({ week_start: weekStartStr }),
-  });
-
-  const confirmedAgentNames = new Set(confirmations.map(c => c.agent_name));
 
   const handleGenerate = () => {
-    const result = buildAutoSchedule(weekDays, unavailabilities, vacationRequests, confirmedAgentNames);
+    const result = buildAutoSchedule(weekDays, unavailabilities, vacationRequests);
     setAssignments(result);
     setSaved(false);
   };
@@ -466,7 +466,7 @@ export default function AutoScheduleBuilder({ weekStart }) {
           <div>
             <h3 className="font-bold text-slate-800">שיבוץ אוטומטי</h3>
             <p className="text-xs text-slate-400">
-              שבוע {format(weekDays[0], "dd/MM")} – {format(weekDays[4], "dd/MM/yyyy")}
+              שבוע {format(weekDays[0], "dd/MM")} – {format(weekDays[4], "dd/MM/yyyy")} · כל הנציגים נכללים; אילוצים רק למי שהגיש
             </p>
           </div>
         </div>

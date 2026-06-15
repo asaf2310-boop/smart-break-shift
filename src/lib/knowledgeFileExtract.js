@@ -14,6 +14,57 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 export const MAX_KNOWLEDGE_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_PDF_PAGES = 30;
 const PAGE_RENDER_MAX_WIDTH = 960;
+const UPLOAD_THUMB_MAX_WIDTH = 640;
+
+/** Metadata only — thumbnails live on server in knowledge_images. */
+export function stripPageThumbnailsForStorage(pages) {
+  if (!Array.isArray(pages) || !pages.length) return null;
+  return pages.map((p) => ({
+    pageNumber: p.pageNumber ?? null,
+    sectionTitle: p.sectionTitle || (p.pageNumber != null ? `עמוד ${p.pageNumber}` : null),
+    text: p.text || "",
+    ...(p.thumbnail || p.hasThumbnail ? { hasThumbnail: true } : {}),
+  }));
+}
+
+function loadImageFromDataUrl(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
+
+/** Smaller JPEGs for server ingest — avoids request size / timeout failures. */
+export async function slimPageThumbnailsForUpload(pages) {
+  if (!Array.isArray(pages) || !pages.length) return pages;
+  const out = [];
+  for (const page of pages) {
+    const thumb = page?.thumbnail;
+    if (!thumb?.startsWith("data:image")) {
+      out.push(page);
+      continue;
+    }
+    try {
+      const img = await loadImageFromDataUrl(thumb);
+      const scale = Math.min(UPLOAD_THUMB_MAX_WIDTH / img.width, 1);
+      const w = Math.max(1, Math.floor(img.width * scale));
+      const h = Math.max(1, Math.floor(img.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d", { alpha: false });
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      out.push({ ...page, thumbnail: canvas.toDataURL("image/jpeg", 0.62) });
+    } catch {
+      out.push(page);
+    }
+  }
+  return out;
+}
 
 /** Structured per-page text for storage and RAG (not one glued wall of text). */
 export function buildPdfDocumentContent(pages, title = "מסמך") {

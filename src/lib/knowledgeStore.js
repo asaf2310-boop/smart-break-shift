@@ -160,7 +160,14 @@ function mergeKnowledgeDocuments(localDocs, cloudDocs) {
 function writeRaw(store) {
   memoryStore = { version: 1, documents: store.documents || [] };
   if (typeof window !== "undefined") {
-    localStorage.setItem(KNOWLEDGE_STORAGE_KEY, JSON.stringify(memoryStore));
+    try {
+      localStorage.setItem(KNOWLEDGE_STORAGE_KEY, JSON.stringify(memoryStore));
+    } catch (err) {
+      if (err?.name === "QuotaExceededError") {
+        throw new Error("local_storage_quota");
+      }
+      throw err;
+    }
     markKnowledgeLocalDirty();
     window.dispatchEvent(new CustomEvent(KNOWLEDGE_CHANGE_EVENT));
   }

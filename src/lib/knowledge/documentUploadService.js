@@ -3,6 +3,10 @@
 import { upsertKnowledgeDocument, deleteKnowledgeDocument } from "@/lib/knowledgeStore";
 import { sanitizeMarkdownIngestText } from "@/lib/knowledgeAi";
 import {
+  slimPageThumbnailsForUpload,
+  stripPageThumbnailsForStorage,
+} from "@/lib/knowledge/textExtractionService";
+import {
   shouldUseServerRag,
   ingestServerDocument,
   deleteServerDocument,
@@ -10,16 +14,46 @@ import {
   getKnowledgeTenantId,
 } from "@/lib/knowledge/knowledgeClient";
 
+export function formatKnowledgeIngestError(err) {
+  const msg = String(err?.message || err || "");
+  if (msg === "ingest_timeout" || msg.includes("aborted")) {
+    return "העיבוד בשרת ארך זמן רב מדי. נסו שוב או המתינו דקה ולחצו «עיבוד מחדש».";
+  }
+  if (msg === "ingest_network" || msg.includes("fetch failed") || msg === "network") {
+    return "שגיאת רשת בשמירה לשרת. המסמך נשמר מקומית — נסו «עיבוד מחדש» מהרשימה.";
+  }
+  if (msg === "document_too_large") {
+    return "המסמך גדול מדי לשרת (הקטינו PDF או פצלו לקבצים קטנים יותר).";
+  }
+  if (msg === "local_storage_quota") {
+    return "אין מספיק מקום בדפדפן. מחקו מסמכים ישנים ונסו שוב.";
+  }
+  if (msg === "pgvector_not_configured") {
+    return "שרת RAG לא מוגדר (SUPABASE_SERVICE_ROLE_KEY ב-Vercel).";
+  }
+  return msg || "לא ניתן לעבד בשרת";
+}
+
 /**
  * Save document locally and ingest to pgvector when server RAG is active.
  */
 export async function saveKnowledgeDocument(payload) {
+  const pagesForIngest = payload.pages?.length
+    ? await slimPageThumbnailsForUpload(payload.pages)
+    : null;
+  const pagesForStorage = stripPageThumbnailsForStorage(pagesForIngest || payload.pages);
+
   const doc = upsertKnowledgeDocument({
     ...payload,
+    pages: pagesForStorage,
     content: sanitizeMarkdownIngestText(payload.content),
   });
 
-  if (shouldUseServerRag()) {
+  if (!shouldUseServerRag()) {
+    return { doc, ingestResult: null, ingestError: null };
+  }
+
+  try {
     const ingestResult = await ingestServerDocument({
       id: doc.id,
       title: doc.title,
@@ -27,16 +61,16 @@ export async function saveKnowledgeDocument(payload) {
       category: doc.category,
       sourceType: doc.sourceType,
       fileName: doc.fileName,
-      pages: doc.pages,
+      pages: pagesForIngest,
       images: payload.images,
       tenantId: payload.tenantId ?? getKnowledgeTenantId(),
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
     });
-    return { doc, ingestResult };
+    return { doc, ingestResult, ingestError: null };
+  } catch (err) {
+    return { doc, ingestResult: null, ingestError: err };
   }
-
-  return { doc, ingestResult: null };
 }
 
 export async function removeKnowledgeDocument(id) {

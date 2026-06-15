@@ -97,6 +97,11 @@ export default async function handler(req, res) {
     return json(res, 400, { error: "document_too_large" }, req);
   }
 
+  const bodyBytes = Buffer.byteLength(JSON.stringify(body), "utf8");
+  if (bodyBytes > 4_500_000) {
+    return json(res, 413, { error: "document_too_large" }, req);
+  }
+
   const result = await ingestDocument(doc);
   if (!result.ok) return json(res, 500, { error: result.error, ...result }, req);
   return json(res, 200, result, req);

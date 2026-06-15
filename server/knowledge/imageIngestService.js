@@ -30,8 +30,6 @@ export async function ingestDocumentImages(document) {
   const tenantId = document.tenantId ?? document.tenant_id ?? null;
   const fileName = document.fileName || document.file_name || null;
 
-  await supabase.from("knowledge_images").delete().eq("document_id", docId);
-
   const candidates = [];
 
   const pages = Array.isArray(document.pages) ? document.pages : [];
@@ -45,8 +43,8 @@ export async function ingestDocumentImages(document) {
     });
   }
 
-  const standalone = Array.isArray(document.images) ? document.images : [];
-  for (const img of standalone) {
+  const extraImages = Array.isArray(document.images) ? document.images : [];
+  for (const img of extraImages) {
     const data = img?.imageData || img?.image_data || img?.src;
     if (!data) continue;
     candidates.push({
@@ -59,6 +57,8 @@ export async function ingestDocumentImages(document) {
   if (!candidates.length) {
     return { ok: true, imageCount: 0 };
   }
+
+  await supabase.from("knowledge_images").delete().eq("document_id", docId);
 
   const rows = [];
   for (const cand of candidates) {

@@ -25,6 +25,17 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Store page metadata in knowledge_documents; binary thumbnails go to knowledge_images. */
+function pagesForDocumentRow(pages) {
+  if (!Array.isArray(pages) || !pages.length) return null;
+  return pages.map((p) => ({
+    pageNumber: p.pageNumber ?? p.page_number ?? null,
+    sectionTitle: p.sectionTitle ?? p.section_title ?? null,
+    text: p.text || "",
+    hasThumbnail: Boolean(p.thumbnail || p.hasThumbnail || p.imageData),
+  }));
+}
+
 /**
  * Ingest or reprocess a document into pgvector.
  * @param {object} document
@@ -37,15 +48,18 @@ export async function ingestDocument(document) {
   }
 
   const dbDoc = mapDocToDb(document);
+  const pagesForChunking = dbDoc.pages;
   const chunks = chunkDocument({
     id: dbDoc.id,
     title: dbDoc.title,
     category: dbDoc.category,
     content: dbDoc.content,
-    pages: dbDoc.pages,
+    pages: pagesForChunking,
   });
 
-  const { error: upsertErr } = await supabase.from("knowledge_documents").upsert(dbDoc, {
+  const dbDocRow = { ...dbDoc, pages: pagesForDocumentRow(pagesForChunking) };
+
+  const { error: upsertErr } = await supabase.from("knowledge_documents").upsert(dbDocRow, {
     onConflict: "id",
   });
   if (upsertErr) {

@@ -290,7 +290,7 @@ function findChunkBreak(slice, maxLen) {
 function pageSectionText(page, docTitle) {
   const sanitized = sanitizeChunkText(page.text, { preserveLines: true });
   if (sanitized) return sanitized;
-  if (page.thumbnail || page.pageNumber != null) {
+  if (page.thumbnail || page.hasThumbnail || page.pageNumber != null) {
     const n = page.pageNumber ?? "?";
     const name = docTitle || "מסמך";
     return normalizeHebrewText(`עמוד ${n} — תוכן ויזואלי מהמסמך "${name}"`);
@@ -303,7 +303,7 @@ export function chunkDocument(document) {
   const keepMarkdown = contentLooksLikeMarkdown(document.content);
   const text = sanitizeChunkText(document.content, { preserveLines: true, keepMarkdown });
   const hasVisualPages =
-    Array.isArray(document.pages) && document.pages.some((p) => p?.thumbnail);
+    Array.isArray(document.pages) && document.pages.some((p) => p?.thumbnail || p?.hasThumbnail);
   if (!text && !hasVisualPages) return [];
 
   const pageSections = Array.isArray(document.pages)
@@ -314,7 +314,7 @@ export function chunkDocument(document) {
           thumbnail: p.thumbnail || null,
           text: pageSectionText(p, document.title || document.documentName),
         }))
-        .filter((p) => p.text || p.thumbnail)
+        .filter((p) => p.text || p.thumbnail || p.hasThumbnail)
     : null;
 
   const sections = pageSections?.length
