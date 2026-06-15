@@ -5,7 +5,9 @@ export const KNOWLEDGE_BIDI_RULES_HE = `
 1. לעולם אל תערבב עברית ואנגלית באותה שורה בלי עיצוב Markdown מתאים.
 2. כל מונח טכני, שם שדה או אפשרות תצורה באנגלית (למשל Invoice Options, Yaad, Hyp invoice) — עטוף תמיד ב-backticks: \`Invoice Options\`. זה מונע היפוך מילים וסימני פיסוק בתצוגה.
 3. טקסט מ-OCR/PDF: פלט עברית נקייה וטבעית בלבד. אל תעתיק מילים שבורות או מחוברות (כמו "מתקדסבשה"). אם קטע מקור מקולקל — נסח מחדש בעברית תקינה על בסיס ההקשר.
-4. פיסוק: סימני קריאה וסוגריים בתוך ההקשר העברי — לדוגמה "שימו לב!" ולא "!שימו לב".`;
+4. פיסוק: סימני קריאה וסוגריים בתוך ההקשר העברי — לדוגמה "שימו לב!" ולא "!שימו לב".
+5. ריווח מילים: רווח ברור בין כל מילה עברית (נכון: "נוספת בעת", "בשם המלא" — שגוי: "נוספתבעת", "בשמהמלא").
+6. Markdown bold: אל תצמיד סימני פיסוק או סוגריים לכוכביות **. עטוף בסוגריים מחוץ ל-bold: (**הפחתת הונאות**) ולא הפחתת הונאות**).`;
 
 export const KNOWLEDGE_BIDI_FORMAT_HINT = `${KNOWLEDGE_BIDI_RULES_HE}
 Markdown:
@@ -26,8 +28,77 @@ function fixRtlPunctuation(line) {
   return s;
 }
 
+const GLUED_HEBREW_SUFFIXES = [
+  "בעת",
+  "עבור",
+  "אחרי",
+  "לפני",
+  "יחדיו",
+  "כמו",
+  "אשר",
+  "כדי",
+  "אצל",
+  "בגלל",
+  "למרות",
+];
+
+const GLUED_HEBREW_PARTICLES = ["של", "עם", "גם", "עוד", "רק", "כל", "זאת", "זה", "היא", "הוא", "את"];
+
+function fixGluedHebrewWords(line) {
+  let s = String(line || "");
+  for (const suffix of GLUED_HEBREW_SUFFIXES) {
+    const re = new RegExp(`([\\u0590-\\u05FF]{2,})(${suffix})(?=[\\u0590-\\u05FF\\s]|$)`, "gu");
+    s = s.replace(re, "$1 $2");
+  }
+  for (const particle of GLUED_HEBREW_PARTICLES) {
+    const re = new RegExp(`([\\u0590-\\u05FF]{2,})(${particle})(?=[\\u0590-\\u05FF]{2,})`, "gu");
+    s = s.replace(re, "$1 $2");
+  }
+  s = s.replace(/(בשמ)(המלא)/gu, "בשם $2");
+  s = s.replace(/(בשם)(המלא)/gu, "$1 $2");
+  s = s.replace(/(נוספת)(בעת)/gu, "$1 $2");
+  return s.replace(/[ \t]{2,}/g, " ");
+}
+
+function fixBoldPunctuationInLine(line) {
+  let s = String(line || "").trim();
+  if (!s) return "";
+
+  if (/\(\*\*[^*\n]+?\*\*[\).]/.test(s)) return s;
+
+  if (/^\*\*[^*\n]+?\*\*\)\.$/.test(s)) {
+    return s.replace(/^\*\*([^*\n]+?)\*\*\)\.$/, "(**$1**).");
+  }
+  if (/^\*\*[^*\n]+?\*\*\)$/.test(s)) {
+    return s.replace(/^\*\*([^*\n]+?)\*\*\)$/, "(**$1**)");
+  }
+
+  s = s.replace(/([\u0590-\u05FF][\u0590-\u05FF\s]*?)\*\*\)\.$/g, "(**$1**).");
+  s = s.replace(/([\u0590-\u05FF][\u0590-\u05FF\s]*?)\*\*\)$/g, "(**$1**)");
+  s = s.replace(/([\u0590-\u05FF][\u0590-\u05FF\s]*?)\*\*([,.!?;:]+)$/g, "**$1**$2");
+
+  return s;
+}
+
+/** Post-process Gemini Hebrew markdown artifacts before API response. */
+export function cleanHebrewMarkdownArtifacts(text) {
+  if (!text) return "";
+
+  let cleaned = String(text).replace(/\r\n/g, "\n");
+
+  cleaned = cleaned.replace(/([^\s]),(?=\S)/g, "$1, ");
+  cleaned = cleaned.replace(/([^\s]);(?=\S)/g, "$1; ");
+
+  cleaned = cleaned
+    .split("\n")
+    .map((line) => fixBoldPunctuationInLine(fixGluedHebrewWords(line)))
+    .join("\n");
+
+  return cleaned.replace(/[ \t]{2,}/g, " ").trim();
+}
+
 function fixGluedOcrHebrew(line) {
-  return String(line || "").replace(/[\u0590-\u05FF]{10,}/gu, (word) => {
+  return String(line || "").replace(/[\u0590-\u05FF]{7,}/gu, (word) => {
     const split = word
       .replace(/(שה|וב|מה|בה|לה|וה|אם|עם|כי|גם)(?=[\u0590-\u05FF]{2})/gu, " $1")
       .replace(/([\u0590-\u05FF]{4,})(ב|ל|מ|כ|ו)(?=[\u0590-\u05FF]{3})/gu, "$1 $2");
@@ -74,6 +145,7 @@ function wrapEnglishTermsInLine(line) {
 function formatLineForBidi(line) {
   let s = String(line || "").replace(/[ \t]+/g, " ").trim();
   if (!s) return "";
+  s = fixGluedHebrewWords(s);
   s = fixGluedOcrHebrew(s);
   s = fixRtlPunctuation(s);
   s = wrapEnglishTermsInLine(s);
@@ -92,5 +164,5 @@ export function formatAssistantBidiText(text) {
 }
 
 export function sanitizeAssistantAnswer(text) {
-  return formatAssistantBidiText(text);
+  return cleanHebrewMarkdownArtifacts(formatAssistantBidiText(text));
 }
