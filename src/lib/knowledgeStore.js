@@ -1,6 +1,7 @@
 import { demoModeEnabled } from "@/api/demoClient";
 import { dataClient } from "@/api/client";
 import { isSupabaseBackend } from "@/api/dataClient";
+import { shouldUseServerRag } from "@/lib/knowledge/knowledgeClient";
 
 export const KNOWLEDGE_STORAGE_KEY = "smart-break-shift-knowledge-v1";
 export const KNOWLEDGE_CHUNKS_KEY = "smart-break-shift-knowledge-chunks-v1";
@@ -215,7 +216,13 @@ async function persistDocumentsToCloud(documents) {
     return;
   }
 
+  // Production RAG writes knowledge_documents via /api/knowledge-upload — skip client POST to avoid 409 races.
+  if (shouldUseServerRag()) {
+    return;
+  }
+
   const existing = await dataClient.entities.KnowledgeDocument.list("-updated_at", 500);
+  const existingIds = new Set((existing || []).map((r) => r.id));
   const nextIds = new Set((documents || []).map((d) => d.id));
 
   for (const row of existing || []) {
@@ -226,11 +233,21 @@ async function persistDocumentsToCloud(documents) {
 
   for (const doc of documents || []) {
     const payload = mapDocToDb(doc);
-    const found = (existing || []).find((r) => r.id === doc.id);
-    if (found) {
+    if (existingIds.has(doc.id)) {
       await dataClient.entities.KnowledgeDocument.update(doc.id, payload);
-    } else {
+      continue;
+    }
+    try {
       await dataClient.entities.KnowledgeDocument.create(payload);
+      existingIds.add(doc.id);
+    } catch (err) {
+      const msg = String(err?.message || err);
+      if (msg.includes("23505") || msg.includes("409") || /duplicate key/i.test(msg)) {
+        await dataClient.entities.KnowledgeDocument.update(doc.id, payload);
+        existingIds.add(doc.id);
+        continue;
+      }
+      throw err;
     }
   }
 }

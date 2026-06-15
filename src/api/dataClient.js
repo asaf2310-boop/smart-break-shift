@@ -76,6 +76,18 @@ function createEntity(tableName) {
       return data?.[0] ?? data;
     },
 
+    async upsert(row, { onConflict = "id" } = {}) {
+      const data = await requestJson(
+        buildUrl(tableName, {}, { select: "*", on_conflict: onConflict }),
+        {
+          method: "POST",
+          headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+          body: JSON.stringify(row),
+        },
+      );
+      return data?.[0] ?? data;
+    },
+
     async bulkCreate(rows) {
       if (!rows?.length) return [];
       return (await requestJson(buildUrl(tableName, {}, { select: "*" }), {
