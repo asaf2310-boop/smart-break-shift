@@ -2,5 +2,6 @@
 export {
   extractTextFromFile,
   sanitizeKnowledgeText,
+  buildPdfDocumentContent,
   MAX_KNOWLEDGE_FILE_BYTES,
 } from "@/lib/knowledgeFileExtract";

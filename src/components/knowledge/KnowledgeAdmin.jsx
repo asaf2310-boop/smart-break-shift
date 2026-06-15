@@ -24,7 +24,8 @@ import {
   getOpenAiRateLimitRetrySec,
   isOpenAiRateLimited,
 } from "@/lib/knowledgeAi";
-import { extractTextFromFile } from "@/lib/knowledge/textExtractionService";
+import { extractTextFromFile, buildPdfDocumentContent } from "@/lib/knowledge/textExtractionService";
+import KnowledgePdfPagesPreview from "@/components/knowledge/KnowledgePdfPagesPreview";
 import {
   saveKnowledgeDocument,
   removeKnowledgeDocument,
@@ -208,11 +209,20 @@ export default function KnowledgeAdmin() {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    const hasPdfPages = form.pages?.some((p) => p?.thumbnail);
+    const content =
+      hasPdfPages && form.pages?.length
+        ? buildPdfDocumentContent(form.pages, form.title)
+        : form.content;
+    if (!content?.trim() && !hasPdfPages) {
+      toast({ title: "חסר תוכן", description: "יש להזין תוכן או להעלות קובץ", variant: "destructive" });
+      return;
+    }
     try {
       const { ingestResult } = await saveKnowledgeDocument({
         id: dialog.mode === "edit" ? dialog.id : undefined,
         title: form.title,
-        content: form.content,
+        content: content || buildPdfDocumentContent(form.pages, form.title),
         category: form.category,
         sourceType: dialog.sourceType || "text",
         fileName: dialog.fileName,
@@ -287,12 +297,16 @@ export default function KnowledgeAdmin() {
         images: images || null,
       });
       const thumbCount = pages?.filter((p) => p?.thumbnail).length || 0;
-      setDialog({ mode: "create", sourceType: "upload", fileName: file.name });
+      setDialog({
+        mode: "create",
+        sourceType: "upload",
+        fileName: file.name,
+      });
       toast({
         title: "הקובץ נקרא בהצלחה",
         description:
           thumbCount > 0
-            ? `נשמרו ${thumbCount} תמונות עמוד מ-PDF. בדקו את התוכן ולחצו שמירה.`
+            ? `נשמרו ${thumbCount} עמודים כתמונות. בדקו את התצוגה ולחצו שמירה.`
             : "בדקו את התוכן ולחצו שמירה",
       });
     } finally {
@@ -310,6 +324,8 @@ export default function KnowledgeAdmin() {
     }
     toast({ title: "בסיס הידע אופס לדמו" });
   };
+
+  const hasPdfPages = form.pages?.some((p) => p?.thumbnail);
 
   return (
     <div className="space-y-6" dir="rtl">
@@ -382,6 +398,7 @@ export default function KnowledgeAdmin() {
         <ul className="space-y-3">
           {documents.map((doc, i) => {
             const docChunks = getDocChunkCount(doc.id);
+            const pdfPageCount = doc.pages?.filter((p) => p?.thumbnail)?.length || 0;
             return (
               <motion.li
                 key={doc.id}
@@ -400,11 +417,20 @@ export default function KnowledgeAdmin() {
                     {docChunks != null && (
                       <span className="m3-badge text-[10px] py-0.5">{docChunks} קטעים</span>
                     )}
+                    {pdfPageCount > 0 && (
+                      <span className="m3-badge text-[10px] py-0.5">{pdfPageCount} עמודים</span>
+                    )}
                     {doc.sourceType === "upload" && doc.fileName && (
                       <span className="m3-label-medium">· {doc.fileName}</span>
                     )}
                   </div>
-                  <p className="m3-label-medium mt-1 line-clamp-2">{doc.content}</p>
+                  {pdfPageCount > 0 ? (
+                    <p className="m3-label-medium mt-1 text-on-surface-variant">
+                      PDF · {pdfPageCount} עמודים (תצוגה ויזואלית)
+                    </p>
+                  ) : (
+                    <p className="m3-label-medium mt-1 line-clamp-2">{doc.content}</p>
+                  )}
                   <p className="m3-label-medium mt-1 opacity-70">
                     עודכן {new Date(doc.updatedAt).toLocaleString("he-IL")}
                   </p>
@@ -452,7 +478,7 @@ export default function KnowledgeAdmin() {
           <motion.div
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-lg m3-card p-6 max-h-[90vh] overflow-y-auto"
+            className={`w-full m3-card p-6 max-h-[90vh] overflow-y-auto ${hasPdfPages ? "max-w-4xl" : "max-w-lg"}`}
             dir="rtl"
           >
             <div className="flex items-center justify-between mb-4">
@@ -492,15 +518,35 @@ export default function KnowledgeAdmin() {
                 </datalist>
               </div>
               <div>
-                <label className="m3-label-medium block mb-1">תוכן</label>
-                <textarea
-                  value={form.content}
-                  onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
-                  rows={10}
-                  dir="auto"
-                  className="w-full rounded-xl border border-outline/30 bg-surface-container-lowest px-3 py-2 text-sm outline-none focus:border-primary resize-y min-h-[160px] whitespace-pre-wrap"
-                  required
-                />
+                <label className="m3-label-medium block mb-1">
+                  {hasPdfPages ? "תצוגת עמודים" : "תוכן"}
+                </label>
+                {hasPdfPages ? (
+                  <>
+                    <KnowledgePdfPagesPreview pages={form.pages} />
+                    <details className="mt-3">
+                      <summary className="m3-label-medium cursor-pointer text-on-surface-variant">
+                        טקסט מחולץ לחיפוש (אופציונלי)
+                      </summary>
+                      <textarea
+                        value={form.content}
+                        onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
+                        rows={6}
+                        dir="auto"
+                        className="mt-2 w-full rounded-xl border border-outline/30 bg-surface-container-lowest px-3 py-2 text-sm outline-none focus:border-primary resize-y min-h-[100px] whitespace-pre-wrap"
+                      />
+                    </details>
+                  </>
+                ) : (
+                  <textarea
+                    value={form.content}
+                    onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
+                    rows={10}
+                    dir="auto"
+                    className="w-full rounded-xl border border-outline/30 bg-surface-container-lowest px-3 py-2 text-sm outline-none focus:border-primary resize-y min-h-[160px] whitespace-pre-wrap"
+                    required
+                  />
+                )}
               </div>
               <div className="flex gap-2 justify-end">
                 <button type="button" onClick={() => setDialog(null)} className="m3-btn-outlined">

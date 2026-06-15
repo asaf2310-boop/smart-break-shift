@@ -12,8 +12,21 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 ).toString();
 
 export const MAX_KNOWLEDGE_FILE_BYTES = 5 * 1024 * 1024;
-const MAX_PAGE_THUMBNAILS = 24;
-const THUMBNAIL_MAX_WIDTH = 520;
+const MAX_PDF_PAGES = 30;
+const PAGE_RENDER_MAX_WIDTH = 960;
+
+/** Structured per-page text for storage and RAG (not one glued wall of text). */
+export function buildPdfDocumentContent(pages, title = "מסמך") {
+  if (!Array.isArray(pages) || !pages.length) return "";
+  return pages
+    .map((p) => {
+      const header = `## עמוד ${p.pageNumber}`;
+      const body = String(p.text || "").trim();
+      if (body) return `${header}\n\n${body}`;
+      return `${header}\n\n[עמוד ויזואלי — התוכן מוצג כתמונת עמוד מ"${title}"]`;
+    })
+    .join("\n\n");
+}
 
 const SUPPORTED_EXTENSIONS = new Set(["txt", "md", "pdf", "docx", "html", "htm", "png", "jpg", "jpeg", "webp"]);
 
@@ -139,7 +152,7 @@ async function renderPageThumbnail(page) {
   const baseViewport = page.getViewport({ scale: 1 });
   if (!baseViewport.width) return null;
 
-  const scale = Math.min(THUMBNAIL_MAX_WIDTH / baseViewport.width, 1.25);
+  const scale = Math.min(PAGE_RENDER_MAX_WIDTH / baseViewport.width, 2);
   const viewport = page.getViewport({ scale });
   const canvas = document.createElement("canvas");
   canvas.width = Math.floor(viewport.width);
@@ -150,42 +163,43 @@ async function renderPageThumbnail(page) {
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   await page.render({ canvasContext: ctx, viewport }).promise;
-  return canvas.toDataURL("image/jpeg", 0.62);
+  return canvas.toDataURL("image/jpeg", 0.78);
 }
 
-async function extractPdfText(file) {
+async function extractPdfText(file, docTitle) {
   const data = new Uint8Array(await file.arrayBuffer());
   const pdf = await pdfjsLib.getDocument({ data, useWorkerFetch: false, isEvalSupported: false }).promise;
-  const parts = [];
   const pages = [];
+  const pageLimit = Math.min(pdf.numPages, MAX_PDF_PAGES);
 
-  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
+  for (let pageNum = 1; pageNum <= pageLimit; pageNum += 1) {
     const page = await pdf.getPage(pageNum);
     const content = await page.getTextContent({ disableCombineTextItems: true });
     const pageText = normalizeHebrewText(pdfItemsToText(content.items), { preserveLines: true });
     let thumbnail = null;
 
-    if (pageText && pageNum <= MAX_PAGE_THUMBNAILS) {
-      try {
-        thumbnail = await renderPageThumbnail(page);
-      } catch {
-        thumbnail = null;
-      }
+    try {
+      thumbnail = await renderPageThumbnail(page);
+    } catch {
+      thumbnail = null;
     }
 
     if (pageText || thumbnail) {
-      if (pageText) parts.push(pageText);
       pages.push({
         pageNumber: pageNum,
+        sectionTitle: `עמוד ${pageNum}`,
         text: pageText || "",
         ...(thumbnail ? { thumbnail } : {}),
       });
     }
   }
 
+  const title = docTitle || "מסמך";
   return {
-    text: normalizeHebrewText(parts.join("\n\n")),
+    text: buildPdfDocumentContent(pages, title),
     pages,
+    sourceFormat: "pdf",
+    visualFirst: true,
   };
 }
 
@@ -263,7 +277,7 @@ export async function extractTextFromFile(file) {
     } else if (ext === "docx") {
       rawText = await extractDocxText(file);
     } else if (ext === "pdf") {
-      const pdfResult = await extractPdfText(file);
+      const pdfResult = await extractPdfText(file, title);
       rawText = pdfResult.text;
       pages = pdfResult.pages;
     } else if (ext === "png" || ext === "jpg" || ext === "jpeg" || ext === "webp") {
@@ -277,9 +291,11 @@ export async function extractTextFromFile(file) {
     const text =
       ext === "md"
         ? sanitizeMarkdownIngestText(cleaned)
-        : ext === "txt" || ext === "docx" || ext === "pdf"
-          ? sanitizeChunkText(cleaned, { preserveLines: true })
-          : sanitizeChunkText(cleaned);
+        : ext === "pdf"
+          ? sanitizeChunkText(cleaned, { preserveLines: true, keepMarkdown: true })
+          : ext === "txt" || ext === "docx"
+            ? sanitizeChunkText(cleaned, { preserveLines: true })
+            : sanitizeChunkText(cleaned);
 
     const hasImages = pages?.some((p) => p?.thumbnail) || images?.length > 0;
 
@@ -297,6 +313,8 @@ export async function extractTextFromFile(file) {
       error: null,
       pages: pages || undefined,
       images: images || undefined,
+      sourceFormat: ext === "pdf" ? "pdf" : undefined,
+      visualFirst: ext === "pdf" && pages?.some((p) => p?.thumbnail),
     };
   } catch {
     if (ext === "pdf") {
