@@ -6,13 +6,10 @@ import {
   GEMINI_KNOWLEDGE_SYSTEM_PROMPT,
   KNOWLEDGE_MISSING_ANSWER,
 } from "./geminiKnowledgePrompt.js";
+import { KNOWLEDGE_BIDI_FORMAT_HINT, sanitizeAssistantAnswer } from "./assistantBidi.js";
 
 export const KNOWLEDGE_SYSTEM_PROMPT = GEMINI_KNOWLEDGE_SYSTEM_PROMPT;
-
-export const KNOWLEDGE_ANSWER_FORMAT_HINT = `Structure every answer as:
-- Bullet points and bold highlights (no long paragraphs)
-- Optional numbered steps for procedures
-- If information is missing, reply exactly: "${KNOWLEDGE_MISSING_ANSWER}"`;
+export const KNOWLEDGE_ANSWER_FORMAT_HINT = KNOWLEDGE_BIDI_FORMAT_HINT;
 
 export const KNOWLEDGE_NO_CONTEXT_ANSWER = KNOWLEDGE_MISSING_ANSWER;
 
@@ -73,17 +70,6 @@ function uniqueCitations(chunks) {
       pageNumber: c.pageNumber,
       sectionTitle: c.sectionTitle,
     }));
-}
-
-function sanitizeAssistantAnswer(text) {
-  let s = String(text || "").replace(/\r\n/g, "\n").trim();
-  if (!s) return "";
-  s = s
-    .split("\n")
-    .map((line) => line.replace(/[ \t]+/g, " ").trim())
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n");
-  return s.trim();
 }
 
 function buildMessages(query, context) {

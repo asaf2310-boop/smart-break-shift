@@ -3,6 +3,7 @@
 import { getSupabaseAdmin } from "./supabaseAdmin.js";
 import { ocrImage, isOcrConfigured } from "./ocrService.js";
 import { embedTexts } from "./embeddingService.js";
+import { formatAssistantBidiText } from "./assistantBidi.js";
 
 function buildImageEmbeddingInput(row) {
   const parts = [
@@ -84,7 +85,7 @@ export async function ingestDocumentImages(document, options = {}) {
         fileName: cand.fileName || fileName,
         pageNumber: cand.pageNumber,
       });
-      ocrText = ocr.ocrText || "";
+      ocrText = formatAssistantBidiText(ocr.ocrText || "");
       description = ocr.description || "";
       if (ocr.error && !ocrText) {
         description = description || `עמוד ${cand.pageNumber ?? "?"}`;

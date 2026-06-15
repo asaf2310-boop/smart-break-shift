@@ -1858,7 +1858,29 @@ html.app-hyp-demo .customer-chat-bubble--staff {
 }
 
 .knowledge-chat-message--assistant {
+  /* BiDi handled by .agent-response-container */
+}
+
+.agent-response-container {
+  direction: rtl;
+  text-align: right;
+  unicode-bidi: plaintext;
+}
+
+.agent-response-container code,
+.knowledge-md-code {
+  direction: ltr;
+  display: inline-block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background-color: #f4f4f5;
+  padding: 2px 4px;
+  border-radius: 4px;
   unicode-bidi: isolate;
+}
+
+.dark .agent-response-container code,
+.dark .knowledge-md-code {
+  background-color: hsl(var(--surface-container-high));
 }
 
 .knowledge-chat-user-text {

@@ -23,16 +23,7 @@ import {
   stripRelevantImagesMarker,
 } from "./geminiKnowledgePrompt.js";
 
-function sanitizeAssistantAnswer(text) {
-  let s = String(text || "").replace(/\r\n/g, "\n").trim();
-  if (!s) return "";
-  return s
-    .split("\n")
-    .map((line) => line.replace(/[ \t]+/g, " ").trim())
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
+import { sanitizeAssistantAnswer } from "./assistantBidi.js";
 
 /** Assign stable [IMG-N] labels for prompt + response parsing. */
 export function assignImageLabels(images = []) {

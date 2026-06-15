@@ -309,6 +309,8 @@ export async function geminiOcrImage(imageDataUrl, meta = {}) {
         systemInstruction: {
           parts: [{
             text: `אתה מומחה OCR לעברית. חלץ את כל הטקסט מהתמונה בדיוק, עם רווחים נכונים.
+אל תעתיק מילים מחוברות או שבורות — נסח עברית טבעית ותקינה.
+מונחים באנגלית מהתמונה: שמור אותם באנגלית, מופרדים מהעברית.
 החזר JSON בלבד: {"ocr_text":"...","description":"..."}
 description — כיתוב קצר (עד 120 תווים).`,
           }],

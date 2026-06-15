@@ -14,6 +14,7 @@ import {
   KNOWLEDGE_SYSTEM_PROMPT,
 } from "@/lib/knowledgePrompt";
 import { askKnowledgeServer, shouldUseServerRag, getKnowledgeTenantId } from "@/lib/knowledge/knowledgeClient";
+import { formatAssistantDisplayMarkdown as applyBidiDisplayMarkdown } from "@/lib/knowledge/assistantBidi";
 
 /** ~500–800 tokens at ~4 chars/token (Hebrew) */
 import { cleanPdfPageText } from "@/lib/knowledge/pdfTextQuality";
@@ -101,17 +102,11 @@ export function sanitizeAssistantAnswer(text) {
   return s.trim();
 }
 
-/** Prepare assistant markdown for RTL chat display (clean text + linkify URLs). */
+/** Prepare assistant markdown for RTL chat display (clean text + BiDi + linkify URLs). */
 export function formatAssistantDisplayMarkdown(text) {
-  let s = sanitizeAssistantAnswer(text);
-  if (!s) return "";
-
-  s = s.replace(
-    /(https?:\/\/[^\s<>\])"]+)/g,
-    (url) => `[${url}](${url})`,
-  );
-
-  return s;
+  const cleaned = sanitizeAssistantAnswer(text);
+  if (!cleaned) return "";
+  return applyBidiDisplayMarkdown(cleaned);
 }
 
 function normalizeText(text) {
