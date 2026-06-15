@@ -1,4 +1,4 @@
-import { customerChatEnabled, demoModeEnabled, knowledgeEnabled } from "@/api/demoClient";
+import { customerChatEnabled, crmEnabled, demoModeEnabled, knowledgeEnabled } from "@/api/demoClient";
 
 const PRODUCTION_TOP_NAV_PATHS = ["/breaks", "/shifts", "/training", "/metrics", "/remote-support"];
 
@@ -7,6 +7,7 @@ const DEMO_TOP_NAV_PATHS = ["/crm", "/knowledge", "/customer-chat"];
 const LIVE_OPTIONAL_NAV_PATHS = [
   ...(customerChatEnabled && !demoModeEnabled ? ["/customer-chat"] : []),
   ...(knowledgeEnabled && !demoModeEnabled ? ["/knowledge"] : []),
+  ...(crmEnabled && !demoModeEnabled ? ["/crm"] : []),
 ];
 
 /** Routes that show the main tab bar (logo is embedded in AppNav). */
@@ -18,6 +19,7 @@ export const TOP_NAV_PATHS = new Set([
 
 export function hasTopAppNav(pathname) {
   if (pathname.startsWith("/metrics")) return true;
+  if (pathname.startsWith("/crm")) return true;
   return TOP_NAV_PATHS.has(pathname);
 }
 

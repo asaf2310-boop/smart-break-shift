@@ -15,7 +15,7 @@ import {
   LUNCH_BREAK_SLOTS,
 } from "@/constants/scheduling";
 import BackendConfigBanner from "@/components/BackendConfigBanner";
-import { customerChatEnabled, demoModeEnabled, knowledgeEnabled } from "@/api/demoClient";
+import { customerChatEnabled, crmEnabled, demoModeEnabled, knowledgeEnabled } from "@/api/demoClient";
 import AdminLocalhostLinksPanel from "@/components/admin/AdminLocalhostLinksPanel";
 import {
   BreakRegistrationError,
@@ -167,6 +167,11 @@ export default function AdminDashboard() {
           {(demoModeEnabled || knowledgeEnabled) && (
             <Link to="/admin/knowledge" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">
               ניהול ידע
+            </Link>
+          )}
+          {crmEnabled && (
+            <Link to="/crm" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">
+              CRM
             </Link>
           )}
           {customerChatEnabled && (

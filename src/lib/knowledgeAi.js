@@ -80,7 +80,7 @@ const STOP_WORDS = new Set([
 
 const KNOWLEDGE_SANITIZE_STORAGE_KEY = "knowledge-content-sanitize-v5";
 
-/** Light sanitize for GPT answers — preserves spacing; no OCR rejoin heuristics. */
+/** Light sanitize for GPT answers — preserves spacing; fixes Hebrew OCR/PDF artifacts. */
 export function sanitizeAssistantAnswer(text) {
   let s = String(text || "").replace(/\r\n/g, "\n").trim();
   if (!s) return "";
@@ -89,11 +89,27 @@ export function sanitizeAssistantAnswer(text) {
   s = separateHebrewLatinGlue(s);
   s = s
     .split("\n")
-    .map((line) => line.replace(/[ \t]+/g, " ").trim())
+    .map((line) => {
+      const trimmed = line.replace(/[ \t]+/g, " ").trim();
+      return normalizeHebrewText(repairPdfHebrewSplits(repairHebrewPrefixes(trimmed)));
+    })
     .join("\n")
     .replace(/\n{3,}/g, "\n\n");
 
   return s.trim();
+}
+
+/** Prepare assistant markdown for RTL chat display (clean text + linkify URLs). */
+export function formatAssistantDisplayMarkdown(text) {
+  let s = sanitizeAssistantAnswer(text);
+  if (!s) return "";
+
+  s = s.replace(
+    /(https?:\/\/[^\s<>\])"]+)/g,
+    (url) => `[${url}](${url})`,
+  );
+
+  return s;
 }
 
 function normalizeText(text) {
@@ -133,6 +149,26 @@ function separateHebrewLatinGlue(s) {
   return String(s || "")
     .replace(/([\u0590-\u05FF])([A-Za-z0-9])/g, "$1 $2")
     .replace(/([A-Za-z0-9])([\u0590-\u05FF])/g, "$1 $2");
+}
+
+/** Fix detached Hebrew prefixes (e.g. "וב הגעה" → "ובהגעה"). */
+function repairHebrewPrefixes(s) {
+  return String(s || "").replace(
+    /(^|[\s([{«"'])(([ובלכמהשה])(?:'|׳)?)(\s+)([\u0590-\u05FF])/gu,
+    "$1$2$5",
+  );
+}
+
+/** Merge short PDF/OCR syllable splits inside Hebrew words (e.g. "הני הול" → "הניהול"). */
+function repairPdfHebrewSplits(line) {
+  return String(line || "").replace(
+    /([\u0590-\u05FF]{2,5})\s+([\u0590-\u05FF]{2,4})(?=\s|[,.;:!?…]|$)/gu,
+    (match, a, b) => {
+      if (a.length + b.length > 12) return match;
+      if (/[.!?…]$/.test(a)) return match;
+      return a + b;
+    },
+  );
 }
 
 /**
@@ -1271,14 +1307,14 @@ function buildLocalStructuredAnswer(chunks, query = "") {
     sentences.length > 1
       ? sentences
           .slice(1)
-          .map((s, i) => `${i + 1}. ${sanitizeAssistantAnswer(s)}`)
+          .map((s) => `- ${sanitizeAssistantAnswer(s)}`)
           .join("\n")
       : "";
 
   const source = formatSourceLine(chunks[0]);
   const parts = [lead];
-  if (detail) parts.push(`פירוט:\n${detail}`);
-  if (source) parts.push(`מקור: ${source}`);
+  if (detail) parts.push(`**פירוט:**\n${detail}`);
+  if (source) parts.push(`*מקור: ${source}*`);
   return parts.join("\n\n");
 }
 

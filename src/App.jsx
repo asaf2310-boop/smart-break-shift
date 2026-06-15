@@ -11,6 +11,7 @@ import AppLoadError from '@/components/AppLoadError';
 import AdminGate from '@/components/admin/AdminGate';
 import ModuleGate from '@/components/auth/ModuleGate';
 import DemoGate from '@/components/DemoGate';
+import CrmGate from '@/components/CrmGate';
 import KnowledgeGate from '@/components/KnowledgeGate';
 import CustomerChatGate from '@/components/CustomerChatGate';
 import Home from './pages/Home';
@@ -113,9 +114,9 @@ const AuthenticatedApp = () => {
         <Route path="/chat/guest" element={<CustomerChatGate><CustomerChatGuestPage /></CustomerChatGate>} />
         <Route path="/chat" element={<ChatRoute />} />
         <Route path="/customer-chat" element={<ModuleGate module="customer_chat"><CustomerChatGate><AgentCustomerChatPage /></CustomerChatGate></ModuleGate>} />
-        <Route path="/crm" element={<ModuleGate module="crm"><DemoGate><CrmDashboard /></DemoGate></ModuleGate>} />
-        <Route path="/crm/lookup" element={<ModuleGate module="crm"><DemoGate><CrmLookupDeepLink /></DemoGate></ModuleGate>} />
-        <Route path="/crm/:id" element={<ModuleGate module="crm"><DemoGate><CrmCustomerDetail /></DemoGate></ModuleGate>} />
+        <Route path="/crm" element={<ModuleGate module="crm"><CrmGate><CrmDashboard /></CrmGate></ModuleGate>} />
+        <Route path="/crm/lookup" element={<ModuleGate module="crm"><CrmGate><CrmLookupDeepLink /></CrmGate></ModuleGate>} />
+        <Route path="/crm/:id" element={<ModuleGate module="crm"><CrmGate><CrmCustomerDetail /></CrmGate></ModuleGate>} />
         <Route path="/remote-support" element={<ModuleGate module="remote_support"><RemoteSupportPage /></ModuleGate>} />
         <Route
           path="/remote-support/recordings/play"

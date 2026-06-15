@@ -1,4 +1,4 @@
-import { demoModeEnabled } from "@/api/demoClient";
+import { crmEnabled } from "@/api/crmMode";
 import { getDepartmentName, getDepartmentsForAgent } from "@/lib/crmDepartments";
 
 export const CRM_STORAGE_KEY = "smart-break-shift-crm-v3";
@@ -284,7 +284,7 @@ function parseStoredCrm(raw) {
 }
 
 function readStore() {
-  if (!demoModeEnabled || typeof window === "undefined") {
+  if (!crmEnabled || typeof window === "undefined") {
     return { customers: [], callLogs: [], emailLogs: [], referrals: [] };
   }
   try {
@@ -315,13 +315,13 @@ function readStore() {
 }
 
 function writeStore(store) {
-  if (!demoModeEnabled || typeof window === "undefined") return;
+  if (!crmEnabled || typeof window === "undefined") return;
   localStorage.setItem(CRM_STORAGE_KEY, JSON.stringify(store));
   window.dispatchEvent(new CustomEvent(CRM_CHANGE_EVENT));
 }
 
 export function crmDemoAvailable() {
-  return demoModeEnabled;
+  return crmEnabled;
 }
 
 export function listCustomers() {
@@ -363,7 +363,7 @@ export function normalizePhoneForLookup(phone) {
 
 /** חיפוש לקוח לפי טלפון (דמו בלבד) — null אם לא נמצא */
 export function getCustomerByPhone(phone) {
-  if (!demoModeEnabled) return null;
+  if (!crmEnabled) return null;
   const needle = normalizePhoneForLookup(phone);
   if (!needle || needle.length < 7) return null;
   const { customers } = readStore();

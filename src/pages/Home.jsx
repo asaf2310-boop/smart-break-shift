@@ -4,7 +4,7 @@ import { getAgentNamesList } from "@/constants/scheduling";
 import AgentLogin from "@/components/auth/AgentLogin";
 import HypHomeShell from "@/components/hyp/HypHomeShell";
 import RouteErrorBoundary from "@/components/RouteErrorBoundary";
-import { customerChatEnabled, demoModeEnabled, knowledgeEnabled } from "@/api/demoClient";
+import { customerChatEnabled, crmEnabled, demoModeEnabled, knowledgeEnabled } from "@/api/demoClient";
 import { isAdminPinConfigured } from "@/hooks/useIsAdmin";
 import { connectAgentAsAvailable } from "@/lib/agentChatPresence";
 import { useAgentSession } from "@/hooks/useAgentSession";
@@ -73,15 +73,17 @@ const knowledgeCard = {
   iconTile: "m3-icon-tile",
 };
 
+const crmCard = {
+  module: "crm",
+  to: "/crm",
+  title: "CRM",
+  desc: "לקוחות ותיעוד שיחות",
+  icon: Contact,
+  iconTile: "m3-icon-tile",
+};
+
 const demoOnlyCards = [
-  {
-    module: "crm",
-    to: "/crm",
-    title: "CRM",
-    desc: "לקוחות ותיעוד שיחות",
-    icon: Contact,
-    iconTile: "m3-icon-tile",
-  },
+  crmCard,
   knowledgeCard,
   customerChatCard,
 ];
@@ -90,6 +92,7 @@ const liveCardsWithOptionalModules = [
   ...productionCards,
   ...(customerChatEnabled && !demoModeEnabled ? [customerChatCard] : []),
   ...(knowledgeEnabled && !demoModeEnabled ? [knowledgeCard] : []),
+  ...(crmEnabled && !demoModeEnabled ? [crmCard] : []),
 ];
 
 const homeCards = demoModeEnabled

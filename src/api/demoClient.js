@@ -8,6 +8,7 @@ import { demoModeEnabled } from "./demoMode";
 
 export { demoModeEnabled } from "./demoMode";
 export { knowledgeEnabled } from "./knowledgeMode";
+export { crmEnabled } from "./crmMode";
 export { remoteSupportEnabled } from "./remoteSupportMode";
 export { customerChatEnabled } from "./customerChatMode";
 

@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import { BookOpen, ChevronDown, ChevronUp, Copy, ExternalLink, Loader2, RefreshCw, Send, Sparkles, ThumbsDown } from "lucide-react";
 import {
   askKnowledgeBase,
+  formatAssistantDisplayMarkdown,
   getKnowledgeIndexStats,
   getOpenAiRateLimitRetrySec,
   isOpenAiRateLimited,
@@ -32,20 +33,33 @@ function isDebugPanelEnabled() {
   }
 }
 
-function AssistantMarkdown({ content }) {
-  return (
-    <ReactMarkdown
-      className="knowledge-markdown prose prose-sm max-w-none dark:prose-invert [&_p]:m-0 [&_p+p]:mt-2 [&_ul]:my-2 [&_ol]:my-2 [&_li]:my-0.5 [&_strong]:font-semibold [&_table]:text-xs"
-      components={{
-        a: ({ href, children }) => (
-          <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline">
-            {children}
-          </a>
-        ),
-      }}
+const MARKDOWN_COMPONENTS = {
+  p: ({ children }) => <p className="knowledge-md-p">{children}</p>,
+  strong: ({ children }) => <strong className="knowledge-md-strong">{children}</strong>,
+  em: ({ children }) => <em className="knowledge-md-em">{children}</em>,
+  ul: ({ children }) => <ul className="knowledge-md-ul">{children}</ul>,
+  ol: ({ children }) => <ol className="knowledge-md-ol">{children}</ol>,
+  li: ({ children }) => <li className="knowledge-md-li">{children}</li>,
+  a: ({ href, children }) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="knowledge-md-link"
+      dir="ltr"
     >
-      {content}
-    </ReactMarkdown>
+      {children}
+    </a>
+  ),
+};
+
+function AssistantMarkdown({ content }) {
+  const formatted = formatAssistantDisplayMarkdown(content);
+
+  return (
+    <div className="knowledge-markdown">
+      <ReactMarkdown components={MARKDOWN_COMPONENTS}>{formatted}</ReactMarkdown>
+    </div>
   );
 }
 
@@ -126,15 +140,20 @@ function MessageBubble({ message, showDebug, onRetry, onFeedback, feedbackSendin
       <div
         dir="rtl"
         lang="he"
-        style={{ unicodeBidi: "embed" }}
-        className={`knowledge-chat-message max-w-[92%] sm:max-w-[85%] rounded-2xl px-4 py-3 text-sm ${
+        className={`knowledge-chat-message max-w-[92%] sm:max-w-[85%] text-sm ${
           isUser
-            ? "bg-primary text-primary-foreground rounded-br-md"
-            : "bg-surface-container-high text-foreground border border-outline/15 rounded-bl-md"
+            ? "knowledge-chat-message--user rounded-2xl rounded-br-md bg-primary px-4 py-3 text-primary-foreground"
+            : "knowledge-chat-message--assistant rounded-2xl rounded-bl-md border border-outline/12 bg-gradient-to-br from-violet-50/95 via-white to-surface-container-high px-4 py-3.5 text-foreground shadow-sm dark:from-violet-950/35 dark:via-card dark:to-surface-container-high"
         }`}
       >
+        {!isUser && message.mode !== "system" && message.mode !== "error" && (
+          <div className="knowledge-chat-assistant-label mb-2 flex items-center gap-1.5 text-[11px] font-medium text-primary/90">
+            <Sparkles className="h-3.5 w-3.5 shrink-0" />
+            <span>תשובה מהידע</span>
+          </div>
+        )}
         {isUser ? (
-          message.content
+          <div className="knowledge-chat-user-text">{message.content}</div>
         ) : (
           <AssistantMarkdown content={message.content} />
         )}

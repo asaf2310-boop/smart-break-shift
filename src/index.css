@@ -1842,23 +1842,110 @@ html.app-hyp-demo .customer-chat-bubble--staff {
   }
 }
 
-/* Knowledge base chat — stable RTL rendering (avoid plaintext bidi reordering) */
-.knowledge-chat-message,
-.chat-message {
+/* Knowledge base chat — stable RTL rendering */
+.knowledge-chat-message {
   direction: rtl;
-  unicode-bidi: embed;
-  text-align: start;
+  text-align: right;
   font-family: "Heebo", "Rubik", "Assistant", Arial, sans-serif;
-  line-height: 1.8;
-  white-space: pre-wrap;
+  line-height: 1.7;
   word-break: normal;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 
-.knowledge-chat-message *,
-.chat-message * {
-  direction: inherit;
-  unicode-bidi: inherit;
+.knowledge-chat-message--user {
+  white-space: pre-wrap;
+  unicode-bidi: isolate;
+}
+
+.knowledge-chat-message--assistant {
+  unicode-bidi: isolate;
+}
+
+.knowledge-chat-user-text {
+  white-space: pre-wrap;
+}
+
+.knowledge-markdown {
+  direction: rtl;
+  text-align: right;
+  font-size: 0.875rem;
+  line-height: 1.75;
+}
+
+.knowledge-md-p {
+  margin: 0;
+  text-align: right;
+}
+
+.knowledge-md-p + .knowledge-md-p,
+.knowledge-md-p + .knowledge-md-ul,
+.knowledge-md-p + .knowledge-md-ol {
+  margin-top: 0.625rem;
+}
+
+.knowledge-md-strong {
+  font-weight: 600;
+  color: inherit;
+}
+
+.knowledge-md-em {
+  font-style: italic;
+  opacity: 0.9;
+}
+
+.knowledge-md-ul,
+.knowledge-md-ol {
+  margin: 0.5rem 0 0;
+  padding-inline-start: 1.25rem;
+  padding-inline-end: 0;
+}
+
+.knowledge-md-li {
+  margin: 0.35rem 0;
+}
+
+.knowledge-md-li::marker {
+  font-weight: 600;
+  color: hsl(var(--primary));
+}
+
+.knowledge-md-link {
+  display: inline-block;
+  max-width: 100%;
+  margin-block: 0.25rem;
+  padding: 0.35rem 0.55rem;
+  border-radius: 0.5rem;
+  background: hsl(var(--primary) / 0.08);
+  color: hsl(var(--primary));
+  font-size: 0.75rem;
+  line-height: 1.45;
+  text-decoration: none;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  unicode-bidi: isolate;
+  direction: ltr;
+  text-align: left;
+}
+
+.knowledge-md-link:hover {
+  background: hsl(var(--primary) / 0.14);
+  text-decoration: underline;
+}
+
+.knowledge-chat-assistant-label {
+  border-bottom: 1px solid hsl(var(--outline) / 0.12);
+  padding-bottom: 0.5rem;
+}
+
+/* Legacy chat-message alias */
+.chat-message {
+  direction: rtl;
+  unicode-bidi: isolate;
+  text-align: right;
+  font-family: "Heebo", "Rubik", "Assistant", Arial, sans-serif;
+  line-height: 1.7;
+  word-break: normal;
+  overflow-wrap: anywhere;
 }
 
 /* Training calendar — premium day cards (TrainingPage.jsx) */

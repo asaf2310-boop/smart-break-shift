@@ -14,7 +14,6 @@ import {
   UsersRound,
 } from "lucide-react";
 import { getStoredAgentName } from "@/constants/scheduling";
-import { demoModeEnabled } from "@/api/demoClient";
 import {
   countReferralsHandledTodayByAgent,
   createCustomer,
@@ -135,9 +134,10 @@ export default function CrmDashboard() {
       <div className={m3PageClass("flex items-center justify-center p-6")} dir="rtl">
         <div className="max-w-md text-center m3-card p-8">
           <Users className="w-12 h-12 mx-auto text-primary mb-4" />
-          <h1 className="m3-title-large text-xl font-medium mb-2">CRM — סביבת דמו</h1>
+          <h1 className="m3-title-large text-xl font-medium mb-2">CRM אינו פעיל</h1>
           <p className="m3-label-medium mb-6">
-            מודול ה-CRM זמין כרגע עם <code className="text-xs bg-surface-container px-1 rounded-md">VITE_DEMO_MODE=true</code> ונתונים ב-localStorage.
+            מודול ה-CRM כבוי בסביבה זו. הפעילו אותו ב-Vercel או הסירו{" "}
+            <code className="text-xs bg-surface-container px-1 rounded-md">VITE_CRM_ENABLED=false</code>.
           </p>
           <Link to="/" className="text-primary font-medium text-sm hover:underline">
             חזרה לדף הבית

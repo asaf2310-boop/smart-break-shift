@@ -1,4 +1,4 @@
-import { customerChatEnabled, demoModeEnabled, knowledgeEnabled } from "@/api/demoClient";
+import { customerChatEnabled, crmEnabled, demoModeEnabled, knowledgeEnabled } from "@/api/demoClient";
 
 const ADMIN_DEV_ROUTES_CORE = [
   { path: "/admin", label: "דשבורד מנהל" },
@@ -10,6 +10,8 @@ const ADMIN_DEV_ROUTES_CORE = [
 
 const ADMIN_DEV_ROUTES_KNOWLEDGE = [{ path: "/admin/knowledge", label: "ניהול ידע" }];
 
+const ADMIN_DEV_ROUTES_CRM = [{ path: "/crm", label: "CRM (נציגים)" }];
+
 const ADMIN_DEV_ROUTES_CUSTOMER_CHAT = [
   { path: "/admin/customer-chat", label: "בוט צ'אט לקוחות" },
   { path: "/chat/guest", label: "צ'אט לקוח (אורח)" },
@@ -20,6 +22,7 @@ const ADMIN_DEV_ROUTES_CUSTOMER_CHAT = [
 export const ADMIN_DEV_ROUTES = [
   ...ADMIN_DEV_ROUTES_CORE,
   ...(demoModeEnabled || knowledgeEnabled ? ADMIN_DEV_ROUTES_KNOWLEDGE : []),
+  ...(crmEnabled ? ADMIN_DEV_ROUTES_CRM : []),
   ...(customerChatEnabled ? ADMIN_DEV_ROUTES_CUSTOMER_CHAT : []),
 ];
 

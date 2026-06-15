@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { useScreenShareSession } from "@/contexts/ScreenShareSessionContext";
 import DemoRecordingsLibrary from "@/components/remote/DemoRecordingsLibrary";
-import { demoModeEnabled } from "@/api/demoClient";
+import { crmEnabled, demoModeEnabled } from "@/api/demoClient";
 import { getStoredAgentName } from "@/constants/scheduling";
 import RemoteSupportPanel from "@/components/remote/RemoteSupportPanel";
 import EmailStatusBanner from "@/components/remote/EmailStatusBanner";
@@ -169,7 +169,7 @@ export default function RemoteSupportPage() {
             <li>פתחו סשן צפייה, ואז שלחו מייל או העתיקו קישור — הלקוח מאשר בדף הקישור.</li>
             <li>סיימו את הסשן בסיום הטיפול.</li>
           </ol>
-          {demoModeEnabled && (
+          {crmEnabled && (
             <Link
               to="/crm"
               className="inline-flex items-center gap-2 m3-btn-outlined text-sm py-2"
