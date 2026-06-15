@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from "./supabaseAdmin.js";
 import { chunkDocument } from "./chunkingService.js";
 import { buildEmbeddingInput, embedTexts } from "./embeddingService.js";
 import { ingestDocumentImages, deleteDocumentImages } from "./imageIngestService.js";
+import { buildPdfDocumentContent, cleanPdfPageText } from "./pdfTextQuality.js";
 
 function mapDocToDb(doc) {
   const now = new Date().toISOString();
@@ -221,5 +222,84 @@ export async function reprocessDocument(documentId) {
     tenantId: data.tenant_id,
     createdAt: data.created_at,
     updatedAt: data.updated_at,
+  });
+}
+
+/**
+ * Merge OCR text from knowledge_images into document pages and rebuild text chunks.
+ */
+export async function syncDocumentChunksFromOcr(documentId) {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return { ok: false, error: "supabase_not_configured", chunkCount: 0 };
+
+  const { data: doc, error: docErr } = await supabase
+    .from("knowledge_documents")
+    .select("*")
+    .eq("id", documentId)
+    .maybeSingle();
+
+  if (docErr || !doc) return { ok: false, error: docErr?.message || "not_found", chunkCount: 0 };
+
+  const { data: images, error: imgErr } = await supabase
+    .from("knowledge_images")
+    .select("page_number, ocr_text, description")
+    .eq("document_id", documentId)
+    .order("page_number", { ascending: true });
+
+  if (imgErr) return { ok: false, error: imgErr.message, chunkCount: 0 };
+
+  const pages = Array.isArray(doc.pages) ? doc.pages.map((p) => ({ ...p })) : [];
+  let changed = false;
+
+  for (const img of images || []) {
+    const ocr = String(img.ocr_text || "").trim();
+    if (!ocr) continue;
+    const pageNumber = img.page_number;
+    let page = pages.find((p) => (p.pageNumber ?? p.page_number) === pageNumber);
+    if (!page) {
+      page = {
+        pageNumber,
+        sectionTitle: pageNumber != null ? `עמוד ${pageNumber}` : null,
+        text: "",
+        hasThumbnail: true,
+      };
+      pages.push(page);
+      changed = true;
+    }
+    const existing = cleanPdfPageText(page.text || "");
+    if (!existing) {
+      page.text = ocr;
+      changed = true;
+    } else if (!existing.includes(ocr.slice(0, Math.min(48, ocr.length)))) {
+      page.text = `${existing}\n\n${ocr}`;
+      changed = true;
+    }
+    page.hasThumbnail = true;
+  }
+
+  if (!changed) {
+    return { ok: true, chunkCount: doc.chunk_count ?? 0, ocrMerged: false };
+  }
+
+  const content = buildPdfDocumentContent(
+    pages.map((p) => ({
+      pageNumber: p.pageNumber ?? p.page_number ?? null,
+      text: p.text || "",
+    })),
+    doc.title,
+  );
+
+  return ingestDocument({
+    id: doc.id,
+    title: doc.title,
+    category: doc.category,
+    content,
+    sourceType: doc.source_type,
+    fileName: doc.file_name,
+    pages,
+    tenantId: doc.tenant_id,
+    createdAt: doc.created_at,
+    updatedAt: new Date().toISOString(),
+    skipImages: true,
   });
 }

@@ -9,7 +9,7 @@ import { KNOWLEDGE_LOW_RELEVANCE_ANSWER } from "@/lib/knowledgePrompt";
 
 const API_TIMEOUT_MS = 25_000;
 const INGEST_TIMEOUT_MS = 120_000;
-const PAGE_INGEST_TIMEOUT_MS = 90_000;
+const PAGE_INGEST_TIMEOUT_MS = 120_000;
 const PAGE_INGEST_BATCH = 2;
 
 function postKnowledgeUpload(body, timeoutMs = API_TIMEOUT_MS) {
@@ -98,6 +98,7 @@ export async function ingestServerDocumentPages({
   tenantId,
   pages,
   replaceAll = false,
+  runOcr = true,
 }) {
   let res;
   try {
@@ -110,6 +111,7 @@ export async function ingestServerDocumentPages({
         tenantId: tenantId ?? getKnowledgeTenantId(),
         pages,
         replaceAll,
+        runOcr,
       },
       PAGE_INGEST_TIMEOUT_MS,
     );

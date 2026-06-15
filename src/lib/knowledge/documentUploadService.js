@@ -40,10 +40,11 @@ export function formatKnowledgeIngestError(err) {
 }
 
 async function uploadPageThumbnailsToServer(doc, pagesWithThumbs) {
-  if (!pagesWithThumbs?.length) return 0;
+  if (!pagesWithThumbs?.length) return { imageCount: 0, chunkCount: null };
 
   const tenantId = doc.tenantId ?? getKnowledgeTenantId();
   let totalImages = 0;
+  let lastChunkCount = null;
 
   for (let offset = 0; offset < pagesWithThumbs.length; offset += PAGE_INGEST_BATCH) {
     const batch = pagesWithThumbs.slice(offset, offset + PAGE_INGEST_BATCH);
@@ -54,11 +55,13 @@ async function uploadPageThumbnailsToServer(doc, pagesWithThumbs) {
       tenantId,
       pages: batch,
       replaceAll: offset === 0,
+      runOcr: Boolean(doc.needsServerOcr),
     });
     totalImages += result?.imageCount ?? 0;
+    if (result?.chunkCount != null) lastChunkCount = result.chunkCount;
   }
 
-  return totalImages;
+  return { imageCount: totalImages, chunkCount: lastChunkCount };
 }
 
 /**
@@ -76,6 +79,8 @@ export async function saveKnowledgeDocument(payload) {
     pages: pagesForStorage,
     content: sanitizeMarkdownIngestText(payload.content),
   });
+
+  const needsServerOcr = payload.needsServerOcr === true;
 
   if (!shouldUseServerRag()) {
     return { doc, ingestResult: null, ingestError: null };
@@ -99,7 +104,14 @@ export async function saveKnowledgeDocument(payload) {
 
     if (pagesWithThumbs.length) {
       try {
-        ingestResult.imageCount = await uploadPageThumbnailsToServer(doc, pagesWithThumbs);
+        const pageUpload = await uploadPageThumbnailsToServer(
+          { ...doc, needsServerOcr },
+          pagesWithThumbs,
+        );
+        ingestResult.imageCount = pageUpload.imageCount;
+        if (pageUpload.chunkCount != null) {
+          ingestResult.chunkCount = pageUpload.chunkCount;
+        }
       } catch (pageErr) {
         return { doc, ingestResult, ingestError: pageErr };
       }

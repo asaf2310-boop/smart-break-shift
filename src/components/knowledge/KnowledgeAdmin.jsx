@@ -52,6 +52,7 @@ export default function KnowledgeAdmin() {
     category: "כללי",
     pages: null,
     images: null,
+    needsServerOcr: false,
   });
   const [uploading, setUploading] = useState(false);
   const [reindexing, setReindexing] = useState(false);
@@ -193,7 +194,7 @@ export default function KnowledgeAdmin() {
   };
 
   const openCreate = () => {
-    setForm({ title: "", content: "", category: categories[0] || "כללי", pages: null, images: null });
+    setForm({ title: "", content: "", category: categories[0] || "כללי", pages: null, images: null, needsServerOcr: false });
     setDialog({ mode: "create" });
   };
 
@@ -204,13 +205,16 @@ export default function KnowledgeAdmin() {
       category: doc.category || "כללי",
       pages: doc.pages || null,
       images: doc.images || null,
+      needsServerOcr: false,
     });
     setDialog({ mode: "edit", id: doc.id });
   };
 
   const handleSave = async (e) => {
     e.preventDefault();
-    const hasPdfPages = form.pages?.some((p) => p?.thumbnail);
+    const hasPdfPages =
+      (form.pages?.length > 0 && form.pages.some((p) => p?.thumbnail || p?.hasThumbnail)) ||
+      (dialog?.fileName?.toLowerCase().endsWith(".pdf") && form.pages?.length > 0);
     const content =
       hasPdfPages && form.pages?.length
         ? buildPdfDocumentContent(form.pages, form.title)
@@ -229,6 +233,7 @@ export default function KnowledgeAdmin() {
         fileName: dialog.fileName,
         pages: form.pages,
         images: form.images,
+        needsServerOcr: form.needsServerOcr,
       });
       setDialog(null);
       refresh();
@@ -296,7 +301,7 @@ export default function KnowledgeAdmin() {
 
     setUploading(true);
     try {
-      const { text, title, error, pages, images } = await extractTextFromFile(file);
+      const { text, title, error, pages, images, needsServerOcr } = await extractTextFromFile(file);
       if (error) {
         toast({ title: "שגיאה בהעלאה", description: error, variant: "destructive" });
         return;
@@ -307,6 +312,7 @@ export default function KnowledgeAdmin() {
         category: form.category || "כללי",
         pages: pages || null,
         images: images || null,
+        needsServerOcr: needsServerOcr === true,
       });
       const thumbCount = pages?.filter((p) => p?.thumbnail).length || 0;
       setDialog({
@@ -318,8 +324,12 @@ export default function KnowledgeAdmin() {
         title: "הקובץ נקרא בהצלחה",
         description:
           thumbCount > 0
-            ? `נשמרו ${thumbCount} עמודים כתמונות. בדקו את התצוגה ולחצו שמירה.`
-            : "בדקו את התוכן ולחצו שמירה",
+            ? needsServerOcr
+              ? `נשמרו ${thumbCount} עמודים כתמונות. לאחר שמירה יופעל OCR בשרת לחילוץ טקסט עברי.`
+              : `נשמרו ${thumbCount} עמודים כתמונות. בדקו את התצוגה ולחצו שמירה.`
+            : pages?.length
+              ? `${pages.length} עמודים זוהו — בדקו את התוכן ולחצו שמירה`
+              : "בדקו את התוכן ולחצו שמירה",
       });
     } finally {
       setUploading(false);
@@ -337,7 +347,9 @@ export default function KnowledgeAdmin() {
     toast({ title: "בסיס הידע אופס לדמו" });
   };
 
-  const hasPdfPages = form.pages?.some((p) => p?.thumbnail);
+  const hasPdfPages =
+    (form.pages?.length > 0 && form.pages.some((p) => p?.thumbnail || p?.hasThumbnail)) ||
+    (dialog?.fileName?.toLowerCase().endsWith(".pdf") && form.pages?.length > 0);
 
   return (
     <div className="space-y-6" dir="rtl">
@@ -535,7 +547,7 @@ export default function KnowledgeAdmin() {
                 </label>
                 {hasPdfPages ? (
                   <>
-                    <KnowledgePdfPagesPreview pages={form.pages} />
+                    <KnowledgePdfPagesPreview pages={form.pages} needsServerOcr={form.needsServerOcr} />
                     <details className="mt-3">
                       <summary className="m3-label-medium cursor-pointer text-on-surface-variant">
                         טקסט מחולץ לחיפוש (אופציונלי)

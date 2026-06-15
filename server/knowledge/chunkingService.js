@@ -1,5 +1,7 @@
 /** Server-side document chunking for RAG ingest. Mirrors src/lib/knowledge/chunkingService.js */
 
+import { cleanPdfPageText } from "./pdfTextQuality.js";
+
 const CHUNK_TARGET_CHARS = 2600;
 const CHUNK_MIN_CHARS = 2000;
 const CHUNK_MAX_CHARS = 3200;
@@ -135,7 +137,7 @@ function findChunkBreak(slice, maxLen) {
 }
 
 function pageSectionText(page, docTitle) {
-  const sanitized = sanitizeChunkText(page.text, { preserveLines: true });
+  const sanitized = sanitizeChunkText(cleanPdfPageText(page.text), { preserveLines: true });
   if (sanitized) return sanitized;
   if (page.thumbnail || page.hasThumbnail || page.pageNumber != null) {
     const n = page.pageNumber ?? "?";

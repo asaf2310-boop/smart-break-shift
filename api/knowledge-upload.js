@@ -8,6 +8,7 @@ import {
   listDocumentsWithChunkCounts,
   reprocessDocument,
   getTotalChunkCount,
+  syncDocumentChunksFromOcr,
 } from "../server/knowledge/documentIngestService.js";
 import { ingestDocumentImages } from "../server/knowledge/imageIngestService.js";
 
@@ -106,6 +107,7 @@ export default async function handler(req, res) {
     }
 
     try {
+      const runOcr = body.runOcr !== false;
       const result = await ingestDocumentImages(
         {
           id: documentId,
@@ -113,12 +115,19 @@ export default async function handler(req, res) {
           fileName: body.fileName,
           tenantId: body.tenantId ?? null,
           pages,
-          skipOcr: true,
+          skipOcr: !runOcr,
         },
-        { replaceAll: body.replaceAll === true, skipOcr: true },
+        { replaceAll: body.replaceAll === true, skipOcr: !runOcr },
       );
       if (!result.ok) return json(res, 500, { error: result.error }, req);
-      return json(res, 200, result, req);
+
+      let chunkCount = null;
+      if (runOcr && result.imageCount > 0) {
+        const merged = await syncDocumentChunksFromOcr(documentId);
+        if (merged.ok) chunkCount = merged.chunkCount;
+      }
+
+      return json(res, 200, { ...result, chunkCount }, req);
     } catch (err) {
       console.error("[knowledge-upload] ingest_pages", err);
       return json(res, 500, { error: err?.message || "ingest_exception" }, req);

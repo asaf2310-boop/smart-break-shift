@@ -5,11 +5,26 @@ import {
   sanitizeChunkText,
   sanitizeMarkdownIngestText,
 } from "@/lib/knowledgeAi";
+import { cleanPdfPageText, isPdfExtractedTextReadable } from "@/lib/knowledge/pdfTextQuality";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
   import.meta.url
 ).toString();
+
+const PDF_CMAP_URL = new URL("pdfjs-dist/cmaps/", import.meta.url).toString();
+const PDF_STANDARD_FONT_URL = new URL("pdfjs-dist/standard_fonts/", import.meta.url).toString();
+
+function openPdfDocument(data) {
+  return pdfjsLib.getDocument({
+    data,
+    useWorkerFetch: false,
+    isEvalSupported: false,
+    cMapUrl: PDF_CMAP_URL,
+    cMapPacked: true,
+    standardFontDataUrl: PDF_STANDARD_FONT_URL,
+  }).promise;
+}
 
 export const MAX_KNOWLEDGE_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_PDF_PAGES = 30;
@@ -219,14 +234,16 @@ async function renderPageThumbnail(page) {
 
 async function extractPdfText(file, docTitle) {
   const data = new Uint8Array(await file.arrayBuffer());
-  const pdf = await pdfjsLib.getDocument({ data, useWorkerFetch: false, isEvalSupported: false }).promise;
+  const pdf = await openPdfDocument(data);
   const pages = [];
   const pageLimit = Math.min(pdf.numPages, MAX_PDF_PAGES);
 
   for (let pageNum = 1; pageNum <= pageLimit; pageNum += 1) {
     const page = await pdf.getPage(pageNum);
     const content = await page.getTextContent({ disableCombineTextItems: true });
-    const pageText = normalizeHebrewText(pdfItemsToText(content.items), { preserveLines: true });
+    const pageText = cleanPdfPageText(
+      normalizeHebrewText(pdfItemsToText(content.items), { preserveLines: true }),
+    );
     let thumbnail = null;
 
     try {
@@ -235,22 +252,22 @@ async function extractPdfText(file, docTitle) {
       thumbnail = null;
     }
 
-    if (pageText || thumbnail) {
-      pages.push({
-        pageNumber: pageNum,
-        sectionTitle: `עמוד ${pageNum}`,
-        text: pageText || "",
-        ...(thumbnail ? { thumbnail } : {}),
-      });
-    }
+    pages.push({
+      pageNumber: pageNum,
+      sectionTitle: `עמוד ${pageNum}`,
+      text: pageText,
+      ...(thumbnail ? { thumbnail } : {}),
+    });
   }
 
   const title = docTitle || "מסמך";
+  const visualOnly = pages.length > 0 && pages.every((p) => !p.text);
   return {
     text: buildPdfDocumentContent(pages, title),
     pages,
     sourceFormat: "pdf",
-    visualFirst: true,
+    visualFirst: visualOnly || pages.some((p) => p?.thumbnail),
+    needsServerOcr: visualOnly || pages.some((p) => !p.text && p.thumbnail),
   };
 }
 
@@ -315,6 +332,7 @@ export async function extractTextFromFile(file) {
     let rawText = "";
     let pages = null;
     let images = null;
+    let needsServerOcr = false;
 
     let htmlTitle = null;
 
@@ -331,6 +349,7 @@ export async function extractTextFromFile(file) {
       const pdfResult = await extractPdfText(file, title);
       rawText = pdfResult.text;
       pages = pdfResult.pages;
+      needsServerOcr = pdfResult.needsServerOcr === true;
     } else if (ext === "png" || ext === "jpg" || ext === "jpeg" || ext === "webp") {
       const imgResult = await extractImageFile(file);
       rawText = imgResult.text;
@@ -349,8 +368,12 @@ export async function extractTextFromFile(file) {
             : sanitizeChunkText(cleaned);
 
     const hasImages = pages?.some((p) => p?.thumbnail) || images?.length > 0;
+    const hasPdfPages = Array.isArray(pages) && pages.length > 0;
+    const readableText =
+      isPdfExtractedTextReadable(cleaned) ||
+      pages?.some((p) => isPdfExtractedTextReadable(p.text));
 
-    if (!text && !hasImages) {
+    if (!readableText && !hasImages && !hasPdfPages) {
       return {
         text: "",
         title,
@@ -358,14 +381,24 @@ export async function extractTextFromFile(file) {
       };
     }
 
+    if (!readableText && !hasImages && hasPdfPages) {
+      return {
+        text: "",
+        title,
+        error:
+          "לא ניתן לרנדר את עמודי ה-PDF בדפדפן. נסו Chrome/Edge עדכני, או ייצאו את הקובץ מחדש כ-PDF עם שכבת טקסט.",
+      };
+    }
+
     return {
-      text: text || `[תמונה: ${title}]`,
+      text: text || (hasPdfPages ? buildPdfDocumentContent(pages, title) : `[תמונה: ${title}]`),
       title: htmlTitle || title,
       error: null,
       pages: pages || undefined,
       images: images || undefined,
       sourceFormat: ext === "pdf" ? "pdf" : undefined,
-      visualFirst: ext === "pdf" && pages?.some((p) => p?.thumbnail),
+      visualFirst: ext === "pdf" && (hasImages || needsServerOcr),
+      needsServerOcr: needsServerOcr && hasImages,
     };
   } catch {
     if (ext === "pdf") {
