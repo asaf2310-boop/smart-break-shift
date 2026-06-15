@@ -36,6 +36,9 @@ export function formatKnowledgeIngestError(err) {
   if (msg.startsWith("ingest_http_403")) {
     return "הגישה לשרת נחסמה — רעננו את הדף ונסו שוב.";
   }
+  if (msg.includes("foreign key constraint") || msg.includes("knowledge_images_document_id_fkey")) {
+    return "שמירת תמונות העמודים נכשלה — נסו «עיבוד מחדש» מהרשימה.";
+  }
   if (msg === "ingest_pages_failed") {
     return "טקסט נשמר בשרת אך העלאת תמונות העמודים נכשלה. נסו «עיבוד מחדש».";
   }
@@ -51,7 +54,9 @@ export function formatKnowledgeIngestError(err) {
   return msg || "לא ניתן לעבד בשרת";
 }
 
-async function uploadPageThumbnailsToServer(doc, pagesWithThumbs, { runOcr = true } = {}) {
+let saveInFlight = null;
+
+async function uploadPageThumbnailsToServer(doc, pagesWithThumbs, { runOcr = true, content = "" } = {}) {
   if (!pagesWithThumbs?.length) return { imageCount: 0, chunkCount: null };
 
   const tenantId = doc.tenantId ?? getKnowledgeTenantId();
@@ -64,6 +69,8 @@ async function uploadPageThumbnailsToServer(doc, pagesWithThumbs, { runOcr = tru
       documentId: doc.id,
       title: doc.title,
       fileName: doc.fileName,
+      category: doc.category,
+      content,
       tenantId,
       pages: batch,
       replaceAll: offset === 0,
@@ -80,16 +87,22 @@ async function uploadPageThumbnailsToServer(doc, pagesWithThumbs, { runOcr = tru
  * Save document locally and ingest to pgvector when server RAG is active.
  */
 export async function saveKnowledgeDocument(payload) {
+  if (saveInFlight) {
+    return saveInFlight;
+  }
+
+  saveInFlight = (async () => {
   const pagesForIngest = payload.pages?.length
     ? await slimPageThumbnailsForUpload(payload.pages)
     : null;
   const pagesForStorage = stripPageThumbnailsForStorage(pagesForIngest || payload.pages);
   const pagesWithThumbs = pagesForIngest?.filter((p) => p?.thumbnail) || [];
+  const sanitizedContent = sanitizeMarkdownIngestText(payload.content);
 
   const doc = upsertKnowledgeDocument({
     ...payload,
     pages: pagesForStorage,
-    content: sanitizeMarkdownIngestText(payload.content),
+    content: sanitizedContent,
   });
 
   const needsServerOcr = payload.needsServerOcr === true;
@@ -116,10 +129,10 @@ export async function saveKnowledgeDocument(payload) {
 
     if (pagesWithThumbs.length) {
       try {
-    const pageUpload = await uploadPageThumbnailsToServer(
+        const pageUpload = await uploadPageThumbnailsToServer(
           { ...doc, needsServerOcr },
           pagesWithThumbs,
-          { runOcr: needsServerOcr },
+          { runOcr: needsServerOcr, content: sanitizedContent },
         );
         ingestResult.imageCount = pageUpload.imageCount;
         if (pageUpload.chunkCount != null) {
@@ -133,6 +146,13 @@ export async function saveKnowledgeDocument(payload) {
     return { doc, ingestResult, ingestError: null };
   } catch (err) {
     return { doc, ingestResult: null, ingestError: err };
+  }
+  })();
+
+  try {
+    return await saveInFlight;
+  } finally {
+    saveInFlight = null;
   }
 }
 

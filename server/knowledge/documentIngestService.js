@@ -210,6 +210,36 @@ export async function ingestDocument(document) {
   };
 }
 
+export async function ensureKnowledgeDocumentParent(documentId, meta = {}) {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return { ok: false, error: "supabase_not_configured" };
+
+  const id = String(documentId || "").trim();
+  if (!id) return { ok: false, error: "document_id_required" };
+
+  const { data } = await supabase.from("knowledge_documents").select("id").eq("id", id).maybeSingle();
+  if (data?.id) return { ok: true };
+
+  const now = new Date().toISOString();
+  const { error } = await supabase.from("knowledge_documents").upsert(
+    {
+      id,
+      title: String(meta.title || "מסמך").trim() || "מסמך",
+      category: meta.category || "כללי",
+      content: String(meta.content || " ").trim() || " ",
+      source_type: meta.sourceType || meta.source_type || "upload",
+      file_name: meta.fileName || meta.file_name || null,
+      tenant_id: meta.tenantId ?? meta.tenant_id ?? null,
+      created_at: meta.createdAt || now,
+      updated_at: now,
+    },
+    { onConflict: "id" },
+  );
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 export async function deleteDocument(documentId) {
   const supabase = getSupabaseAdmin();
   if (!supabase) return { ok: false, error: "supabase_not_configured" };

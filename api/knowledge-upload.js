@@ -9,6 +9,7 @@ import {
   reprocessDocument,
   getTotalChunkCount,
   syncDocumentChunksFromOcr,
+  ensureKnowledgeDocumentParent,
 } from "../server/knowledge/documentIngestService.js";
 import { ingestDocumentImages, listDocumentPageImages } from "../server/knowledge/imageIngestService.js";
 
@@ -165,6 +166,18 @@ export default async function handler(req, res) {
 
     try {
       const runOcr = body.runOcr !== false;
+      const parent = await ensureKnowledgeDocumentParent(documentId, {
+        title: body.title,
+        category: body.category,
+        content: body.content,
+        fileName: body.fileName,
+        tenantId: body.tenantId,
+        sourceType: "upload",
+      });
+      if (!parent.ok) {
+        return json(res, 500, { error: parent.error || "document_parent_missing" }, req);
+      }
+
       const result = await ingestDocumentImages(
         {
           id: documentId,

@@ -377,12 +377,6 @@ export function listKnowledgeDocuments() {
   const { documents } = readRaw();
   const deduped = dedupeDocumentsByFileName(documents);
   if (deduped.length !== documents.length && typeof window !== "undefined") {
-    const keptIds = new Set(deduped.map((d) => d.id));
-    for (const doc of documents) {
-      if (!keptIds.has(doc.id) && !demoModeEnabled && isSupabaseBackend() && dataClient.entities.KnowledgeDocument) {
-        dataClient.entities.KnowledgeDocument.delete(doc.id).catch(() => {});
-      }
-    }
     writeRaw({ version: 1, documents: deduped });
   }
   return [...deduped].sort(

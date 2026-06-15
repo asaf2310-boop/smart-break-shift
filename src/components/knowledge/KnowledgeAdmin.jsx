@@ -8,6 +8,7 @@ import {
   RotateCcw,
   Trash2,
   X,
+  Loader2,
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import {
@@ -75,6 +76,7 @@ export default function KnowledgeAdmin() {
   const [serverChunkCounts, setServerChunkCounts] = useState({});
   const [totalServerChunks, setTotalServerChunks] = useState(0);
   const [storeReady, setStoreReady] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const refreshServerStats = useCallback(async () => {
     if (!shouldUseServerRag()) return;
@@ -251,6 +253,8 @@ export default function KnowledgeAdmin() {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (saving) return;
+
     const hasPdfPages =
       (form.pages?.length > 0 && form.pages.some((p) => p?.thumbnail || p?.hasThumbnail)) ||
       (dialog?.fileName?.toLowerCase().endsWith(".pdf") && form.pages?.length > 0);
@@ -262,6 +266,8 @@ export default function KnowledgeAdmin() {
       toast({ title: "חסר תוכן", description: "יש להזין תוכן או להעלות קובץ", variant: "destructive" });
       return;
     }
+
+    setSaving(true);
     try {
       const { ingestResult, ingestError } = await saveKnowledgeDocument({
         id: dialog.mode === "edit" ? dialog.id : undefined,
@@ -307,6 +313,8 @@ export default function KnowledgeAdmin() {
             : formatKnowledgeIngestError(err),
         variant: "destructive",
       });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -563,7 +571,8 @@ export default function KnowledgeAdmin() {
               <button
                 type="button"
                 onClick={() => setDialog(null)}
-                className="p-2 rounded-full hover:bg-surface-container-high"
+                disabled={saving}
+                className="p-2 rounded-full hover:bg-surface-container-high disabled:opacity-50"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -623,12 +632,30 @@ export default function KnowledgeAdmin() {
                   />
                 )}
               </div>
-              <div className="flex gap-2 justify-end">
-                <button type="button" onClick={() => setDialog(null)} className="m3-btn-outlined">
+              <div className="flex gap-2 justify-end items-center">
+                {saving && (
+                  <span className="m3-label-medium flex items-center gap-2 text-primary me-auto">
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                    {serverRag ? "שומר ומעבד בשרת…" : "שומר…"}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setDialog(null)}
+                  disabled={saving}
+                  className="m3-btn-outlined disabled:opacity-50"
+                >
                   ביטול
                 </button>
-                <button type="submit" className="m3-btn-tonal">
-                  שמירה
+                <button type="submit" disabled={saving} className="m3-btn-tonal disabled:opacity-50 min-w-[5.5rem]">
+                  {saving ? (
+                    <span className="inline-flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      שומר…
+                    </span>
+                  ) : (
+                    "שמירה"
+                  )}
                 </button>
               </div>
             </form>
