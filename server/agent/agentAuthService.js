@@ -236,24 +236,35 @@ export async function verifyBearerAgent(req) {
   const token = authHeader.slice(7).trim();
   if (!token) return null;
 
-  const url = getSupabaseUrl();
-  const anonKey = getSupabaseAnonKey();
-  if (!url || !anonKey) return null;
+  const admin = getSupabaseAdmin();
+  let data = null;
+  let error = null;
 
-  const anonClient = createClient(url, anonKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  if (admin) {
+    const adminResult = await admin.auth.getUser(token);
+    data = adminResult.data;
+    error = adminResult.error;
+  } else {
+    const url = getSupabaseUrl();
+    const anonKey = getSupabaseAnonKey();
+    if (!url || !anonKey) return null;
+    const anonClient = createClient(url, anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const anonResult = await anonClient.auth.getUser(token);
+    data = anonResult.data;
+    error = anonResult.error;
+  }
 
-  const { data, error } = await anonClient.auth.getUser(token);
   if (error || !data?.user?.id) return null;
 
   let agent = await getAgentByAuthUserId(data.user.id);
   if (!agent && data.user.email) {
     agent = await getAgentByEmail(data.user.email);
     if (agent?.id && agent.authUserId !== data.user.id) {
-      const admin = getSupabaseAdmin();
-      if (admin) {
-        await admin
+      const linkAdmin = getSupabaseAdmin();
+      if (linkAdmin) {
+        await linkAdmin
           .from("agents")
           .update({ auth_user_id: data.user.id })
           .eq("id", agent.id);
