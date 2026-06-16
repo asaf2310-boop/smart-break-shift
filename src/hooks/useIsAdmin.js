@@ -13,9 +13,12 @@ export function isDemoAdminPinRequired() {
   return demoModeEnabled && isAdminPinConfigured();
 }
 
-/** פרודקשן: /admin פתוח בלי PIN כשאין VITE_ADMIN_PIN ב-build (לא משפיע על ניווט נציג). */
+/**
+ * @deprecated שלב 3 — /admin דורש התחברות נציג; PIN הוא שכבה נוספת בלבד.
+ * נשמר לתאימות; אל תשתמש לעקיפת AdminGate.
+ */
 export function isProductionAdminOpen() {
-  return !demoModeEnabled && !isAdminPinConfigured();
+  return false;
 }
 
 function subscribeAdminSession(onStoreChange) {

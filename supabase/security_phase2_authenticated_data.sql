@@ -10,8 +10,8 @@
 --   • מוסיף מדיניות RLS ל-role authenticated על טבלאות ליבה (כמו anon היום)
 --   • מאפשר לנציג מחובר לעבוד עם JWT במקום מפתח anon גולמי
 --
--- מה זה **לא** עושה (שלב 3):
---   • לא מסיר עדיין כתיבה ל-anon
+-- מה זה **לא** עושה (שלב 3 — security_phase3_revoke_anon_write.sql):
+--   • לא מסיר עדיין כתיבה ל-anon (שלב 3 עושה זאת)
 --   • לא מגביל לפי agent_name בשורה (דורש API או claims)
 --
 -- גיבוי לפני הרצה: Supabase → Database → Backups
