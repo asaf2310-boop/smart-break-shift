@@ -111,10 +111,14 @@ function mapDemoAgent(user) {
 }
 
 function sessionFromAgent(agent) {
+  const normalizedEmail = String(agent.email || "").trim().toLowerCase();
+  const displayName =
+    String(agent.displayName || "").trim() ||
+    (normalizedEmail ? normalizedEmail.split("@")[0] : "");
   return {
     userId: agent.id,
-    email: agent.email,
-    displayName: agent.displayName,
+    email: normalizedEmail,
+    displayName,
     modules: normalizeAgentModules(agent.modules),
     needsPasswordSetup: agent.needsPasswordSetup === true,
     ...(agent.authUserId ? { authUserId: agent.authUserId } : {}),
@@ -206,7 +210,7 @@ export async function resolveAgentForSession(session) {
  */
 export async function validateAndRefreshAgentSession() {
   const session = getAgentSession();
-  if (!session?.displayName) return null;
+  if (!session?.email || !session?.userId) return null;
 
   if (isLegacyAgentSession(session)) {
     await agentLogout();
