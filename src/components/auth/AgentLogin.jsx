@@ -1,7 +1,7 @@
-﻿import React, { useEffect, useState } from "react";
+﻿import React, { useState } from "react";
 import { Lock, Mail } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { supabaseConfigured, cleanEnvValue } from "@/api/supabase";
+import { supabaseConfigured } from "@/api/supabase";
 import {
   agentHasPendingPasswordReset,
   agentLoginWithPassword,
@@ -44,7 +44,7 @@ export default function AgentLogin({ onSuccess }) {
 
 function ProdEmailLogin({ onSuccess }) {
   return (
-    <LoginShell subtitle="התחברות עם אימייל וסיסמה" hypCard>
+    <LoginShell subtitle="כניסת נציגים" hypCard>
       <EmailPasswordLogin onSuccess={onSuccess} variant="prod" />
     </LoginShell>
   );
@@ -60,7 +60,7 @@ function DemoEmailLogin({ onSuccess }) {
 
 function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
   const isDemo = variant === "demo";
-  const prodDirectLogin = !isDemo;
+  const isProd = !isDemo;
   const fieldClass = isDemo
     ? DEMO_FIELD_CLASS
     : "login-demo-input w-full py-3 px-4 pr-10 text-right shadow-none";
@@ -68,45 +68,39 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
   const errorClass = isDemo ? "text-red-300 login-error-message" : "login-error-message";
   const infoClass = isDemo ? "text-emerald-200" : "text-emerald-700";
 
-  const [mode, setMode] = useState(MODES.LOGIN);
-  const [emailStepDone, setEmailStepDone] = useState(prodDirectLogin);
+  const [mode, setMode] = useState(isProd ? MODES.FIRST_LOGIN : MODES.LOGIN);
+  const [emailStepDone, setEmailStepDone] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(() =>
+    isProd && !supabaseConfigured
+      ? "Supabase לא מוגדר — בדוק VITE_SUPABASE_URL ו-VITE_SUPABASE_ANON_KEY ב-Vercel"
+      : ""
+  );
   const [info, setInfo] = useState("");
-  const [setupAfterReset, setSetupAfterReset] = useState(false);
-
-  useEffect(() => {
-    if (isDemo) return;
-    if (!supabaseConfigured) {
-      setError("Supabase לא מוגדר — בדוק VITE_SUPABASE_URL ו-VITE_SUPABASE_ANON_KEY ב-Vercel");
-      return;
-    }
-    const baseUrl = cleanEnvValue(import.meta.env.VITE_SUPABASE_URL).replace(/\/+$/, "");
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 8000);
-    fetch(`${baseUrl}/auth/v1/health`, { signal: controller.signal })
-      .then((res) => {
-        if (!res.ok) {
-          setError("שרת ההתחברות (Supabase Auth) לא זמין — בדוק את כתובת הפרויקט");
-        }
-      })
-      .catch(() => {
-        setError(
-          "לא ניתן להתחבר ל-Supabase — בדוק חיבור אינטרנט, VITE_SUPABASE_URL ב-Vercel, ו-Redeploy"
-        );
-      })
-      .finally(() => clearTimeout(timer));
-  }, [isDemo]);
+  const [firstLoginFlow, setFirstLoginFlow] = useState(isProd);
 
   const resetMessages = () => {
     setError("");
     setInfo("");
   };
 
-  const showPasswordField = emailStepDone || prodDirectLogin;
+  const goToReturningLogin = () => {
+    setFirstLoginFlow(false);
+    setMode(MODES.LOGIN);
+    setPassword("");
+    resetMessages();
+  };
+
+  const goToFirstLogin = () => {
+    setFirstLoginFlow(true);
+    setMode(MODES.FIRST_LOGIN);
+    setPassword("");
+    setConfirmPassword("");
+    resetMessages();
+  };
 
   const handleProdLogin = async (e) => {
     e.preventDefault();
@@ -116,16 +110,18 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
       const result = await agentLoginWithPassword(email, password);
       if (!result.ok) {
         if (result.error === "needs_temp_password") {
+          setFirstLoginFlow(true);
           setMode(MODES.TEMP_VERIFY);
           return;
         }
         if (result.error === "needs_password_setup") {
-          setSetupAfterReset(false);
+          setFirstLoginFlow(true);
           setMode(MODES.SETUP);
           return;
         }
         if (result.error === "needs_first_login") {
-          setError(result.message || "זו כניסה ראשונה? לחץ «כניסה ראשונה» למטה.");
+          goToFirstLogin();
+          setInfo("הזן/י את האימייל ולחץ/י «המשך» — נשלח SMS לכניסה ראשונה.");
           return;
         }
         setError(result.message || INVALID_CREDENTIALS_MSG);
@@ -139,73 +135,19 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
     }
   };
 
-  const handleEmailContinue = async (e) => {
+  const handleFirstLogin = async (e) => {
     e.preventDefault();
     resetMessages();
     setLoading(true);
     try {
-      const agent = await resolveAgentByEmail(email);
-      if (!canAgentAuthenticate(agent)) {
-        setError(INVALID_CREDENTIALS_MSG);
-        return;
-      }
-
-      if (!isDemo && agent.needsPasswordSetup && !agent.authUserId) {
-        setError("פנה/י למנהל להגדרת סיסמה ראשונית");
-        return;
-      }
-
-      if (agentHasPendingPasswordReset(agent)) {
+      const result = await agentRequestFirstLogin(email);
+      if (result.ok) {
+        setInfo(result.message);
         setMode(MODES.TEMP_VERIFY);
         setPassword("");
-        setEmailStepDone(false);
-        return;
+      } else {
+        setError(result.message || "לא הצלחנו לשלוח SMS. נסה/י שוב או פנה/י למנהל.");
       }
-
-      if (agent.needsPasswordSetup && !agentHasPendingPasswordReset(agent)) {
-        if (!isDemo) {
-          setMode(MODES.LOGIN);
-          setEmailStepDone(true);
-          setPassword("");
-          return;
-        }
-        setSetupAfterReset(false);
-        setMode(MODES.SETUP);
-        setPassword("");
-        setConfirmPassword("");
-        setEmailStepDone(false);
-        return;
-      }
-
-      setMode(MODES.LOGIN);
-      setEmailStepDone(true);
-    } catch {
-      setError(AGENT_AUTH_TIMEOUT_MSG);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    resetMessages();
-    setLoading(true);
-    try {
-      const result = await agentLoginWithPassword(email, password);
-      if (!result.ok) {
-        if (result.error === "needs_temp_password") {
-          setMode(MODES.TEMP_VERIFY);
-          return;
-        }
-        if (result.error === "needs_password_setup") {
-          setSetupAfterReset(false);
-          setMode(MODES.SETUP);
-          return;
-        }
-        setError(result.message || INVALID_CREDENTIALS_MSG);
-        return;
-      }
-      onSuccess?.(result.session);
     } catch {
       setError(AGENT_AUTH_TIMEOUT_MSG);
     } finally {
@@ -223,10 +165,11 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
         setError(result.message || INVALID_CREDENTIALS_MSG);
         return;
       }
-      setSetupAfterReset(true);
       setMode(MODES.SETUP);
       setPassword("");
       setConfirmPassword("");
+    } catch {
+      setError(AGENT_AUTH_TIMEOUT_MSG);
     } finally {
       setLoading(false);
     }
@@ -251,6 +194,8 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
         return;
       }
       onSuccess?.(result.session);
+    } catch {
+      setError(AGENT_AUTH_TIMEOUT_MSG);
     } finally {
       setLoading(false);
     }
@@ -264,6 +209,7 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
       const result = await agentRequestPasswordReset(email);
       if (result.ok) {
         setInfo(result.message);
+        setFirstLoginFlow(false);
         setMode(MODES.TEMP_VERIFY);
         setPassword("");
       } else {
@@ -273,151 +219,12 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
       setLoading(false);
     }
   };
-
-  const handleFirstLogin = async (e) => {
-    e.preventDefault();
-    resetMessages();
-    setLoading(true);
-    try {
-      const result = await agentRequestFirstLogin(email);
-      if (result.ok) {
-        setInfo(result.message);
-        setSetupAfterReset(true);
-        setMode(MODES.TEMP_VERIFY);
-        setPassword("");
-      } else {
-        setError(result.message || "לא הצלחנו לשלוח SMS. נסה/י שוב או פנה/י למנהל.");
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (mode === MODES.FIRST_LOGIN) {
-    return (
-      <form onSubmit={handleFirstLogin} className="font-heebo">
-        <p className="text-sm text-muted-foreground text-center leading-relaxed mb-3">
-          כניסה ראשונה: הזן/י את האימייל שרשם המנהל. נשלח SMS עם סיסמה זמנית — אחרי ההזנה תבחר/י סיסמה
-          אישית.
-        </p>
-        <Field icon={Mail} label="אימייל">
-          <Input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className={fieldClass}
-            required
-            dir="ltr"
-            autoFocus
-          />
-        </Field>
-        {error && <p className={`text-sm text-center ${errorClass}`}>{error}</p>}
-        {info && <p className={`text-sm text-center ${infoClass}`}>{info}</p>}
-        <button type="submit" disabled={loading} className={submitClass}>
-          {loading ? "שולח..." : "שלח סיסמה זמנית ב-SMS"}
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setMode(MODES.LOGIN);
-            resetMessages();
-          }}
-          className="login-demo-link w-full text-sm mt-2"
-        >
-          חזרה להתחברות
-        </button>
-      </form>
-    );
-  }
-
-  if (mode === MODES.FORGOT) {
-    return (
-      <form onSubmit={handleForgot} className="font-heebo">
-        <p className="text-sm text-muted-foreground text-center leading-relaxed mb-3">
-          נשלח סיסמה זמנית ב-SMS למספר הרשום במערכת. לאחר הכניסה תוכל/י להגדיר סיסמה חדשה.
-        </p>
-        <Field icon={Mail} label="אימייל">
-          <Input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className={fieldClass}
-            required
-            dir="ltr"
-          />
-        </Field>
-        {error && <p className={`text-sm text-center ${errorClass}`}>{error}</p>}
-        {info && <p className={`text-sm text-center ${infoClass}`}>{info}</p>}
-        <button type="submit" disabled={loading} className={submitClass}>
-          {loading ? "שולח..." : "שלח סיסמה זמנית ב-SMS"}
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setMode(MODES.LOGIN);
-            resetMessages();
-          }}
-          className="login-demo-link w-full text-sm mt-2"
-        >
-          חזרה להתחברות
-        </button>
-      </form>
-    );
-  }
-
-  if (mode === MODES.TEMP_VERIFY) {
-    return (
-      <form onSubmit={handleTempVerify} className="font-heebo space-y-1">
-        <p className="text-sm text-muted-foreground text-center leading-relaxed mb-2">
-          הזן/י את הסיסמה הזמנית שנשלחה אליך ב-SMS.
-        </p>
-        <Field icon={Mail} label="אימייל">
-          <Input
-            type="email"
-            value={email}
-            readOnly
-            className={cn(fieldClass, "text-muted-foreground")}
-            dir="ltr"
-          />
-        </Field>
-        <Field icon={Lock} label="סיסמה זמנית">
-          <Input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className={fieldClass}
-            required
-            autoFocus
-            inputMode="numeric"
-            autoComplete="one-time-code"
-          />
-        </Field>
-        {error && <p className={`text-sm text-center ${errorClass}`}>{error}</p>}
-        <button type="submit" disabled={loading} className={submitClass}>
-          {loading ? "בודק..." : "המשך להגדרת סיסמה"}
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setMode(MODES.FORGOT);
-            setPassword("");
-            resetMessages();
-          }}
-          className="login-demo-link w-full text-sm mt-2"
-        >
-          לא קיבלתי SMS — שלח שוב
-        </button>
-      </form>
-    );
-  }
 
   if (mode === MODES.SETUP) {
     return (
       <form onSubmit={handleSetup} className="font-heebo space-y-1">
         <p className="text-sm text-muted-foreground text-center leading-relaxed mb-2">
-          {setupAfterReset
-            ? "בחר/י סיסמה חדשה לחשבון שלך."
-            : "זו הכניסה הראשונה שלך. בחר/י סיסמה — רק מנהל יוכל לשנות אותה לאחר מכן."}
+          בחר/י סיסמה אישית לחשבון שלך (לפחות {PASSWORD_MIN_LENGTH} תווים).
         </p>
         <Field icon={Mail} label="אימייל">
           <Input
@@ -435,6 +242,7 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
             onChange={(e) => setPassword(e.target.value)}
             className={fieldClass}
             required
+            autoFocus
             {...passwordMinLengthInputProps()}
           />
         </Field>
@@ -456,9 +264,225 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
     );
   }
 
+  if (mode === MODES.TEMP_VERIFY) {
+    return (
+      <form onSubmit={handleTempVerify} className="font-heebo space-y-1">
+        <p className="text-sm text-muted-foreground text-center leading-relaxed mb-2">
+          הזן/י את הקוד שנשלח ב-SMS (6 ספרות). לאחר מכן תגדיר/י סיסמה אישית.
+        </p>
+        <Field icon={Mail} label="אימייל">
+          <Input
+            type="email"
+            value={email}
+            readOnly
+            className={cn(fieldClass, "text-muted-foreground")}
+            dir="ltr"
+          />
+        </Field>
+        <Field icon={Lock} label="קוד מ-SMS">
+          <Input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className={fieldClass}
+            required
+            autoFocus
+            inputMode="numeric"
+            autoComplete="one-time-code"
+          />
+        </Field>
+        {error && <p className={`text-sm text-center ${errorClass}`}>{error}</p>}
+        {info && <p className={`text-sm text-center ${infoClass}`}>{info}</p>}
+        <button type="submit" disabled={loading} className={submitClass}>
+          {loading ? "בודק..." : "המשך להגדרת סיסמה"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setPassword("");
+            resetMessages();
+            if (firstLoginFlow) {
+              setMode(MODES.FIRST_LOGIN);
+            } else {
+              setMode(MODES.FORGOT);
+            }
+          }}
+          className="login-demo-link w-full text-sm mt-2"
+        >
+          לא קיבלתי SMS — שלח שוב
+        </button>
+      </form>
+    );
+  }
+
+  if (mode === MODES.FORGOT) {
+    return (
+      <form onSubmit={handleForgot} className="font-heebo">
+        <p className="text-sm text-muted-foreground text-center leading-relaxed mb-3">
+          נשלח קוד זמני ב-SMS. לאחר האימות תגדיר/י סיסמה חדשה.
+        </p>
+        <Field icon={Mail} label="אימייל">
+          <Input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className={fieldClass}
+            required
+            dir="ltr"
+            autoFocus
+          />
+        </Field>
+        {error && <p className={`text-sm text-center ${errorClass}`}>{error}</p>}
+        {info && <p className={`text-sm text-center ${infoClass}`}>{info}</p>}
+        <button type="submit" disabled={loading} className={submitClass}>
+          {loading ? "שולח..." : "שלח קוד ב-SMS"}
+        </button>
+        <button
+          type="button"
+          onClick={goToReturningLogin}
+          className="login-demo-link w-full text-sm mt-2"
+        >
+          חזרה להתחברות
+        </button>
+      </form>
+    );
+  }
+
+  if (isProd && mode === MODES.FIRST_LOGIN) {
+    return (
+      <form onSubmit={handleFirstLogin} className="font-heebo">
+        <p className="text-sm text-muted-foreground text-center leading-relaxed mb-3">
+          כניסה ראשונה — הזן/י את האימייל שרשם המנהל. נשלח SMS עם קוד אימות, ואז תבחר/י סיסמה
+          אישית.
+        </p>
+        <Field icon={Mail} label="אימייל">
+          <Input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className={fieldClass}
+            required
+            dir="ltr"
+            autoFocus
+          />
+        </Field>
+        {error && <p className={`text-sm text-center ${errorClass}`}>{error}</p>}
+        {info && <p className={`text-sm text-center ${infoClass}`}>{info}</p>}
+        <button type="submit" disabled={loading} className={submitClass}>
+          {loading ? "שולח..." : "המשך"}
+        </button>
+        <button
+          type="button"
+          onClick={goToReturningLogin}
+          className="login-demo-link w-full text-sm mt-2"
+        >
+          יש לי כבר סיסמה — התחברות
+        </button>
+      </form>
+    );
+  }
+
+  if (isProd && mode === MODES.LOGIN) {
+    return (
+      <form onSubmit={handleProdLogin} className="font-heebo">
+        <p className="text-sm text-muted-foreground text-center leading-relaxed mb-3">
+          התחברות לנציגים רשומים
+        </p>
+        <Field icon={Mail} label="אימייל">
+          <Input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className={fieldClass}
+            required
+            dir="ltr"
+            autoFocus
+          />
+        </Field>
+        <Field icon={Lock} label="סיסמה">
+          <Input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className={fieldClass}
+            required
+          />
+        </Field>
+        {error && <p className={`text-sm text-center ${errorClass}`}>{error}</p>}
+        {info && <p className={`text-sm text-center ${infoClass}`}>{info}</p>}
+        <button type="submit" disabled={loading} className={submitClass}>
+          {loading ? "מתחבר..." : "כניסה"}
+        </button>
+        <div className="flex flex-col gap-2 text-center mt-2">
+          <button type="button" onClick={goToFirstLogin} className="login-demo-link text-sm font-medium">
+            כניסה ראשונה — הגדרת סיסמה
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode(MODES.FORGOT);
+              resetMessages();
+            }}
+            className="login-demo-link text-sm"
+          >
+            שכחתי סיסמה
+          </button>
+        </div>
+      </form>
+    );
+  }
+
+  // Demo: legacy two-step flow
+  const showPasswordField = emailStepDone;
+
+  const handleEmailContinue = async (e) => {
+    e.preventDefault();
+    resetMessages();
+    setLoading(true);
+    try {
+      const agent = await resolveAgentByEmail(email);
+      if (!canAgentAuthenticate(agent)) {
+        setError(INVALID_CREDENTIALS_MSG);
+        return;
+      }
+      if (agentHasPendingPasswordReset(agent)) {
+        setMode(MODES.TEMP_VERIFY);
+        setPassword("");
+        return;
+      }
+      if (agent.needsPasswordSetup) {
+        setMode(MODES.SETUP);
+        return;
+      }
+      setEmailStepDone(true);
+    } catch {
+      setError(AGENT_AUTH_TIMEOUT_MSG);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    resetMessages();
+    setLoading(true);
+    try {
+      const result = await agentLoginWithPassword(email, password);
+      if (!result.ok) {
+        setError(result.message || INVALID_CREDENTIALS_MSG);
+        return;
+      }
+      onSuccess?.(result.session);
+    } catch {
+      setError(AGENT_AUTH_TIMEOUT_MSG);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <form
-      onSubmit={prodDirectLogin ? handleProdLogin : showPasswordField ? handleLogin : handleEmailContinue}
+      onSubmit={showPasswordField ? handleLogin : handleEmailContinue}
       className="font-heebo"
     >
       <Field icon={Mail} label="אימייל">
@@ -467,11 +491,11 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
           value={email}
           onChange={(e) => {
             setEmail(e.target.value);
-            if (!prodDirectLogin) setEmailStepDone(false);
+            setEmailStepDone(false);
           }}
           className={fieldClass}
           required
-          readOnly={showPasswordField && !prodDirectLogin}
+          readOnly={showPasswordField}
           autoFocus
           dir="ltr"
         />
@@ -484,65 +508,14 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
             onChange={(e) => setPassword(e.target.value)}
             className={fieldClass}
             required
-            autoFocus={prodDirectLogin}
+            autoFocus
           />
         </Field>
       )}
       {error && <p className={`text-sm text-center ${errorClass}`}>{error}</p>}
-      {info && <p className={`text-sm text-center ${infoClass}`}>{info}</p>}
       <button type="submit" disabled={loading} className={submitClass}>
         {loading ? "מתחבר..." : showPasswordField ? "כניסה" : "המשך"}
       </button>
-      {!showPasswordField && (
-        <button
-          type="button"
-          onClick={() => {
-            setMode(MODES.FORGOT);
-            resetMessages();
-          }}
-          className="login-demo-link w-full text-sm mt-2"
-        >
-          שכחתי סיסמה
-        </button>
-      )}
-      {showPasswordField && (
-        <div className="flex flex-col gap-2 text-center mt-2">
-          {!prodDirectLogin && (
-            <button
-              type="button"
-              onClick={() => {
-                setEmailStepDone(false);
-                resetMessages();
-              }}
-              className="login-demo-link text-sm"
-            >
-              שינוי אימייל
-            </button>
-          )}
-          {prodDirectLogin && (
-            <button
-              type="button"
-              onClick={() => {
-                setMode(MODES.FIRST_LOGIN);
-                resetMessages();
-              }}
-              className="login-demo-link text-sm font-medium"
-            >
-              כניסה ראשונה — הגדרת סיסמה
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              setMode(MODES.FORGOT);
-              resetMessages();
-            }}
-            className="login-demo-link text-sm"
-          >
-            שכחתי סיסמה
-          </button>
-        </div>
-      )}
     </form>
   );
 }
