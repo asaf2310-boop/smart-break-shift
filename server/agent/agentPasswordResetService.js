@@ -3,6 +3,8 @@ import {
   getAgentByEmail,
   markAgentNeedsPasswordSetup,
   provisionAuthUserForAgent,
+  resolveAgentAuthUser,
+  agentRequiresFirstLogin,
 } from "./agentAuthService.js";
 import { normalizeIsraeliPhone, sendInforuSms } from "../../api/send-schedule-sms.js";
 
@@ -138,17 +140,23 @@ export async function requestFirstLoginByEmail(email) {
     return { ok: true, message: GENERIC_FIRST_LOGIN_OK_MSG };
   }
 
-  if (!agent.needsPasswordSetup) {
+  const authState = await resolveAgentAuthUser(agent);
+
+  if (!agentRequiresFirstLogin(agent, authState)) {
     return {
       ok: false,
       message: "החשבון כבר הופעל. התחבר/י עם הסיסמה שלך או «שכחתי סיסמה».",
     };
   }
 
-  if (!agent.authUserId) {
+  await markAgentNeedsPasswordSetup(agent.id);
+
+  const agentForProvision = { ...agent, authUserId: authState.authUserId };
+
+  if (!authState.exists) {
     try {
       const temp = generateTemporaryPassword();
-      await provisionAuthUserForAgent(agent, temp);
+      await provisionAuthUserForAgent(agentForProvision, temp);
     } catch (err) {
       console.warn("[agentPasswordResetService] first login provision failed", err);
       return { ok: false, message: "לא הצלחנו להכין חשבון. פנה/י למנהל." };

@@ -511,7 +511,7 @@ export async function agentRequestFirstLogin(email) {
         message: "אם האימייל רשום במערכת — נשלחה סיסמה זמנית (דמו).",
       };
     }
-    if (!agent.needsPasswordSetup) {
+    if (!agent.needsPasswordSetup && agent.authUserId) {
       return {
         ok: false,
         message: "החשבון כבר הופעל. התחבר/י עם הסיסמה שלך.",

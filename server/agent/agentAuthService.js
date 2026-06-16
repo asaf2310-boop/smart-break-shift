@@ -36,7 +36,7 @@ export async function getAgentByEmail(email) {
     .select(
       "id, email, display_name, auth_user_id, needs_password_setup, phone, active, blocked, deleted_at, modules"
     )
-    .eq("email", normalized)
+    .ilike("email", normalized)
     .maybeSingle();
 
   if (error) {
@@ -183,6 +183,48 @@ export async function markAgentNeedsPasswordSetup(agentId) {
     .eq("id", agentId);
 
   if (error) throw error;
+}
+
+/** האם יש משתמש ב-Supabase Auth — לא רק דגל needs_password_setup בטבלה. */
+export async function resolveAgentAuthUser(agent) {
+  const supabase = getSupabaseAdmin();
+  if (!supabase || !agent) return { exists: false, authUserId: null };
+
+  const email = normalizeEmail(agent.email);
+  if (!email) return { exists: false, authUserId: null };
+
+  if (agent.authUserId) {
+    const { data, error } = await supabase.auth.admin.getUserById(agent.authUserId);
+    if (!error && data?.user?.id) {
+      return { exists: true, authUserId: data.user.id };
+    }
+  }
+
+  const { data: listData, error: listErr } = await supabase.auth.admin.listUsers({
+    page: 1,
+    perPage: 1000,
+  });
+  if (listErr) {
+    console.warn("[agentAuthService] listUsers failed", listErr.message);
+    return { exists: false, authUserId: null };
+  }
+
+  const existing = (listData?.users || []).find((u) => normalizeEmail(u.email) === email);
+  if (!existing?.id) {
+    return { exists: false, authUserId: null };
+  }
+
+  if (agent.authUserId !== existing.id) {
+    await supabase.from("agents").update({ auth_user_id: existing.id }).eq("id", agent.id);
+  }
+
+  return { exists: true, authUserId: existing.id };
+}
+
+export function agentRequiresFirstLogin(agent, authState) {
+  if (!agent) return false;
+  if (agent.needsPasswordSetup) return true;
+  return !authState?.exists;
 }
 
 export async function verifyBearerAgent(req) {
