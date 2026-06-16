@@ -15,6 +15,10 @@ import { DEFAULT_AGENT_MODULES, normalizeAgentModules } from "@/constants/agentM
 import { REAL_AGENT_NAMES } from "@/constants/scheduling";
 import { normalizeAgentPhone } from "@/lib/agentPhone";
 import { apiAdminSetAgentPassword, apiProvisionAgentAuth } from "@/lib/agentAuthClient";
+import {
+  fetchAgentByIdFromSupabase,
+  fetchAgentsFromSupabase,
+} from "@/lib/agentsSupabase";
 
 const PENDING_EMAIL_SUFFIX = "@pending.local";
 
@@ -67,16 +71,13 @@ export async function listManagedAgents() {
       return listAllDemoAppUsers().map(mapDemoRow);
     }
 
-    if (!dataClient.entities.Agent?.list) {
-      return [];
-    }
-
-    const rows = await dataClient.entities.Agent.list("-created_at", 500);
-    return (rows || [])
-      .filter((r) => r.active !== false && !r.deleted_at)
-      .map(mapSupabaseRow);
+    const rows = await fetchAgentsFromSupabase({ activeOnly: true });
+    return rows.map(mapSupabaseRow);
   } catch (err) {
     console.warn("[agentsApi] listManagedAgents failed", err);
+    if (String(err?.message || err) === "agents_query_timeout") {
+      throw new Error("agents_list_timeout");
+    }
     if (demoModeEnabled) {
       try {
         return listAllDemoAppUsers().map(mapDemoRow);
@@ -84,7 +85,7 @@ export async function listManagedAgents() {
         return [];
       }
     }
-    return [];
+    throw err;
   }
 }
 
@@ -184,8 +185,7 @@ export async function adminSetManagedAgentPassword(id, password, { forceSetup = 
   }
 
   notifyAgentUsersChanged();
-  const rows = await dataClient.entities.Agent.list("-created_at", 500);
-  const row = (rows || []).find((r) => r.id === id);
+  const row = await fetchAgentByIdFromSupabase(id);
   return mapSupabaseRow(row || { id });
 }
 

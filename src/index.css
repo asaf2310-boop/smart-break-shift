@@ -1634,8 +1634,11 @@ body,
   }
 
   .login-shell--demo .login-shell__card .text-red-300,
-  .login-shell--brand .login-shell__card .text-red-300 {
-    @apply text-destructive;
+  .login-shell--brand .login-shell__card .text-red-300,
+  .login-shell--demo .login-shell__card .login-error-message,
+  .login-shell--brand .login-shell__card .login-error-message {
+    color: hsl(var(--destructive));
+    font-weight: 600;
   }
 
   .login-shell--demo .login-shell__card .text-emerald-200,

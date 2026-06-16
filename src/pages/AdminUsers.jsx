@@ -54,9 +54,10 @@ export default function AdminUsers() {
   const [passwordForm, setPasswordForm] = useState({ password: "", forceSetup: true });
   const [modulesForm, setModulesForm] = useState([]);
 
-  const { data: users = [], isLoading } = useQuery({
+  const { data: users = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ["managed-agents"],
     queryFn: listManagedAgents,
+    retry: 1,
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["managed-agents"] });
@@ -69,7 +70,8 @@ export default function AdminUsers() {
       setForm({ email: "", name: "", phone: "" });
       toast({
         title: "נציג נוסף",
-        description: "הגדיר/י אימייל וסיסמה — בכניסה הראשונה הנציג יגדיר סיסמה",
+        description:
+          "הנציג יגדיר סיסמה בכניסה הראשונה («כניסה ראשונה» במסך הכניסה). אין צורך להגדיר סיסמה כאן.",
       });
     },
     onError: (err) => {
@@ -247,7 +249,7 @@ export default function AdminUsers() {
 
       {!demoModeEnabled && (
         <p className="mb-4 text-xs text-violet-800 bg-violet-50 border border-violet-200 rounded-xl px-3 py-2">
-          בטעינה ראשונה הרשימה מתמלאת אוטומטית משמות הנציגים. ערכ/י אימייל אמיתי לכל נציג והגדיר/י סיסמה.
+          בטעינה ראשונה הרשימה מתמלאת אוטומטית משמות הנציגים. ערכ/י אימייל וטלפון — הנציג יגדיר סיסמה בכניסה הראשונה.
         </p>
       )}
 
@@ -281,6 +283,23 @@ export default function AdminUsers() {
               <tr>
                 <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
                   טוען...
+                </td>
+              </tr>
+            ) : isError ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-8 text-center">
+                  <p className="text-red-600 font-medium mb-2">
+                    {error?.message === "agents_list_timeout"
+                      ? "טעינת הנציגים נכשלה — בדוק חיבור ל-Supabase"
+                      : "לא הצלחנו לטעון את רשימת הנציגים"}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => refetch()}
+                    className="text-sm text-primary underline"
+                  >
+                    נסה שוב
+                  </button>
                 </td>
               </tr>
             ) : users.length === 0 ? (
@@ -330,8 +349,8 @@ export default function AdminUsers() {
                         type="button"
                         onClick={() => openPassword(user)}
                         className="p-2 rounded-lg hover:bg-amber-50 text-amber-700"
-                        title="הגדרת סיסמה (מנהל)"
-                        aria-label="סיסמה"
+                        title="איפוס סיסמה (מנהל)"
+                        aria-label="איפוס סיסמה"
                       >
                         <KeyRound className="w-4 h-4" />
                       </button>
@@ -380,7 +399,7 @@ export default function AdminUsers() {
         </div>
         <ul className="list-disc list-inside space-y-1 text-xs">
           <li>
-            <strong>סיסמה</strong> — רק מנהל מגדיר/מאפס דרך Supabase Auth; נציג מגדיר בכניסה ראשונה
+            <strong>סיסמה</strong> — הנציג מגדיר בכניסה ראשונה (SMS). מנהל יכול לאפס סיסמה במקרה הצורך
           </li>
           <li>
             <strong>אימייל</strong> — נדרש לכניסה עם אימייל; בלי אימייל — כניסה בשם מהרשימה

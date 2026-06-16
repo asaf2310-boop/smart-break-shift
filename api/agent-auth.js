@@ -11,7 +11,7 @@ import {
   verifyAdminPin,
   verifyBearerAgent,
 } from "../server/agent/agentAuthService.js";
-import { requestPasswordResetByEmail } from "../server/agent/agentPasswordResetService.js";
+import { requestPasswordResetByEmail, requestFirstLoginByEmail } from "../server/agent/agentPasswordResetService.js";
 
 const PASSWORD_MIN_LENGTH = 6;
 
@@ -83,6 +83,18 @@ export default async function handler(req, res) {
         { ok: false, message: "לא הצלחנו לעבד את הבקשה" },
         req
       );
+    }
+  }
+
+  if (action === "request_first_login") {
+    const email = String(body.email || "").trim();
+    try {
+      const result = await requestFirstLoginByEmail(email);
+      const status = result.ok ? 200 : 400;
+      return json(res, status, result, req);
+    } catch (err) {
+      console.error("[agent-auth] request_first_login", err);
+      return json(res, 500, { ok: false, message: "לא הצלחנו לעבד את הבקשה" }, req);
     }
   }
 

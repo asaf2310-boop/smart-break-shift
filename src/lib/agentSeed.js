@@ -3,6 +3,7 @@ import { demoModeEnabled } from "@/api/demoClient";
 import { isSupabaseBackend } from "@/api/dataClient";
 import { DEFAULT_AGENT_MODULES } from "@/constants/agentModules";
 import { REAL_AGENT_NAMES } from "@/constants/scheduling";
+import { fetchAgentsFromSupabase } from "@/lib/agentsSupabase";
 
 function pendingEmail(index) {
   return `agent-${index + 1}@pending.local`;
@@ -18,9 +19,8 @@ export async function ensureAgentsSeeded() {
   }
 
   try {
-    const existing = await dataClient.entities.Agent.list("-created_at", 500);
-    const active = (existing || []).filter((r) => r.active !== false && !r.deleted_at);
-    if (active.length > 0) {
+    const existing = await fetchAgentsFromSupabase({ activeOnly: true, limit: 10 });
+    if (existing.length > 0) {
       return { seeded: 0, skipped: false };
     }
 

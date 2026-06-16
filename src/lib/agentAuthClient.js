@@ -58,6 +58,13 @@ export async function apiRequestAgentPasswordReset(email) {
   });
 }
 
+export async function apiRequestFirstLogin(email) {
+  return postAgentAuth({
+    action: "request_first_login",
+    email,
+  });
+}
+
 export async function apiProvisionAgentAuth(agentId) {
   return postAgentAuth({
     action: "provision_auth",

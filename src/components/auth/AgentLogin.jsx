@@ -1,9 +1,11 @@
-﻿import React, { useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { Lock, Mail } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { supabaseConfigured, cleanEnvValue } from "@/api/supabase";
 import {
   agentHasPendingPasswordReset,
   agentLoginWithPassword,
+  agentRequestFirstLogin,
   agentRequestPasswordReset,
   agentSetupPassword,
   agentVerifyTemporaryPassword,
@@ -30,6 +32,7 @@ const MODES = {
   SETUP: "setup",
   TEMP_VERIFY: "temp_verify",
   FORGOT: "forgot",
+  FIRST_LOGIN: "first_login",
 };
 
 export default function AgentLogin({ onSuccess }) {
@@ -62,7 +65,7 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
     ? DEMO_FIELD_CLASS
     : "login-demo-input w-full py-3 px-4 pr-10 text-right shadow-none";
   const submitClass = isDemo ? DEMO_SUBMIT_CLASS : BRAND_SUBMIT_CLASS;
-  const errorClass = isDemo ? "text-red-300" : "text-destructive";
+  const errorClass = isDemo ? "text-red-300 login-error-message" : "login-error-message";
   const infoClass = isDemo ? "text-emerald-200" : "text-emerald-700";
 
   const [mode, setMode] = useState(MODES.LOGIN);
@@ -74,6 +77,29 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [setupAfterReset, setSetupAfterReset] = useState(false);
+
+  useEffect(() => {
+    if (isDemo) return;
+    if (!supabaseConfigured) {
+      setError("Supabase לא מוגדר — בדוק VITE_SUPABASE_URL ו-VITE_SUPABASE_ANON_KEY ב-Vercel");
+      return;
+    }
+    const baseUrl = cleanEnvValue(import.meta.env.VITE_SUPABASE_URL).replace(/\/+$/, "");
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    fetch(`${baseUrl}/auth/v1/health`, { signal: controller.signal })
+      .then((res) => {
+        if (!res.ok) {
+          setError("שרת ההתחברות (Supabase Auth) לא זמין — בדוק את כתובת הפרויקט");
+        }
+      })
+      .catch(() => {
+        setError(
+          "לא ניתן להתחבר ל-Supabase — בדוק חיבור אינטרנט, VITE_SUPABASE_URL ב-Vercel, ו-Redeploy"
+        );
+      })
+      .finally(() => clearTimeout(timer));
+  }, [isDemo]);
 
   const resetMessages = () => {
     setError("");
@@ -96,6 +122,10 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
         if (result.error === "needs_password_setup") {
           setSetupAfterReset(false);
           setMode(MODES.SETUP);
+          return;
+        }
+        if (result.error === "needs_first_login") {
+          setError(result.message || "זו כניסה ראשונה? לחץ «כניסה ראשונה» למטה.");
           return;
         }
         setError(result.message || INVALID_CREDENTIALS_MSG);
@@ -234,6 +264,8 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
       const result = await agentRequestPasswordReset(email);
       if (result.ok) {
         setInfo(result.message);
+        setMode(MODES.TEMP_VERIFY);
+        setPassword("");
       } else {
         setError(result.message || "לא הצלחנו לשלוח SMS. נסה/י שוב או פנה/י למנהל.");
       }
@@ -241,6 +273,62 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
       setLoading(false);
     }
   };
+
+  const handleFirstLogin = async (e) => {
+    e.preventDefault();
+    resetMessages();
+    setLoading(true);
+    try {
+      const result = await agentRequestFirstLogin(email);
+      if (result.ok) {
+        setInfo(result.message);
+        setSetupAfterReset(true);
+        setMode(MODES.TEMP_VERIFY);
+        setPassword("");
+      } else {
+        setError(result.message || "לא הצלחנו לשלוח SMS. נסה/י שוב או פנה/י למנהל.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (mode === MODES.FIRST_LOGIN) {
+    return (
+      <form onSubmit={handleFirstLogin} className="font-heebo">
+        <p className="text-sm text-muted-foreground text-center leading-relaxed mb-3">
+          כניסה ראשונה: הזן/י את האימייל שרשם המנהל. נשלח SMS עם סיסמה זמנית — אחרי ההזנה תבחר/י סיסמה
+          אישית.
+        </p>
+        <Field icon={Mail} label="אימייל">
+          <Input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className={fieldClass}
+            required
+            dir="ltr"
+            autoFocus
+          />
+        </Field>
+        {error && <p className={`text-sm text-center ${errorClass}`}>{error}</p>}
+        {info && <p className={`text-sm text-center ${infoClass}`}>{info}</p>}
+        <button type="submit" disabled={loading} className={submitClass}>
+          {loading ? "שולח..." : "שלח סיסמה זמנית ב-SMS"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setMode(MODES.LOGIN);
+            resetMessages();
+          }}
+          className="login-demo-link w-full text-sm mt-2"
+        >
+          חזרה להתחברות
+        </button>
+      </form>
+    );
+  }
 
   if (mode === MODES.FORGOT) {
     return (
@@ -429,6 +517,18 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
               className="login-demo-link text-sm"
             >
               שינוי אימייל
+            </button>
+          )}
+          {prodDirectLogin && (
+            <button
+              type="button"
+              onClick={() => {
+                setMode(MODES.FIRST_LOGIN);
+                resetMessages();
+              }}
+              className="login-demo-link text-sm font-medium"
+            >
+              כניסה ראשונה — הגדרת סיסמה
             </button>
           )}
           <button

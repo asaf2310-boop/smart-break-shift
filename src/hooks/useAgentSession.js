@@ -46,7 +46,10 @@ export function useAgentSession() {
   }, [refresh]);
 
   const hasValidSession = Boolean(
-    session?.displayName && session?.email && session?.userId
+    session?.displayName &&
+      session?.email &&
+      session?.userId &&
+      session?.needsPasswordSetup !== true
   );
 
   return {

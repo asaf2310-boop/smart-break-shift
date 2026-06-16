@@ -119,3 +119,49 @@ export async function requestPasswordResetByEmail(email) {
     message: "נשלחה סיסמה זמנית ב-SMS. הזן/י אותה בכניסה ולאחר מכן בחר/י סיסמה חדשה.",
   };
 }
+
+const GENERIC_FIRST_LOGIN_OK_MSG =
+  "אם האימייל רשום במערכת ויש טלפון — נשלחה סיסמה זמנית ב-SMS לכניסה ראשונה.";
+
+/**
+ * כניסה ראשונה — רק לנציגים עם needs_password_setup.
+ * שולח SMS זמני (אותה לוגיקה כאיפוס) בלי שהמנהל הגדיר סיסמה.
+ */
+export async function requestFirstLoginByEmail(email) {
+  const normalized = String(email || "").trim().toLowerCase();
+  if (!normalized) {
+    return { ok: true, message: GENERIC_FIRST_LOGIN_OK_MSG };
+  }
+
+  const agent = await getAgentByEmail(normalized);
+  if (!agent || !agent.active || agent.blocked) {
+    return { ok: true, message: GENERIC_FIRST_LOGIN_OK_MSG };
+  }
+
+  if (!agent.needsPasswordSetup) {
+    return {
+      ok: false,
+      message: "החשבון כבר הופעל. התחבר/י עם הסיסמה שלך או «שכחתי סיסמה».",
+    };
+  }
+
+  if (!agent.authUserId) {
+    try {
+      const temp = generateTemporaryPassword();
+      await provisionAuthUserForAgent(agent, temp);
+    } catch (err) {
+      console.warn("[agentPasswordResetService] first login provision failed", err);
+      return { ok: false, message: "לא הצלחנו להכין חשבון. פנה/י למנהל." };
+    }
+  }
+
+  const result = await requestPasswordResetByEmail(normalized);
+  if (result.ok) {
+    return {
+      ok: true,
+      message:
+        "נשלחה סיסמה זמנית ב-SMS לכניסה ראשונה. הזן/י אותה ולאחר מכן בחר/י סיסמה אישית.",
+    };
+  }
+  return result;
+}

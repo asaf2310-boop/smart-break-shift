@@ -13,13 +13,14 @@ import { normalizeAgentModules } from "@/constants/agentModules";
 import { getAgentNamesList } from "@/constants/scheduling";
 import { normalizeAgentPhone } from "@/lib/agentPhone";
 import { requestAgentPasswordResetSms } from "@/lib/agentPasswordReset";
-import { apiCompleteAgentPasswordSetup } from "@/lib/agentAuthClient";
+import { apiCompleteAgentPasswordSetup, apiRequestFirstLogin } from "@/lib/agentAuthClient";
 
 export const AGENT_SESSION_KEY = "smart-break-agent-session-v1";
 export const INVALID_CREDENTIALS_MSG = "אימייל או סיסמה שגויים";
 export const PASSWORD_MIN_LENGTH = 6;
 export const PASSWORD_MIN_LENGTH_MSG = "הסיסמה חייבת להכיל לפחות 6 תווים";
-export const AGENT_AUTH_TIMEOUT_MSG = "החיבור לשרת ארך זמן רב מדי — נסה/י שוב";
+export const AGENT_AUTH_TIMEOUT_MSG =
+  "החיבור לשרת ארך זמן רב מדי — בדוק חיבור אינטרנט ואת הגדרות Supabase ב-Vercel";
 
 const AGENT_PROFILE_COLUMNS =
   "id,email,display_name,auth_user_id,active,blocked,needs_password_setup,deleted_at,phone,modules";
@@ -115,6 +116,7 @@ function sessionFromAgent(agent) {
     email: agent.email,
     displayName: agent.displayName,
     modules: normalizeAgentModules(agent.modules),
+    needsPasswordSetup: agent.needsPasswordSetup === true,
     ...(agent.authUserId ? { authUserId: agent.authUserId } : {}),
   };
 }
@@ -218,13 +220,7 @@ export async function validateAndRefreshAgentSession() {
   }
 
   if (agent.needsPasswordSetup) {
-    if (!demoModeEnabled && supabase) {
-      const { data: { session: authSession } } = await supabase.auth.getSession();
-      if (authSession?.user?.id) {
-        return sessionFromAgent({ ...agent, authUserId: authSession.user.id });
-      }
-    }
-    await agentLogout();
+    clearAgentSession();
     return null;
   }
 
@@ -409,7 +405,17 @@ export async function agentLoginWithPassword(email, password) {
     );
     data = result.data;
     if (result.error) {
-      if (isInvalidCredentialsError(result.error)) return credentialsError();
+      if (isInvalidCredentialsError(result.error)) {
+        const pending = await resolveSupabaseAgentByEmail(normalizedEmail);
+        if (pending?.needsPasswordSetup) {
+          return {
+            ok: false,
+            error: "needs_first_login",
+            message: "זו כניסה ראשונה? לחץ «כניסה ראשונה» לקבלת סיסמה זמנית ב-SMS.",
+          };
+        }
+        return credentialsError();
+      }
       return { ok: false, message: mapPasswordAuthError(result.error.message) };
     }
   } catch (err) {
@@ -425,8 +431,6 @@ export async function agentLoginWithPassword(email, password) {
   }
 
   if (refreshedAgent.needsPasswordSetup) {
-    const session = sessionFromAgent({ ...refreshedAgent, authUserId: authUserId || refreshedAgent.authUserId });
-    setAgentSession(session);
     return { ok: false, error: "needs_password_setup", agent: refreshedAgent };
   }
 
@@ -497,6 +501,28 @@ export async function agentRequestPasswordReset(email) {
   return requestAgentPasswordResetSms(agent);
 }
 
+/** כניסה ראשונה — נציג מגדיר סיסמה בעצמו (SMS זמני, בלי שהמנהל הגדיר סיסמה). */
+export async function agentRequestFirstLogin(email) {
+  if (demoModeEnabled) {
+    const agent = await resolveAgentByEmail(email);
+    if (!canAgentAuthenticate(agent)) {
+      return {
+        ok: true,
+        message: "אם האימייל רשום במערכת — נשלחה סיסמה זמנית (דמו).",
+      };
+    }
+    if (!agent.needsPasswordSetup) {
+      return {
+        ok: false,
+        message: "החשבון כבר הופעל. התחבר/י עם הסיסמה שלך.",
+      };
+    }
+    return requestAgentPasswordResetSms(agent);
+  }
+
+  return apiRequestFirstLogin(email);
+}
+
 export async function agentLogout() {
   clearAgentSession();
   if (!demoModeEnabled && supabase) {
@@ -516,8 +542,13 @@ export async function restoreSupabaseAgentSession() {
 
   const email = authSession.user.email;
   const agent = await lookupAgentByEmail(email);
-  if (!agent || agent.needsPasswordSetup) {
+  if (!agent || !canAgentAuthenticate(agent)) {
     await supabase.auth.signOut();
+    clearAgentSession();
+    return null;
+  }
+
+  if (agent.needsPasswordSetup) {
     clearAgentSession();
     return null;
   }
