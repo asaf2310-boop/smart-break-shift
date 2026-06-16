@@ -9,9 +9,9 @@ async function getBearerToken() {
   return data?.session?.access_token || null;
 }
 
-async function postAgentAuth(body, { requireBearer = false } = {}) {
+async function postAgentAuth(body, { requireBearer = false, accessToken = null } = {}) {
   const headers = { "Content-Type": "application/json" };
-  const token = await getBearerToken();
+  const token = accessToken || (await getBearerToken());
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   } else if (requireBearer) {
@@ -38,8 +38,8 @@ async function postAgentAuth(body, { requireBearer = false } = {}) {
   return { ok: true, ...data };
 }
 
-export async function apiCompleteAgentPasswordSetup() {
-  return postAgentAuth({ action: "complete_setup" }, { requireBearer: true });
+export async function apiCompleteAgentPasswordSetup(accessToken = null) {
+  return postAgentAuth({ action: "complete_setup" }, { requireBearer: true, accessToken });
 }
 
 export async function apiAdminSetAgentPassword(agentId, password, { forceSetup = true } = {}) {

@@ -247,7 +247,20 @@ export async function verifyBearerAgent(req) {
   const { data, error } = await anonClient.auth.getUser(token);
   if (error || !data?.user?.id) return null;
 
-  const agent = await getAgentByAuthUserId(data.user.id);
+  let agent = await getAgentByAuthUserId(data.user.id);
+  if (!agent && data.user.email) {
+    agent = await getAgentByEmail(data.user.email);
+    if (agent?.id && agent.authUserId !== data.user.id) {
+      const admin = getSupabaseAdmin();
+      if (admin) {
+        await admin
+          .from("agents")
+          .update({ auth_user_id: data.user.id })
+          .eq("id", agent.id);
+        agent = { ...agent, authUserId: data.user.id };
+      }
+    }
+  }
   if (!agent || !agent.active || agent.blocked) return null;
 
   return { agent, authUser: data.user, accessToken: token };

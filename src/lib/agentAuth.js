@@ -220,6 +220,10 @@ export async function validateAndRefreshAgentSession() {
   }
 
   if (agent.needsPasswordSetup) {
+    // Client may have cleared the flag before the agents row replicates.
+    if (session.needsPasswordSetup === false) {
+      return session;
+    }
     clearAgentSession();
     return null;
   }
@@ -468,18 +472,38 @@ export async function agentSetupPassword(email, password) {
     return { ok: false, message: "נדרשת התחברות לפני הגדרת סיסמה" };
   }
 
-  const { error } = await supabase.auth.updateUser({ password: String(password) });
-  if (error) {
-    return { ok: false, message: mapPasswordAuthError(error.message) };
+  const { data: updateData, error: updateError } = await supabase.auth.updateUser({
+    password: String(password),
+  });
+  if (updateError) {
+    return { ok: false, message: mapPasswordAuthError(updateError.message) };
   }
 
-  const complete = await apiCompleteAgentPasswordSetup();
+  let accessToken = updateData?.session?.access_token || null;
+  if (!accessToken) {
+    const { data: refreshed } = await supabase.auth.refreshSession();
+    accessToken = refreshed?.session?.access_token || null;
+  }
+  if (!accessToken) {
+    const { data: latest } = await supabase.auth.getSession();
+    accessToken = latest?.session?.access_token || null;
+  }
+  if (!accessToken) {
+    return { ok: false, message: "נדרשת התחברות לפני הגדרת סיסמה" };
+  }
+
+  const complete = await apiCompleteAgentPasswordSetup(accessToken);
   if (!complete.ok) {
     return { ok: false, message: complete.message || "לא הצלחנו לסיים הגדרת סיסמה" };
   }
 
-  const authUserId = sessionData.session.user.id || agent.authUserId;
-  const session = sessionFromAgent({ ...agent, authUserId, needsPasswordSetup: false });
+  const authUserId = updateData?.user?.id || sessionData.session.user.id || agent.authUserId;
+  const refreshedAgent = (await resolveAgentByEmail(email)) || agent;
+  const session = sessionFromAgent({
+    ...refreshedAgent,
+    authUserId,
+    needsPasswordSetup: false,
+  });
   setAgentSession(session);
   return { ok: true, session };
 }
