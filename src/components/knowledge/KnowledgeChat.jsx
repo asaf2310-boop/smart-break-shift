@@ -24,6 +24,7 @@ import {
   listKnowledgeDocuments,
 } from "@/lib/knowledgeStore";
 import { useToast } from "@/components/ui/use-toast";
+import KnowledgeImageLightbox from "@/components/knowledge/KnowledgeImageLightbox";
 
 function isDebugPanelEnabled() {
   if (typeof window === "undefined") return false;
@@ -190,19 +191,10 @@ function MessageBubble({ message, showDebug, onRetry, onFeedback, onWebSearch, f
         {!isUser && message.images?.length > 0 && (
           <div className="mt-3 grid gap-2">
             {message.images.map((img, idx) => (
-              <figure key={`${img.documentId}-${img.pageNumber}-${idx}`} className="m-0">
-                <img
-                  src={img.url || img.src}
-                  alt={`${img.documentTitle || img.documentName || "מסמך"}${img.pageNumber != null ? ` — עמוד ${img.pageNumber}` : ""}`}
-                  className="rounded-lg border border-outline/20 max-w-full h-auto bg-white"
-                  loading="lazy"
-                />
-                <figcaption className="text-[10px] text-on-surface-variant mt-1">
-                  {img.documentTitle || img.documentName || "מסמך"}
-                  {img.pageNumber != null ? ` · עמוד ${img.pageNumber}` : ""}
-                  {img.caption ? ` · ${img.caption}` : ""}
-                </figcaption>
-              </figure>
+              <KnowledgeImageLightbox
+                key={`${img.documentId}-${img.pageNumber}-${idx}`}
+                img={img}
+              />
             ))}
           </div>
         )}

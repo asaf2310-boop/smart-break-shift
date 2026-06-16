@@ -1,0 +1,163 @@
+/** Vercel serverless — agent auth (password admin, reset SMS, setup complete). */
+
+import { json, readJsonBody, handleOptions, isSameOrigin } from "../server/knowledge/httpUtils.js";
+import { isPgVectorConfigured } from "../server/knowledge/supabaseAdmin.js";
+import {
+  adminUpdateAgentPassword,
+  getAgentById,
+  markAgentPasswordSetupComplete,
+  markAgentNeedsPasswordSetup,
+  provisionAuthUserForAgent,
+  verifyAdminPin,
+  verifyBearerAgent,
+} from "../server/agent/agentAuthService.js";
+import { requestPasswordResetByEmail } from "../server/agent/agentPasswordResetService.js";
+
+const PASSWORD_MIN_LENGTH = 6;
+
+function supabaseReady() {
+  return isPgVectorConfigured();
+}
+
+export default async function handler(req, res) {
+  if (req.method === "OPTIONS") {
+    handleOptions(req, res);
+    return;
+  }
+
+  if (!isSameOrigin(req)) {
+    return json(res, 403, { error: "forbidden" }, req);
+  }
+
+  if (!supabaseReady()) {
+    return json(
+      res,
+      503,
+      {
+        error: "supabase_not_configured",
+        message: "הגדר VITE_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY ב-Vercel",
+      },
+      req
+    );
+  }
+
+  if (req.method !== "POST") {
+    return json(res, 405, { error: "method_not_allowed" }, req);
+  }
+
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    return json(res, 400, { error: "invalid_json" }, req);
+  }
+
+  const action = String(body.action || "").trim();
+
+  if (action === "complete_setup") {
+    const auth = await verifyBearerAgent(req);
+    if (!auth?.agent) {
+      return json(res, 401, { error: "unauthorized", message: "נדרשת התחברות" }, req);
+    }
+
+    try {
+      await markAgentPasswordSetupComplete(auth.agent.id);
+      return json(res, 200, { ok: true }, req);
+    } catch (err) {
+      console.error("[agent-auth] complete_setup", err);
+      return json(res, 500, { error: "update_failed", message: "לא הצלחנו לעדכן" }, req);
+    }
+  }
+
+  if (action === "request_password_reset") {
+    const email = String(body.email || "").trim();
+    try {
+      const result = await requestPasswordResetByEmail(email);
+      const status = result.ok ? 200 : 400;
+      return json(res, status, result, req);
+    } catch (err) {
+      console.error("[agent-auth] request_password_reset", err);
+      return json(
+        res,
+        500,
+        { ok: false, message: "לא הצלחנו לעבד את הבקשה" },
+        req
+      );
+    }
+  }
+
+  if (action === "admin_set_password") {
+    if (!verifyAdminPin(body)) {
+      return json(res, 403, { error: "forbidden", message: "אין הרשאה" }, req);
+    }
+
+    const agentId = String(body.agentId || body.id || "").trim();
+    const password = String(body.password || "");
+    const forceSetup = body.forceSetup !== false;
+
+    if (!agentId || password.length < PASSWORD_MIN_LENGTH) {
+      return json(
+        res,
+        400,
+        { error: "invalid_fields", message: "סיסמה חייבת להכיל לפחות 6 תווים" },
+        req
+      );
+    }
+
+    try {
+      const agent = await getAgentById(agentId);
+      if (!agent) {
+        return json(res, 404, { error: "not_found", message: "נציג לא נמצא" }, req);
+      }
+
+      const provisioned = await provisionAuthUserForAgent(agent, password);
+      await adminUpdateAgentPassword(provisioned.authUserId, password);
+
+      if (forceSetup) {
+        await markAgentNeedsPasswordSetup(agentId);
+      } else {
+        await markAgentPasswordSetupComplete(agentId);
+      }
+
+      return json(res, 200, { ok: true, authUserId: provisioned.authUserId }, req);
+    } catch (err) {
+      console.error("[agent-auth] admin_set_password", err);
+      return json(
+        res,
+        500,
+        { error: "password_update_failed", message: "לא הצלחנו לעדכן סיסמה" },
+        req
+      );
+    }
+  }
+
+  if (action === "provision_auth") {
+    if (!verifyAdminPin(body)) {
+      return json(res, 403, { error: "forbidden", message: "אין הרשאה" }, req);
+    }
+
+    const agentId = String(body.agentId || body.id || "").trim();
+    if (!agentId) {
+      return json(res, 400, { error: "agent_id_required" }, req);
+    }
+
+    try {
+      const agent = await getAgentById(agentId);
+      if (!agent) {
+        return json(res, 404, { error: "not_found", message: "נציג לא נמצא" }, req);
+      }
+
+      const result = await provisionAuthUserForAgent(agent);
+      return json(res, 200, { ok: true, ...result }, req);
+    } catch (err) {
+      console.error("[agent-auth] provision_auth", err);
+      const message =
+        err.message === "invalid_agent_email"
+          ? "נדרש אימייל אמיתי לנציג"
+          : "לא הצלחנו ליצור משתמש Auth";
+      return json(res, 500, { error: err.message || "provision_failed", message }, req);
+    }
+  }
+
+  return json(res, 400, { error: "unknown_action" }, req);
+}

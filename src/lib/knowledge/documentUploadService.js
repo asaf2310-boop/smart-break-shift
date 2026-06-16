@@ -14,6 +14,7 @@ import {
   reprocessServerDocument,
   getKnowledgeTenantId,
   PAGE_INGEST_BATCH,
+  importHypPayPackage as importHypPayServer,
 } from "@/lib/knowledge/knowledgeClient";
 
 export function formatKnowledgeIngestError(err) {
@@ -210,4 +211,24 @@ export async function reprocessKnowledgeDocument(id, docFromStore, { pagesWithTh
     return reprocessServerDocument(id);
   }
   return null;
+}
+
+const HYP_PAY_DOC_ID = "hyp-pay-api-documentation";
+
+export async function importHypPayKnowledgePackage() {
+  if (!shouldUseServerRag()) {
+    throw new Error("pgvector_not_configured");
+  }
+
+  const ingestResult = await importHypPayServer();
+  const doc = upsertKnowledgeDocument({
+    id: HYP_PAY_DOC_ID,
+    title: "HYP Pay — מדריך API",
+    category: "תשלומים",
+    content: "מדריך HYP Pay API — תוכן מלא בשרת.",
+    sourceType: "package",
+    fileName: "HYP_Pay_RAG_Clean_RTL_Fixed.json",
+  });
+
+  return { doc, ingestResult };
 }

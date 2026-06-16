@@ -33,6 +33,7 @@ import {
   removeKnowledgeDocument,
   reprocessKnowledgeDocument,
   formatKnowledgeIngestError,
+  importHypPayKnowledgePackage,
 } from "@/lib/knowledge/documentUploadService";
 import {
   shouldUseServerRag,
@@ -77,6 +78,7 @@ export default function KnowledgeAdmin() {
   const [totalServerChunks, setTotalServerChunks] = useState(0);
   const [storeReady, setStoreReady] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [importingHypPay, setImportingHypPay] = useState(false);
 
   const refreshServerStats = useCallback(async () => {
     if (!shouldUseServerRag()) return;
@@ -386,6 +388,28 @@ export default function KnowledgeAdmin() {
     }
   };
 
+  const handleImportHypPay = async () => {
+    if (importingHypPay) return;
+    setImportingHypPay(true);
+    try {
+      const { doc, ingestResult } = await importHypPayKnowledgePackage();
+      refresh();
+      notifyIndexResult(ingestResult);
+      toast({
+        title: "ייבוא HYP Pay הושלם",
+        description: `${ingestResult?.chunkCount ?? 0} קטעים נשמרו בשרת · ${doc.title}`,
+      });
+    } catch (err) {
+      toast({
+        title: "ייבוא HYP Pay נכשל",
+        description: formatKnowledgeIngestError(err),
+        variant: "destructive",
+      });
+    } finally {
+      setImportingHypPay(false);
+    }
+  };
+
   const handleResetSeed = async () => {
     if (!window.confirm("לאפס את בסיס הידע לנתוני הדמו? פעולה זו תמחק את כל המסמכים הנוכחיים.")) return;
     resetKnowledgeToSeed();
@@ -432,6 +456,21 @@ export default function KnowledgeAdmin() {
             <RotateCcw className={`w-4 h-4 ${reindexing ? "animate-spin" : ""}`} />
             {reindexing ? "בונה אינדקס…" : serverRag ? "עיבוד מחדש לכל המסמכים" : "בניית אינדקס מחדש"}
           </button>
+          {serverRag && (
+            <button
+              type="button"
+              onClick={handleImportHypPay}
+              disabled={importingHypPay}
+              className="m3-btn-outlined disabled:opacity-50"
+            >
+              {importingHypPay ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <FileUp className="w-4 h-4" />
+              )}
+              {importingHypPay ? "מייבא HYP Pay…" : "ייבוא HYP Pay"}
+            </button>
+          )}
           <label
             className={`m3-btn-outlined cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}
           >

@@ -89,6 +89,11 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
         return;
       }
 
+      if (!isDemo && agent.needsPasswordSetup && !agent.authUserId) {
+        setError("פנה/י למנהל להגדרת סיסמה ראשונית");
+        return;
+      }
+
       if (agentHasPendingPasswordReset(agent)) {
         setMode(MODES.TEMP_VERIFY);
         setPassword("");
@@ -96,7 +101,13 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
         return;
       }
 
-      if (agent.needsPasswordSetup) {
+      if (agent.needsPasswordSetup && !agentHasPendingPasswordReset(agent)) {
+        if (!isDemo) {
+          setMode(MODES.LOGIN);
+          setEmailStepDone(true);
+          setPassword("");
+          return;
+        }
         setSetupAfterReset(false);
         setMode(MODES.SETUP);
         setPassword("");

@@ -13,6 +13,7 @@ import { normalizeAgentModules } from "@/constants/agentModules";
 import { getAgentNamesList } from "@/constants/scheduling";
 import { normalizeAgentPhone } from "@/lib/agentPhone";
 import { requestAgentPasswordResetSms } from "@/lib/agentPasswordReset";
+import { apiCompleteAgentPasswordSetup } from "@/lib/agentAuthClient";
 
 export const AGENT_SESSION_KEY = "smart-break-agent-session-v1";
 export const INVALID_CREDENTIALS_MSG = "אימייל או סיסמה שגויים";
@@ -43,7 +44,19 @@ function mapPasswordAuthError(message) {
   ) {
     return PASSWORD_MIN_LENGTH_MSG;
   }
+  if (lower.includes("invalid") && lower.includes("credentials")) {
+    return INVALID_CREDENTIALS_MSG;
+  }
   return message;
+}
+
+function isInvalidCredentialsError(error) {
+  const msg = String(error?.message || error || "").toLowerCase();
+  return (
+    msg.includes("invalid login credentials") ||
+    msg.includes("invalid_credentials") ||
+    (msg.includes("invalid") && msg.includes("credential"))
+  );
 }
 
 function mapSupabaseAgent(row) {
@@ -54,8 +67,6 @@ function mapSupabaseAgent(row) {
     displayName: row.display_name,
     authUserId: row.auth_user_id,
     needsPasswordSetup: row.needs_password_setup === true,
-    hasStoredPassword: Boolean(row.password_plain),
-    passwordPlain: row.password_plain || null,
     phone: row.phone || "",
     active: row.active !== false && !row.deleted_at,
     blocked: row.blocked === true,
@@ -71,7 +82,6 @@ function mapDemoAgent(user) {
     displayName: user.name,
     needsPasswordSetup: user.needsPasswordSetup === true,
     hasStoredPassword: Boolean(user.password),
-    passwordPlain: user.password || null,
     phone: user.phone || "",
     active: user.active !== false,
     blocked: user.blocked === true,
@@ -169,7 +179,18 @@ export async function validateAndRefreshAgentSession() {
   }
 
   const agent = await resolveAgentForSession(session);
-  if (!canAgentAuthenticate(agent) || agent.needsPasswordSetup) {
+  if (!canAgentAuthenticate(agent)) {
+    await agentLogout();
+    return null;
+  }
+
+  if (agent.needsPasswordSetup) {
+    if (!demoModeEnabled && supabase) {
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      if (authSession?.user?.id) {
+        return sessionFromAgent({ ...agent, authUserId: authSession.user.id });
+      }
+    }
     await agentLogout();
     return null;
   }
@@ -273,13 +294,11 @@ export function agentLoginByDisplayName(displayName) {
   return { ok: true, session };
 }
 
-function verifySupabaseAgentPassword(agent, password) {
-  if (!agent?.passwordPlain) return false;
-  return agent.passwordPlain === String(password);
-}
-
 export function agentHasPendingPasswordReset(agent) {
-  return Boolean(agent?.needsPasswordSetup && agent?.hasStoredPassword);
+  if (demoModeEnabled) {
+    return Boolean(agent?.needsPasswordSetup && agent?.hasStoredPassword);
+  }
+  return Boolean(agent?.needsPasswordSetup);
 }
 
 export async function agentVerifyTemporaryPassword(email, password) {
@@ -296,8 +315,15 @@ export async function agentVerifyTemporaryPassword(email, password) {
     return { ok: true };
   }
 
-  if (!verifySupabaseAgentPassword(agent, password)) {
-    return credentialsError();
+  if (!supabase) return credentialsError();
+
+  const { error } = await supabase.auth.signInWithPassword({
+    email: String(email).trim().toLowerCase(),
+    password: String(password),
+  });
+  if (error) {
+    if (isInvalidCredentialsError(error)) return credentialsError();
+    return { ok: false, message: mapPasswordAuthError(error.message) };
   }
 
   return { ok: true };
@@ -325,11 +351,34 @@ export async function agentLoginWithPassword(email, password) {
     return { ok: true, session };
   }
 
-  if (!verifySupabaseAgentPassword(agent, password)) {
+  if (!supabase) return credentialsError();
+
+  const normalizedEmail = String(email).trim().toLowerCase();
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: normalizedEmail,
+    password: String(password),
+  });
+
+  if (error) {
+    if (isInvalidCredentialsError(error)) return credentialsError();
+    return { ok: false, message: mapPasswordAuthError(error.message) };
+  }
+
+  const authUserId = data?.user?.id || agent.authUserId;
+  const refreshedAgent = (await lookupAgentByEmail(normalizedEmail)) || agent;
+
+  if (!canAgentAuthenticate(refreshedAgent)) {
+    await supabase.auth.signOut();
     return credentialsError();
   }
 
-  const session = sessionFromAgent(agent);
+  if (refreshedAgent.needsPasswordSetup) {
+    const session = sessionFromAgent({ ...refreshedAgent, authUserId });
+    setAgentSession(session);
+    return { ok: false, error: "needs_password_setup", agent: refreshedAgent };
+  }
+
+  const session = sessionFromAgent({ ...refreshedAgent, authUserId });
   setAgentSession(session);
   return { ok: true, session };
 }
@@ -351,17 +400,27 @@ export async function agentSetupPassword(email, password) {
     return { ok: true, session };
   }
 
-  if (!dataClient.entities.Agent?.update) {
-    return credentialsError();
+  if (!supabase) {
+    return { ok: false, message: "Supabase לא מוגדר" };
   }
 
-  // SECURITY: password stored plaintext for admin visibility — see agents_password_migration.sql
-  await dataClient.entities.Agent.update(agent.id, {
-    password_plain: String(password),
-    needs_password_setup: false,
-  });
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData?.session?.user) {
+    return { ok: false, message: "נדרשת התחברות לפני הגדרת סיסמה" };
+  }
 
-  const session = sessionFromAgent(agent);
+  const { error } = await supabase.auth.updateUser({ password: String(password) });
+  if (error) {
+    return { ok: false, message: mapPasswordAuthError(error.message) };
+  }
+
+  const complete = await apiCompleteAgentPasswordSetup();
+  if (!complete.ok) {
+    return { ok: false, message: complete.message || "לא הצלחנו לסיים הגדרת סיסמה" };
+  }
+
+  const authUserId = sessionData.session.user.id || agent.authUserId;
+  const session = sessionFromAgent({ ...agent, authUserId, needsPasswordSetup: false });
   setAgentSession(session);
   return { ok: true, session };
 }

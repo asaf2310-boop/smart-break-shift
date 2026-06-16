@@ -15,6 +15,7 @@ import {
   useIsAdmin,
   unlockAdminSession,
 } from "@/hooks/useIsAdmin";
+import { rememberAdminPinForApi } from "@/lib/adminPinClient";
 
 export default function AdminGate({ children }) {
   const isAdmin = useIsAdmin();
@@ -34,6 +35,7 @@ export default function AdminGate({ children }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (pin === import.meta.env.VITE_ADMIN_PIN) {
+      rememberAdminPinForApi(pin);
       unlockAdminSession();
       setError("");
       window.location.reload();

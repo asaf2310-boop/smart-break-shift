@@ -14,6 +14,7 @@ import { PASSWORD_MIN_LENGTH } from "@/lib/agentAuth";
 import { DEFAULT_AGENT_MODULES, normalizeAgentModules } from "@/constants/agentModules";
 import { REAL_AGENT_NAMES } from "@/constants/scheduling";
 import { normalizeAgentPhone } from "@/lib/agentPhone";
+import { apiAdminSetAgentPassword, apiProvisionAgentAuth } from "@/lib/agentAuthClient";
 
 const PENDING_EMAIL_SUFFIX = "@pending.local";
 
@@ -37,7 +38,6 @@ function mapSupabaseRow(row) {
     blocked: row.blocked === true,
     needsPasswordSetup: row.needs_password_setup === true,
     authUserId: row.auth_user_id,
-    password: row.password_plain || null,
     modules: normalizeAgentModules(row.modules),
     phone: row.phone || "",
   };
@@ -128,10 +128,17 @@ export async function createManagedAgent({ email, name, phone }) {
     active: true,
     blocked: false,
     needs_password_setup: true,
-    password_plain: null,
     modules: [...DEFAULT_AGENT_MODULES],
     phone: phoneValue,
   });
+
+  if (normalized && !isPlaceholderAgentEmail(normalized)) {
+    const provision = await apiProvisionAgentAuth(row.id);
+    if (!provision.ok) {
+      console.warn("[agentsApi] provision_auth failed", provision.message);
+    }
+  }
+
   return mapSupabaseRow(row);
 }
 
@@ -171,12 +178,15 @@ export async function adminSetManagedAgentPassword(id, password, { forceSetup = 
     return mapDemoRow(u);
   }
 
-  const row = await dataClient.entities.Agent.update(id, {
-    password_plain: plain,
-    needs_password_setup: Boolean(forceSetup),
-  });
+  const result = await apiAdminSetAgentPassword(id, plain, { forceSetup });
+  if (!result.ok) {
+    throw new Error(result.error || "password_update_failed");
+  }
+
   notifyAgentUsersChanged();
-  return mapSupabaseRow(row);
+  const rows = await dataClient.entities.Agent.list("-created_at", 500);
+  const row = (rows || []).find((r) => r.id === id);
+  return mapSupabaseRow(row || { id });
 }
 
 export async function setManagedAgentBlocked(id, blocked) {

@@ -12,7 +12,9 @@
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p ./jsconfig.json",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "import:hyp-pay": "node scripts/import-hyp-pay-rag-package.mjs",
+    "migrate:agent-auth": "node scripts/migrate-agents-to-supabase-auth.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.8.0",

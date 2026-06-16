@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import { fetchKnowledgeDocumentView, shouldUseServerRag } from "@/lib/knowledge/knowledgeClient";
 import { getKnowledgeDocument } from "@/lib/knowledgeStore";
 import { formatAssistantDisplayMarkdown } from "@/lib/knowledge/assistantBidi";
+import KnowledgeImageLightbox from "@/components/knowledge/KnowledgeImageLightbox";
 import { m3PageClass } from "@/lib/hypPage";
 
 function normalizePages(pages = []) {
@@ -115,29 +116,32 @@ export default function KnowledgeDocumentViewPage() {
                 <h2 className="m3-title-medium mb-4">עמודי המסמך</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {pages.map((p) => (
-                    <figure
+                    <div
                       key={p.pageNumber}
                       ref={(el) => {
                         if (p.pageNumber != null) pageRefs.current[p.pageNumber] = el;
                       }}
-                      className="m-0 rounded-xl border border-outline/20 overflow-hidden bg-white shadow-sm scroll-mt-24"
+                      className="scroll-mt-24"
                     >
                       {p.thumbnail ? (
-                        <img
-                          src={p.thumbnail}
-                          alt={`עמוד ${p.pageNumber}`}
-                          className="w-full h-auto block"
-                          loading="lazy"
+                        <KnowledgeImageLightbox
+                          img={{
+                            src: p.thumbnail,
+                            documentTitle: doc.title,
+                            pageNumber: p.pageNumber,
+                          }}
                         />
                       ) : (
-                        <div className="p-6 text-sm text-on-surface-variant text-center">
-                          אין תצוגה לעמוד {p.pageNumber}
-                        </div>
+                        <figure className="m-0 rounded-xl border border-outline/20 overflow-hidden bg-white shadow-sm">
+                          <div className="p-6 text-sm text-on-surface-variant text-center">
+                            אין תצוגה לעמוד {p.pageNumber}
+                          </div>
+                          <figcaption className="text-xs text-center py-1.5 bg-surface-container-low text-on-surface-variant">
+                            עמוד {p.pageNumber}
+                          </figcaption>
+                        </figure>
                       )}
-                      <figcaption className="text-xs text-center py-1.5 bg-surface-container-low text-on-surface-variant">
-                        עמוד {p.pageNumber}
-                      </figcaption>
-                    </figure>
+                    </div>
                   ))}
                 </div>
               </section>

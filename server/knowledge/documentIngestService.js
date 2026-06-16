@@ -212,6 +212,137 @@ export async function ingestDocument(document) {
   };
 }
 
+/**
+ * Ingest a document using pre-chunked segments (skip automatic chunking).
+ * @param {object} document
+ * @param {Array<{ documentName?: string, text: string, chunkIndex?: number, pageNumber?: number | null, sectionTitle?: string | null, category?: string }>} preChunks
+ * @param {{ skipImages?: boolean }} [options]
+ * @returns {Promise<{ ok: boolean, chunkCount: number, embeddingError?: string }>}
+ */
+export async function ingestPreChunkedDocument(document, preChunks, options = {}) {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    return { ok: false, error: "supabase_not_configured", chunkCount: 0 };
+  }
+
+  const dbDoc = mapDocToDb(document);
+  const normalizedContent = normalizeExtractedDocumentText(dbDoc.content);
+  const dbDocRow = { ...dbDoc, content: normalizedContent, pages: pagesForDocumentRow(dbDoc.pages) };
+
+  const chunks = (preChunks || [])
+    .map((pc, i) => ({
+      documentName: pc.documentName || dbDoc.title,
+      text: normalizeExtractedDocumentText(pc.text || ""),
+      chunkIndex: pc.chunkIndex ?? i,
+      pageNumber: pc.pageNumber ?? null,
+      sectionTitle: pc.sectionTitle || null,
+      category: pc.category || dbDoc.category || "כללי",
+    }))
+    .filter((c) => c.text);
+
+  const upsertErr = await upsertKnowledgeDocumentRow(supabase, dbDocRow);
+  if (upsertErr) {
+    return {
+      ok: false,
+      error: isSchemaColumnError(upsertErr) ? "knowledge_schema_not_migrated" : upsertErr,
+      chunkCount: 0,
+    };
+  }
+
+  await supabase.from("knowledge_chunks").delete().eq("document_id", dbDoc.id);
+
+  const skipImages = options.skipImages ?? document.skipImages ?? false;
+
+  if (!chunks.length) {
+    await supabase
+      .from("knowledge_documents")
+      .update({ chunk_count: 0, updated_at: new Date().toISOString() })
+      .eq("id", dbDoc.id);
+
+    const imageResult = skipImages
+      ? { imageCount: 0 }
+      : await ingestDocumentImages({
+          id: dbDoc.id,
+          title: dbDoc.title,
+          fileName: dbDoc.file_name,
+          pages: document.pages,
+          images: document.images,
+          tenantId: dbDoc.tenant_id,
+          skipOcr: true,
+        });
+
+    return {
+      ok: true,
+      chunkCount: 0,
+      imageCount: imageResult.imageCount ?? 0,
+      imageError: imageResult.error || null,
+    };
+  }
+
+  const embedInputs = chunks.map(buildEmbeddingInput);
+  const { embeddings, error: embedErr } = await embedTexts(embedInputs);
+  const expectedDims = getEmbeddingDimensions();
+
+  const rows = chunks.map((chunk, i) => {
+    const vec = embeddings?.[i];
+    const embedding = Array.isArray(vec) && vec.length === expectedDims ? vec : null;
+    return {
+      tenant_id: dbDoc.tenant_id,
+      document_id: dbDoc.id,
+      document_name: chunk.documentName,
+      chunk_text: chunk.text,
+      chunk_index: chunk.chunkIndex,
+      page_number: chunk.pageNumber,
+      section_title: chunk.sectionTitle,
+      category: chunk.category,
+      embedding,
+    };
+  });
+
+  const insertErr = await insertChunkBatches(supabase, rows, dbDoc.id);
+  if (insertErr) {
+    return {
+      ok: false,
+      error: isSchemaColumnError(insertErr) ? "knowledge_schema_not_migrated" : insertErr,
+      chunkCount: 0,
+    };
+  }
+
+  const embeddedCount = rows.filter((r) => r.embedding).length;
+  const updatePayload = { updated_at: new Date().toISOString(), chunk_count: rows.length };
+  const { error: countErr } = await supabase
+    .from("knowledge_documents")
+    .update(updatePayload)
+    .eq("id", dbDoc.id);
+  if (countErr && isSchemaColumnError(countErr.message)) {
+    await supabase
+      .from("knowledge_documents")
+      .update({ updated_at: updatePayload.updated_at })
+      .eq("id", dbDoc.id);
+  }
+
+  const imageResult = skipImages
+    ? { imageCount: 0 }
+    : await ingestDocumentImages({
+        id: dbDoc.id,
+        title: dbDoc.title,
+        fileName: dbDoc.file_name,
+        pages: document.pages,
+        images: document.images,
+        tenantId: dbDoc.tenant_id,
+        skipOcr: true,
+      });
+
+  return {
+    ok: true,
+    chunkCount: rows.length,
+    embeddingCount: embeddedCount,
+    imageCount: imageResult.imageCount ?? 0,
+    imageError: imageResult.error || null,
+    embeddingError: embedErr || (embeddedCount < rows.length ? "partial_embeddings" : null),
+  };
+}
+
 export async function ensureKnowledgeDocumentParent(documentId, meta = {}) {
   const supabase = getSupabaseAdmin();
   if (!supabase) return { ok: false, error: "supabase_not_configured" };

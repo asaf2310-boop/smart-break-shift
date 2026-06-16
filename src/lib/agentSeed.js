@@ -30,7 +30,6 @@ export async function ensureAgentsSeeded() {
       active: true,
       blocked: false,
       needs_password_setup: true,
-      password_plain: null,
       modules: [...DEFAULT_AGENT_MODULES],
     }));
 

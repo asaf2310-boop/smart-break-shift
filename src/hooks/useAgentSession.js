@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { getAgentSession, validateAndRefreshAgentSession } from "@/lib/agentAuth";
+import {
+  getAgentSession,
+  restoreSupabaseAgentSession,
+  validateAndRefreshAgentSession,
+} from "@/lib/agentAuth";
 
 export function useAgentSession() {
   const [session, setSession] = useState(() => getAgentSession());
@@ -15,7 +19,8 @@ export function useAgentSession() {
     let cancelled = false;
 
     const bootstrap = async () => {
-      const valid = await validateAndRefreshAgentSession();
+      const restored = await restoreSupabaseAgentSession();
+      const valid = restored || (await validateAndRefreshAgentSession());
       if (!cancelled) {
         setSession(valid);
         setBootstrapped(true);

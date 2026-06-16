@@ -1,10 +1,10 @@
 import { demoModeEnabled } from "@/api/demoClient";
-import { dataClient } from "@/api/client";
 import { PASSWORD_MIN_LENGTH } from "@/lib/agentAuth";
 import { sendAgentSms } from "@/lib/agentSms";
 import { normalizeAgentPhone } from "@/lib/agentPhone";
 import { setDemoUserPasswordByAdmin } from "@/lib/appUsersStore";
 import { DEMO_AGENT_PHONES } from "@/constants/agentPhones";
+import { apiRequestAgentPasswordReset } from "@/lib/agentAuthClient";
 
 const RESET_COOLDOWN_MS = 2 * 60 * 1000;
 const RESET_COOLDOWN_KEY = "agent-password-reset-cooldown-v1";
@@ -57,20 +57,8 @@ function resolveAgentPhone(agent) {
   return "";
 }
 
-async function storeTemporaryPassword(agent, tempPassword) {
-  if (demoModeEnabled) {
-    setDemoUserPasswordByAdmin(agent.id, tempPassword, { forceSetup: true });
-    return;
-  }
-
-  if (!dataClient.entities.Agent?.update) {
-    throw new Error("agent_update_unavailable");
-  }
-
-  await dataClient.entities.Agent.update(agent.id, {
-    password_plain: String(tempPassword),
-    needs_password_setup: true,
-  });
+async function storeTemporaryPasswordDemo(agent, tempPassword) {
+  setDemoUserPasswordByAdmin(agent.id, tempPassword, { forceSetup: true });
 }
 
 export function buildTemporaryPasswordSmsMessage(tempPassword) {
@@ -87,6 +75,10 @@ const GENERIC_RESET_OK_MSG =
 export async function requestAgentPasswordResetSms(agent) {
   if (!agent?.id || !agent.email) {
     return { ok: true, message: GENERIC_RESET_OK_MSG };
+  }
+
+  if (!demoModeEnabled) {
+    return apiRequestAgentPasswordReset(agent.email);
   }
 
   const cooldown = checkResetCooldown(agent.email);
@@ -111,7 +103,7 @@ export async function requestAgentPasswordResetSms(agent) {
   }
 
   try {
-    await storeTemporaryPassword(agent, tempPassword);
+    await storeTemporaryPasswordDemo(agent, tempPassword);
   } catch (err) {
     console.warn("[agentPasswordReset] store failed", err);
     return { ok: false, message: "לא הצלחנו לעדכן סיסמה. נסה/י שוב או פנה/י למנהל." };
@@ -133,16 +125,9 @@ export async function requestAgentPasswordResetSms(agent) {
 
   markResetCooldown(agent.email);
 
-  if (demoModeEnabled) {
-    return {
-      ok: true,
-      message: `דמו: הסיסמה הזמנית היא ${tempPassword} (בפרודקשן נשלחת ב-SMS בלבד). לאחר הכניסה הגדר סיסמה חדשה.`,
-      demoPassword: tempPassword,
-    };
-  }
-
   return {
     ok: true,
-    message: "נשלחה סיסמה זמנית ב-SMS. הזן/י אותה בכניסה ולאחר מכן בחר/י סיסמה חדשה.",
+    message: `דמו: הסיסמה הזמנית היא ${tempPassword} (בפרודקשן נשלחת ב-SMS בלבד). לאחר הכניסה הגדר סיסמה חדשה.`,
+    demoPassword: tempPassword,
   };
 }

@@ -5,8 +5,6 @@ import { motion } from "framer-motion";
 import {
   ArrowRight,
   Ban,
-  Eye,
-  EyeOff,
   KeyRound,
   Pencil,
   Plus,
@@ -55,7 +53,6 @@ export default function AdminUsers() {
   const [form, setForm] = useState({ email: "", name: "", phone: "" });
   const [passwordForm, setPasswordForm] = useState({ password: "", forceSetup: true });
   const [modulesForm, setModulesForm] = useState([]);
-  const [revealedIds, setRevealedIds] = useState(() => new Set());
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ["managed-agents"],
@@ -112,7 +109,7 @@ export default function AdminUsers() {
         title: "סיסמה עודכנה",
         description: passwordForm.forceSetup
           ? "הנציג יידרש להגדיר סיסמה בכניסה הבאה"
-          : "הסיסמה נשמרה ומוצגת בטבלה",
+          : "הסיסמה עודכנה ב-Supabase Auth",
       });
     },
     onError: (err) => {
@@ -200,15 +197,6 @@ export default function AdminUsers() {
     setDialog({ mode: "modules", id: user.id, userName: user.name });
   };
 
-  const toggleReveal = (id) => {
-    setRevealedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
   const handleSubmit = (e) => {
     e.preventDefault();
     if (dialog.mode === "create") createMutation.mutate();
@@ -227,31 +215,6 @@ export default function AdminUsers() {
     return <span className="text-xs bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">פעיל</span>;
   };
 
-  const passwordCell = (user) => {
-    if (user.needsPasswordSetup && !user.password) {
-      return <span className="text-slate-400 text-xs">טרם הוגדרה</span>;
-    }
-    if (!user.password) {
-      return <span className="text-slate-400 text-xs">—</span>;
-    }
-    const revealed = revealedIds.has(user.id);
-    return (
-      <div className="flex items-center gap-1 justify-end" dir="ltr">
-        <span className="font-mono text-xs text-slate-700">
-          {revealed ? user.password : "••••••••"}
-        </span>
-        <button
-          type="button"
-          onClick={() => toggleReveal(user.id)}
-          className="p-1 rounded hover:bg-slate-100 text-slate-500"
-          aria-label={revealed ? "הסתר סיסמה" : "הצג סיסמה"}
-        >
-          {revealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-        </button>
-      </div>
-    );
-  };
-
   return (
     <HypPageLayout variant="scheduling" withNav={false} contentClassName="max-w-4xl px-4 py-8">
       <div className="flex items-center justify-between mb-6">
@@ -266,7 +229,7 @@ export default function AdminUsers() {
           <div>
             <h1 className="text-xl font-extrabold text-slate-800">ניהול נציגים</h1>
             <p className="text-sm text-slate-500">
-              אימיילים, סיסמאות וחסימה — כניסה בהיברידי (שם או אימייל)
+              אימיילים, סיסמאות וחסימה — כניסה עם אימייל ו-Supabase Auth
             </p>
           </div>
         </div>
@@ -308,7 +271,6 @@ export default function AdminUsers() {
               <th className="text-right px-4 py-3 font-semibold">שם</th>
               <th className="text-right px-4 py-3 font-semibold">אימייל</th>
               <th className="text-right px-4 py-3 font-semibold">טלפון (SMS)</th>
-              <th className="text-right px-4 py-3 font-semibold">סיסמה</th>
               <th className="text-right px-4 py-3 font-semibold">מודולים</th>
               <th className="text-right px-4 py-3 font-semibold">סטטוס</th>
               <th className="px-4 py-3" />
@@ -317,13 +279,13 @@ export default function AdminUsers() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
                   טוען...
                 </td>
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
                   אין נציגים — הוסף/י ראשון או המתן לטעינה
                 </td>
               </tr>
@@ -349,7 +311,6 @@ export default function AdminUsers() {
                       disabled={phoneMutation.isPending}
                     />
                   </td>
-                  <td className="px-4 py-3">{passwordCell(user)}</td>
                   <td className="px-4 py-3 text-xs text-slate-600 max-w-[10rem] leading-snug">
                     {formatModulesSummary(user.modules)}
                   </td>
@@ -419,7 +380,7 @@ export default function AdminUsers() {
         </div>
         <ul className="list-disc list-inside space-y-1 text-xs">
           <li>
-            <strong>סיסמה</strong> — רק מנהל מגדיר/מאפס; נציג מגדיר בכניסה ראשונה בלבד
+            <strong>סיסמה</strong> — רק מנהל מגדיר/מאפס דרך Supabase Auth; נציג מגדיר בכניסה ראשונה
           </li>
           <li>
             <strong>אימייל</strong> — נדרש לכניסה עם אימייל; בלי אימייל — כניסה בשם מהרשימה
@@ -431,10 +392,7 @@ export default function AdminUsers() {
             <strong>מודולים</strong> — בחר/י אילו מסכים יופיעו לנציג (למשל רק השתלטות מרחוק)
           </li>
           <li>
-            <strong>טלפון</strong> — לשליחת SMS בפרסום שיבוץ; עריכה ישירות בטבלה או בחלון עריכה
-          </li>
-          <li className="text-amber-800">
-            אזהרה: סיסמאות נשמרות לתצוגת מנהל — לא מומלץ לסביבות רגישות
+            <strong>טלפון</strong> — לשליחת SMS בפרסום שיבוץ ואיפוס סיסמה; עריכה ישירות בטבלה או בחלון עריכה
           </li>
         </ul>
       </div>
@@ -467,7 +425,7 @@ export default function AdminUsers() {
                 <div>
                   <label className="text-xs text-slate-500 mb-1 block">סיסמה חדשה</label>
                   <Input
-                    type="text"
+                    type="password"
                     value={passwordForm.password}
                     onChange={(e) => setPasswordForm((f) => ({ ...f, password: e.target.value }))}
                     required

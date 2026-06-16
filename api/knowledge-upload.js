@@ -13,6 +13,7 @@ import {
   ensureKnowledgeDocumentParent,
 } from "../server/knowledge/documentIngestService.js";
 import { ingestDocumentImages, listDocumentPageImages } from "../server/knowledge/imageIngestService.js";
+import { importHypPayPackage } from "../server/knowledge/hypPayPackageImport.js";
 
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") {
@@ -159,6 +160,34 @@ export default async function handler(req, res) {
     } catch (err) {
       console.error("[knowledge-upload] reprocess", err);
       return json(res, 500, { error: err?.message || "ingest_exception" }, req);
+    }
+  }
+
+  if (action === "import_hyp_pay") {
+    try {
+      const result = await importHypPayPackage({
+        tenantId: body.tenantId ?? null,
+      });
+      if (!result.ok) {
+        const status = result.error === "knowledge_schema_not_migrated" ? 503 : 500;
+        return json(
+          res,
+          status,
+          {
+            error: result.error,
+            message:
+              result.error === "knowledge_schema_not_migrated"
+                ? "הרץ supabase/knowledge.sql, knowledge_pgvector.sql ו-knowledge_gemini_migration.sql ב-Supabase SQL Editor"
+                : undefined,
+            ...result,
+          },
+          req,
+        );
+      }
+      return json(res, 200, result, req);
+    } catch (err) {
+      console.error("[knowledge-upload] import_hyp_pay", err);
+      return json(res, 500, { error: err?.message || "import_exception" }, req);
     }
   }
 

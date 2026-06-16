@@ -219,6 +219,23 @@ export async function deleteServerDocument(documentId) {
   return data;
 }
 
+export async function importHypPayPackage() {
+  let res;
+  try {
+    res = await postKnowledgeUploadWithRetry({ action: "import_hyp_pay" }, INGEST_TIMEOUT_MS);
+  } catch (err) {
+    if (err?.message === "ingest_timeout" || err?.name === "AbortError") throw new Error("ingest_timeout");
+    throw new Error("ingest_network");
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data.error || data.message || `import_hyp_pay_http_${res.status}`);
+    err.httpStatus = res.status;
+    throw err;
+  }
+  return data;
+}
+
 export async function listKnowledgeGaps({ status = null } = {}) {
   const params = new URLSearchParams({ type: "gaps" });
   if (status) params.set("status", status);

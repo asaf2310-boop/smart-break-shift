@@ -1,0 +1,218 @@
+import { createClient } from "@supabase/supabase-js";
+import { getSupabaseAdmin, getSupabaseUrl } from "../knowledge/supabaseAdmin.js";
+
+function getSupabaseAnonKey() {
+  return String(process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "").trim();
+}
+
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+function mapAgentRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    email: row.email || "",
+    displayName: row.display_name,
+    authUserId: row.auth_user_id || null,
+    needsPasswordSetup: row.needs_password_setup === true,
+    phone: row.phone || "",
+    active: row.active !== false && !row.deleted_at,
+    blocked: row.blocked === true,
+    modules: Array.isArray(row.modules) ? row.modules : [],
+  };
+}
+
+export async function getAgentByEmail(email) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return null;
+
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from("agents")
+    .select(
+      "id, email, display_name, auth_user_id, needs_password_setup, phone, active, blocked, deleted_at, modules"
+    )
+    .eq("email", normalized)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("[agentAuthService] getAgentByEmail failed", error.message);
+    return null;
+  }
+  return mapAgentRow(data);
+}
+
+export async function getAgentById(agentId) {
+  const id = String(agentId || "").trim();
+  if (!id) return null;
+
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from("agents")
+    .select(
+      "id, email, display_name, auth_user_id, needs_password_setup, phone, active, blocked, deleted_at, modules"
+    )
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("[agentAuthService] getAgentById failed", error.message);
+    return null;
+  }
+  return mapAgentRow(data);
+}
+
+export async function getAgentByAuthUserId(authUserId) {
+  const id = String(authUserId || "").trim();
+  if (!id) return null;
+
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from("agents")
+    .select(
+      "id, email, display_name, auth_user_id, needs_password_setup, phone, active, blocked, deleted_at, modules"
+    )
+    .eq("auth_user_id", id)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("[agentAuthService] getAgentByAuthUserId failed", error.message);
+    return null;
+  }
+  return mapAgentRow(data);
+}
+
+function randomInternalPassword() {
+  return `Agt_${crypto.randomUUID().replace(/-/g, "")}!9`;
+}
+
+/**
+ * Create auth.users if missing, link auth_user_id, confirm email.
+ * @param {object} agent — row from getAgentById / getAgentByEmail
+ * @param {string} [password] — optional initial password
+ */
+export async function provisionAuthUserForAgent(agent, password) {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) throw new Error("supabase_not_configured");
+
+  const email = normalizeEmail(agent?.email);
+  if (!email || email.endsWith("@pending.local")) {
+    throw new Error("invalid_agent_email");
+  }
+
+  let authUserId = agent.authUserId || null;
+
+  if (!authUserId) {
+    const initialPassword = password || randomInternalPassword();
+    const { data, error } = await supabase.auth.admin.createUser({
+      email,
+      password: initialPassword,
+      email_confirm: true,
+      user_metadata: { agent_id: agent.id, display_name: agent.displayName },
+    });
+
+    if (error) {
+      if (String(error.message || "").toLowerCase().includes("already")) {
+        const { data: listData, error: listErr } = await supabase.auth.admin.listUsers({
+          page: 1,
+          perPage: 1000,
+        });
+        if (listErr) throw listErr;
+        const existing = (listData?.users || []).find(
+          (u) => normalizeEmail(u.email) === email
+        );
+        if (!existing?.id) throw error;
+        authUserId = existing.id;
+      } else {
+        throw error;
+      }
+    } else {
+      authUserId = data.user?.id || null;
+    }
+  }
+
+  if (!authUserId) throw new Error("auth_user_missing");
+
+  const { error: linkErr } = await supabase
+    .from("agents")
+    .update({ auth_user_id: authUserId })
+    .eq("id", agent.id);
+
+  if (linkErr) throw linkErr;
+
+  return { authUserId, agentId: agent.id };
+}
+
+export async function adminUpdateAgentPassword(authUserId, password) {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) throw new Error("supabase_not_configured");
+
+  const { error } = await supabase.auth.admin.updateUserById(authUserId, {
+    password: String(password),
+  });
+  if (error) throw error;
+}
+
+export async function markAgentPasswordSetupComplete(agentId) {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) throw new Error("supabase_not_configured");
+
+  const { error } = await supabase
+    .from("agents")
+    .update({ needs_password_setup: false })
+    .eq("id", agentId);
+
+  if (error) throw error;
+}
+
+export async function markAgentNeedsPasswordSetup(agentId) {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) throw new Error("supabase_not_configured");
+
+  const { error } = await supabase
+    .from("agents")
+    .update({ needs_password_setup: true })
+    .eq("id", agentId);
+
+  if (error) throw error;
+}
+
+export async function verifyBearerAgent(req) {
+  const authHeader = req.headers.authorization || req.headers.Authorization;
+  if (typeof authHeader !== "string" || !authHeader.startsWith("Bearer ")) {
+    return null;
+  }
+
+  const token = authHeader.slice(7).trim();
+  if (!token) return null;
+
+  const url = getSupabaseUrl();
+  const anonKey = getSupabaseAnonKey();
+  if (!url || !anonKey) return null;
+
+  const anonClient = createClient(url, anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  const { data, error } = await anonClient.auth.getUser(token);
+  if (error || !data?.user?.id) return null;
+
+  const agent = await getAgentByAuthUserId(data.user.id);
+  if (!agent || !agent.active || agent.blocked) return null;
+
+  return { agent, authUser: data.user, accessToken: token };
+}
+
+export function verifyAdminPin(body) {
+  const configured = String(process.env.ADMIN_PIN || process.env.VITE_ADMIN_PIN || "").trim();
+  if (!configured) return true;
+  return String(body?.adminPin || "").trim() === configured;
+}
