@@ -8,6 +8,7 @@ import {
   agentSetupPassword,
   agentVerifyTemporaryPassword,
   canAgentAuthenticate,
+  AGENT_AUTH_TIMEOUT_MSG,
   INVALID_CREDENTIALS_MSG,
   PASSWORD_MIN_LENGTH,
   PASSWORD_MIN_LENGTH_MSG,
@@ -56,6 +57,7 @@ function DemoEmailLogin({ onSuccess }) {
 
 function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
   const isDemo = variant === "demo";
+  const prodDirectLogin = !isDemo;
   const fieldClass = isDemo
     ? DEMO_FIELD_CLASS
     : "login-demo-input w-full py-3 px-4 pr-10 text-right shadow-none";
@@ -64,7 +66,7 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
   const infoClass = isDemo ? "text-emerald-200" : "text-emerald-700";
 
   const [mode, setMode] = useState(MODES.LOGIN);
-  const [emailStepDone, setEmailStepDone] = useState(false);
+  const [emailStepDone, setEmailStepDone] = useState(prodDirectLogin);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -76,6 +78,35 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
   const resetMessages = () => {
     setError("");
     setInfo("");
+  };
+
+  const showPasswordField = emailStepDone || prodDirectLogin;
+
+  const handleProdLogin = async (e) => {
+    e.preventDefault();
+    resetMessages();
+    setLoading(true);
+    try {
+      const result = await agentLoginWithPassword(email, password);
+      if (!result.ok) {
+        if (result.error === "needs_temp_password") {
+          setMode(MODES.TEMP_VERIFY);
+          return;
+        }
+        if (result.error === "needs_password_setup") {
+          setSetupAfterReset(false);
+          setMode(MODES.SETUP);
+          return;
+        }
+        setError(result.message || INVALID_CREDENTIALS_MSG);
+        return;
+      }
+      onSuccess?.(result.session);
+    } catch {
+      setError(AGENT_AUTH_TIMEOUT_MSG);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleEmailContinue = async (e) => {
@@ -118,6 +149,8 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
 
       setMode(MODES.LOGIN);
       setEmailStepDone(true);
+    } catch {
+      setError(AGENT_AUTH_TIMEOUT_MSG);
     } finally {
       setLoading(false);
     }
@@ -143,6 +176,8 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
         return;
       }
       onSuccess?.(result.session);
+    } catch {
+      setError(AGENT_AUTH_TIMEOUT_MSG);
     } finally {
       setLoading(false);
     }
@@ -335,7 +370,7 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
 
   return (
     <form
-      onSubmit={emailStepDone ? handleLogin : handleEmailContinue}
+      onSubmit={prodDirectLogin ? handleProdLogin : showPasswordField ? handleLogin : handleEmailContinue}
       className="font-heebo"
     >
       <Field icon={Mail} label="אימייל">
@@ -344,16 +379,16 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
           value={email}
           onChange={(e) => {
             setEmail(e.target.value);
-            setEmailStepDone(false);
+            if (!prodDirectLogin) setEmailStepDone(false);
           }}
           className={fieldClass}
           required
-          readOnly={emailStepDone}
+          readOnly={showPasswordField && !prodDirectLogin}
           autoFocus
           dir="ltr"
         />
       </Field>
-      {emailStepDone && (
+      {showPasswordField && (
         <Field icon={Lock} label="סיסמה">
           <Input
             type="password"
@@ -361,16 +396,16 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
             onChange={(e) => setPassword(e.target.value)}
             className={fieldClass}
             required
-            autoFocus
+            autoFocus={prodDirectLogin}
           />
         </Field>
       )}
       {error && <p className={`text-sm text-center ${errorClass}`}>{error}</p>}
       {info && <p className={`text-sm text-center ${infoClass}`}>{info}</p>}
       <button type="submit" disabled={loading} className={submitClass}>
-        {loading ? "מתחבר..." : emailStepDone ? "כניסה" : "המשך"}
+        {loading ? "מתחבר..." : showPasswordField ? "כניסה" : "המשך"}
       </button>
-      {!emailStepDone && (
+      {!showPasswordField && (
         <button
           type="button"
           onClick={() => {
@@ -382,18 +417,20 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
           שכחתי סיסמה
         </button>
       )}
-      {emailStepDone && (
+      {showPasswordField && (
         <div className="flex flex-col gap-2 text-center mt-2">
-          <button
-            type="button"
-            onClick={() => {
-              setEmailStepDone(false);
-              resetMessages();
-            }}
-            className="login-demo-link text-sm"
-          >
-            שינוי אימייל
-          </button>
+          {!prodDirectLogin && (
+            <button
+              type="button"
+              onClick={() => {
+                setEmailStepDone(false);
+                resetMessages();
+              }}
+              className="login-demo-link text-sm"
+            >
+              שינוי אימייל
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {

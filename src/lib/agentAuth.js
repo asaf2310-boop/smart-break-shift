@@ -19,6 +19,26 @@ export const AGENT_SESSION_KEY = "smart-break-agent-session-v1";
 export const INVALID_CREDENTIALS_MSG = "אימייל או סיסמה שגויים";
 export const PASSWORD_MIN_LENGTH = 6;
 export const PASSWORD_MIN_LENGTH_MSG = "הסיסמה חייבת להכיל לפחות 6 תווים";
+export const AGENT_AUTH_TIMEOUT_MSG = "החיבור לשרת ארך זמן רב מדי — נסה/י שוב";
+
+const AGENT_PROFILE_COLUMNS =
+  "id,email,display_name,auth_user_id,active,blocked,needs_password_setup,deleted_at,phone,modules";
+
+function withAuthTimeout(promise, ms = 15000) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("agent_auth_timeout")), ms);
+    }),
+  ]);
+}
+
+function mapAuthTimeoutError(err) {
+  if (String(err?.message || err) === "agent_auth_timeout") {
+    return { ok: false, message: AGENT_AUTH_TIMEOUT_MSG };
+  }
+  return null;
+}
 
 /** HTML5 minLength shows English in many browsers; override with Hebrew. */
 export function passwordMinLengthInputProps() {
@@ -110,11 +130,16 @@ export function isLegacyAgentSession(session) {
 }
 
 async function resolveSupabaseAgentById(id) {
-  if (!id || !supabaseConfigured || !dataClient.entities.Agent?.list) return null;
+  if (!id || !supabase) return null;
   try {
-    const all = await dataClient.entities.Agent.list("-created_at", 500);
-    const match = (all || []).find((r) => r.id === id);
-    return mapSupabaseAgent(match);
+    const { data, error } = await withAuthTimeout(
+      supabase.from("agents").select(AGENT_PROFILE_COLUMNS).eq("id", id).maybeSingle()
+    );
+    if (error) {
+      console.warn("[agentAuth] resolveSupabaseAgentById failed", error);
+      return null;
+    }
+    return mapSupabaseAgent(data);
   } catch (err) {
     console.warn("[agentAuth] resolveSupabaseAgentById failed", err);
     return null;
@@ -123,13 +148,21 @@ async function resolveSupabaseAgentById(id) {
 
 async function resolveSupabaseAgentByDisplayName(displayName) {
   const normalized = String(displayName || "").trim();
-  if (!normalized || !supabaseConfigured || !dataClient.entities.Agent?.list) return null;
+  if (!normalized || !supabase) return null;
   try {
-    const all = await dataClient.entities.Agent.list("-created_at", 500);
-    const match = (all || []).find(
-      (r) => String(r.display_name || "").trim() === normalized
+    const { data, error } = await withAuthTimeout(
+      supabase
+        .from("agents")
+        .select(AGENT_PROFILE_COLUMNS)
+        .eq("display_name", normalized)
+        .limit(1)
+        .maybeSingle()
     );
-    return mapSupabaseAgent(match);
+    if (error) {
+      console.warn("[agentAuth] resolveSupabaseAgentByDisplayName failed", error);
+      return null;
+    }
+    return mapSupabaseAgent(data);
   } catch (err) {
     console.warn("[agentAuth] resolveSupabaseAgentByDisplayName failed", err);
     return null;
@@ -242,14 +275,22 @@ export const clearLogout = clearAgentSession;
 
 async function resolveSupabaseAgentByEmail(email) {
   const normalized = String(email || "").trim().toLowerCase();
-  if (!supabaseConfigured || !dataClient.entities.Agent?.list) return null;
+  if (!normalized || !supabase) return null;
 
   try {
-    const all = await dataClient.entities.Agent.list("-created_at", 500);
-    const match = (all || []).find(
-      (r) => String(r.email || "").trim().toLowerCase() === normalized
+    const { data, error } = await withAuthTimeout(
+      supabase
+        .from("agents")
+        .select(AGENT_PROFILE_COLUMNS)
+        .ilike("email", normalized)
+        .limit(1)
+        .maybeSingle()
     );
-    return mapSupabaseAgent(match);
+    if (error) {
+      console.warn("[agentAuth] resolveSupabaseAgentByEmail failed", error);
+      return null;
+    }
+    return mapSupabaseAgent(data);
   } catch (err) {
     console.warn("[agentAuth] resolveSupabaseAgentByEmail failed", err);
     return null;
@@ -317,31 +358,35 @@ export async function agentVerifyTemporaryPassword(email, password) {
 
   if (!supabase) return credentialsError();
 
-  const { error } = await supabase.auth.signInWithPassword({
-    email: String(email).trim().toLowerCase(),
-    password: String(password),
-  });
-  if (error) {
-    if (isInvalidCredentialsError(error)) return credentialsError();
-    return { ok: false, message: mapPasswordAuthError(error.message) };
+  try {
+    const { error } = await withAuthTimeout(
+      supabase.auth.signInWithPassword({
+        email: String(email).trim().toLowerCase(),
+        password: String(password),
+      })
+    );
+    if (error) {
+      if (isInvalidCredentialsError(error)) return credentialsError();
+      return { ok: false, message: mapPasswordAuthError(error.message) };
+    }
+    return { ok: true };
+  } catch (err) {
+    return mapAuthTimeoutError(err) || credentialsError();
   }
-
-  return { ok: true };
 }
 
 export async function agentLoginWithPassword(email, password) {
-  const agent = await resolveAgentByEmail(email);
-  if (!canAgentAuthenticate(agent)) {
-    return credentialsError();
-  }
-  if (agent.needsPasswordSetup) {
-    if (agentHasPendingPasswordReset(agent)) {
-      return { ok: false, error: "needs_temp_password", agent };
-    }
-    return { ok: false, error: "needs_password_setup", agent };
-  }
-
   if (demoModeEnabled) {
+    const agent = await resolveAgentByEmail(email);
+    if (!canAgentAuthenticate(agent)) {
+      return credentialsError();
+    }
+    if (agent.needsPasswordSetup) {
+      if (agentHasPendingPasswordReset(agent)) {
+        return { ok: false, error: "needs_temp_password", agent };
+      }
+      return { ok: false, error: "needs_password_setup", agent };
+    }
     const user = findDemoUserByEmail(email);
     if (!verifyDemoUserPassword(user, password)) {
       return credentialsError();
@@ -354,31 +399,41 @@ export async function agentLoginWithPassword(email, password) {
   if (!supabase) return credentialsError();
 
   const normalizedEmail = String(email).trim().toLowerCase();
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email: normalizedEmail,
-    password: String(password),
-  });
-
-  if (error) {
-    if (isInvalidCredentialsError(error)) return credentialsError();
-    return { ok: false, message: mapPasswordAuthError(error.message) };
+  let data;
+  try {
+    const result = await withAuthTimeout(
+      supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password: String(password),
+      })
+    );
+    data = result.data;
+    if (result.error) {
+      if (isInvalidCredentialsError(result.error)) return credentialsError();
+      return { ok: false, message: mapPasswordAuthError(result.error.message) };
+    }
+  } catch (err) {
+    return mapAuthTimeoutError(err) || credentialsError();
   }
 
-  const authUserId = data?.user?.id || agent.authUserId;
-  const refreshedAgent = (await lookupAgentByEmail(normalizedEmail)) || agent;
+  const authUserId = data?.user?.id;
+  const refreshedAgent = (await resolveSupabaseAgentByEmail(normalizedEmail)) || null;
 
-  if (!canAgentAuthenticate(refreshedAgent)) {
+  if (!refreshedAgent || !canAgentAuthenticate(refreshedAgent)) {
     await supabase.auth.signOut();
     return credentialsError();
   }
 
   if (refreshedAgent.needsPasswordSetup) {
-    const session = sessionFromAgent({ ...refreshedAgent, authUserId });
+    const session = sessionFromAgent({ ...refreshedAgent, authUserId: authUserId || refreshedAgent.authUserId });
     setAgentSession(session);
     return { ok: false, error: "needs_password_setup", agent: refreshedAgent };
   }
 
-  const session = sessionFromAgent({ ...refreshedAgent, authUserId });
+  const session = sessionFromAgent({
+    ...refreshedAgent,
+    authUserId: authUserId || refreshedAgent.authUserId,
+  });
   setAgentSession(session);
   return { ok: true, session };
 }
