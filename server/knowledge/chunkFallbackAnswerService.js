@@ -56,24 +56,68 @@ function pickSentences(text, terms, max = 3) {
     .map((row) => row.sentence);
 }
 
-function buildVisualIntro(chunks, { imageCount = 0 } = {}) {
-  const docName = chunks[0]?.documentName || chunks[0]?.documentTitle || "המסמך";
-  const pages = [
+function collectPageNumbers(chunks) {
+  return [
     ...new Set(
       (chunks || [])
         .map((c) => c.pageNumber)
         .filter((n) => n != null),
     ),
   ].sort((a, b) => a - b);
+}
+
+function buildVisualIntro(chunks, { imageCount = 0 } = {}) {
+  const docName = chunks[0]?.documentName || chunks[0]?.documentTitle || "המסמך";
+  const pages = collectPageNumbers(chunks);
 
   const pageHint =
     pages.length > 1
-      ? ` (עמודים ${pages.slice(0, 4).join(", ")}${pages.length > 4 ? "…" : ""})`
+      ? ` (עמודים ${pages.slice(0, 6).join(", ")}${pages.length > 6 ? "…" : ""})`
       : pages.length === 1
         ? ` (עמוד ${pages[0]})`
         : "";
 
-  return `להלן ${imageCount > 1 ? "צילומי העמודים" : "צילום העמוד"} הרלוונטיים ממסמך **${docName}**${pageHint}:`;
+  return `להלן ${imageCount > 1 ? "צילומי העמודים" : imageCount === 1 ? "צילום העמוד" : "העמודים"} הרלוונטיים ממסמך **${docName}**${pageHint}:`;
+}
+
+/**
+ * Minimal answer: page numbers + optional screenshot intro — no procedural text.
+ * @param {Array} chunks
+ * @param {{ imageCount?: number }} [options]
+ */
+export function buildPageReferenceAnswer(chunks, options = {}) {
+  const docName = chunks[0]?.documentName || chunks[0]?.documentTitle || "המסמך";
+  const pages = collectPageNumbers(chunks);
+  const imageCount = options.imageCount ?? 0;
+
+  if (!pages.length && imageCount === 0) {
+    return {
+      answer: KNOWLEDGE_MISSING_ANSWER,
+      grounded: false,
+    };
+  }
+
+  const pageList =
+    pages.length > 0
+      ? pages.map((n) => `- עמוד ${n}`).join("\n")
+      : "- (לא זוהו מספרי עמוד — ראו צילומי המסך למטה)";
+
+  const summaryLine1 =
+    pages.length > 0
+      ? `העמודים הרלוונטיים במסמך **${docName}** הם: ${pages.join(", ")}.`
+      : `נמצאו צילומי מסך רלוונטיים במסמך **${docName}**.`;
+  const summaryLine2 = "להלן תצוגת העמודים — ללא טקסט הוראות.";
+
+  const parts = [`${summaryLine1}\n${summaryLine2}`, `### עמודים רלוונטיים\n${pageList}`];
+
+  if (imageCount > 0) {
+    parts.push(sanitizeAssistantAnswer(buildVisualIntro(chunks, { imageCount })));
+  }
+
+  return {
+    answer: sanitizeAssistantAnswer(parts.join("\n\n")),
+    grounded: true,
+  };
 }
 
 /**
@@ -82,6 +126,12 @@ function buildVisualIntro(chunks, { imageCount = 0 } = {}) {
  * @param {{ imageCount?: number }} [options]
  */
 export function buildChunkFallbackAnswer(query, chunks, options = {}) {
+  const imageCount = options.imageCount ?? 0;
+
+  if (options.pageReferenceOnly) {
+    return buildPageReferenceAnswer(chunks, { imageCount });
+  }
+
   const terms = extractSearchTerms(query);
   const picked = [];
   const seen = new Set();
@@ -97,8 +147,6 @@ export function buildChunkFallbackAnswer(query, chunks, options = {}) {
     }
     if (picked.length >= 3) break;
   }
-
-  const imageCount = options.imageCount ?? 0;
 
   if (!picked.length) {
     if (imageCount > 0) {

@@ -6,8 +6,8 @@ import { directChunkSearch } from "./simpleRetrievalService.js";
 import { fetchImagesForChunks } from "./imageIngestService.js";
 import { generateGeminiKnowledgeAnswer, mergeRelevantImages, buildKnowledgeSources, normalizeKnowledgeImages } from "./geminiChatService.js";
 import { buildContextBlocks, truncateSnippet, uniqueCitations } from "./chatAnswerService.js";
-import { KNOWLEDGE_MISSING_ANSWER, isMissingKnowledgeAnswer } from "./geminiKnowledgePrompt.js";
-import { buildChunkFallbackAnswer } from "./chunkFallbackAnswerService.js";
+import { KNOWLEDGE_MISSING_ANSWER, isMissingKnowledgeAnswer, isPageReferenceOnlyQuestion } from "./geminiKnowledgePrompt.js";
+import { buildChunkFallbackAnswer, buildPageReferenceAnswer } from "./chunkFallbackAnswerService.js";
 import { sanitizeAssistantAnswer } from "./assistantBidi.js";
 import { logKnowledgeGap } from "./gapFeedbackService.js";
 import { logKnowledgeQuery } from "./loggingService.js";
@@ -171,6 +171,7 @@ export async function generateAgentResponse(userQuery, options = {}) {
   const fetchedImages = await fetchImagesForChunks(pageRefs, { tenantId, limit: topK });
   const relevantImages = mergeRelevantImages(fetchedImages, searchResult.imageHits || [], topK);
   const responseImages = formatImagesForResponse(relevantImages, topK);
+  const pageReferenceOnly = isPageReferenceOnlyQuestion(query);
 
   if (!chunks.length || !passesThreshold) {
     if (process.env.NODE_ENV !== "production" || process.env.KNOWLEDGE_DEBUG === "1") {
@@ -209,6 +210,45 @@ export async function generateAgentResponse(userQuery, options = {}) {
     return emptyAgentResult({ confidence, debug });
   }
 
+  if (pageReferenceOnly) {
+    const pageResult = buildPageReferenceAnswer(chunks, { imageCount: responseImages.length });
+    if (!pageResult.grounded) {
+      return emptyAgentResult({ confidence, debug, mode: "page_reference_miss" });
+    }
+    const citations = uniqueCitations(chunks);
+    await logKnowledgeQuery({
+      question: query,
+      tenantId,
+      retrievalMethod: "hybrid_page_reference",
+      hits,
+      answer: pageResult.answer,
+    });
+    return {
+      answer: pageResult.answer,
+      citations,
+      sources: buildKnowledgeSources(citations, relevantImages),
+      images: responseImages,
+      chunks: chunks.map((c) => ({
+        documentId: c.documentId,
+        documentName: c.documentName,
+        pageNumber: c.pageNumber,
+        sectionTitle: c.sectionTitle,
+      })),
+      confidence,
+      grounded: true,
+      mode: "page_reference",
+      debug,
+      error: null,
+      retryAfterSec: null,
+      rateLimited: false,
+      retrieval: {
+        textHits: hits.length,
+        imageHits: (searchResult.imageHits || []).length,
+        imagesProvided: relevantImages.length,
+      },
+    };
+  }
+
   const result = await generateGeminiKnowledgeAnswer(query, chunks, {
     images: relevantImages,
     confidence,
@@ -218,6 +258,7 @@ export async function generateAgentResponse(userQuery, options = {}) {
     if (chunks.length) {
       const fallback = buildChunkFallbackAnswer(query, chunks, {
         imageCount: responseImages.length,
+        pageReferenceOnly,
       });
       if (!fallback.grounded) {
         return emptyAgentResult({

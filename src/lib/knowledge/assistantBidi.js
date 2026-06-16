@@ -30,6 +30,18 @@ const TECHNICAL_TERM_PATTERNS = [
   /\b3DS\b/gi,
 ];
 const URL_PATTERN = /https?:\/\/[^\s<>\])"]+/g;
+const METADATA_LEAK_PATTERN =
+  /(?:\b\d{1,2}\/\d{1,2}\/\d{2,4},?\s*\d{1,2}:\d{2}\b|\b\d+\/\d+\s*$)/g;
+
+/** Remove leaked URLs, editor links, and PDF footer metadata from model answers. */
+export function stripAnswerMetadataLeakage(text) {
+  return String(text || "")
+    .replace(URL_PATTERN, "")
+    .replace(METADATA_LEAK_PATTERN, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
 
 /** Leading punctuation wrongly placed before Hebrew (RTL display bug). */
 function fixRtlPunctuation(line) {
@@ -176,7 +188,7 @@ function formatLineForBidi(line) {
  */
 export function formatAssistantBidiText(text) {
   let s = sanitizeHebrewText(
-    advancedHebrewSanitizer(String(text || "").replace(/\r\n/g, "\n").trim()),
+    advancedHebrewSanitizer(stripAnswerMetadataLeakage(String(text || "").replace(/\r\n/g, "\n").trim())),
   );
   if (!s) return "";
 

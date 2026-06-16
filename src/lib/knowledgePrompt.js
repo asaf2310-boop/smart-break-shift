@@ -59,6 +59,19 @@ ${GEMINI_RAG_PERSONA_AND_LAYOUT}
 /** Alias aligned with server geminiKnowledgePrompt.js */
 export const GEMINI_KNOWLEDGE_SYSTEM_PROMPT = KNOWLEDGE_SYSTEM_PROMPT;
 
+/** User wants relevant document pages/screenshots — not procedural text. Keep in sync with server. */
+export function isPageReferenceOnlyQuestion(query) {
+  const q = String(query || "").replace(/\s+/g, " ").trim();
+  return (
+    /(?:הצג|הראה|תראה|תציג).{0,40}(?:עמוד|עמודים|צילום|תמונ)/iu.test(q) ||
+    /(?:אילו|מהם?|רשימת).{0,25}עמוד(?:ים)?/iu.test(q) ||
+    /עמוד(?:ים)?.{0,30}(?:רלוונט|מתייחס|במסמך|שמתייחס)/iu.test(q) ||
+    /(?:בלי|ללא|רק).{0,20}(?:מלל|טקסט|הסבר|שלבים|התקנה)/iu.test(q) ||
+    /(?:צילומי|תמונות).{0,20}עמוד/iu.test(q) ||
+    /(?:show|which|list).{0,25}pages?/i.test(q)
+  );
+}
+
 export const KNOWLEDGE_ANSWER_FORMAT_HINT = KNOWLEDGE_BIDI_FORMAT_HINT;
 
 export const KNOWLEDGE_LOW_RELEVANCE_ANSWER = KNOWLEDGE_MISSING_ANSWER;

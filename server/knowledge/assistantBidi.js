@@ -30,6 +30,18 @@ const TECHNICAL_TERM_PATTERNS = [
   /\b3DS\b/gi,
 ];
 const URL_PATTERN = /https?:\/\/[^\s<>\])"]+/g;
+const METADATA_LEAK_PATTERN =
+  /(?:\b\d{1,2}\/\d{1,2}\/\d{2,4},?\s*\d{1,2}:\d{2}\b|\b\d+\/\d+\s*$)/g;
+
+/** Remove leaked URLs, editor links, and PDF footer metadata from model answers. */
+export function stripAnswerMetadataLeakage(text) {
+  return String(text || "")
+    .replace(URL_PATTERN, "")
+    .replace(METADATA_LEAK_PATTERN, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
 
 function fixRtlPunctuation(line) {
   let s = String(line || "");
@@ -180,7 +192,9 @@ export function formatAssistantBidiText(text) {
 
 export function sanitizeAssistantAnswer(text) {
   return cleanHebrewMarkdownArtifacts(
-    formatAssistantBidiText(sanitizeHebrewText(advancedHebrewSanitizer(text))),
+    formatAssistantBidiText(
+      stripAnswerMetadataLeakage(sanitizeHebrewText(advancedHebrewSanitizer(text))),
+    ),
   );
 }
 

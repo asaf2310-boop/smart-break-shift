@@ -12,9 +12,10 @@ import {
   KNOWLEDGE_LOW_RELEVANCE_ANSWER,
   KNOWLEDGE_NO_CONTEXT_ANSWER,
   KNOWLEDGE_SYSTEM_PROMPT,
+  isPageReferenceOnlyQuestion,
 } from "@/lib/knowledgePrompt";
 import { askKnowledgeServer, shouldUseServerRag, getKnowledgeTenantId } from "@/lib/knowledge/knowledgeClient";
-import { formatAssistantDisplayMarkdown as applyBidiDisplayMarkdown } from "@/lib/knowledge/assistantBidi";
+import { formatAssistantDisplayMarkdown as applyBidiDisplayMarkdown, stripAnswerMetadataLeakage } from "@/lib/knowledge/assistantBidi";
 import { sanitizeHebrewText, advancedHebrewSanitizer } from "@/lib/knowledge/sanitizeHebrewText";
 
 /** ~500–800 tokens at ~4 chars/token (Hebrew) */
@@ -85,7 +86,7 @@ const KNOWLEDGE_SANITIZE_STORAGE_KEY = "knowledge-content-sanitize-v6";
 /** Light sanitize for GPT answers — preserves spacing; fixes Hebrew OCR/PDF artifacts. */
 export function sanitizeAssistantAnswer(text) {
   let s = sanitizeHebrewText(
-    advancedHebrewSanitizer(String(text || "").replace(/\r\n/g, "\n").trim()),
+    advancedHebrewSanitizer(stripAnswerMetadataLeakage(String(text || "").replace(/\r\n/g, "\n").trim())),
   );
   if (!s) return "";
 
@@ -1254,6 +1255,50 @@ function formatSourceLine(chunk) {
   return parts.join(" / ");
 }
 
+function collectChunkPageNumbers(chunks) {
+  return [
+    ...new Set(
+      (chunks || [])
+        .map((c) => c.pageNumber)
+        .filter((n) => n != null),
+    ),
+  ].sort((a, b) => a - b);
+}
+
+/** Page-only answer — no procedural text from OCR chunks. */
+function buildPageReferenceAnswer(chunks, imageCount = 0) {
+  const docName = chunks[0]?.documentName || chunks[0]?.documentTitle || "המסמך";
+  const pages = collectChunkPageNumbers(chunks);
+
+  if (!pages.length && imageCount === 0) {
+    return KNOWLEDGE_LOW_RELEVANCE_ANSWER;
+  }
+
+  const pageList =
+    pages.length > 0
+      ? pages.map((n) => `- עמוד ${n}`).join("\n")
+      : "- (ראו צילומי המסך למטה)";
+
+  const line1 =
+    pages.length > 0
+      ? `העמודים הרלוונטיים במסמך **${docName}** הם: ${pages.join(", ")}.`
+      : `נמצאו צילומי מסך רלוונטיים במסמך **${docName}**.`;
+  const line2 = "להלן תצוגת העמודים — ללא טקסט הוראות.";
+
+  const parts = [`${line1}\n${line2}`, `### עמודים רלוונטיים\n${pageList}`];
+  if (imageCount > 0) {
+    const pageHint =
+      pages.length > 1
+        ? ` (עמודים ${pages.slice(0, 6).join(", ")}${pages.length > 6 ? "…" : ""})`
+        : pages.length === 1
+          ? ` (עמוד ${pages[0]})`
+          : "";
+    parts.push(`להלן צילומי העמודים הרלוונטיים ממסמך **${docName}**${pageHint}:`);
+  }
+
+  return sanitizeAssistantAnswer(parts.join("\n\n"));
+}
+
 /** Pick sentences from chunk text that match the user's question. */
 function extractRelevantSentences(text, queryTokens, maxSentences = 4) {
   const cleaned = sanitizeChunkText(text, { preserveLines: true });
@@ -1281,7 +1326,11 @@ function extractRelevantSentences(text, queryTokens, maxSentences = 4) {
 }
 
 /** Structured Hebrew answer without GPT — keyword-focused excerpts. */
-function buildLocalStructuredAnswer(chunks, query = "") {
+function buildLocalStructuredAnswer(chunks, query = "", imageCount = 0) {
+  if (isPageReferenceOnlyQuestion(query)) {
+    return buildPageReferenceAnswer(chunks, imageCount);
+  }
+
   const queryTokens = tokenize(query);
   const sentences = [];
   const seen = new Set();
@@ -1371,7 +1420,7 @@ async function askKnowledgeLocal(query, { onPhase } = {}) {
 
   const pageImages = resolvePageImages(chunks);
   const localAnswer = () => ({
-    answer: buildLocalStructuredAnswer(chunks, trimmed),
+    answer: buildLocalStructuredAnswer(chunks, trimmed, pageImages.length),
     citations: uniqueCitations(chunks),
     chunks,
     images: pageImages,

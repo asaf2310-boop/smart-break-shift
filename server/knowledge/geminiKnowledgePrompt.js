@@ -137,6 +137,19 @@ export function isDefinitionQuestion(query) {
   return /^(מה\s+(זה|זאת|הוא|היא)|מהו|מהי|הגדר|הסבר\s+מה|מה\s+פירוש)/iu.test(q);
 }
 
+/** User wants relevant document pages/screenshots — not procedural text or steps. */
+export function isPageReferenceOnlyQuestion(query) {
+  const q = String(query || "").replace(/\s+/g, " ").trim();
+  return (
+    /(?:הצג|הראה|תראה|תציג).{0,40}(?:עמוד|עמודים|צילום|תמונ)/iu.test(q) ||
+    /(?:אילו|מהם?|רשימת).{0,25}עמוד(?:ים)?/iu.test(q) ||
+    /עמוד(?:ים)?.{0,30}(?:רלוונט|מתייחס|במסמך|שמתייחס)/iu.test(q) ||
+    /(?:בלי|ללא|רק).{0,20}(?:מלל|טקסט|הסבר|שלבים|התקנה)/iu.test(q) ||
+    /(?:צילומי|תמונות).{0,20}עמוד/iu.test(q) ||
+    /(?:show|which|list).{0,25}pages?/i.test(q)
+  );
+}
+
 /** Strip the relevantImageIds JSON footer from model output. */
 export function stripRelevantImagesMarker(text) {
   return String(text || "")
@@ -183,11 +196,17 @@ export function buildGeminiUserPrompt(query, context, meta = {}) {
         ? `\n\nתיאורי תמונות/צילומי מסך רלוונטיים:\n${meta.imageDescriptions.map((d, i) => `[IMG-${i + 1}] ${d}`).join("\n")}`
         : "";
 
-  const visualHint = visual
+  const pageOnly = isPageReferenceOnlyQuestion(query);
+
+  const pageOnlyHint = pageOnly
+    ? "\n\nסוג שאלה: עמודים בלבד — החזר בדיוק שתי שורות סיכום עם מספרי העמודים הרלוונטיים, ואז ### עמודים רלוונטיים עם רשימת עמודים בלבד. אסור לכלול שלבי התקנה, הוראות תהליך, או טקסט מקור מקולקל. אל תעתיק OCR."
+    : "";
+
+  const visualHint = visual && !pageOnly
     ? "\n\nהשאלה קשורה לממשק/צילום מסך — הסבר לפי מה שמופיע בתמונה ובקטעי ההקשר."
     : "";
 
-  const howToHint = howTo
+  const howToHint = howTo && !pageOnly
     ? "\n\nסוג שאלה: הדרכה/תהליך — פתח בשתי שורות סיכום, ואז הצג שלבים ממוספרים או טבלה לפי המקור תחת כותרות ###. אל תדחוס שלבים למשפטים."
     : "";
 
@@ -205,7 +224,7 @@ ${context || "(ריק — אין מידע)"}
 ${imageSection}
 
 שאלת הנציג: ${query}
-${howToHint}${definitionHint}${visualHint}${imageFooterHint}
+${howToHint}${definitionHint}${pageOnlyHint}${visualHint}${imageFooterHint}
 
 ענה לפי ההנחיות. ${GEMINI_VERBATIM_GROUNDING_RULE} ${GEMINI_STRICT_GROUNDING_RULE}`;
 }
