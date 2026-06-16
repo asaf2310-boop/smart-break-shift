@@ -68,7 +68,7 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
   const errorClass = isDemo ? "text-red-300 login-error-message" : "login-error-message";
   const infoClass = isDemo ? "text-emerald-200" : "text-emerald-700";
 
-  const [mode, setMode] = useState(isProd ? MODES.FIRST_LOGIN : MODES.LOGIN);
+  const [mode, setMode] = useState(MODES.LOGIN);
   const [emailStepDone, setEmailStepDone] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -80,7 +80,7 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
       : ""
   );
   const [info, setInfo] = useState("");
-  const [firstLoginFlow, setFirstLoginFlow] = useState(isProd);
+  const [firstLoginFlow, setFirstLoginFlow] = useState(false);
 
   const resetMessages = () => {
     setError("");
