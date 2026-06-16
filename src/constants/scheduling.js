@@ -61,6 +61,9 @@ export function getStoredAgentName() {
 
   const session = getAgentSession();
   if (session?.displayName && session?.email && session?.userId) {
+    if (!demoModeEnabled && !session.authUserId) {
+      return "";
+    }
     return session.displayName;
   }
 

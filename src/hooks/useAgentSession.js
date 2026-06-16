@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { demoModeEnabled } from "@/api/demoClient";
 import {
   getAgentSession,
   restoreSupabaseAgentSession,
@@ -48,7 +49,8 @@ export function useAgentSession() {
   const hasValidSession = Boolean(
     session?.email &&
       session?.userId &&
-      session?.needsPasswordSetup !== true
+      session?.needsPasswordSetup !== true &&
+      (demoModeEnabled || session?.authUserId)
   );
 
   return {

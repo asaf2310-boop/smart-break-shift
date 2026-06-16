@@ -227,6 +227,11 @@ export async function validateAndRefreshAgentSession() {
     return null;
   }
 
+  if (!demoModeEnabled && !agent.authUserId) {
+    await agentLogout();
+    return null;
+  }
+
   if (agent.needsPasswordSetup) {
     // Client may have cleared the flag before the agents row replicates.
     if (session.needsPasswordSetup === false) {

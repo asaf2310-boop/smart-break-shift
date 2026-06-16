@@ -14,7 +14,8 @@
     "typecheck": "tsc -p ./jsconfig.json",
     "preview": "vite preview",
     "import:hyp-pay": "node scripts/import-hyp-pay-rag-package.mjs",
-    "migrate:agent-auth": "node scripts/migrate-agents-to-supabase-auth.mjs"
+    "migrate:agent-auth": "node scripts/migrate-agents-to-supabase-auth.mjs",
+    "reset:agents-without-auth": "node scripts/reset-agents-without-auth.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.8.0",
