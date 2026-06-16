@@ -218,6 +218,10 @@ export async function validateAndRefreshAgentSession() {
   }
 
   const agent = await resolveAgentForSession(session);
+  if (!agent) {
+    // Transient backend/read timeout should not force-logout an already authenticated user.
+    return session;
+  }
   if (!canAgentAuthenticate(agent)) {
     await agentLogout();
     return null;
@@ -570,7 +574,14 @@ export async function restoreSupabaseAgentSession() {
 
   const email = authSession.user.email;
   const agent = await lookupAgentByEmail(email);
-  if (!agent || !canAgentAuthenticate(agent)) {
+  if (!agent) {
+    // Keep an existing local session when profile lookup temporarily fails.
+    if (existing?.email && existing?.userId && existing?.authUserId === authSession.user.id) {
+      return existing;
+    }
+    return null;
+  }
+  if (!canAgentAuthenticate(agent)) {
     await supabase.auth.signOut();
     clearAgentSession();
     return null;
