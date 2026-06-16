@@ -1,4 +1,4 @@
-import { supabaseConfigured } from "./supabase";
+import { supabase, supabaseConfigured } from "./supabase";
 import { cleanEnvValue } from "./supabase";
 
 const supabaseUrl = cleanEnvValue(import.meta.env.VITE_SUPABASE_URL);
@@ -8,6 +8,20 @@ function assertSupabaseConfigured() {
   if (!supabaseConfigured) {
     throw new Error("Supabase לא מוגדר — הוסף VITE_SUPABASE_URL ו-VITE_SUPABASE_ANON_KEY");
   }
+}
+
+async function resolveBearerToken() {
+  if (supabase) {
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (data?.session?.access_token) {
+        return data.session.access_token;
+      }
+    } catch {
+      // Fall back to anon key for admin / pre-login reads.
+    }
+  }
+  return supabaseKey;
 }
 
 function buildUrl(tableName, filters = {}, params = {}) {
@@ -26,10 +40,11 @@ function buildUrl(tableName, filters = {}, params = {}) {
   return url.toString();
 }
 
-function requestHeaders(extra = {}) {
+async function requestHeaders(extra = {}) {
+  const bearer = await resolveBearerToken();
   return {
     apikey: supabaseKey,
-    Authorization: `Bearer ${supabaseKey}`,
+    Authorization: `Bearer ${bearer}`,
     "Content-Type": "application/json",
     ...extra,
   };
@@ -38,7 +53,7 @@ function requestHeaders(extra = {}) {
 async function requestJson(url, options = {}) {
   const response = await fetch(url, {
     ...options,
-    headers: requestHeaders(options.headers),
+    headers: await requestHeaders(options.headers),
   });
 
   if (!response.ok) {

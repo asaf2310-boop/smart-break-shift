@@ -7,6 +7,8 @@
 --
 -- לא להריץ security_phase0b_lockdown.sql בפרודקשן עדיין (שובר את שאר המודולים)
 --
+-- שלב 2 (אחרי deploy): security_phase2_authenticated_data.sql
+--
 -- לפני הרצה — Supabase Dashboard:
 --   Authentication → Providers → Email: הפעל Email+Password
 --   Authentication → URL Configuration → Redirect: .../reset-password
