@@ -27,7 +27,7 @@ import {
   syncRustDeskSessionToCloud,
   syncRustDeskSessionToCloudAwait,
 } from "@/lib/supportSessionsSync";
-import { buildShortGuestUrl, waitForShortCodeInCloud } from "@/lib/shortGuestLink";
+import { buildShortGuestUrl, finalizeCloudGuestLink } from "@/lib/shortGuestLink";
 import { generateShortCode } from "@/lib/guestLinkCodec";
 
 export const REMOTE_SUPPORT_STORAGE_KEY = "smart-break-shift-remote-support-v1";
@@ -252,37 +252,26 @@ export async function ensureConsentLinkReady(session) {
   if (!session?.id) return { ok: false, error: "missing session", cloudSynced: false };
   if (!cloudSessionSyncEnabled()) return { ok: true, session, cloudSynced: true };
 
-  let workingSession = session;
-  if (!workingSession.shortCode) {
-    const updated = updateSession(workingSession.id, { shortCode: generateShortCode(6) });
-    if (updated) workingSession = updated;
-  }
-  if (!workingSession.shortCode) {
-    return { ok: false, error: "missing short code", cloudSynced: false };
-  }
+  const result = await finalizeCloudGuestLink(session, {
+    kind: "consent",
+    updateSession,
+    syncToCloud: syncRustDeskSessionToCloudAwait,
+  });
 
-  const syncResult = await syncRustDeskSessionToCloudAwait(workingSession);
-  let cloudSynced = false;
-  if (syncResult.ok) {
-    cloudSynced = await waitForShortCodeInCloud(workingSession.shortCode);
-  }
-
-  if (!cloudSynced) {
-    syncRustDeskSessionToCloud(workingSession);
+  if (!result.cloudSynced && result.session) {
+    syncRustDeskSessionToCloud(result.session);
     console.warn("[remoteSupportStore] consent link cloud sync pending", {
-      sessionId: workingSession.id,
-      shortCode: workingSession.shortCode,
-      syncError: syncResult.error || "short code not visible after verify",
+      sessionId: result.session.id,
+      shortCode: result.session.shortCode,
+      syncError: result.cloudError || "signed guest token not ready",
     });
   }
 
   return {
-    ok: true,
-    session: workingSession,
-    cloudSynced,
-    cloudError: cloudSynced
-      ? undefined
-      : syncResult.error || "short code not synced to cloud",
+    ok: result.ok,
+    session: result.session || session,
+    cloudSynced: result.cloudSynced,
+    cloudError: result.cloudError,
   };
 }
 

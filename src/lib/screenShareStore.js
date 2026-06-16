@@ -23,7 +23,7 @@ import {
   syncScreenShareSessionToCloud,
   syncScreenShareSessionToCloudAwait,
 } from "@/lib/supportSessionsSync";
-import { buildShortGuestUrl, waitForShortCodeInCloud } from "@/lib/shortGuestLink";
+import { buildShortGuestUrl, finalizeCloudGuestLink } from "@/lib/shortGuestLink";
 import { requestAgentEndGuestNotify } from "@/lib/screenShareSessionEnd";
 import {
   decodeGuestBootstrapPayload,
@@ -206,7 +206,7 @@ export function isGuestSessionExpired(session) {
 }
 
 export const GUEST_LINK_CLOUD_PENDING_MESSAGE =
-  "הסנכרון לענן עדיין בתהליך — אם הלקוח לא מצליח לפתוח את הקישור, נסו שוב בעוד רגע";
+  "הקישור החתום עדיין בהכנה — אם הלקוח לא מצליח לפתוח, נסו שוב בעוד רגע";
 
 /**
  * Ensure a local short link exists; best-effort cloud sync for /j/ resolution on guest devices.
@@ -216,44 +216,26 @@ export async function ensureGuestLinkReady(session) {
   if (!session?.id) return { ok: false, error: "missing session", cloudSynced: false };
   if (!cloudSessionSyncEnabled()) return { ok: true, session, cloudSynced: true };
 
-  let workingSession = session;
-  if (!workingSession.shortCode) {
-    const updated = updateSession(workingSession.id, { shortCode: generateShortCode(6) });
-    if (updated) workingSession = updated;
-  }
-  if (!workingSession.shortCode) {
-    return { ok: false, error: "missing short code", cloudSynced: false };
-  }
+  const result = await finalizeCloudGuestLink(session, {
+    kind: "screen",
+    updateSession,
+    syncToCloud: syncScreenShareSessionToCloudAwait,
+  });
 
-  const syncResult = await syncScreenShareSessionToCloudAwait(workingSession);
-  let cloudSynced = false;
-  if (syncResult.ok) {
-    cloudSynced = await waitForShortCodeInCloud(workingSession.shortCode);
-  }
-
-  if (cloudSynced && workingSession.shortCode) {
-    const verified = updateSession(workingSession.id, {
-      shortCodeCloudSynced: true,
-    });
-    if (verified) workingSession = verified;
-  }
-
-  if (!cloudSynced) {
-    syncScreenShareSessionToCloud(workingSession);
+  if (!result.cloudSynced && result.session) {
+    syncScreenShareSessionToCloud(result.session);
     console.warn("[screenShareStore] guest link cloud sync pending", {
-      sessionId: workingSession.id,
-      shortCode: workingSession.shortCode,
-      syncError: syncResult.error || "short code not visible after verify",
+      sessionId: result.session.id,
+      shortCode: result.session.shortCode,
+      syncError: result.cloudError || "signed guest token not ready",
     });
   }
 
   return {
-    ok: true,
-    session: workingSession,
-    cloudSynced,
-    cloudError: cloudSynced
-      ? undefined
-      : syncResult.error || "short code not synced to cloud",
+    ok: result.ok,
+    session: result.session || session,
+    cloudSynced: result.cloudSynced,
+    cloudError: result.cloudError,
   };
 }
 
