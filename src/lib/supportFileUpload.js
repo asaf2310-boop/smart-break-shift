@@ -1,5 +1,4 @@
 import { demoModeEnabled } from "@/api/demoClient";
-import { supabase } from "@/api/supabase";
 import {
   downloadSupportFileBlob,
   getSupportFileBlob,
@@ -18,11 +17,13 @@ import {
   cloudSupportFilesEnabled,
   fetchCloudSessionFiles,
   getSignedSupportFileUrl,
-  isSupportFilesBucketMissingError,
   mergeSessionFiles,
-  SUPPORT_FILES_BUCKET,
   upsertCloudSupportFileMeta,
 } from "@/lib/supportFilesSync";
+import {
+  apiPrepareSupportFileUpload,
+  uploadBlobToSignedUrl,
+} from "@/lib/storageApiClient";
 import { generateShortCode } from "@/lib/guestLinkCodec";
 
 export { cloudSupportFilesEnabled, MAX_SUPPORT_FILE_BYTES, mergeSessionFiles, fetchCloudSessionFiles };
@@ -137,19 +138,21 @@ export async function uploadSupportSessionFile(file, options = {}) {
     uploadStatus: "uploading",
   });
 
-  const { error: uploadError } = await supabase.storage
-    .from(SUPPORT_FILES_BUCKET)
-    .upload(storagePath, file, {
-      upsert: true,
-      contentType: mimeType,
-      cacheControl: "3600",
-    });
+  const prep = await apiPrepareSupportFileUpload({
+    sessionId,
+    storagePath,
+    mimeType,
+    uploadedBy,
+  });
 
-  if (uploadError) {
-    const bucketMissing = isSupportFilesBucketMissingError(uploadError);
-    const message = bucketMissing
-      ? `bucket «${SUPPORT_FILES_BUCKET}» לא קיים — הריצו supabase/support_files_storage.sql`
-      : uploadError.message || "שגיאה בהעלאה";
+  if (!prep.ok) {
+    const message =
+      prep.message ||
+      (prep.error === "not_found"
+        ? "סשן לא נמצא"
+        : prep.error === "unauthorized"
+          ? "אין הרשאה להעלות קובץ"
+          : "שגיאה בהעלאה");
 
     await upsertCloudSupportFileMeta({
       sessionId,
@@ -164,6 +167,25 @@ export async function uploadSupportSessionFile(file, options = {}) {
     });
 
     return { ok: false, message, uploadStatus: "failed", fileId };
+  }
+
+  if (prep.signedUrl) {
+    const putResult = await uploadBlobToSignedUrl(prep.signedUrl, file, mimeType);
+    if (!putResult.ok) {
+      const message = putResult.message || "שגיאה בהעלאה ל-Storage";
+      await upsertCloudSupportFileMeta({
+        sessionId,
+        fileId,
+        storagePath,
+        originalName,
+        uploadedBy,
+        uploaderLabel,
+        uploadStatus: "failed",
+        uploadError: message,
+        fileSizeBytes: file.size,
+      });
+      return { ok: false, message, uploadStatus: "failed", fileId };
+    }
   }
 
   const now = new Date().toISOString();

@@ -2,6 +2,7 @@ import { cleanEnvValue } from "@/api/supabase";
 import { demoModeEnabled } from "@/api/demoClient";
 import { cloudSessionSyncEnabled } from "@/lib/supportSessionsSync";
 import { apiMintGuestLink, apiResolveGuestLink } from "@/lib/guestLinkClient";
+import { saveGuestLinkToken } from "@/lib/guestLinkTokenStore";
 import {
   encodeCompactGuestToken,
   decodeCompactGuestToken,
@@ -175,6 +176,8 @@ async function resolveSignedGuestToken(
   } else {
     bootstrapScreen?.(session.sessionId, bootstrap);
   }
+
+  saveGuestLinkToken(session.sessionId, token);
 
   return {
     kind,

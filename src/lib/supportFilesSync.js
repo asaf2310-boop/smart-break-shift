@@ -1,6 +1,7 @@
 import { demoModeEnabled } from "@/api/demoClient";
 import { supabase, supabaseConfigured } from "@/api/supabase";
 import { getFileExtension } from "@/lib/supportFilesStore";
+import { apiGetSupportFileSignedUrl } from "@/lib/storageApiClient";
 
 export const SUPPORT_FILES_BUCKET = "support-files";
 
@@ -106,15 +107,19 @@ export async function fetchCloudSessionFiles(sessionId) {
 
 export async function getSignedSupportFileUrl(storagePath, expiresIn = SIGNED_URL_TTL_SEC) {
   if (!cloudSupportFilesEnabled() || !storagePath) return null;
+  const sessionId = String(storagePath).split("/")[0] || "";
   try {
-    const { data, error } = await supabase.storage
-      .from(SUPPORT_FILES_BUCKET)
-      .createSignedUrl(storagePath, expiresIn);
-    if (error) {
-      console.warn("[supportFilesSync] signed url failed", error.message);
+    const result = await apiGetSupportFileSignedUrl({
+      sessionId,
+      storagePath,
+      bucket: SUPPORT_FILES_BUCKET,
+      expiresIn,
+    });
+    if (!result.ok) {
+      console.warn("[supportFilesSync] signed url failed", result.error || result.message);
       return null;
     }
-    return data?.signedUrl || null;
+    return result.signedUrl || null;
   } catch (err) {
     console.warn("[supportFilesSync] signed url error", err);
     return null;

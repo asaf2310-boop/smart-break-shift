@@ -1,7 +1,12 @@
-/** Vercel serverless — agent auth + signed guest support links (mint + resolve). */
+/** Vercel serverless — agent auth, guest links, storage uploads (phase 5). */
 
 import { json, readJsonBody, handleOptions, isSameOrigin } from "../server/knowledge/httpUtils.js";
 import { isPgVectorConfigured } from "../server/knowledge/supabaseAdmin.js";
+import {
+  handleRecordingUpload,
+  handleSupportFileSignedUrl,
+  handleSupportFileUpload,
+} from "../server/storage/storageUploadService.js";
 import {
   adminUpdateAgentPassword,
   getAgentById,
@@ -235,6 +240,58 @@ export default async function handler(req, res) {
       return json(res, status, result, req);
     }
 
+    return json(res, 200, result, req);
+  }
+
+  if (action === "support_file_upload") {
+    const result = await handleSupportFileUpload(req, body);
+    if (!result.ok) {
+      const status =
+        result.error === "unauthorized" || result.error === "forbidden"
+          ? 401
+          : result.error === "not_found"
+            ? 404
+            : result.error === "ended"
+              ? 410
+              : result.error === "invalid_token" || result.error === "expired"
+                ? 403
+                : 400;
+      return json(res, status, result, req);
+    }
+    return json(res, 200, result, req);
+  }
+
+  if (action === "support_file_signed_url") {
+    const result = await handleSupportFileSignedUrl(req, body);
+    if (!result.ok) {
+      const status =
+        result.error === "unauthorized" || result.error === "forbidden"
+          ? 401
+          : result.error === "not_found"
+            ? 404
+            : result.error === "ended"
+              ? 410
+              : result.error === "invalid_token" || result.error === "expired"
+                ? 403
+                : 400;
+      return json(res, status, result, req);
+    }
+    return json(res, 200, result, req);
+  }
+
+  if (action === "recording_upload") {
+    const result = await handleRecordingUpload(req, body);
+    if (!result.ok) {
+      const status =
+        result.error === "unauthorized" || result.error === "forbidden"
+          ? 401
+          : result.error === "not_found"
+            ? 404
+            : result.error === "ended"
+              ? 410
+              : 400;
+      return json(res, status, result, req);
+    }
     return json(res, 200, result, req);
   }
 

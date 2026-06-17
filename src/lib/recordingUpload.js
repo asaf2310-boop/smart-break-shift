@@ -1,5 +1,4 @@
 import { demoModeEnabled } from "@/api/demoClient";
-import { supabase } from "@/api/supabase";
 import { getAgentSession } from "@/lib/agentAuth";
 import { getSession, updateRecordingMetadata } from "@/lib/screenShareStore";
 import { syncScreenShareSessionToCloudAwait } from "@/lib/supportSessionsSync";
@@ -7,9 +6,12 @@ import {
   buildRecordingStoragePath,
   cloudRecordingUploadEnabled,
   formatRecordingStorageError,
-  SCREEN_RECORDINGS_BUCKET,
   upsertCloudRecordingMeta,
 } from "@/lib/screenRecordingsSync";
+import {
+  apiPrepareRecordingUpload,
+  uploadBlobToSignedUrl,
+} from "@/lib/storageApiClient";
 
 export { cloudRecordingUploadEnabled };
 
@@ -146,16 +148,18 @@ export async function uploadRecordingToCloud(blob, meta = {}, options = {}) {
     uploadStatus: "uploading",
   });
 
-  const { error: uploadError } = await supabase.storage
-    .from(SCREEN_RECORDINGS_BUCKET)
-    .upload(storagePath, blob, {
-      upsert: true,
-      contentType: mimeType,
-      cacheControl: "3600",
-    });
+  const prep = await apiPrepareRecordingUpload({
+    sessionId,
+    storagePath,
+    mimeType,
+  });
 
-  if (uploadError) {
-    const message = formatRecordingStorageError(uploadError);
+  if (!prep.ok) {
+    const message =
+      prep.message ||
+      (prep.error === "unauthorized"
+        ? "יש להתחבר כנציג לפני העלאה לשרת"
+        : formatRecordingStorageError({ message: prep.error }));
 
     updateRecordingMetadata(sessionId, recordingId, {
       cloudUploadStatus: "failed",
@@ -175,6 +179,29 @@ export async function uploadRecordingToCloud(blob, meta = {}, options = {}) {
 
     onStatus?.("failed");
     return { ok: false, message, uploadStatus: "failed" };
+  }
+
+  if (prep.signedUrl) {
+    const putResult = await uploadBlobToSignedUrl(prep.signedUrl, blob, mimeType);
+    if (!putResult.ok) {
+      const message = formatRecordingStorageError({ message: putResult.message });
+      updateRecordingMetadata(sessionId, recordingId, {
+        cloudUploadStatus: "failed",
+        cloudUploadError: message,
+        storagePath,
+      });
+      await upsertCloudRecordingMeta({
+        sessionId,
+        recordingId,
+        storagePath,
+        agentName,
+        uploadStatus: "failed",
+        uploadError: message,
+        fileSizeBytes: blob.size,
+      });
+      onStatus?.("failed");
+      return { ok: false, message, uploadStatus: "failed" };
+    }
   }
 
   const now = new Date().toISOString();

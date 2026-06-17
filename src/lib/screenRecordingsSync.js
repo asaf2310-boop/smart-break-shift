@@ -1,6 +1,7 @@
 import { demoModeEnabled } from "@/api/demoClient";
 import { supabase, supabaseConfigured } from "@/api/supabase";
 import { getAgentSession } from "@/lib/agentAuth";
+import { apiGetSupportFileSignedUrl } from "@/lib/storageApiClient";
 
 export const SCREEN_RECORDINGS_BUCKET = "screen-recordings";
 
@@ -190,18 +191,22 @@ export async function fetchCloudScreenRecordings(limit = 1000) {
   }
 }
 
-/** URL חתום לנגינה (מנהל / נציג מחובר). */
+/** URL חתום לנגינה (מנהל / נציג מחובר) — דרך API + service role. */
 export async function getSignedRecordingUrl(storagePath, expiresIn = SIGNED_URL_TTL_SEC) {
   if (!cloudRecordingUploadEnabled() || !storagePath) return null;
+  const sessionId = String(storagePath).split("/")[0] || "";
   try {
-    const { data, error } = await supabase.storage
-      .from(SCREEN_RECORDINGS_BUCKET)
-      .createSignedUrl(storagePath, expiresIn);
-    if (error) {
-      console.warn("[screenRecordingsSync] signed url failed", error.message);
+    const result = await apiGetSupportFileSignedUrl({
+      sessionId,
+      storagePath,
+      bucket: SCREEN_RECORDINGS_BUCKET,
+      expiresIn,
+    });
+    if (!result.ok) {
+      console.warn("[screenRecordingsSync] signed url failed", result.error || result.message);
       return null;
     }
-    return data?.signedUrl || null;
+    return result.signedUrl || null;
   } catch (err) {
     console.warn("[screenRecordingsSync] signed url error", err);
     return null;

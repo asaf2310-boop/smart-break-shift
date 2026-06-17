@@ -15,9 +15,11 @@ import {
   buildFullGuestPath,
   GUEST_BOOTSTRAP_QUERY_KEY,
   GUEST_LINK_ERROR,
+  isSignedGuestLinkToken,
   messageForGuestLinkError,
   resolveGuestFromTokenAsync,
 } from "@/lib/shortGuestLink";
+import { saveGuestLinkToken } from "@/lib/guestLinkTokenStore";
 
 export default function GuestJoinRedirectPage() {
   const { token } = useParams();
@@ -53,6 +55,10 @@ export default function GuestJoinRedirectPage() {
       if (!resolved?.sessionId || !resolved.kind) {
         setError(messageForGuestLinkError(GUEST_LINK_ERROR.NOT_FOUND));
         return;
+      }
+
+      if (isSignedGuestLinkToken(token)) {
+        saveGuestLinkToken(resolved.sessionId, token);
       }
 
       const path = buildFullGuestPath(resolved.sessionId, resolved.kind, resolved.bootstrap);
