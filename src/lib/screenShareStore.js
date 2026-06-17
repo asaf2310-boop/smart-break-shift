@@ -31,11 +31,17 @@ import {
   generateShortCode,
   GUEST_BOOTSTRAP_QUERY_KEY,
 } from "@/lib/guestLinkCodec";
+import {
+  getSupportSessionStorage,
+  readJson,
+  writeJson,
+} from "@/lib/browserStoragePolicy";
 
 export { GUEST_BOOTSTRAP_QUERY_KEY, encodeGuestBootstrapPayload, decodeGuestBootstrapPayload };
 
 export const SCREEN_SHARE_STORAGE_KEY = "smart-break-shift-screen-share-v1";
 export const SCREEN_SHARE_CHANGE_EVENT = "screen-share-changed";
+const SCREEN_SHARE_BROADCAST_CHANNEL = "smart-break-screen-share";
 /** דמו: תוקף קישור אורח — 72 שעות מיצירת הסשן (לא מחיקה אוטומטית מ-localStorage) */
 export const DEMO_GUEST_SESSION_TTL_MS = 72 * 60 * 60 * 1000;
 
@@ -49,40 +55,44 @@ function makeId(prefix) {
   return `${prefix}${generateShortCode(8)}`;
 }
 
+function getSupportStorage() {
+  return getSupportSessionStorage(demoModeEnabled);
+}
+
 function readStore() {
   if (!remoteSupportEnabled || typeof window === "undefined") {
     return { sessions: [], emailLogs: [], recordings: [] };
   }
-  try {
-    const raw = localStorage.getItem(SCREEN_SHARE_STORAGE_KEY);
-    if (!raw) return { sessions: [], emailLogs: [], recordings: [] };
-    const parsed = JSON.parse(raw);
-    return {
-      sessions: Array.isArray(parsed.sessions) ? parsed.sessions : [],
-      emailLogs: Array.isArray(parsed.emailLogs) ? parsed.emailLogs : [],
-      recordings: Array.isArray(parsed.recordings) ? parsed.recordings : [],
-    };
-  } catch {
-    return { sessions: [], emailLogs: [], recordings: [] };
-  }
+  const parsed = readJson(getSupportStorage(), SCREEN_SHARE_STORAGE_KEY);
+  if (!parsed) return { sessions: [], emailLogs: [], recordings: [] };
+  return {
+    sessions: Array.isArray(parsed.sessions) ? parsed.sessions : [],
+    emailLogs: Array.isArray(parsed.emailLogs) ? parsed.emailLogs : [],
+    recordings: Array.isArray(parsed.recordings) ? parsed.recordings : [],
+  };
 }
 
 function readSessions() {
   return readStore().sessions;
 }
 
+function notifyScreenShareBroadcast() {
+  if (demoModeEnabled || typeof BroadcastChannel === "undefined") return;
+  const channel = new BroadcastChannel(SCREEN_SHARE_BROADCAST_CHANNEL);
+  channel.postMessage({ type: "changed" });
+  channel.close();
+}
+
 function writeStore({ sessions, emailLogs, recordings }) {
   if (!remoteSupportEnabled || typeof window === "undefined") return;
   const current = readStore();
-  localStorage.setItem(
-    SCREEN_SHARE_STORAGE_KEY,
-    JSON.stringify({
-      sessions: sessions ?? current.sessions,
-      emailLogs: emailLogs ?? current.emailLogs,
-      recordings: recordings ?? current.recordings,
-    })
-  );
+  writeJson(getSupportStorage(), SCREEN_SHARE_STORAGE_KEY, {
+    sessions: sessions ?? current.sessions,
+    emailLogs: emailLogs ?? current.emailLogs,
+    recordings: recordings ?? current.recordings,
+  });
   window.dispatchEvent(new CustomEvent(SCREEN_SHARE_CHANGE_EVENT));
+  notifyScreenShareBroadcast();
 }
 
 function writeSessions(sessions) {
@@ -1122,15 +1132,25 @@ export function subscribeScreenShare(callback) {
   if (typeof window === "undefined") return () => {};
   const handler = () => callback();
   window.addEventListener(SCREEN_SHARE_CHANGE_EVENT, handler);
-  // Cross-tab sync: localStorage write triggers `storage` events in other tabs.
-  const onStorage = (e) => {
-    if (!e) return;
-    if (e.key !== SCREEN_SHARE_STORAGE_KEY) return;
-    callback();
-  };
-  window.addEventListener("storage", onStorage);
+
+  let broadcastChannel = null;
+  if (!demoModeEnabled && typeof BroadcastChannel !== "undefined") {
+    broadcastChannel = new BroadcastChannel(SCREEN_SHARE_BROADCAST_CHANNEL);
+    broadcastChannel.onmessage = () => callback();
+  }
+
+  const onStorage = demoModeEnabled
+    ? (e) => {
+        if (!e) return;
+        if (e.key !== SCREEN_SHARE_STORAGE_KEY) return;
+        callback();
+      }
+    : null;
+  if (onStorage) window.addEventListener("storage", onStorage);
+
   return () => {
     window.removeEventListener(SCREEN_SHARE_CHANGE_EVENT, handler);
-    window.removeEventListener("storage", onStorage);
+    if (onStorage) window.removeEventListener("storage", onStorage);
+    if (broadcastChannel) broadcastChannel.close();
   };
 }

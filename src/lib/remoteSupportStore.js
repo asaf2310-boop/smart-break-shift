@@ -29,9 +29,16 @@ import {
 } from "@/lib/supportSessionsSync";
 import { buildShortGuestUrl, finalizeCloudGuestLink } from "@/lib/shortGuestLink";
 import { generateShortCode } from "@/lib/guestLinkCodec";
+import {
+  getSupportSessionStorage,
+  readJson,
+  sanitizeSupportSessionForPersist,
+  writeJson,
+} from "@/lib/browserStoragePolicy";
 
 export const REMOTE_SUPPORT_STORAGE_KEY = "smart-break-shift-remote-support-v1";
 export const REMOTE_SUPPORT_CHANGE_EVENT = "remote-support-changed";
+const REMOTE_SUPPORT_BROADCAST_CHANNEL = "smart-break-remote-support";
 export const RUSTDESK_DOWNLOAD_URL = "https://rustdesk.com/download";
 
 const EMAIL_SUBJECT_RUSTDESK =
@@ -47,38 +54,45 @@ function makeId(prefix) {
   return `${prefix}${generateShortCode(8)}`;
 }
 
+function getSupportStorage() {
+  return getSupportSessionStorage(demoModeEnabled);
+}
+
 function readStore() {
   if (!remoteSupportEnabled || typeof window === "undefined") {
     return { sessions: [], emailLogs: [] };
   }
-  try {
-    const raw = localStorage.getItem(REMOTE_SUPPORT_STORAGE_KEY);
-    if (!raw) return { sessions: [], emailLogs: [] };
-    const parsed = JSON.parse(raw);
-    return {
-      sessions: Array.isArray(parsed.sessions) ? parsed.sessions : [],
-      emailLogs: Array.isArray(parsed.emailLogs) ? parsed.emailLogs : [],
-    };
-  } catch {
-    return { sessions: [], emailLogs: [] };
-  }
+  const parsed = readJson(getSupportStorage(), REMOTE_SUPPORT_STORAGE_KEY);
+  if (!parsed) return { sessions: [], emailLogs: [] };
+  return {
+    sessions: Array.isArray(parsed.sessions) ? parsed.sessions : [],
+    emailLogs: Array.isArray(parsed.emailLogs) ? parsed.emailLogs : [],
+  };
 }
 
 function readSessions() {
   return readStore().sessions;
 }
 
+function notifyRemoteSupportBroadcast() {
+  if (demoModeEnabled || typeof BroadcastChannel === "undefined") return;
+  const channel = new BroadcastChannel(REMOTE_SUPPORT_BROADCAST_CHANNEL);
+  channel.postMessage({ type: "changed" });
+  channel.close();
+}
+
 function writeStore({ sessions, emailLogs }) {
   if (!remoteSupportEnabled || typeof window === "undefined") return;
   const current = readStore();
-  localStorage.setItem(
-    REMOTE_SUPPORT_STORAGE_KEY,
-    JSON.stringify({
-      sessions: sessions ?? current.sessions,
-      emailLogs: emailLogs ?? current.emailLogs,
-    })
+  const nextSessions = (sessions ?? current.sessions).map((session) =>
+    sanitizeSupportSessionForPersist(session, { demoMode: demoModeEnabled })
   );
+  writeJson(getSupportStorage(), REMOTE_SUPPORT_STORAGE_KEY, {
+    sessions: nextSessions,
+    emailLogs: emailLogs ?? current.emailLogs,
+  });
   window.dispatchEvent(new CustomEvent(REMOTE_SUPPORT_CHANGE_EVENT));
+  notifyRemoteSupportBroadcast();
 }
 
 function writeSessions(sessions) {
@@ -568,14 +582,25 @@ export function subscribeRemoteSupport(callback) {
   if (typeof window === "undefined") return () => {};
   const handler = () => callback();
   window.addEventListener(REMOTE_SUPPORT_CHANGE_EVENT, handler);
-  const onStorage = (e) => {
-    if (!e) return;
-    if (e.key !== REMOTE_SUPPORT_STORAGE_KEY) return;
-    callback();
-  };
-  window.addEventListener("storage", onStorage);
+
+  let broadcastChannel = null;
+  if (!demoModeEnabled && typeof BroadcastChannel !== "undefined") {
+    broadcastChannel = new BroadcastChannel(REMOTE_SUPPORT_BROADCAST_CHANNEL);
+    broadcastChannel.onmessage = () => callback();
+  }
+
+  const onStorage = demoModeEnabled
+    ? (e) => {
+        if (!e) return;
+        if (e.key !== REMOTE_SUPPORT_STORAGE_KEY) return;
+        callback();
+      }
+    : null;
+  if (onStorage) window.addEventListener("storage", onStorage);
+
   return () => {
     window.removeEventListener(REMOTE_SUPPORT_CHANGE_EVENT, handler);
-    window.removeEventListener("storage", onStorage);
+    if (onStorage) window.removeEventListener("storage", onStorage);
+    if (broadcastChannel) broadcastChannel.close();
   };
 }

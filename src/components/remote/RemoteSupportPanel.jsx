@@ -54,7 +54,7 @@ const PANEL_DEMO_BANNER =
   "דמו — בחרו למטה: שלב א צפייה בדפדפן (ללא התקנה) או שליטה מלאה ב-RustDesk.";
 
 const RUSTDESK_DEMO_BANNER =
-  "לפרודקשן: שרת RustDesk עצמי (hbbs/hbbr) + מדיניות אבטחה; אל תשמרו סיסמאות ב-localStorage.";
+  "לפרודקשן: שרת RustDesk עצמי (hbbs/hbbr) + מדיניות אבטחה; סיסמאות לא נשמרות בדפדפן.";
 
 function isValidEmail(value) {
   const trimmed = String(value || "").trim();
@@ -607,7 +607,7 @@ export default function RemoteSupportPanel({
                     dir="ltr"
                   />
                   <p className="text-xs text-slate-500">
-                    בדמו נשמרת ב-localStorage — בפרודקשן להימנע משמירה ארוכת טווח.
+                    בדמו נשמרת ב-localStorage — בפרודקשן נשמר רק במהלך הטאב (sessionStorage), ללא סיסמה.
                   </p>
                 </div>
               </div>

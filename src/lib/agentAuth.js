@@ -18,6 +18,12 @@ import {
   apiRequestFirstLogin,
   apiSyncAgentAuth,
 } from "@/lib/agentAuthClient";
+import {
+  getAgentSessionStorage,
+  readJson,
+  removeKey,
+  writeJson,
+} from "@/lib/browserStoragePolicy";
 
 export const AGENT_SESSION_KEY = "smart-break-agent-session-v1";
 export const INVALID_CREDENTIALS_MSG = "אימייל או סיסמה שגויים";
@@ -298,25 +304,21 @@ export async function validateAndRefreshAgentSession() {
 
 export function getAgentSession() {
   if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(AGENT_SESSION_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+  return readJson(getAgentSessionStorage(), AGENT_SESSION_KEY);
 }
 
 export function setAgentSession(session) {
   clearAdminSession();
-  localStorage.setItem(AGENT_SESSION_KEY, JSON.stringify(session));
-  localStorage.setItem("agent_name", session.displayName);
+  writeJson(getAgentSessionStorage(), AGENT_SESSION_KEY, session);
   window.dispatchEvent(new CustomEvent("agent-session-changed"));
 }
 
 export function clearAgentSession() {
   clearAdminSession();
-  localStorage.removeItem(AGENT_SESSION_KEY);
-  localStorage.removeItem("agent_name");
+  removeKey(getAgentSessionStorage(), AGENT_SESSION_KEY);
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem("agent_name");
+  }
   window.dispatchEvent(new CustomEvent("agent-session-changed"));
 }
 
