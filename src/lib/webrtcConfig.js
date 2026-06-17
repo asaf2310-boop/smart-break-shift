@@ -86,8 +86,8 @@ export function getPeerJsOptions(peerId) {
  * @param {string} [peerId]
  * @returns {Promise<PeerJSOption>}
  */
-export async function getPeerJsOptionsAsync(peerId, options = {}) {
-  const { iceServers, iceTransportPolicy } = await resolveIceServers(options);
+export async function getPeerJsOptionsAsync(peerId, fetchOptions = {}) {
+  const { iceServers, iceTransportPolicy } = await resolveIceServers(fetchOptions);
 
   /** @type {PeerJSOption} */
   const options = {
