@@ -1,6 +1,6 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Label } from "@/components/ui/label";
-import { CRM_DEPARTMENTS } from "@/lib/crmDepartments";
+import { listCrmDepartments, subscribeCrmDepartments } from "@/lib/crmDepartments";
 import { getAgentNamesList } from "@/constants/scheduling";
 
 export const ASSIGNMENT_TYPES = [
@@ -10,6 +10,13 @@ export const ASSIGNMENT_TYPES = [
 
 export default function ReferralAssignmentFields({ value, onChange, defaultAgentName }) {
   const agents = useMemo(() => getAgentNamesList(), []);
+  const [departments, setDepartments] = useState(() => listCrmDepartments());
+
+  useEffect(() => {
+    const refresh = () => setDepartments(listCrmDepartments());
+    refresh();
+    return subscribeCrmDepartments(refresh);
+  }, []);
 
   const setType = (assigned_to_type) => {
     if (assigned_to_type === "agent") {
@@ -22,7 +29,7 @@ export default function ReferralAssignmentFields({ value, onChange, defaultAgent
       onChange({
         assigned_to_type: "department",
         assigned_agent_name: null,
-        assigned_department_id: value.assigned_department_id || CRM_DEPARTMENTS[0]?.id || "service",
+        assigned_department_id: value.assigned_department_id || departments[0]?.id || "service",
       });
     }
   };
@@ -89,7 +96,7 @@ export default function ReferralAssignmentFields({ value, onChange, defaultAgent
             }
             className="flex h-9 w-full rounded-xl border border-input bg-white px-3 py-1 text-sm shadow-sm"
           >
-            {CRM_DEPARTMENTS.map((dept) => (
+            {departments.map((dept) => (
               <option key={dept.id} value={dept.id}>
                 {dept.name}
                 {dept.agentNames.length ? ` (${dept.agentNames.length} נציגים)` : ""}

@@ -1,10 +1,36 @@
 import { crmEnabled } from "@/api/crmMode";
-import { getDepartmentName, getDepartmentsForAgent } from "@/lib/crmDepartments";
+import { isCrmCloudEnabled } from "@/api/crmCloudMode";
+import { getDepartmentName, getDepartmentsForAgent, isCrmDepartmentsHydrated } from "@/lib/crmDepartments";
+import {
+  deleteCallLogFromCloud,
+  deleteCustomerFromCloud,
+  deleteEmailLogFromCloud,
+  invalidateCrmCloudCache,
+  loadCrmFromCloud,
+  logReferralEvent,
+  migrateLocalStoreToCloud,
+  persistCallLog,
+  persistCustomer,
+  persistEmailLog,
+  persistReferral,
+} from "@/lib/crmCloudSync";
 
 export const CRM_STORAGE_KEY = "smart-break-shift-crm-v3";
 const CRM_STORAGE_KEY_V2 = "smart-break-shift-crm-v2";
 export const REFERRAL_REOPEN_DAYS = 7;
 export const CRM_CHANGE_EVENT = "crm-store-changed";
+
+let memoryStore = null;
+let hydratePromise = null;
+let cloudHydrated = false;
+
+function emptyStore() {
+  return { customers: [], callLogs: [], emailLogs: [], referrals: [] };
+}
+
+function warnCloudPersist(err, op) {
+  console.warn(`[crmStore] cloud ${op} failed`, err);
+}
 
 /*
 -- Supabase (production, later):
@@ -74,6 +100,9 @@ export const CALL_TYPES = [
 ];
 
 function makeId(prefix) {
+  if (isCrmCloudEnabled() && typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
   return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
 }
 
@@ -299,10 +328,8 @@ function isStoreEmpty(store) {
   );
 }
 
-function readStore() {
-  if (!crmEnabled || typeof window === "undefined") {
-    return { customers: [], callLogs: [], emailLogs: [], referrals: [] };
-  }
+function readLocalStorageStore() {
+  if (!crmEnabled || typeof window === "undefined") return emptyStore();
   try {
     let raw = localStorage.getItem(CRM_STORAGE_KEY);
     if (!raw) {
@@ -310,30 +337,143 @@ function readStore() {
       if (raw) {
         const store = parseStoredCrm(raw);
         migrateReferralsInStore(store);
-        writeStore(store);
         return store;
       }
     }
     if (raw) {
       const store = parseStoredCrm(raw);
-      if (isStoreEmpty(store)) {
-        return seedAndPersistStore();
-      }
       if (migrateReferralsInStore(store)) {
-        writeStore(store);
+        return store;
       }
       return store;
     }
   } catch {
     // ignore
   }
-  return seedAndPersistStore();
+  return emptyStore();
+}
+
+function readStore() {
+  if (!crmEnabled || typeof window === "undefined") {
+    return emptyStore();
+  }
+  if (isCrmCloudEnabled()) {
+    if (!cloudHydrated) return emptyStore();
+    if (memoryStore) return memoryStore;
+    return readLocalStorageStore();
+  }
+  const local = readLocalStorageStore();
+  if (isStoreEmpty(local)) {
+    return seedAndPersistStore();
+  }
+  if (memoryStore) return memoryStore;
+  memoryStore = local;
+  return memoryStore;
+}
+
+function cacheStoreToLocalStorage(store) {
+  try {
+    localStorage.setItem(CRM_STORAGE_KEY, JSON.stringify(store));
+  } catch {
+    // ignore quota / private mode
+  }
 }
 
 function writeStore(store) {
   if (!crmEnabled || typeof window === "undefined") return;
-  localStorage.setItem(CRM_STORAGE_KEY, JSON.stringify(store));
+  memoryStore = {
+    customers: store.customers || [],
+    callLogs: store.callLogs || [],
+    emailLogs: store.emailLogs || [],
+    referrals: store.referrals || [],
+  };
+  cacheStoreToLocalStorage(memoryStore);
   window.dispatchEvent(new CustomEvent(CRM_CHANGE_EVENT));
+}
+
+function cloudHasData(store) {
+  return (
+    store.customers?.length > 0 ||
+    store.referrals?.length > 0 ||
+    store.callLogs?.length > 0 ||
+    store.emailLogs?.length > 0
+  );
+}
+
+async function loadCrmStoreFromCloud() {
+  if (!isCrmCloudEnabled()) {
+    memoryStore = readLocalStorageStore();
+    if (isStoreEmpty(memoryStore)) {
+      memoryStore = seedAndPersistStore();
+    }
+    cloudHydrated = true;
+    return memoryStore;
+  }
+
+  const local = readLocalStorageStore();
+
+  try {
+    const cloud = await loadCrmFromCloud();
+    if (cloudHasData(cloud)) {
+      memoryStore = cloud;
+      cacheStoreToLocalStorage(memoryStore);
+      cloudHydrated = true;
+      return memoryStore;
+    }
+
+    if (cloudHasData(local)) {
+      memoryStore = await migrateLocalStoreToCloud(local);
+      cacheStoreToLocalStorage(memoryStore);
+      cloudHydrated = true;
+      return memoryStore;
+    }
+  } catch (err) {
+    console.warn("[crmStore] cloud load failed", err);
+    if (cloudHasData(local)) {
+      memoryStore = local;
+      cacheStoreToLocalStorage(memoryStore);
+      cloudHydrated = true;
+      return memoryStore;
+    }
+  }
+
+  memoryStore = emptyStore();
+  cacheStoreToLocalStorage(memoryStore);
+  cloudHydrated = true;
+  return memoryStore;
+}
+
+/** טוען CRM מ-Supabase (כולל מחלקות) */
+export function hydrateCrmStore() {
+  if (!hydratePromise) {
+    hydratePromise = (async () => {
+      const { hydrateCrmDepartments } = await import("@/lib/crmDepartments");
+      await Promise.all([loadCrmStoreFromCloud(), hydrateCrmDepartments()]);
+    })().finally(() => {
+      hydratePromise = null;
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent(CRM_CHANGE_EVENT));
+      }
+    });
+  }
+  return hydratePromise;
+}
+
+/** רענון מ-Supabase Realtime */
+export function invalidateCrmStoreCache() {
+  memoryStore = null;
+  cloudHydrated = false;
+  hydratePromise = null;
+  invalidateCrmCloudCache();
+  import("@/lib/crmDepartments").then(({ clearCrmDepartmentsMemory }) => {
+    clearCrmDepartmentsMemory();
+  });
+  return hydrateCrmStore();
+}
+
+export function isCrmStoreHydrated() {
+  if (!isCrmCloudEnabled()) return true;
+  return cloudHydrated && isCrmDepartmentsHydrated();
 }
 
 export function crmDemoAvailable() {
@@ -406,6 +546,9 @@ export function createCustomer({ name, phone, email, company, notes }) {
   };
   store.customers = [...store.customers, customer];
   writeStore(store);
+  if (isCrmCloudEnabled()) {
+    persistCustomer(customer).catch((err) => warnCloudPersist(err, "persistCustomer"));
+  }
   return customer;
 }
 
@@ -427,6 +570,9 @@ export function updateCustomer(id, patch) {
     return updated;
   });
   writeStore(store);
+  if (isCrmCloudEnabled() && updated) {
+    persistCustomer(updated).catch((err) => warnCloudPersist(err, "persistCustomer"));
+  }
   return updated;
 }
 
@@ -437,6 +583,9 @@ export function deleteCustomer(id) {
   store.emailLogs = (store.emailLogs || []).filter((log) => log.customer_id !== id);
   store.referrals = (store.referrals || []).filter((ref) => ref.customer_id !== id);
   writeStore(store);
+  if (isCrmCloudEnabled()) {
+    deleteCustomerFromCloud(id).catch((err) => warnCloudPersist(err, "deleteCustomer"));
+  }
 }
 
 export function listCallLogsForCustomer(customerId) {
@@ -488,6 +637,9 @@ export function createCallLog({
   };
   store.callLogs = [...store.callLogs, log];
   writeStore(store);
+  if (isCrmCloudEnabled()) {
+    persistCallLog(log).catch((err) => warnCloudPersist(err, "persistCallLog"));
+  }
   if (log.call_type === "incoming") {
     tryAutoReopenReferrals(customer_id, {
       referralTopic: log.referral_topic,
@@ -501,6 +653,9 @@ export function deleteCallLog(id) {
   const store = readStore();
   store.callLogs = store.callLogs.filter((log) => log.id !== id);
   writeStore(store);
+  if (isCrmCloudEnabled()) {
+    deleteCallLogFromCloud(id).catch((err) => warnCloudPersist(err, "deleteCallLog"));
+  }
 }
 
 export function listEmailLogsForCustomer(customerId) {
@@ -536,6 +691,9 @@ export function createEmailLog({
   };
   store.emailLogs = [...(store.emailLogs || []), log];
   writeStore(store);
+  if (isCrmCloudEnabled()) {
+    persistEmailLog(log).catch((err) => warnCloudPersist(err, "persistEmailLog"));
+  }
   return log;
 }
 
@@ -564,6 +722,9 @@ export function createInboundEmailLog({
   };
   store.emailLogs = [...(store.emailLogs || []), log];
   writeStore(store);
+  if (isCrmCloudEnabled()) {
+    persistEmailLog(log).catch((err) => warnCloudPersist(err, "persistEmailLog"));
+  }
   tryAutoReopenReferrals(customer_id, {
     referralTopic: log.referral_topic,
     activityAt: log.sent_at,
@@ -575,6 +736,9 @@ export function deleteEmailLog(id) {
   const store = readStore();
   store.emailLogs = (store.emailLogs || []).filter((log) => log.id !== id);
   writeStore(store);
+  if (isCrmCloudEnabled()) {
+    deleteEmailLogFromCloud(id).catch((err) => warnCloudPersist(err, "deleteEmailLog"));
+  }
 }
 
 export function getEmailStatusLabel(status) {
@@ -729,6 +893,10 @@ export function createReferral({
   };
   store.referrals = [...(store.referrals || []), referral];
   writeStore(store);
+  if (isCrmCloudEnabled()) {
+    persistReferral(referral).catch((err) => warnCloudPersist(err, "persistReferral"));
+    logReferralEvent(referral.id, "created", {}, referral).catch(() => {});
+  }
   return referral;
 }
 
@@ -754,6 +922,29 @@ export function assignReferral(id, { assigned_to_type, assigned_agent_name, assi
     return updated;
   });
   writeStore(store);
+  if (isCrmCloudEnabled() && updated) {
+    persistReferral(updated).catch((err) => warnCloudPersist(err, "persistReferral"));
+    logReferralEvent(id, "assigned", target, updated).catch(() => {});
+  }
+  return updated;
+}
+
+export function claimDepartmentReferral(id, agentName) {
+  const name = String(agentName || "").trim();
+  if (!name) return null;
+  const store = readStore();
+  const target = (store.referrals || []).find((ref) => ref.id === id);
+  if (!target || target.status !== "open" || target.assigned_to_type !== "department") {
+    return null;
+  }
+  const updated = assignReferral(id, {
+    assigned_to_type: "agent",
+    assigned_agent_name: name,
+    assigned_department_id: null,
+  });
+  if (isCrmCloudEnabled() && updated) {
+    logReferralEvent(id, "claimed", target, updated).catch(() => {});
+  }
   return updated;
 }
 
@@ -772,6 +963,10 @@ export function closeReferral(id) {
     return updated;
   });
   writeStore(store);
+  if (isCrmCloudEnabled() && updated) {
+    persistReferral(updated).catch((err) => warnCloudPersist(err, "persistReferral"));
+    logReferralEvent(id, "closed", { status: "open" }, updated).catch(() => {});
+  }
   return updated;
 }
 
@@ -803,6 +998,10 @@ export function reopenReferralFromCustomerResponse(id) {
     return updated;
   });
   writeStore(store);
+  if (isCrmCloudEnabled() && updated) {
+    persistReferral(updated).catch((err) => warnCloudPersist(err, "persistReferral"));
+    logReferralEvent(id, "reopened", target, updated).catch(() => {});
+  }
   return updated;
 }
 
@@ -831,6 +1030,12 @@ export function tryAutoReopenReferrals(customerId, { referralTopic = null, activ
     return updated;
   });
   writeStore(store);
+  if (isCrmCloudEnabled()) {
+    for (const ref of reopened) {
+      persistReferral(ref).catch((err) => warnCloudPersist(err, "persistReferral"));
+      logReferralEvent(ref.id, "reopened", toReopen, ref).catch(() => {});
+    }
+  }
   return reopened;
 }
 

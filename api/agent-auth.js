@@ -16,6 +16,7 @@ import {
   verifyAdminPin,
   verifyBearerAgent,
 } from "../server/agent/agentAuthService.js";
+import { adminDeleteBreakRegistration } from "../server/agent/breakRegistrationAdminService.js";
 import { requestPasswordResetByEmail, requestFirstLoginByEmail } from "../server/agent/agentPasswordResetService.js";
 import {
   guestLinkApiReady,
@@ -163,6 +164,34 @@ export default async function handler(req, res) {
         { error: "password_update_failed", message: "לא הצלחנו לעדכן סיסמה" },
         req
       );
+    }
+  }
+
+  if (action === "admin_delete_break_registration") {
+    if (!verifyAdminPin(body)) {
+      return json(res, 403, { error: "forbidden", message: "אין הרשאה" }, req);
+    }
+
+    const registrationId = String(body.id || "").trim();
+    if (!registrationId) {
+      return json(
+        res,
+        400,
+        { error: "invalid_fields", message: "חסר מזהה הרשמה" },
+        req
+      );
+    }
+
+    try {
+      await adminDeleteBreakRegistration(registrationId);
+      return json(res, 200, { ok: true }, req);
+    } catch (err) {
+      console.error("[agent-auth] admin_delete_break_registration", err);
+      const message =
+        String(err?.message || "") === "not_found"
+          ? "ההרשמה לא נמצאה"
+          : "לא הצלחנו להסיר את ההרשמה";
+      return json(res, 500, { error: "delete_failed", message }, req);
     }
   }
 

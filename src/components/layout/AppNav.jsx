@@ -163,10 +163,16 @@ export default function AppNav() {
                 </Link>
               )}
               {crmEnabled && (
-                <Link to="/crm" className={tabClass(isCrm)}>
-                  <Contact className="w-4 h-4" />
-                  CRM
-                </Link>
+                <>
+                  <Link to="/crm" className={tabClass(isCrm)}>
+                    <Contact className="w-4 h-4" />
+                    CRM
+                  </Link>
+                  <Link to="/admin/crm/departments" className={tabClass(location.pathname === "/admin/crm/departments")}>
+                    <ShieldCheck className="w-4 h-4" />
+                    מחלקות CRM
+                  </Link>
+                </>
               )}
               {customerChatEnabled && (
                 <Link to="/admin/customer-chat" className={tabClass(location.pathname === "/admin/customer-chat")}>

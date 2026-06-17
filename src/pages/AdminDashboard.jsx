@@ -20,6 +20,7 @@ import AdminLocalhostLinksPanel from "@/components/admin/AdminLocalhostLinksPane
 import {
   BreakRegistrationError,
   createBreakRegistration,
+  deleteBreakRegistration,
   getBreakLimits,
 } from "@/lib/breakCapacity";
 import { getLiveQueryOptions } from "@/lib/liveQuery";
@@ -72,10 +73,19 @@ export default function AdminDashboard() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => dataClient.entities.BreakRegistration.delete(id),
+    mutationFn: (id) => deleteBreakRegistration(dataClient, id, { admin: true }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["break-registrations", dateStr] });
       toast({ title: "הרשמה הוסרה" });
+    },
+    onError: (error) => {
+      queryClient.invalidateQueries({ queryKey: ["break-registrations", dateStr] });
+      const message = String(error?.message || "");
+      if (message.includes("delete_no_rows") || message.includes("not_found")) {
+        toast({ title: "לא ניתן להסיר", description: "אין הרשאה להסיר רשומה זו או שהיא כבר לא קיימת" });
+        return;
+      }
+      toast({ title: "שגיאה", description: message || "לא הצלחנו להסיר את ההרשמה" });
     },
   });
 
@@ -170,9 +180,14 @@ export default function AdminDashboard() {
             </Link>
           )}
           {crmEnabled && (
-            <Link to="/crm" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">
-              CRM
-            </Link>
+            <>
+              <Link to="/crm" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">
+                CRM
+              </Link>
+              <Link to="/admin/crm/departments" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">
+                מחלקות CRM
+              </Link>
+            </>
           )}
           {customerChatEnabled && (
             <Link to="/admin/customer-chat" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">

@@ -122,9 +122,13 @@ function createEntity(tableName) {
     },
 
     async delete(id) {
-      await requestJson(buildUrl(tableName, { id }), {
+      const data = await requestJson(buildUrl(tableName, { id }, { select: "*" }), {
         method: "DELETE",
+        headers: { Prefer: "return=representation" },
       });
+      if (!data?.length) {
+        throw new Error("delete_no_rows");
+      }
     },
   };
 }

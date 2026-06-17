@@ -23,6 +23,7 @@ import {
   agentOwnsBreakRegistration,
   BreakRegistrationError,
   createBreakRegistration,
+  deleteBreakRegistration,
   getBreakLimits,
   isBreakRegistrationBlocked,
   validateBreakRegistration,
@@ -122,10 +123,22 @@ export default function BreakScheduler() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => dataClient.entities.BreakRegistration.delete(id),
+    mutationFn: (id) => deleteBreakRegistration(dataClient, id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["break-day", dateStr] });
       toast({ title: "ההרשמה בוטלה", description: "ניתן להירשם מחדש" });
+    },
+    onError: (error) => {
+      queryClient.invalidateQueries({ queryKey: ["break-day", dateStr] });
+      const message = String(error?.message || "");
+      if (message.includes("delete_no_rows")) {
+        toast({
+          title: "לא ניתן לבטל",
+          description: "אין הרשאה להסיר רשומה זו. פנה/י למנהל אם השם ברשומה שונה מהשם שלך במערכת.",
+        });
+        return;
+      }
+      toast({ title: "שגיאה", description: "לא הצלחנו לבטל את ההרשמה" });
     },
   });
 

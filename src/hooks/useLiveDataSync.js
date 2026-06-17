@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase, supabaseConfigured } from "@/api/supabase";
 import { demoModeEnabled, DEMO_STORE_KEY } from "@/api/demoClient";
+import { isCrmCloudEnabled } from "@/api/crmCloudMode";
 import { CHAT_BRANDING_STORAGE_KEY } from "@/lib/chatBranding";
 import { clearAllScheduleCaches } from "@/lib/shiftScheduleQuery";
 
@@ -38,6 +39,12 @@ const TABLE_QUERY_PREFIXES = {
   training_presentation_meta: ["training-presentation-meta"],
   knowledge_documents: ["knowledge-documents"],
   knowledge_index: ["knowledge-index"],
+  crm_customers: ["crm"],
+  crm_referrals: ["crm"],
+  crm_call_logs: ["crm"],
+  crm_email_logs: ["crm"],
+  crm_departments: ["crm"],
+  crm_department_members: ["crm"],
 };
 
 const TRAINING_REALTIME_HANDLERS = {
@@ -63,6 +70,21 @@ const TRAINING_REALTIME_HANDLERS = {
   },
 };
 
+const CRM_REALTIME_TABLES = new Set([
+  "crm_customers",
+  "crm_referrals",
+  "crm_call_logs",
+  "crm_email_logs",
+  "crm_departments",
+  "crm_department_members",
+]);
+
+function handleCrmRealtimeChange() {
+  import("@/lib/crmStore").then(({ invalidateCrmStoreCache }) => {
+    invalidateCrmStoreCache();
+  });
+}
+
 function invalidateByPrefixes(queryClient, prefixes) {
   if (!prefixes?.length) return;
   if (prefixes.includes("shift-registrations")) {
@@ -83,6 +105,16 @@ function invalidateByPrefixes(queryClient, prefixes) {
  */
 export function useLiveDataSync() {
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!demoModeEnabled && isCrmCloudEnabled()) {
+      import("@/lib/crmStore").then(({ hydrateCrmStore }) => {
+        hydrateCrmStore().catch((err) => {
+          console.warn("[useLiveDataSync] CRM hydrate failed", err);
+        });
+      });
+    }
+  }, []);
 
   useEffect(() => {
     if (demoModeEnabled) {
@@ -119,6 +151,9 @@ export function useLiveDataSync() {
         () => {
           invalidateByPrefixes(queryClient, TABLE_QUERY_PREFIXES[table]);
           TRAINING_REALTIME_HANDLERS[table]?.();
+          if (CRM_REALTIME_TABLES.has(table)) {
+            handleCrmRealtimeChange();
+          }
         }
       );
     }

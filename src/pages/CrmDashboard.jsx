@@ -15,7 +15,9 @@ import {
 } from "lucide-react";
 import { getStoredAgentName } from "@/constants/scheduling";
 import { demoModeEnabled } from "@/api/demoClient";
+import { isCrmCloudEnabled } from "@/api/crmCloudMode";
 import {
+  claimDepartmentReferral,
   countReferralsHandledTodayByAgent,
   createCustomer,
   crmDemoAvailable,
@@ -38,38 +40,48 @@ import { useToast } from "@/components/ui/use-toast";
 import { hypHeaderIconClass, m3PageClass } from "@/lib/hypPage";
 import { cn } from "@/lib/utils";
 
-function ReferralCard({ referral, variant = "personal" }) {
+function ReferralCard({ referral, variant = "personal", onClaim = null }) {
   const topicClass =
     variant === "department"
       ? "text-on-primary-container bg-primary-container/70 border-outline/20"
       : "text-primary bg-primary-container/50 border-outline/20";
 
   return (
-    <Link
-      to={`/crm/${referral.customer_id}`}
-      className="m3-card block px-4 py-3 hover:border-primary/30 transition-all"
-    >
-      <div className="flex justify-between gap-2 items-start">
-        <div className="min-w-0">
-          <span className="m3-label-large">{referral.customer?.name || "לקוח"}</span>
-          <span className={`mr-2 text-xs font-semibold border rounded-lg px-2 py-0.5 ${topicClass}`}>
-            {referral.referral_topic}
+    <div className="m3-card px-4 py-3 hover:border-primary/30 transition-all">
+      <Link to={`/crm/${referral.customer_id}`} className="block">
+        <div className="flex justify-between gap-2 items-start">
+          <div className="min-w-0">
+            <span className="m3-label-large">{referral.customer?.name || "לקוח"}</span>
+            <span className={`mr-2 text-xs font-semibold border rounded-lg px-2 py-0.5 ${topicClass}`}>
+              {referral.referral_topic}
+            </span>
+          </div>
+          <span className="m3-label-medium text-primary bg-primary-container/60 border border-outline/20 rounded-lg px-2 py-0.5 shrink-0">
+            {getReferralStatusLabel(referral.status)}
           </span>
         </div>
-        <span className="m3-label-medium text-primary bg-primary-container/60 border border-outline/20 rounded-lg px-2 py-0.5 shrink-0">
-          {getReferralStatusLabel(referral.status)}
-        </span>
-      </div>
-      <p className="m3-label-medium mt-1.5 line-clamp-2">{referral.description}</p>
-      {referral.reopened_at && (
-        <p className="text-xs text-amber-700 mt-1">נפתח מחדש לאחר תגובת לקוח</p>
+        <p className="m3-label-medium mt-1.5 line-clamp-2">{referral.description}</p>
+        {referral.reopened_at && (
+          <p className="text-xs text-amber-700 mt-1">נפתח מחדש לאחר תגובת לקוח</p>
+        )}
+        {variant === "department" && (
+          <p className="m3-label-medium mt-1">
+            {getReferralAssignmentLabel(referral)} · יוצר: {referral.original_agent_name}
+          </p>
+        )}
+      </Link>
+      {variant === "department" && typeof onClaim === "function" && (
+        <div className="mt-2 flex justify-end">
+          <button
+            type="button"
+            onClick={() => onClaim(referral)}
+            className="m3-btn-tonal px-3 py-1.5 text-xs"
+          >
+            קח לטיפול
+          </button>
+        </div>
       )}
-      {variant === "department" && (
-        <p className="m3-label-medium mt-1">
-          {getReferralAssignmentLabel(referral)} · יוצר: {referral.original_agent_name}
-        </p>
-      )}
-    </Link>
+    </div>
   );
 }
 
@@ -89,6 +101,23 @@ export default function CrmDashboard() {
     setDepartmentQueues(listDepartmentQueuesForAgent(agentName));
     setHandledToday(countReferralsHandledTodayByAgent(agentName));
   }, [agentName]);
+
+  const handleClaimDepartmentReferral = useCallback(
+    (referral) => {
+      const updated = claimDepartmentReferral(referral.id, agentName);
+      if (!updated) {
+        toast({ title: "לא ניתן לקחת לטיפול", description: "הפניה כבר שויכה או נסגרה" });
+        refresh();
+        return;
+      }
+      toast({
+        title: "הפניה שויכה אליך",
+        description: `${referral.customer?.name || "הלקוח"} הועברה לטיפול אישי`,
+      });
+      refresh();
+    },
+    [agentName, refresh, toast]
+  );
 
   useEffect(() => {
     refresh();
@@ -192,9 +221,11 @@ export default function CrmDashboard() {
               לקוח חדש
             </button>
           </div>
-          {demoModeEnabled && (
+          {isCrmCloudEnabled() ? (
+            <span className="m3-badge mt-3">ענן · Supabase</span>
+          ) : demoModeEnabled ? (
             <span className="m3-badge mt-3">דמו · localStorage</span>
-          )}
+          ) : null}
         </motion.div>
 
         <section className="mb-6">
@@ -301,7 +332,12 @@ export default function CrmDashboard() {
                 </h2>
                 <div className="space-y-2">
                   {referrals.map((ref) => (
-                    <ReferralCard key={ref.id} referral={ref} variant="department" />
+                    <ReferralCard
+                      key={ref.id}
+                      referral={ref}
+                      variant="department"
+                      onClaim={handleClaimDepartmentReferral}
+                    />
                   ))}
                 </div>
               </section>

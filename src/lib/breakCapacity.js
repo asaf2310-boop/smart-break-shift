@@ -136,3 +136,23 @@ export async function createBreakRegistration(dataClient, payload, options = {})
 
   return dataClient.entities.BreakRegistration.create(normalizedPayload);
 }
+
+/** מחיקת הרשמה — בלוח מנהל (Supabase) דרך service role; נציג מוחק את שלו ישירות */
+export async function deleteBreakRegistration(dataClient, id, { admin = false } = {}) {
+  const registrationId = String(id || "").trim();
+  if (!registrationId) {
+    throw new BreakRegistrationError("INVALID_ID", "מזהה הרשמה חסר");
+  }
+
+  if (admin) {
+    const { demoModeEnabled } = await import("@/api/demoClient");
+    const { isSupabaseBackend } = await import("@/api/dataClient");
+    if (!demoModeEnabled && isSupabaseBackend()) {
+      const { apiAdminDeleteBreakRegistration } = await import("@/lib/agentAuthClient");
+      await apiAdminDeleteBreakRegistration(registrationId);
+      return;
+    }
+  }
+
+  await dataClient.entities.BreakRegistration.delete(registrationId);
+}

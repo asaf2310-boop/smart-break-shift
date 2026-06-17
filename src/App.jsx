@@ -52,6 +52,7 @@ import TrainingPage from './pages/TrainingPage';
 import AdminTraining from './pages/AdminTraining';
 import AdminRecordings from './pages/AdminRecordings';
 import AdminMetrics from './pages/AdminMetrics';
+import AdminCrmDepartments from './pages/AdminCrmDepartments';
 import AgentMetricsPage from './pages/AgentMetricsPage';
 import AgentMetricsRankingPage from './pages/AgentMetricsRankingPage';
 import RouteErrorBoundary from '@/components/RouteErrorBoundary';
@@ -137,6 +138,7 @@ const AuthenticatedApp = () => {
         <Route path="/admin/training" element={<AdminGate><AdminTraining /></AdminGate>} />
         <Route path="/admin/recordings" element={<AdminGate><AdminRecordings /></AdminGate>} />
         <Route path="/admin/metrics" element={<AdminGate><AdminMetrics /></AdminGate>} />
+        <Route path="/admin/crm/departments" element={<AdminGate><AdminCrmDepartments /></AdminGate>} />
         <Route
           path="/admin/recordings/play"
           element={

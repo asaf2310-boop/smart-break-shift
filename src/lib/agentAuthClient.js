@@ -76,3 +76,14 @@ export async function apiProvisionAgentAuth(agentId) {
     agentId,
   });
 }
+
+export async function apiAdminDeleteBreakRegistration(id) {
+  const result = await postAgentAuth({
+    action: "admin_delete_break_registration",
+    id,
+  });
+  if (!result.ok) {
+    throw new Error(result.message || "לא הצלחנו להסיר את ההרשמה");
+  }
+  return result;
+}
