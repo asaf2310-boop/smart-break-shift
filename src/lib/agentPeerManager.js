@@ -3,7 +3,7 @@
  * Guest calls peer.call(agentPeerId) where agentPeerId is published via session store + Supabase.
  */
 import Peer from "peerjs";
-import { getPeerJsOptions } from "@/lib/webrtcConfig";
+import { getPeerJsOptionsAsync } from "@/lib/webrtcConfig";
 
 /** @typedef {{ peer: import('peerjs').Peer | null, creating: boolean, listenersAttached: boolean, activeCall: import('peerjs').MediaConnection | null, remoteStream: MediaStream | null, refCount: number }} AgentPeerEntry */
 
@@ -62,9 +62,9 @@ export function getAgentPeerEntry(sessionId) {
 /**
  * Open or reuse the agent Peer for a session (random id — no sessionId collision).
  * @param {string} sessionId
- * @returns {{ peer: import('peerjs').Peer | null, entry: AgentPeerEntry, reusing: boolean, created: boolean, inFlight?: boolean }}
+ * @returns {Promise<{ peer: import('peerjs').Peer | null, entry: AgentPeerEntry, reusing: boolean, created: boolean, inFlight?: boolean }>}
  */
-export function openAgentPeer(sessionId) {
+export async function openAgentPeer(sessionId) {
   cancelDeferredPeerDestroy(sessionId);
   let entry = entries.get(sessionId);
 
@@ -88,7 +88,8 @@ export function openAgentPeer(sessionId) {
   };
   entries.set(sessionId, entry);
 
-  const peer = new Peer(getPeerJsOptions());
+  const peerOptions = await getPeerJsOptionsAsync();
+  const peer = new Peer(peerOptions);
   entry.peer = peer;
   entry.creating = false;
 

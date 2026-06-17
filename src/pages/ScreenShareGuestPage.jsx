@@ -36,7 +36,7 @@ import { CLOUD_RECORDING_RETENTION_DAYS } from "@/lib/screenRecordingsSync";
 import { m3PageClass } from "@/lib/hypPage";
 import SessionFileShare from "@/components/remote/SessionFileShare";
 import SessionSupportChat from "@/components/remote/SessionSupportChat";
-import { getPeerJsOptions } from "@/lib/webrtcConfig";
+import { getPeerJsOptionsAsync, resolveIceServers } from "@/lib/webrtcConfig";
 import {
   acquireDisplayMediaStream,
   attachPeerConnectionDebugLogging,
@@ -467,7 +467,7 @@ export default function ScreenShareGuestPage() {
 
     let peer = peerRef.current;
     if (!peer || peer.destroyed) {
-      peer = new Peer(getPeerJsOptions());
+      peer = new Peer(await getPeerJsOptionsAsync());
       peerRef.current = peer;
       bindPeerAgentEndListener(peer);
       await new Promise((resolve, reject) => {
@@ -515,6 +515,10 @@ export default function ScreenShareGuestPage() {
     isRemoteEndedSession,
     handleEndedByAgent,
   ]);
+
+  useEffect(() => {
+    void resolveIceServers();
+  }, []);
 
   useEffect(() => {
     if (!sessionId || !cloudSessionSyncEnabled()) return undefined;
@@ -657,7 +661,7 @@ export default function ScreenShareGuestPage() {
       }
       setSession(resolveGuestSession(sessionId, bootstrapKey));
 
-      const peer = new Peer(getPeerJsOptions());
+      const peer = new Peer(await getPeerJsOptionsAsync());
       peerRef.current = peer;
       bindPeerAgentEndListener(peer);
 

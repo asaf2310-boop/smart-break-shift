@@ -66,7 +66,7 @@ import {
 import { cloudSessionSyncEnabled } from "@/lib/supportSessionsSync";
 import SessionFileShare from "@/components/remote/SessionFileShare";
 import SessionSupportChat from "@/components/remote/SessionSupportChat";
-import { isTurnConfigured } from "@/lib/webrtcConfig";
+import { isTurnConfigured, isTurnConfiguredAsync, resolveIceServers } from "@/lib/webrtcConfig";
 import {
   openAgentPeer,
   destroyAgentPeer,
@@ -572,7 +572,7 @@ export default function ScreenShareAgentView({
         if (!info || sessionEndedRef.current) return;
         if (!info.usingRelay && isTurnConfigured()) {
           setErrorDetail(
-            "החיבור עלה בלי TURN — אם המסך שחור, בדקו VITE_TURN_* ב-Vercel ו-Redeploy"
+            "החיבור עלה בלי TURN — אם המסך שחור, בדקו TURN_* ב-Vercel (שרת) ו-Redeploy"
           );
         }
       });
@@ -620,10 +620,11 @@ export default function ScreenShareAgentView({
         attempts += 1;
         if (attempts > 8) {
           clearVideoRetryTimer();
-          void describeIcePath(callRef.current?.peerConnection).then((info) => {
+          void describeIcePath(callRef.current?.peerConnection).then(async (info) => {
             if (hasRemoteStreamRef.current || sessionEndedRef.current) return;
-            const turnHint = isTurnConfigured()
-              ? "בדקו ש-VITE_TURN_* ב-Vercel נכונים ושבוצע Redeploy"
+            const turnConfigured = await isTurnConfiguredAsync();
+            const turnHint = turnConfigured
+              ? "בדקו ש-TURN_* ב-Vercel (שרת) נכונים ושבוצע Redeploy"
               : "הגדירו TURN ב-Vercel (Metered) לרשתות שונות";
             const bytesHint =
               info && info.bytesReceived === 0
@@ -787,6 +788,10 @@ export default function ScreenShareAgentView({
   };
 
   useEffect(() => {
+    void resolveIceServers();
+  }, []);
+
+  useEffect(() => {
     if (!sessionId) return undefined;
     const handlers = peerHandlersRef.current;
     sessionEndedRef.current = false;
@@ -803,14 +808,15 @@ export default function ScreenShareAgentView({
       resumedSession?.guestStreamConnectedAt || resumedSession?.consentAt
     );
 
-    const { entry, created, reusing, inFlight } = openAgentPeer(sessionId);
-    let peer = entry.peer;
+    let peer = null;
+    /** @type {import('@/lib/agentPeerManager').AgentPeerEntry | null} */
+    let entry = null;
     let disposed = false;
 
     const applyReuseState = (activePeer) => {
       peerRef.current = activePeer;
-      if (entry.activeCall) callRef.current = entry.activeCall;
-      if (entry.remoteStream) {
+      if (entry?.activeCall) callRef.current = entry.activeCall;
+      if (entry?.remoteStream) {
         remoteStreamRef.current = entry.remoteStream;
         hasRemoteStreamRef.current = true;
         setHasRemoteStream(true);
@@ -835,81 +841,71 @@ export default function ScreenShareAgentView({
       handlers.scheduleNoCallWarning(activePeer);
     };
 
-    if (reusing) {
-      if (peer && !peer.destroyed) {
-        console.log("[WebRTC:agent] reusing existing Peer", {
-          sessionId,
-          connectionEpoch,
-          open: peer.open,
-          peerId: peer.id,
-        });
-        applyReuseState(peer);
-        return () => {
-          disposed = true;
-          handlers.clearNoCallTimer();
-          peerRef.current = null;
-          callRef.current = null;
-          releaseAgentPeer(sessionId, peer);
-        };
-      }
-      if (entry.creating || inFlight) {
-        console.log("[WebRTC:agent] waiting for in-flight Peer", { sessionId });
-        void (async () => {
+    void (async () => {
+      const result = await openAgentPeer(sessionId);
+      if (disposed) return;
+
+      entry = result.entry;
+      peer = entry.peer;
+      const { created, reusing, inFlight } = result;
+
+      if (reusing) {
+        if (peer && !peer.destroyed) {
+          console.log("[WebRTC:agent] reusing existing Peer", {
+            sessionId,
+            connectionEpoch,
+            open: peer.open,
+            peerId: peer.id,
+          });
+          applyReuseState(peer);
+          return;
+        }
+        if (entry.creating || inFlight) {
+          console.log("[WebRTC:agent] waiting for in-flight Peer", { sessionId });
           const waited = await waitForAgentPeer(sessionId);
           if (disposed || !waited || sessionEndedRef.current) return;
+          peer = waited;
           console.log("[WebRTC:agent] reusing in-flight Peer", {
             sessionId,
             open: waited.open,
             peerId: waited.id,
           });
           applyReuseState(waited);
-        })();
-        return () => {
-          disposed = true;
-          handlers.clearNoCallTimer();
-          peerRef.current = null;
-          callRef.current = null;
-          releaseAgentPeer(sessionId, entry.peer);
-        };
+          return;
+        }
       }
-    }
 
-    if (!created) {
-      return () => {
-        disposed = true;
-        releaseAgentPeer(sessionId, entry.peer);
+      if (!created) return;
+
+      setStatus(guestAlreadyLinked ? "connecting" : "waiting");
+      setHasRemoteStream(false);
+      hasRemoteStreamRef.current = false;
+      handlers.clearVideoRetryTimer();
+      setErrorDetail("");
+      setRecordedBlob(null);
+      setTabHidden(false);
+      chunksRef.current = [];
+      metadataPersistedRef.current = false;
+
+      console.log("[WebRTC:agent] openAgentPeer", {
+        sessionId,
+        connectionEpoch,
+        viewOpen: viewOpenRef.current,
+        reusing,
+        created,
+      });
+      peerRef.current = peer;
+
+      const syncPeerSessionRecord = () => {
+        if (!sessionId) return;
+        setSessionRecord(getSession(sessionId));
+        setStoreRevision((n) => n + 1);
       };
-    }
 
-    setStatus(guestAlreadyLinked ? "connecting" : "waiting");
-    setHasRemoteStream(false);
-    hasRemoteStreamRef.current = false;
-    handlers.clearVideoRetryTimer();
-    setErrorDetail("");
-    setRecordedBlob(null);
-    setTabHidden(false);
-    chunksRef.current = [];
-    metadataPersistedRef.current = false;
+      if (!entry.listenersAttached && peer) {
+        entry.listenersAttached = true;
 
-    console.log("[WebRTC:agent] openAgentPeer", {
-      sessionId,
-      connectionEpoch,
-      viewOpen: viewOpenRef.current,
-      reusing,
-      created,
-    });
-    peerRef.current = peer;
-
-    const syncPeerSessionRecord = () => {
-      if (!sessionId) return;
-      setSessionRecord(getSession(sessionId));
-      setStoreRevision((n) => n + 1);
-    };
-
-    if (!entry.listenersAttached) {
-      entry.listenersAttached = true;
-
-      peer.on("open", () => {
+        peer.on("open", () => {
         const peerId = peer.id;
         console.log("[WebRTC:agent] peer open", {
           sessionId,
@@ -1065,11 +1061,13 @@ export default function ScreenShareAgentView({
             }
             if (ice === "failed") {
               setStatus("error");
-              setErrorDetail(
-                isTurnConfigured()
-                  ? "חיבור WebRTC נכשל — ודאו ש-VITE_TURN_* נכונים ושבוצע Redeploy ב-Vercel"
-                  : "חיבור WebRTC נכשל — הגדירו TURN (VITE_TURN_URL) לרשתות שונות"
-              );
+              void isTurnConfiguredAsync().then((turnConfigured) => {
+                setErrorDetail(
+                  turnConfigured
+                    ? "חיבור WebRTC נכשל — ודאו ש-TURN_* ב-Vercel (שרת) נכונים ושבוצע Redeploy"
+                    : "חיבור WebRTC נכשל — הגדירו TURN (TURN_URL) ב-Vercel לרשתות שונות"
+                );
+              });
             }
           };
           pc.addEventListener("iceconnectionstatechange", onIceStateChange);
@@ -1147,7 +1145,8 @@ export default function ScreenShareAgentView({
         setReconnecting(false);
         setErrorDetail(err?.message || "שגיאת PeerJS");
       });
-    }
+      }
+    })();
 
     return () => {
       disposed = true;

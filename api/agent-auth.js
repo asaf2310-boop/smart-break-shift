@@ -22,6 +22,7 @@ import {
   mintGuestLinkForSession,
   resolveGuestLinkFromToken,
 } from "../server/guest/guestLinkService.js";
+import { handleIceServersRequest } from "../server/webrtc/iceServersService.js";
 
 const PASSWORD_MIN_LENGTH = 6;
 
@@ -39,18 +40,6 @@ export default async function handler(req, res) {
     return json(res, 403, { error: "forbidden" }, req);
   }
 
-  if (!supabaseReady()) {
-    return json(
-      res,
-      503,
-      {
-        error: "supabase_not_configured",
-        message: "הגדר VITE_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY ב-Vercel",
-      },
-      req
-    );
-  }
-
   if (req.method !== "POST") {
     return json(res, 405, { error: "method_not_allowed" }, req);
   }
@@ -63,6 +52,22 @@ export default async function handler(req, res) {
   }
 
   const action = String(body.action || "").trim();
+
+  if (action === "ice_servers") {
+    return handleIceServersRequest(res, req);
+  }
+
+  if (!supabaseReady()) {
+    return json(
+      res,
+      503,
+      {
+        error: "supabase_not_configured",
+        message: "הגדר VITE_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY ב-Vercel",
+      },
+      req
+    );
+  }
 
   if (action === "complete_setup") {
     const auth = await verifyBearerAgent(req);

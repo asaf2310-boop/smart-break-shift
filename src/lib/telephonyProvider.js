@@ -7,7 +7,7 @@
  */
 
 import { Web } from "sip.js";
-import { parseIceServers } from "@/lib/webrtcConfig";
+import { parseIceServersAsync } from "@/lib/webrtcConfig";
 
 /** @typedef {'idle' | 'connecting' | 'registered' | 'unregistered' | 'error'} SipRegistrationState */
 
@@ -124,7 +124,7 @@ function getCurrentAgentNameForSip() {
   }
 }
 
-export { parseIceServers };
+export { parseIceServersAsync as parseIceServers } from "@/lib/webrtcConfig";
 
 function buildOutboundDestination(phone, domain) {
   const normalized = normalizePhone(phone);
@@ -249,6 +249,7 @@ function attachSimpleUserDelegates(user) {
 async function createSimpleUser(credentials) {
   const audio = ensureRemoteAudio();
   const aor = credentials.aor || `sip:${credentials.user}@${credentials.domain}`;
+  const iceServers = await parseIceServersAsync();
 
   const user = new Web.SimpleUser(credentials.wsUrl, {
     aor,
@@ -258,7 +259,7 @@ async function createSimpleUser(credentials) {
       displayName: credentials.user,
       sessionDescriptionHandlerFactoryOptions: {
         peerConnectionConfiguration: {
-          iceServers: parseIceServers(),
+          iceServers,
         },
       },
     },
