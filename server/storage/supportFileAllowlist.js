@@ -1,0 +1,89 @@
+/** Allowed support-session file types (server + keep in sync with src/lib/supportFileAllowlist.js). */
+
+export const SUPPORT_FILE_ALLOWED_EXTENSIONS = new Set([
+  ".pdf",
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".webp",
+  ".heic",
+  ".heif",
+  ".doc",
+  ".docx",
+  ".xls",
+  ".xlsx",
+  ".csv",
+  ".txt",
+  ".zip",
+]);
+
+export const SUPPORT_FILE_ALLOWED_MIME_TYPES = new Set([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "text/csv",
+  "text/plain",
+  "application/zip",
+  "application/x-zip-compressed",
+]);
+
+const BLOCKED_EXTENSIONS = new Set([
+  ".html",
+  ".htm",
+  ".svg",
+  ".js",
+  ".mjs",
+  ".exe",
+  ".bat",
+  ".cmd",
+  ".msi",
+  ".scr",
+  ".php",
+  ".sh",
+  ".ps1",
+]);
+
+function extensionFromName(fileName) {
+  const base = String(fileName || "").trim().toLowerCase();
+  const dot = base.lastIndexOf(".");
+  if (dot <= 0 || dot === base.length - 1) return "";
+  return base.slice(dot);
+}
+
+function extensionFromPath(storagePath) {
+  const fileName = String(storagePath || "").split("/").pop() || "";
+  return extensionFromName(fileName);
+}
+
+export function validateSupportFileType({ fileName, storagePath, mimeType } = {}) {
+  const ext = extensionFromName(fileName) || extensionFromPath(storagePath);
+  if (!ext) {
+    return { ok: false, error: "missing_extension", message: "לקובץ חייבת להיות סיומת מוכרת" };
+  }
+  if (BLOCKED_EXTENSIONS.has(ext)) {
+    return { ok: false, error: "blocked_type", message: "סוג קובץ זה אינו מותר להעלאה" };
+  }
+  if (!SUPPORT_FILE_ALLOWED_EXTENSIONS.has(ext)) {
+    return {
+      ok: false,
+      error: "unsupported_type",
+      message: "סוג קובץ לא נתמך — PDF, תמונות, Office, CSV, TXT או ZIP",
+    };
+  }
+
+  const mime = String(mimeType || "").trim().toLowerCase();
+  if (mime && mime !== "application/octet-stream" && !SUPPORT_FILE_ALLOWED_MIME_TYPES.has(mime)) {
+    return { ok: false, error: "unsupported_mime", message: "סוג התוכן של הקובץ אינו מותר" };
+  }
+
+  return { ok: true, extension: ext };
+}

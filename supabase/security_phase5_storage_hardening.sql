@@ -11,6 +11,8 @@
 --   • משאיר authenticated בלבד לעדכון/מחיקה (שלב 0א) — העלאה/קריאה דרך שרת
 --   • training-docs: בלי insert ל-anon (העלאת PDF — נציג מחובר / עתידי API)
 --
+-- שלב 6 (אחרי deploy allowlist): security_phase6_file_allowlist.sql
+--
 -- גיבוי לפני הרצה: Supabase → Database → Backups
 -- =============================================================================
 

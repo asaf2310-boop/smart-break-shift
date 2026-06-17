@@ -5,6 +5,10 @@ import { useToast } from "@/components/ui/use-toast";
 import { demoModeEnabled } from "@/api/demoClient";
 import { listLocalSessionFiles, subscribeSupportFiles } from "@/lib/supportFilesStore";
 import {
+  SUPPORT_FILE_INPUT_ACCEPT,
+  SUPPORT_FILE_TYPE_HINT,
+} from "@/lib/supportFileAllowlist";
+import {
   cloudSupportFilesEnabled,
   downloadSupportSessionFile,
   fetchCloudSessionFiles,
@@ -155,7 +159,8 @@ export default function SessionFileShare({
       </div>
 
       <p className="text-[10px] text-slate-500 leading-relaxed">
-        העלו קבצים לשיתוף עם הצד השני. מקסימום {formatSupportFileSize(MAX_SUPPORT_FILE_BYTES)} לקובץ.
+        העלו קבצים לשיתוף עם הצד השני ({SUPPORT_FILE_TYPE_HINT}). מקסימום{" "}
+        {formatSupportFileSize(MAX_SUPPORT_FILE_BYTES)} לקובץ.
         {cloudSupportFilesEnabled()
           ? " הקבצים נשמרים בשרת וזמינים להורדה מכל מכשיר."
           : " בדמו: הקבצים נשמרים בדפדפן המעלה בלבד."}
@@ -165,6 +170,7 @@ export default function SessionFileShare({
         ref={inputRef}
         type="file"
         className="hidden"
+        accept={SUPPORT_FILE_INPUT_ACCEPT}
         onChange={handleFileChange}
         disabled={disabled || uploading}
       />

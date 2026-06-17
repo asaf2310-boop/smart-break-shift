@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from "../knowledge/supabaseAdmin.js";
 import { verifyGuestLinkToken } from "../guest/guestLinkToken.js";
 import { verifyBearerAgent } from "../agent/agentAuthService.js";
+import { validateSupportFileType } from "./supportFileAllowlist.js";
 
 export const SUPPORT_FILES_BUCKET = "support-files";
 export const SCREEN_RECORDINGS_BUCKET = "screen-recordings";
@@ -155,6 +156,15 @@ export async function handleSupportFileUpload(req, body) {
     allowGuest: true,
   });
   if (!authz.ok) return authz;
+
+  const typeCheck = validateSupportFileType({ storagePath, mimeType });
+  if (!typeCheck.ok) {
+    return {
+      ok: false,
+      error: typeCheck.error || "unsupported_type",
+      message: typeCheck.message,
+    };
+  }
 
   if (fileBase64) {
     const buffer = Buffer.from(fileBase64, "base64");

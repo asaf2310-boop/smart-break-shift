@@ -24,6 +24,7 @@ import {
   apiPrepareSupportFileUpload,
   uploadBlobToSignedUrl,
 } from "@/lib/storageApiClient";
+import { validateSupportFileType } from "@/lib/supportFileAllowlist";
 import { generateShortCode } from "@/lib/guestLinkCodec";
 
 export { cloudSupportFilesEnabled, MAX_SUPPORT_FILE_BYTES, mergeSessionFiles, fetchCloudSessionFiles };
@@ -56,6 +57,11 @@ function validateFile(file) {
     return `הקובץ גדול מדי — מקסימום ${formatSupportFileSize(MAX_SUPPORT_FILE_BYTES)}`;
   }
   if (file.size <= 0) return "הקובץ ריק";
+  const typeCheck = validateSupportFileType({
+    fileName: file.name,
+    mimeType: file.type,
+  });
+  if (!typeCheck.ok) return typeCheck.message;
   return null;
 }
 

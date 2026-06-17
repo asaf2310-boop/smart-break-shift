@@ -13,7 +13,23 @@ values (
   'support-files',
   false,
   20971520, -- 20 MB
-  null -- כל סוגי הקבצים הנפוצים (מוגבל בגודל ב-bucket)
+  array[
+    'application/pdf',
+    'image/png',
+    'image/jpeg',
+    'image/gif',
+    'image/webp',
+    'image/heic',
+    'image/heif',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'text/csv',
+    'text/plain',
+    'application/zip',
+    'application/x-zip-compressed'
+  ]::text[]
 )
 on conflict (id) do update
 set
