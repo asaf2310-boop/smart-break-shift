@@ -157,7 +157,7 @@ async function resolveSignedGuestToken(
 ) {
   const api = await apiResolveGuestLink(token);
   if (!api.ok) {
-    if (urlBootstrap) {
+    if (urlBootstrap && !cloudSessionSyncEnabled()) {
       const fromBootstrap = resolveFromUrlBootstrap(urlBootstrap, {
         bootstrapScreen,
         bootstrapConsent,

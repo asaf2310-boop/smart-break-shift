@@ -23,6 +23,8 @@ import {
   syncScreenShareSessionToCloud,
   syncScreenShareSessionToCloudAwait,
 } from "@/lib/supportSessionsSync";
+import { apiGuestSessionState } from "@/lib/guestLinkClient";
+import { getGuestLinkToken } from "@/lib/guestLinkTokenStore";
 import { buildShortGuestUrl, finalizeCloudGuestLink } from "@/lib/shortGuestLink";
 import { requestAgentEndGuestNotify } from "@/lib/screenShareSessionEnd";
 import {
@@ -466,8 +468,35 @@ function sessionEndPatchFromCloud(row) {
 /** Production: merge guest consent, peer id, וסיום סשן מ-Supabase (cross-device). */
 export async function pullSessionFieldsFromCloud(id) {
   if (!id || !cloudSessionSyncEnabled()) return getSession(id);
+
+  const guestToken = getGuestLinkToken(id);
+  if (guestToken) {
+    try {
+      const api = await apiGuestSessionState({ sessionId: id, token: guestToken });
+      if (!api.ok || !api.session) return getSession(id);
+      const row = {
+        id: api.session.sessionId,
+        status: api.session.status,
+        ended_at: api.session.endedAt,
+        ended_reason: api.session.endedReason,
+        consent_at: api.session.consentAt,
+        recording_consent_at: api.session.recordingConsentAt,
+        recording_active_at: api.session.recordingActiveAt,
+        agent_peer_id: api.session.agentPeerId,
+      };
+      return applyCloudRowToLocalSession(id, row);
+    } catch (err) {
+      console.warn("[screenShareStore] guest session poll failed", err);
+      return getSession(id);
+    }
+  }
+
   const row = await fetchCloudSessionById(id);
   if (!row) return getSession(id);
+  return applyCloudRowToLocalSession(id, row);
+}
+
+function applyCloudRowToLocalSession(id, row) {
   const session = getSession(id);
   if (!session) return null;
 

@@ -75,10 +75,13 @@ export async function authorizeStorageAccess({
 
   const auth = await verifyBearerAgent(req);
   if (auth?.agent) {
-    if (session.agent_name && auth.agent.displayName) {
-      if (normalizeName(session.agent_name) !== normalizeName(auth.agent.displayName)) {
-        return { ok: false, error: "forbidden" };
-      }
+    const ownsSession =
+      session.agent_name &&
+      auth.agent.displayName &&
+      normalizeName(session.agent_name) === normalizeName(auth.agent.displayName);
+    const isAdmin = auth.agent.isAdmin === true;
+    if (!ownsSession && !isAdmin) {
+      return { ok: false, error: "forbidden" };
     }
     return { ok: true, session, uploadedBy: "agent", agent: auth.agent };
   }

@@ -1,5 +1,7 @@
 import { demoModeEnabled } from "@/api/demoClient";
 import { supabase, supabaseConfigured } from "@/api/supabase";
+import { apiGuestChatList, apiGuestChatSend } from "@/lib/guestLinkClient";
+import { getGuestLinkToken } from "@/lib/guestLinkTokenStore";
 
 export function cloudSupportSessionChatEnabled() {
   if (demoModeEnabled || !supabaseConfigured || !supabase) return false;
@@ -21,6 +23,22 @@ function mapCloudChatRow(row) {
 
 export async function fetchCloudSessionChatMessages(sessionId) {
   if (!cloudSupportSessionChatEnabled() || !sessionId) return [];
+
+  const guestToken = getGuestLinkToken(sessionId);
+  if (guestToken) {
+    try {
+      const api = await apiGuestChatList({ sessionId, token: guestToken });
+      if (!api.ok) {
+        console.warn("[supportSessionChatSync] guest chat list failed", api.error);
+        return [];
+      }
+      return (api.messages || []).map(mapCloudChatRow).filter(Boolean);
+    } catch (err) {
+      console.warn("[supportSessionChatSync] guest chat list error", err);
+      return [];
+    }
+  }
+
   try {
     const { data, error } = await supabase
       .from("support_session_messages")
@@ -43,6 +61,21 @@ export async function insertCloudSessionChatMessage(message = {}) {
   if (!cloudSupportSessionChatEnabled() || !message.sessionId || !message.id) {
     return { ok: false, error: "cloud_disabled" };
   }
+
+  if (message.senderType === "guest") {
+    const guestToken = getGuestLinkToken(message.sessionId);
+    if (guestToken) {
+      return apiGuestChatSend({
+        sessionId: message.sessionId,
+        token: guestToken,
+        messageId: message.id,
+        body: message.body,
+        senderLabel: message.senderLabel,
+      });
+    }
+    return { ok: false, error: "guest_token_missing" };
+  }
+
   const row = {
     id: message.id,
     session_id: message.sessionId,

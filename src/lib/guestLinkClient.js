@@ -1,4 +1,5 @@
 import { supabase } from "@/api/supabase";
+import { getGuestLinkToken } from "@/lib/guestLinkTokenStore";
 
 async function authHeaders() {
   const headers = { "Content-Type": "application/json" };
@@ -56,4 +57,77 @@ export async function apiResolveGuestLink(token) {
     console.warn("[guestLinkClient] resolve failed", err);
     return { ok: false, error: "network_error" };
   }
+}
+
+export async function apiGuestSessionState({ sessionId, token }) {
+  try {
+    const response = await fetch("/api/agent-auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "guest_session",
+        sessionId,
+        token,
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return { ok: false, error: data.error || "guest_session_failed" };
+    }
+    return { ok: true, session: data.session, ended: data.ended === true };
+  } catch (err) {
+    console.warn("[guestLinkClient] guest_session failed", err);
+    return { ok: false, error: "network_error" };
+  }
+}
+
+export async function apiGuestChatList({ sessionId, token }) {
+  try {
+    const response = await fetch("/api/agent-auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "guest_chat_list",
+        sessionId,
+        token,
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return { ok: false, error: data.error || "guest_chat_list_failed" };
+    }
+    return { ok: true, messages: data.messages || [] };
+  } catch (err) {
+    console.warn("[guestLinkClient] guest_chat_list failed", err);
+    return { ok: false, error: "network_error" };
+  }
+}
+
+export async function apiGuestChatSend({ sessionId, token, messageId, body, senderLabel }) {
+  try {
+    const response = await fetch("/api/agent-auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "guest_chat_send",
+        sessionId,
+        token,
+        messageId,
+        body,
+        senderLabel,
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return { ok: false, error: data.error || "guest_chat_send_failed" };
+    }
+    return { ok: true, message: data.message };
+  } catch (err) {
+    console.warn("[guestLinkClient] guest_chat_send failed", err);
+    return { ok: false, error: "network_error" };
+  }
+}
+
+export function getGuestTokenForSession(sessionId) {
+  return getGuestLinkToken(sessionId);
 }

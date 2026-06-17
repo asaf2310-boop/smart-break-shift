@@ -1,5 +1,7 @@
 import { demoModeEnabled } from "@/api/demoClient";
 import { supabase, supabaseConfigured } from "@/api/supabase";
+import { apiGuestSessionState } from "@/lib/guestLinkClient";
+import { getGuestLinkToken } from "@/lib/guestLinkTokenStore";
 import {
   fetchCloudScreenRecordings,
   groupCloudRecordingsBySession,
@@ -218,6 +220,34 @@ export async function fetchCloudSessionById(sessionId) {
 /** שליפת סשן שיתוף מסך מהענן לטעינת דף אורח (ללא bootstrap מקומי). */
 export async function fetchGuestScreenSessionForBootstrap(sessionId) {
   if (!cloudSessionSyncEnabled() || !sessionId) return null;
+
+  const guestToken = getGuestLinkToken(sessionId);
+  if (guestToken) {
+    try {
+      const api = await apiGuestSessionState({ sessionId, token: guestToken });
+      if (!api.ok || !api.session) return null;
+      if (api.session.sessionType === "consent") return null;
+      return {
+        id: api.session.sessionId,
+        session_type: "screen_share",
+        status: api.session.status,
+        created_at: api.session.createdAt,
+        agent_name: api.session.agentName,
+        customer_email: api.session.customerEmail,
+        crm_customer_id: api.session.crmCustomerId,
+        agent_peer_id: api.session.agentPeerId,
+        consent_at: api.session.consentAt,
+        recording_consent_at: api.session.recordingConsentAt,
+        recording_active_at: api.session.recordingActiveAt,
+        ended_at: api.session.endedAt,
+        ended_reason: api.session.endedReason,
+      };
+    } catch (err) {
+      console.warn("[supportSessionsSync] guest session API failed", err);
+      return null;
+    }
+  }
+
   try {
     let { data, error } = await fetchSupportSessionRow(sessionId, GUEST_BOOTSTRAP_FIELDS);
     if (error && isMissingColumnError(error)) {

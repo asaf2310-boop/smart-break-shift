@@ -1,3 +1,6 @@
+import { supabase } from "@/api/supabase";
+import { getGuestLinkToken } from "@/lib/guestLinkTokenStore";
+
 const ICE_SERVERS_TTL_MS = 5 * 60 * 1000;
 
 /** @type {{ iceServers: RTCIceServer[], iceTransportPolicy: 'all'|'relay', turnConfigured: boolean, fetchedAt: number } | null} */
@@ -20,9 +23,10 @@ function fallbackResult() {
 }
 
 /**
+ * @param {{ sessionId?: string, guestToken?: string }} [options]
  * @returns {Promise<{ iceServers: RTCIceServer[], iceTransportPolicy: 'all'|'relay', turnConfigured: boolean }>}
  */
-export async function fetchIceServers() {
+export async function fetchIceServers(options = {}) {
   const now = Date.now();
   if (cache && now - cache.fetchedAt < ICE_SERVERS_TTL_MS) {
     return {
@@ -36,11 +40,30 @@ export async function fetchIceServers() {
 
   inFlight = (async () => {
     try {
+      const sessionId = options.sessionId;
+      const guestToken =
+        options.guestToken || (sessionId ? getGuestLinkToken(sessionId) : null);
+
+      const headers = { "Content-Type": "application/json" };
+      if (supabase && !guestToken) {
+        try {
+          const { data } = await supabase.auth.getSession();
+          if (data?.session?.access_token) {
+            headers.Authorization = `Bearer ${data.session.access_token}`;
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+
       const response = await fetch("/api/agent-auth", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         credentials: "same-origin",
-        body: JSON.stringify({ action: "ice_servers" }),
+        body: JSON.stringify({
+          action: "ice_servers",
+          ...(guestToken ? { guestToken } : {}),
+        }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data?.ok || !Array.isArray(data.iceServers)) {

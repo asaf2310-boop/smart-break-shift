@@ -1,10 +1,11 @@
 import { getSupabaseAdmin } from "../knowledge/supabaseAdmin.js";
 import {
-  DEFAULT_GUEST_LINK_TTL_SEC,
+  getGuestLinkTtlSec,
   guestLinkSecretConfigured,
   signGuestLinkToken,
   verifyGuestLinkToken,
 } from "./guestLinkToken.js";
+import { auditGuestAccess } from "./guestSupportService.js";
 
 function normalizeName(value) {
   return String(value || "").trim().toLowerCase();
@@ -56,30 +57,34 @@ export async function mintGuestLinkForSession({ sessionId, kind, agent }) {
     return { ok: false, error: "not_found" };
   }
 
-  if (agent?.displayName && data.agent_name) {
-    if (normalizeName(data.agent_name) !== normalizeName(agent.displayName)) {
-      return { ok: false, error: "forbidden" };
-    }
+  if (!agent?.displayName) {
+    return { ok: false, error: "forbidden" };
+  }
+  const ownsSession = normalizeName(data.agent_name) === normalizeName(agent.displayName);
+  const isAdmin = agent.isAdmin === true;
+  if (!ownsSession && !isAdmin) {
+    return { ok: false, error: "forbidden" };
   }
 
   const sessionKind = data.session_type === "rustdesk" ? "consent" : "screen";
   const resolvedKind = kind === "consent" || kind === "screen" ? kind : sessionKind;
 
   try {
+    const ttlSec = getGuestLinkTtlSec();
     const token = signGuestLinkToken({
       sessionId: data.id,
       shortCode: data.short_code,
       kind: resolvedKind,
-      ttlSec: DEFAULT_GUEST_LINK_TTL_SEC,
+      ttlSec,
     });
-    return { ok: true, token, expiresInSec: DEFAULT_GUEST_LINK_TTL_SEC };
+    return { ok: true, token, expiresInSec: ttlSec };
   } catch (err) {
     console.warn("[guestLinkService] mint sign failed", err);
     return { ok: false, error: "sign_failed" };
   }
 }
 
-export async function resolveGuestLinkFromToken(token) {
+export async function resolveGuestLinkFromToken(token, { req } = {}) {
   if (!guestLinkApiReady()) {
     return { ok: false, error: "guest_link_not_configured" };
   }
@@ -115,6 +120,8 @@ export async function resolveGuestLinkFromToken(token) {
   if (verified.shortCode && session.shortCode && verified.shortCode !== session.shortCode) {
     return { ok: false, error: "invalid_token" };
   }
+
+  auditGuestAccess("resolve_ok", { req, sessionId: session.sessionId });
 
   return {
     ok: true,

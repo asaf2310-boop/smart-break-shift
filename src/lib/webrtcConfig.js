@@ -31,8 +31,8 @@ function resolveTransportPolicy(serverPolicy) {
  * Fetch ICE servers from the server API and update the in-memory cache.
  * @returns {Promise<{ iceServers: RTCIceServer[], iceTransportPolicy: 'all'|'relay', turnConfigured: boolean }>}
  */
-export async function resolveIceServers() {
-  return fetchIceServers();
+export async function resolveIceServers(options = {}) {
+  return fetchIceServers(options);
 }
 
 /** @returns {Promise<RTCIceServer[]>} */
@@ -86,8 +86,8 @@ export function getPeerJsOptions(peerId) {
  * @param {string} [peerId]
  * @returns {Promise<PeerJSOption>}
  */
-export async function getPeerJsOptionsAsync(peerId) {
-  const { iceServers, iceTransportPolicy } = await resolveIceServers();
+export async function getPeerJsOptionsAsync(peerId, options = {}) {
+  const { iceServers, iceTransportPolicy } = await resolveIceServers(options);
 
   /** @type {PeerJSOption} */
   const options = {

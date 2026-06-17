@@ -1,7 +1,13 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 export const GUEST_LINK_TOKEN_PREFIX = "g1.";
-export const DEFAULT_GUEST_LINK_TTL_SEC = 72 * 60 * 60;
+export const DEFAULT_GUEST_LINK_TTL_SEC = 24 * 60 * 60;
+
+export function getGuestLinkTtlSec() {
+  const env = parseInt(process.env.GUEST_LINK_TTL_SEC || "", 10);
+  if (Number.isFinite(env) && env >= 300) return env;
+  return DEFAULT_GUEST_LINK_TTL_SEC;
+}
 
 function getGuestLinkSecret() {
   return String(process.env.GUEST_LINK_SECRET || "").trim();
@@ -36,7 +42,7 @@ export function isSignedGuestLinkToken(token) {
   return String(token || "").startsWith(GUEST_LINK_TOKEN_PREFIX);
 }
 
-export function signGuestLinkToken({ sessionId, shortCode, kind, ttlSec = DEFAULT_GUEST_LINK_TTL_SEC }) {
+export function signGuestLinkToken({ sessionId, shortCode, kind, ttlSec = getGuestLinkTtlSec() }) {
   const secret = getGuestLinkSecret();
   if (!secret) {
     throw new Error("guest_link_secret_missing");
@@ -48,7 +54,7 @@ export function signGuestLinkToken({ sessionId, shortCode, kind, ttlSec = DEFAUL
   }
 
   const iat = Math.floor(Date.now() / 1000);
-  const exp = iat + Math.max(60, Number(ttlSec) || DEFAULT_GUEST_LINK_TTL_SEC);
+  const exp = iat + Math.max(60, Number(ttlSec) || getGuestLinkTtlSec());
   const k = kind === "consent" ? "c" : "s";
   const payload = { sid, sc: shortCode ? String(shortCode) : "", k, exp, iat };
   const sig = createHmac("sha256", secret).update(canonicalString(payload)).digest("base64url");

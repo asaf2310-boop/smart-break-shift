@@ -467,7 +467,7 @@ export default function ScreenShareGuestPage() {
 
     let peer = peerRef.current;
     if (!peer || peer.destroyed) {
-      peer = new Peer(await getPeerJsOptionsAsync());
+      peer = new Peer(await getPeerJsOptionsAsync(undefined, { sessionId }));
       peerRef.current = peer;
       bindPeerAgentEndListener(peer);
       await new Promise((resolve, reject) => {
@@ -517,8 +517,9 @@ export default function ScreenShareGuestPage() {
   ]);
 
   useEffect(() => {
-    void resolveIceServers();
-  }, []);
+    if (!sessionId) return;
+    void resolveIceServers({ sessionId });
+  }, [sessionId]);
 
   useEffect(() => {
     if (!sessionId || !cloudSessionSyncEnabled()) return undefined;
@@ -661,7 +662,7 @@ export default function ScreenShareGuestPage() {
       }
       setSession(resolveGuestSession(sessionId, bootstrapKey));
 
-      const peer = new Peer(await getPeerJsOptionsAsync());
+      const peer = new Peer(await getPeerJsOptionsAsync(undefined, { sessionId }));
       peerRef.current = peer;
       bindPeerAgentEndListener(peer);
 

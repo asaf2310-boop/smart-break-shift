@@ -3,6 +3,11 @@
 import { json, readJsonBody, handleOptions, isSameOrigin } from "../server/knowledge/httpUtils.js";
 import { isPgVectorConfigured } from "../server/knowledge/supabaseAdmin.js";
 import {
+  checkIpRateLimit,
+  getClientIp,
+  recordIpRateLimit,
+} from "../server/http/rateLimit.js";
+import {
   handleRecordingUpload,
   handleSupportFileSignedUrl,
   handleSupportFileUpload,
@@ -26,9 +31,49 @@ import {
   mintGuestLinkForSession,
   resolveGuestLinkFromToken,
 } from "../server/guest/guestLinkService.js";
-import { handleIceServersRequest } from "../server/webrtc/iceServersService.js";
+import {
+  auditGuestAccess,
+  fetchGuestSessionState,
+  insertGuestSessionChatMessage,
+  listGuestSessionChatMessages,
+} from "../server/guest/guestSupportService.js";
+import { verifyGuestLinkToken } from "../server/guest/guestLinkToken.js";
+import { handleIceServersRequest, DEFAULT_STUN_SERVERS } from "../server/webrtc/iceServersService.js";
 
 const PASSWORD_MIN_LENGTH = 12;
+
+const guestResolveRateByIp = new Map();
+const guestSessionRateByIp = new Map();
+const guestChatRateByIp = new Map();
+
+const GUEST_RESOLVE_RATE_MAX = 60;
+const GUEST_SESSION_POLL_RATE_MAX = 240;
+const GUEST_CHAT_RATE_MAX = 120;
+const ICE_SERVERS_RATE_MAX = 120;
+
+function rateLimitResponse(res, req, retryAfterSec) {
+  return json(
+    res,
+    429,
+    {
+      error: "rate_limited",
+      retryAfterSec,
+      message: `יותר מדי בקשות — נסו שוב בעוד ${retryAfterSec} שניות`,
+    },
+    req
+  );
+}
+
+function enforceIpRateLimit(res, req, store, max) {
+  const ip = getClientIp(req);
+  const check = checkIpRateLimit(store, ip, max);
+  if (!check.allowed) {
+    rateLimitResponse(res, req, check.retryAfterSec);
+    return false;
+  }
+  recordIpRateLimit(check.entry);
+  return true;
+}
 
 async function requireAdminAgent(req, res, body) {
   const auth = await verifyAdminAgent(req, body);
@@ -67,6 +112,32 @@ export default async function handler(req, res) {
   const action = String(body.action || "").trim();
 
   if (action === "ice_servers") {
+    if (!enforceIpRateLimit(res, req, guestResolveRateByIp, ICE_SERVERS_RATE_MAX)) return;
+
+    const guestToken = String(body.guestToken || "").trim();
+    let authorized = false;
+    if (guestToken) {
+      const verified = verifyGuestLinkToken(guestToken);
+      authorized = verified.ok;
+    } else {
+      const auth = await verifyBearerAgent(req);
+      authorized = Boolean(auth?.agent);
+    }
+
+    if (!authorized) {
+      return json(
+        res,
+        200,
+        {
+          ok: true,
+          iceServers: DEFAULT_STUN_SERVERS,
+          iceTransportPolicy: "all",
+          turnConfigured: false,
+        },
+        req
+      );
+    }
+
     return handleIceServersRequest(res, req);
   }
 
@@ -303,20 +374,96 @@ export default async function handler(req, res) {
         return json(res, status, result, req);
       }
 
+      auditGuestAccess("mint_ok", { req, sessionId, extra: { agent: auth.agent.displayName } });
       return json(res, 200, result, req);
     }
+
+    if (!enforceIpRateLimit(res, req, guestResolveRateByIp, GUEST_RESOLVE_RATE_MAX)) return;
 
     const token = String(body.token || "").trim();
     if (!token) {
       return json(res, 400, { error: "invalid_token" }, req);
     }
 
-    const result = await resolveGuestLinkFromToken(token);
+    const result = await resolveGuestLinkFromToken(token, { req });
     if (!result.ok) {
       const status = result.error === "ended" ? 410 : result.error === "expired" ? 410 : 404;
       return json(res, status, result, req);
     }
 
+    return json(res, 200, result, req);
+  }
+
+  if (action === "guest_session") {
+    if (!guestLinkApiReady()) {
+      return json(res, 503, { error: "guest_link_not_configured" }, req);
+    }
+    if (!enforceIpRateLimit(res, req, guestSessionRateByIp, GUEST_SESSION_POLL_RATE_MAX)) return;
+
+    const token = String(body.token || body.guestToken || "").trim();
+    const sessionId = String(body.sessionId || "").trim();
+    if (!token || !sessionId) {
+      return json(res, 400, { error: "invalid_request" }, req);
+    }
+
+    const result = await fetchGuestSessionState({ token, sessionId });
+    if (!result.ok) {
+      const status =
+        result.error === "ended"
+          ? 410
+          : result.error === "expired" || result.error === "invalid_token"
+            ? 403
+            : result.error === "not_found"
+              ? 404
+              : 400;
+      return json(res, status, result, req);
+    }
+    return json(res, 200, result, req);
+  }
+
+  if (action === "guest_chat_list" || action === "guest_chat_send") {
+    if (!guestLinkApiReady()) {
+      return json(res, 503, { error: "guest_link_not_configured" }, req);
+    }
+    if (!enforceIpRateLimit(res, req, guestChatRateByIp, GUEST_CHAT_RATE_MAX)) return;
+
+    const token = String(body.token || body.guestToken || "").trim();
+    const sessionId = String(body.sessionId || "").trim();
+    if (!token || !sessionId) {
+      return json(res, 400, { error: "invalid_request" }, req);
+    }
+
+    if (action === "guest_chat_list") {
+      const result = await listGuestSessionChatMessages({ token, sessionId, limit: body.limit });
+      if (!result.ok) {
+        const status =
+          result.error === "ended"
+            ? 410
+            : result.error === "expired" || result.error === "invalid_token"
+              ? 403
+              : 400;
+        return json(res, status, result, req);
+      }
+      return json(res, 200, result, req);
+    }
+
+    const result = await insertGuestSessionChatMessage({
+      token,
+      sessionId,
+      messageId: body.messageId,
+      body: body.body,
+      senderLabel: body.senderLabel,
+    });
+    if (!result.ok) {
+      const status =
+        result.error === "ended"
+          ? 410
+          : result.error === "expired" || result.error === "invalid_token"
+            ? 403
+            : 400;
+      return json(res, status, result, req);
+    }
+    auditGuestAccess("guest_chat_send", { req, sessionId });
     return json(res, 200, result, req);
   }
 
