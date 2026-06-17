@@ -27,13 +27,13 @@ import {
 
 export const AGENT_SESSION_KEY = "smart-break-agent-session-v1";
 export const INVALID_CREDENTIALS_MSG = "אימייל או סיסמה שגויים";
-export const PASSWORD_MIN_LENGTH = 6;
-export const PASSWORD_MIN_LENGTH_MSG = "הסיסמה חייבת להכיל לפחות 6 תווים";
+export const PASSWORD_MIN_LENGTH = 12;
+export const PASSWORD_MIN_LENGTH_MSG = "הסיסמה חייבת להכיל לפחות 12 תווים";
 export const AGENT_AUTH_TIMEOUT_MSG =
   "החיבור לשרת ארך זמן רב מדי — בדוק חיבור אינטרנט ואת הגדרות Supabase ב-Vercel";
 
 const AGENT_PROFILE_COLUMNS =
-  "id,email,display_name,auth_user_id,active,blocked,needs_password_setup,deleted_at,phone,modules";
+  "id,email,display_name,auth_user_id,active,blocked,needs_password_setup,deleted_at,phone,modules,is_admin";
 
 function withAuthTimeout(promise, ms = 15000) {
   return Promise.race([
@@ -70,6 +70,12 @@ function mapPasswordAuthError(message) {
   if (!message) return PASSWORD_MIN_LENGTH_MSG;
   const lower = String(message).toLowerCase();
   if (
+    lower.includes("12") &&
+    (lower.includes("character") || lower.includes("password") || lower.includes("weak"))
+  ) {
+    return PASSWORD_MIN_LENGTH_MSG;
+  }
+  if (
     lower.includes("6") &&
     (lower.includes("character") || lower.includes("password") || lower.includes("weak"))
   ) {
@@ -101,6 +107,7 @@ function mapSupabaseAgent(row) {
     phone: row.phone || "",
     active: row.active !== false && !row.deleted_at,
     blocked: row.blocked === true,
+    isAdmin: row.is_admin === true,
     modules: normalizeAgentModules(row.modules),
   };
 }
@@ -131,6 +138,7 @@ function sessionFromAgent(agent) {
     displayName,
     modules: normalizeAgentModules(agent.modules),
     needsPasswordSetup: agent.needsPasswordSetup === true,
+    isAdmin: agent.isAdmin === true,
     ...(agent.authUserId ? { authUserId: agent.authUserId } : {}),
   };
 }
@@ -293,7 +301,9 @@ export async function validateAndRefreshAgentSession() {
   const modulesChanged =
     JSON.stringify(refreshed.modules || []) !== JSON.stringify(session.modules || []);
   const profileChanged =
-    refreshed.displayName !== session.displayName || refreshed.email !== session.email;
+    refreshed.displayName !== session.displayName ||
+    refreshed.email !== session.email ||
+    refreshed.isAdmin !== session.isAdmin;
 
   if (modulesChanged || profileChanged) {
     setAgentSession(refreshed);

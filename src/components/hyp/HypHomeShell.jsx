@@ -13,7 +13,6 @@ export default function HypHomeShell({
   agentCount,
   homeCards,
   showAdminDemoHint,
-  adminPin,
   onLogout,
   showDemoBadge = false,
 }) {
@@ -45,7 +44,7 @@ export default function HypHomeShell({
             )}
             {showAdminDemoHint && (
               <Link to="/admin" className="hyp-home__admin-link mt-3 inline-block">
-                כניסת מנהל: /admin (PIN: {adminPin})
+                כניסת מנהל: /admin
               </Link>
             )}
             <button type="button" onClick={onLogout} className="hyp-home__logout mt-4">

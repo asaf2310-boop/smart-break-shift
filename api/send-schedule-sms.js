@@ -1,5 +1,7 @@
 /** Vercel serverless — שליחת SMS שיבוץ דרך Inforu (פרטי חשבון ב-process.env בלבד) */
 
+import { verifyAdminAgent } from "../server/agent/agentAuthService.js";
+
 const INFORU_SMS_URL = "https://api.inforu.co.il/SendMessageXml.ashx";
 const RATE_LIMIT_MAX = 120;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
@@ -71,7 +73,7 @@ function corsHeaders(req) {
     return {
       "Access-Control-Allow-Origin": origin,
       "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
       Vary: "Origin",
     };
   }
@@ -198,6 +200,11 @@ export default async function handler(req, res) {
 
   if (!isSameOrigin(req)) {
     return json(res, 403, { error: "forbidden", message: "CORS: same origin only" }, req);
+  }
+
+  const adminAuth = await verifyAdminAgent(req, {});
+  if (!adminAuth?.agent) {
+    return json(res, 403, { error: "forbidden", message: "נדרשת הרשאת מנהל" }, req);
   }
 
   const userName = String(process.env.INFORU_USERNAME || "").trim();

@@ -2,6 +2,7 @@
 
 import { json, readJsonBody, handleOptions, isSameOrigin } from "../server/knowledge/httpUtils.js";
 import { isPgVectorConfigured, getSupabaseUrl, getSupabaseAdmin } from "../server/knowledge/supabaseAdmin.js";
+import { verifyKnowledgeAccess } from "../server/agent/agentAuthService.js";
 import {
   ingestDocument,
   deleteDocument,
@@ -14,6 +15,15 @@ import {
 } from "../server/knowledge/documentIngestService.js";
 import { ingestDocumentImages, listDocumentPageImages } from "../server/knowledge/imageIngestService.js";
 import { importHypPayPackage } from "../server/knowledge/hypPayPackageImport.js";
+
+async function requireKnowledgeAccess(req, res) {
+  const auth = await verifyKnowledgeAccess(req);
+  if (!auth?.agent) {
+    json(res, 401, { error: "unauthorized", message: "נדרשת התחברות עם הרשאת ידע" }, req);
+    return null;
+  }
+  return auth;
+}
 
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") {
@@ -66,6 +76,8 @@ export default async function handler(req, res) {
       );
     }
 
+    if (!(await requireKnowledgeAccess(req, res))) return;
+
     const documentId = String(url.searchParams.get("documentId") || "").trim();
     if (documentId && url.searchParams.get("view") === "1") {
       const { document, error } = await getDocumentForView(documentId);
@@ -115,6 +127,8 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "DELETE") {
+    if (!(await requireKnowledgeAccess(req, res))) return;
+
     let body = {};
     try {
       body = await readJsonBody(req);
@@ -132,6 +146,8 @@ export default async function handler(req, res) {
   if (req.method !== "POST") {
     return json(res, 405, { error: "method_not_allowed" }, req);
   }
+
+  if (!(await requireKnowledgeAccess(req, res))) return;
 
   let body;
   try {

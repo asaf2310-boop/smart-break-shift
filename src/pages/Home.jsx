@@ -5,7 +5,6 @@ import AgentLogin from "@/components/auth/AgentLogin";
 import HypHomeShell from "@/components/hyp/HypHomeShell";
 import RouteErrorBoundary from "@/components/RouteErrorBoundary";
 import { customerChatEnabled, crmEnabled, demoModeEnabled, knowledgeEnabled } from "@/api/demoClient";
-import { isAdminPinConfigured } from "@/hooks/useIsAdmin";
 import { connectAgentAsAvailable } from "@/lib/agentChatPresence";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { useAgentModules } from "@/hooks/useAgentModules";
@@ -99,15 +98,13 @@ const homeCards = demoModeEnabled
   ? [...productionCards, ...demoOnlyCards]
   : liveCardsWithOptionalModules;
 
-const showAdminDemoHint =
-  (import.meta.env.DEV || demoModeEnabled) && isAdminPinConfigured();
+const showAdminDemoHint = import.meta.env.DEV || demoModeEnabled;
 
 function HomeContent() {
   const { displayName, isLoggedIn, refresh } = useAgentSession();
   const { modules } = useAgentModules();
   const visibleCards = filterItemsByModules(homeCards, modules);
   const agentCount = getAgentNamesList().length;
-  const adminPin = String(import.meta.env.VITE_ADMIN_PIN ?? "").trim();
 
   const handleLoginSuccess = (session) => {
     connectAgentAsAvailable(session.displayName).catch(() => {});
@@ -129,7 +126,6 @@ function HomeContent() {
       agentCount={agentCount}
       homeCards={visibleCards}
       showAdminDemoHint={showAdminDemoHint}
-      adminPin={adminPin}
       onLogout={handleLogout}
       showDemoBadge={demoModeEnabled}
     />

@@ -13,7 +13,7 @@ import {
   markAgentPasswordSetupComplete,
   markAgentNeedsPasswordSetup,
   provisionAuthUserForAgent,
-  verifyAdminPin,
+  verifyAdminAgent,
   verifyBearerAgent,
 } from "../server/agent/agentAuthService.js";
 import {
@@ -28,7 +28,16 @@ import {
 } from "../server/guest/guestLinkService.js";
 import { handleIceServersRequest } from "../server/webrtc/iceServersService.js";
 
-const PASSWORD_MIN_LENGTH = 6;
+const PASSWORD_MIN_LENGTH = 12;
+
+async function requireAdminAgent(req, res, body) {
+  const auth = await verifyAdminAgent(req, body);
+  if (!auth?.agent) {
+    json(res, 403, { error: "forbidden", message: "נדרשת הרשאת מנהל" }, req);
+    return null;
+  }
+  return auth;
+}
 
 function supabaseReady() {
   return isPgVectorConfigured();
@@ -126,9 +135,7 @@ export default async function handler(req, res) {
   }
 
   if (action === "admin_set_password") {
-    if (!verifyAdminPin(body)) {
-      return json(res, 403, { error: "forbidden", message: "אין הרשאה" }, req);
-    }
+    if (!(await requireAdminAgent(req, res, body))) return;
 
     const agentId = String(body.agentId || body.id || "").trim();
     const password = String(body.password || "");
@@ -138,7 +145,7 @@ export default async function handler(req, res) {
       return json(
         res,
         400,
-        { error: "invalid_fields", message: "סיסמה חייבת להכיל לפחות 6 תווים" },
+        { error: "invalid_fields", message: "סיסמה חייבת להכיל לפחות 12 תווים" },
         req
       );
     }
@@ -171,9 +178,7 @@ export default async function handler(req, res) {
   }
 
   if (action === "admin_create_break_registration") {
-    if (!verifyAdminPin(body)) {
-      return json(res, 403, { error: "forbidden", message: "אין הרשאה" }, req);
-    }
+    if (!(await requireAdminAgent(req, res, body))) return;
 
     const agent_name = String(body.agent_name || "").trim();
     const break_type = String(body.break_type || "").trim();
@@ -210,9 +215,7 @@ export default async function handler(req, res) {
   }
 
   if (action === "admin_delete_break_registration") {
-    if (!verifyAdminPin(body)) {
-      return json(res, 403, { error: "forbidden", message: "אין הרשאה" }, req);
-    }
+    if (!(await requireAdminAgent(req, res, body))) return;
 
     const registrationId = String(body.id || "").trim();
     if (!registrationId) {
@@ -238,9 +241,7 @@ export default async function handler(req, res) {
   }
 
   if (action === "provision_auth") {
-    if (!verifyAdminPin(body)) {
-      return json(res, 403, { error: "forbidden", message: "אין הרשאה" }, req);
-    }
+    if (!(await requireAdminAgent(req, res, body))) return;
 
     const agentId = String(body.agentId || body.id || "").trim();
     if (!agentId) {

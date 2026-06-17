@@ -40,9 +40,9 @@ function markResetCooldown(email) {
   writeCooldownMap(map);
 }
 
-/** סיסמה זמנית בת 6 ספרות — נוחה ל-SMS */
+/** סיסמה זמנית בת 12 ספרות — עומדת במדיניות אורך מינימלי */
 export function generateTemporaryPassword() {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  return `${Math.floor(100000 + Math.random() * 900000)}${Math.floor(100000 + Math.random() * 900000)}`;
 }
 
 function resolveAgentPhone(agent) {

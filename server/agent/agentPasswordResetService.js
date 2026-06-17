@@ -14,8 +14,10 @@ const cooldownByEmail = new Map();
 const GENERIC_RESET_OK_MSG =
   "אם האימייל רשום במערכת ויש טלפון — נשלחה סיסמה זמנית ב-SMS.";
 
+const PASSWORD_MIN_LENGTH = 12;
+
 export function generateTemporaryPassword() {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  return `${Math.floor(100000 + Math.random() * 900000)}${Math.floor(100000 + Math.random() * 900000)}`;
 }
 
 export function buildTemporaryPasswordSmsMessage(tempPassword) {
@@ -77,7 +79,7 @@ export async function requestPasswordResetByEmail(email) {
   }
 
   const tempPassword = generateTemporaryPassword();
-  if (tempPassword.length < 6) {
+  if (tempPassword.length < PASSWORD_MIN_LENGTH) {
     return { ok: false, message: "שגיאה ביצירת סיסמה זמנית" };
   }
 

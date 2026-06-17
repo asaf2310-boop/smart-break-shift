@@ -1,5 +1,4 @@
 import { supabase } from "@/api/supabase";
-import { getAdminPinForApi } from "@/lib/adminPinClient";
 
 const AGENT_AUTH_API = "/api/agent-auth";
 
@@ -7,6 +6,16 @@ async function getBearerToken() {
   if (!supabase) return null;
   const { data } = await supabase.auth.getSession();
   return data?.session?.access_token || null;
+}
+
+/** Build fetch headers with optional Bearer token for protected API routes. */
+export async function getAgentBearerHeaders(extra = {}) {
+  const headers = { ...extra };
+  const token = await getBearerToken();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
 }
 
 async function postAgentAuth(body, { requireBearer = false, accessToken = null } = {}) {
@@ -18,13 +27,10 @@ async function postAgentAuth(body, { requireBearer = false, accessToken = null }
     return { ok: false, error: "unauthorized", message: "נדרשת התחברות" };
   }
 
-  const adminPin = getAdminPinForApi();
-  const payload = adminPin ? { ...body, adminPin } : body;
-
   const response = await fetch(AGENT_AUTH_API, {
     method: "POST",
     headers,
-    body: JSON.stringify(payload),
+    body: JSON.stringify(body),
   });
 
   const data = await response.json().catch(() => ({}));
@@ -48,12 +54,15 @@ export async function apiSyncAgentAuth(accessToken = null) {
 }
 
 export async function apiAdminSetAgentPassword(agentId, password, { forceSetup = true } = {}) {
-  return postAgentAuth({
-    action: "admin_set_password",
-    agentId,
-    password,
-    forceSetup,
-  });
+  return postAgentAuth(
+    {
+      action: "admin_set_password",
+      agentId,
+      password,
+      forceSetup,
+    },
+    { requireBearer: true }
+  );
 }
 
 export async function apiRequestAgentPasswordReset(email) {
@@ -71,20 +80,26 @@ export async function apiRequestFirstLogin(email) {
 }
 
 export async function apiProvisionAgentAuth(agentId) {
-  return postAgentAuth({
-    action: "provision_auth",
-    agentId,
-  });
+  return postAgentAuth(
+    {
+      action: "provision_auth",
+      agentId,
+    },
+    { requireBearer: true }
+  );
 }
 
 export async function apiAdminCreateBreakRegistration(payload) {
-  const result = await postAgentAuth({
-    action: "admin_create_break_registration",
-    agent_name: payload.agent_name,
-    break_type: payload.break_type,
-    time_slot: payload.time_slot,
-    date: payload.date,
-  });
+  const result = await postAgentAuth(
+    {
+      action: "admin_create_break_registration",
+      agent_name: payload.agent_name,
+      break_type: payload.break_type,
+      time_slot: payload.time_slot,
+      date: payload.date,
+    },
+    { requireBearer: true }
+  );
   if (!result.ok) {
     throw new Error(result.message || "לא הצלחנו לשמור את ההרשמה");
   }
@@ -92,10 +107,13 @@ export async function apiAdminCreateBreakRegistration(payload) {
 }
 
 export async function apiAdminDeleteBreakRegistration(id) {
-  const result = await postAgentAuth({
-    action: "admin_delete_break_registration",
-    id,
-  });
+  const result = await postAgentAuth(
+    {
+      action: "admin_delete_break_registration",
+      id,
+    },
+    { requireBearer: true }
+  );
   if (!result.ok) {
     throw new Error(result.message || "לא הצלחנו להסיר את ההרשמה");
   }

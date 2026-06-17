@@ -1,5 +1,6 @@
 import { demoModeEnabled } from "@/api/demoClient";
 import { cleanEnvValue } from "@/api/supabase";
+import { getAgentBearerHeaders } from "@/lib/agentAuthClient";
 import { normalizeAgentPhone } from "@/lib/agentPhone";
 
 const DEFAULT_SMS_WEBHOOK_PATH = "/api/send-schedule-sms";
@@ -41,9 +42,10 @@ export async function sendAgentSms({ phone, message, agentName }) {
   }
 
   try {
+    const headers = await getAgentBearerHeaders({ "Content-Type": "application/json" });
     const response = await fetch(webhook, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         to: normalized,
         message,

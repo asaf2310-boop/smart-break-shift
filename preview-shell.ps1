@@ -41,7 +41,6 @@ if (Test-Path ".env.local") {
     $envLines = @(Get-Content ".env.local" -Encoding utf8)
 }
 $envLines = Set-EnvLocalValue $envLines "VITE_DEMO_MODE" "true"
-$envLines = Set-EnvLocalValue $envLines "VITE_ADMIN_PIN" "1234"
 $envLocalPath = Join-Path $root ".env.local"
 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 [System.IO.File]::WriteAllLines($envLocalPath, $envLines, $utf8NoBom)
@@ -55,7 +54,7 @@ Write-Host ""
 Write-Host "Mode: demo (not live)"
 Write-Host "Live Supabase: preview-live.ps1"
 Write-Host "Agent:  http://localhost:5173"
-Write-Host "Admin:  http://localhost:5173/admin  PIN: 1234"
+Write-Host "Admin:  http://localhost:5173/admin  (דמו: PIN 1234)"
 Write-Host "Stop:   Ctrl+C"
 Write-Host ""
 Write-Host "If you changed .env.local earlier, restart this script so Vite reloads env."

@@ -5,6 +5,7 @@
 
 import { demoModeEnabled } from "@/api/demoClient";
 import { isSupabaseBackend } from "@/api/dataClient";
+import { getAgentBearerHeaders } from "@/lib/agentAuthClient";
 import { KNOWLEDGE_LOW_RELEVANCE_ANSWER } from "@/lib/knowledgePrompt";
 
 const API_TIMEOUT_MS = 25_000;
@@ -31,7 +32,7 @@ async function postKnowledgeUploadWithRetry(body, timeoutMs = API_TIMEOUT_MS) {
 }
 
 function postKnowledgeUpload(body, timeoutMs = API_TIMEOUT_MS) {
-  return fetchWithTimeout(
+  return authenticatedFetch(
     "/api/knowledge-upload",
     {
       method: "POST",
@@ -40,6 +41,11 @@ function postKnowledgeUpload(body, timeoutMs = API_TIMEOUT_MS) {
     },
     timeoutMs,
   );
+}
+
+async function authenticatedFetch(url, options = {}, timeoutMs = API_TIMEOUT_MS) {
+  const authHeaders = await getAgentBearerHeaders(options.headers || {});
+  return fetchWithTimeout(url, { ...options, headers: authHeaders }, timeoutMs);
 }
 
 function fetchWithTimeout(url, options = {}, timeoutMs = API_TIMEOUT_MS) {
@@ -88,7 +94,7 @@ export async function fetchKnowledgeWelcome() {
 }
 
 export async function listServerDocuments() {
-  const res = await fetchWithTimeout("/api/knowledge-upload");
+  const res = await authenticatedFetch("/api/knowledge-upload");
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "list_failed");
   return data;
@@ -170,7 +176,7 @@ export async function ingestServerDocumentPages({
 export async function fetchServerDocumentPageImages(documentId) {
   const id = String(documentId || "").trim();
   if (!id) return [];
-  const res = await fetchWithTimeout(`/api/knowledge-upload?documentId=${encodeURIComponent(id)}&images=1`);
+  const res = await authenticatedFetch(`/api/knowledge-upload?documentId=${encodeURIComponent(id)}&images=1`);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "page_images_failed");
   return data.pages || [];
@@ -189,7 +195,7 @@ export function buildKnowledgeDocumentViewUrl(documentId, pageNumber) {
 export async function fetchKnowledgeDocumentView(documentId) {
   const id = String(documentId || "").trim();
   if (!id) throw new Error("document_id_required");
-  const res = await fetchWithTimeout(`/api/knowledge-upload?documentId=${encodeURIComponent(id)}&view=1`);
+  const res = await authenticatedFetch(`/api/knowledge-upload?documentId=${encodeURIComponent(id)}&view=1`);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "document_view_failed");
   return data;
@@ -198,7 +204,7 @@ export async function fetchKnowledgeDocumentView(documentId) {
 export { PAGE_INGEST_BATCH };
 
 export async function reprocessServerDocument(documentId) {
-  const res = await fetchWithTimeout("/api/knowledge-upload", {
+  const res = await authenticatedFetch("/api/knowledge-upload", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "reprocess", documentId }),
@@ -209,7 +215,7 @@ export async function reprocessServerDocument(documentId) {
 }
 
 export async function deleteServerDocument(documentId) {
-  const res = await fetchWithTimeout("/api/knowledge-upload", {
+  const res = await authenticatedFetch("/api/knowledge-upload", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "delete", documentId }),

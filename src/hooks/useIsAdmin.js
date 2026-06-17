@@ -1,22 +1,23 @@
 import { useSyncExternalStore } from "react";
 import { demoModeEnabled } from "@/api/demoClient";
+import { useAgentSession } from "@/hooks/useAgentSession";
 
 const ADMIN_SESSION_KEY = "smart_break_admin_unlocked";
 
-/** PIN מוגדר ב-build env (VITE_ADMIN_PIN). */
+/** Demo-only: hardcoded PIN for local preview (never from VITE_* env). */
+export const DEMO_ADMIN_PIN = "1234";
+
+/** @deprecated Use isDemoAdminUnlocked / useIsAdmin instead. */
 export function isAdminPinConfigured() {
-  return Boolean(String(import.meta.env.VITE_ADMIN_PIN ?? "").trim());
+  return demoModeEnabled;
 }
 
-/** דמו בלבד: נדרש PIN רק כשהוגדר ב-build. */
+/** @deprecated */
 export function isDemoAdminPinRequired() {
-  return demoModeEnabled && isAdminPinConfigured();
+  return demoModeEnabled;
 }
 
-/**
- * @deprecated שלב 3 — /admin דורש התחברות נציג; PIN הוא שכבה נוספת בלבד.
- * נשמר לתאימות; אל תשתמש לעקיפת AdminGate.
- */
+/** @deprecated */
 export function isProductionAdminOpen() {
   return false;
 }
@@ -41,9 +42,14 @@ function getAdminSessionSnapshot() {
   }
 }
 
-/** מצב מנהל פעיל — רק אחרי הזנת PIN במסך /admin (לא התחברות נציג). */
+/** Demo: local admin UI unlock flag (not used in production). */
+export function isDemoAdminUnlocked() {
+  return demoModeEnabled && getAdminSessionSnapshot();
+}
+
+/** @deprecated Prefer useIsAdmin. */
 export function isAdminSessionActive() {
-  return isAdminPinConfigured() && getAdminSessionSnapshot();
+  return isDemoAdminUnlocked();
 }
 
 export function unlockAdminSession() {
@@ -56,12 +62,21 @@ export function clearAdminSession() {
   window.dispatchEvent(new CustomEvent("admin-session-changed"));
 }
 
-/** ניווט/הרשאות UI — רק אחרי PIN מוצלח; לא כולל isProductionAdminOpen. */
+/**
+ * Admin UI permissions — production: agents.is_admin from server session.
+ * Demo: local unlock flag after demo PIN.
+ */
 export function useIsAdmin() {
-  const sessionUnlocked = useSyncExternalStore(
+  const { session, isLoggedIn } = useAgentSession();
+  const demoUnlocked = useSyncExternalStore(
     subscribeAdminSession,
     getAdminSessionSnapshot,
     () => false
   );
-  return isAdminPinConfigured() && sessionUnlocked;
+
+  if (demoModeEnabled) {
+    return demoUnlocked;
+  }
+
+  return Boolean(isLoggedIn && session?.isAdmin === true);
 }

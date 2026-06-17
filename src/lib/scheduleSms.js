@@ -1,5 +1,6 @@
 import { demoModeEnabled } from "@/api/demoClient";
 import { cleanEnvValue } from "@/api/supabase";
+import { getAgentBearerHeaders } from "@/lib/agentAuthClient";
 import { listManagedAgents } from "@/lib/agentsApi";
 import { normalizeAgentPhone } from "@/lib/agentPhone";
 import { DEMO_AGENT_PHONES } from "@/constants/agentPhones";
@@ -183,9 +184,10 @@ export function toastScheduleSmsResult(toast, smsResult, labels = {}) {
 }
 
 async function postScheduleSms(webhook, item) {
+  const headers = await getAgentBearerHeaders({ "Content-Type": "application/json" });
   const response = await fetch(webhook, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({
       to: item.phone,
       message: item.message,

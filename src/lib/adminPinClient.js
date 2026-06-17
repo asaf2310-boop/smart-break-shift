@@ -1,22 +1,9 @@
-const ADMIN_PIN_SESSION_KEY = "smart_break_admin_pin_for_api";
+/** @deprecated Admin API auth uses Bearer JWT + is_admin — PIN no longer sent from client. */
 
-/** Remember admin PIN in session for server API calls from /admin pages. */
-export function rememberAdminPinForApi(pin) {
-  try {
-    if (pin) {
-      sessionStorage.setItem(ADMIN_PIN_SESSION_KEY, String(pin));
-    } else {
-      sessionStorage.removeItem(ADMIN_PIN_SESSION_KEY);
-    }
-  } catch {
-    /* ignore */
-  }
+export function rememberAdminPinForApi() {
+  /* no-op */
 }
 
 export function getAdminPinForApi() {
-  try {
-    return sessionStorage.getItem(ADMIN_PIN_SESSION_KEY) || "";
-  } catch {
-    return "";
-  }
+  return "";
 }

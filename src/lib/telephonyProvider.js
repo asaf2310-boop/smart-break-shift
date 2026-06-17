@@ -8,6 +8,7 @@
 
 import { Web } from "sip.js";
 import { parseIceServersAsync } from "@/lib/webrtcConfig";
+import { getAgentBearerHeaders } from "@/lib/agentAuthClient";
 
 /** @typedef {'idle' | 'connecting' | 'registered' | 'unregistered' | 'error'} SipRegistrationState */
 
@@ -162,7 +163,9 @@ async function fetchSipCredentials() {
   try {
     const agentName = getCurrentAgentNameForSip();
     const params = agentName ? `?agent=${encodeURIComponent(agentName)}` : "";
-    const headers = agentName ? { "x-agent-name": agentName } : {};
+    const headers = await getAgentBearerHeaders(
+      agentName ? { "x-agent-name": agentName } : {}
+    );
     const res = await fetch(`/api/sip-token${params}`, {
       credentials: "same-origin",
       headers,
@@ -173,6 +176,27 @@ async function fetchSipCredentials() {
         error: data?.reason || `שגיאת שרת SIP (${res.status})`,
       };
     }
+
+    if (data.credentialToken) {
+      const redeemHeaders = await getAgentBearerHeaders({ "Content-Type": "application/json" });
+      const redeemRes = await fetch("/api/sip-token", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: redeemHeaders,
+        body: JSON.stringify({
+          action: "redeem",
+          credentialToken: data.credentialToken,
+        }),
+      });
+      const redeemed = await redeemRes.json().catch(() => ({}));
+      if (!redeemRes.ok || !redeemed?.ok || !redeemed.password) {
+        return {
+          error: redeemed?.reason || `שגיאת אימות SIP (${redeemRes.status})`,
+        };
+      }
+      return { ...redeemed, source: "server" };
+    }
+
     return { ...data, source: "server" };
   } catch (err) {
     return { error: err?.message || "לא ניתן להתחבר לשרת SIP" };

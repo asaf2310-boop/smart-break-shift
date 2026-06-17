@@ -20,9 +20,13 @@ function mapAgentRow(row) {
     phone: row.phone || "",
     active: row.active !== false && !row.deleted_at,
     blocked: row.blocked === true,
+    isAdmin: row.is_admin === true,
     modules: Array.isArray(row.modules) ? row.modules : [],
   };
 }
+
+const AGENT_AUTH_COLUMNS =
+  "id, email, display_name, auth_user_id, needs_password_setup, phone, active, blocked, deleted_at, modules, is_admin";
 
 export async function getAgentByEmail(email) {
   const normalized = normalizeEmail(email);
@@ -33,9 +37,7 @@ export async function getAgentByEmail(email) {
 
   const { data, error } = await supabase
     .from("agents")
-    .select(
-      "id, email, display_name, auth_user_id, needs_password_setup, phone, active, blocked, deleted_at, modules"
-    )
+    .select(AGENT_AUTH_COLUMNS)
     .ilike("email", normalized)
     .maybeSingle();
 
@@ -55,9 +57,7 @@ export async function getAgentById(agentId) {
 
   const { data, error } = await supabase
     .from("agents")
-    .select(
-      "id, email, display_name, auth_user_id, needs_password_setup, phone, active, blocked, deleted_at, modules"
-    )
+    .select(AGENT_AUTH_COLUMNS)
     .eq("id", id)
     .maybeSingle();
 
@@ -77,9 +77,7 @@ export async function getAgentByAuthUserId(authUserId) {
 
   const { data, error } = await supabase
     .from("agents")
-    .select(
-      "id, email, display_name, auth_user_id, needs_password_setup, phone, active, blocked, deleted_at, modules"
-    )
+    .select(AGENT_AUTH_COLUMNS)
     .eq("auth_user_id", id)
     .maybeSingle();
 
@@ -277,8 +275,30 @@ export async function verifyBearerAgent(req) {
   return { agent, authUser: data.user, accessToken: token };
 }
 
+/** Optional server-only second factor (ADMIN_PIN). When unset, JWT+is_admin is sufficient. */
 export function verifyAdminPin(body) {
-  const configured = String(process.env.ADMIN_PIN || process.env.VITE_ADMIN_PIN || "").trim();
+  const configured = String(process.env.ADMIN_PIN || "").trim();
   if (!configured) return true;
   return String(body?.adminPin || "").trim() === configured;
+}
+
+/**
+ * Primary admin gate: Bearer JWT → agents row → is_admin === true.
+ * ADMIN_PIN is an optional second factor when set server-side.
+ */
+export async function verifyAdminAgent(req, body = {}) {
+  const auth = await verifyBearerAgent(req);
+  if (!auth?.agent?.isAdmin) return null;
+  if (!verifyAdminPin(body)) return null;
+  return auth;
+}
+
+/** Knowledge API: authenticated agent with admin or knowledge module. */
+export async function verifyKnowledgeAccess(req) {
+  const auth = await verifyBearerAgent(req);
+  if (!auth?.agent) return null;
+  if (auth.agent.isAdmin) return auth;
+  const modules = Array.isArray(auth.agent.modules) ? auth.agent.modules : [];
+  if (modules.includes("knowledge")) return auth;
+  return null;
 }
