@@ -1,9 +1,12 @@
 -- =============================================================================
--- agents — יצירה + שדרוג + סיסמה גלויה למנהל (idempotent)
+-- agents — יצירה + שדרוג (idempotent)
 -- =============================================================================
 -- הרץ ב-Supabase → SQL Editor:
 --   • פרויקט ריק / שגיאה "relation agents does not exist" — הדבק והרץ את כל הקובץ
 --   • פרויקט עם schema.sql בלבד — בטוח להרצה חוזרת (מוסיף עמודות חסרות)
+--
+-- אימות: Supabase Auth — security_phase1_auth.sql (לא password_plain)
+-- מדיניות RLS: security_phase0a → … → security_phase9 (ראה RUN_IN_SUPABASE.sql)
 --
 -- לא כולל טבלאות break/shift — לזה השתמשו ב-RUN_IN_SUPABASE.sql או schema.sql
 -- =============================================================================
@@ -20,26 +23,26 @@ create table if not exists agents (
   blocked boolean not null default false,
   needs_password_setup boolean not null default true,
   deleted_at timestamptz,
-  password_plain text,
+  is_admin boolean not null default false,
+  modules jsonb not null default '["breaks","shifts","training","metrics","remote_support","customer_chat","internal_chat","crm","knowledge"]'::jsonb,
+  phone text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
--- ── 2. שדרוג טבלה קיימת (עמודות ישנות / schema.sql ללא password_plain) ─────
+-- ── 2. שדרוג טבלה קיימת ─────────────────────────────────────────────────────
 alter table agents add column if not exists blocked boolean not null default false;
 alter table agents add column if not exists deleted_at timestamptz;
 alter table agents add column if not exists needs_password_setup boolean not null default true;
-alter table agents add column if not exists password_plain text;
 alter table agents add column if not exists auth_user_id uuid;
+alter table agents add column if not exists is_admin boolean not null default false;
+alter table agents add column if not exists modules jsonb not null default '["breaks","shifts","training","metrics","remote_support","customer_chat","internal_chat","crm","knowledge"]'::jsonb;
+alter table agents add column if not exists phone text;
 alter table agents add column if not exists created_at timestamptz not null default now();
 alter table agents add column if not exists updated_at timestamptz not null default now();
-alter table agents add column if not exists phone text;
 
 -- אימייל אופציונלי (שם בלבד / placeholder @pending.local)
 alter table agents alter column email drop not null;
-
-comment on column agents.password_plain is
-  'סיסמה בטקסט גלוי לתצוגת מנהל בלבד — החלף ב-hash + Auth לפני פרודקשן רגיש';
 
 comment on column agents.phone is
   'מספר טלפון לשליחת SMS בשיבוץ — ניהול מעמוד נציגים';
@@ -50,20 +53,11 @@ create unique index if not exists idx_agents_email_lower
   on agents (lower(trim(email)))
   where email is not null and trim(email) <> '';
 
--- ── 4. RLS + מדיניות ─────────────────────────────────────────────────────────
+-- ── 4. RLS (מדיניות — בשלבי security_phase*) ─────────────────────────────────
 alter table agents enable row level security;
 
 drop policy if exists "anon_read_active_agents" on agents;
 drop policy if exists "anon_manage_agents" on agents;
-
-create policy "anon_read_active_agents" on agents
-  for select
-  using (active = true and deleted_at is null);
-
-create policy "anon_manage_agents" on agents
-  for all
-  using (true)
-  with check (true);
 
 -- ── 5. updated_at ─────────────────────────────────────────────────────────────
 create or replace function agents_set_updated_at()

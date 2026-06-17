@@ -5,13 +5,18 @@
 --
 -- חובה:
 --   • טבלאות בסיס (הפסקות, משמרות, חופשות, הגדרות)
---   • טבלת agents + מדיניות RLS (התחברות נציגים)
+--   • טבלת agents (RLS מופעל — ללא מדיניות פתוחות)
 --   • רק agents בפרויקט ריק: supabase/agents_full_setup.sql
 --   • טריגרים למניעת משבצת מלאה וכפילות נציג
 --
 -- אופציונלי אך מומלץ:
 --   • צ'אט (chat_messages, chat_presence) — כבר כלול כאן
 --   • Realtime — עדכון מיידי בין מסכים (בסוף הקובץ)
+--   • קבצי feature (support_sessions, knowledge, training_schedule, agent_metrics, וכו')
+--     — הריצו **לפני** שלבי האבטחה (סעיף 9)
+--
+-- אבטחה לפרודקשן: סעיף 9 — security_phase0a → … → security_phase9
+-- **אל** תריצו security_phase0b_lockdown.sql בפרודקשן
 --
 -- לא ב-SQL — הגדרה ב-Dashboard:
 --   Authentication → Providers → Email (הפעלה)
@@ -117,7 +122,7 @@ insert into chat_settings (id)
 values ('default')
 on conflict (id) do nothing;
 
--- נציגים + קישור ל-Supabase Auth
+-- נציגים + קישור ל-Supabase Auth (security_phase1_auth.sql — ללא password_plain)
 create table if not exists agents (
   id uuid primary key default gen_random_uuid(),
   email text not null,
@@ -127,7 +132,7 @@ create table if not exists agents (
   blocked boolean not null default false,
   needs_password_setup boolean not null default true,
   deleted_at timestamptz,
-  password_plain text,
+  is_admin boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -136,7 +141,7 @@ create table if not exists agents (
 alter table agents add column if not exists blocked boolean not null default false;
 alter table agents add column if not exists deleted_at timestamptz;
 alter table agents add column if not exists needs_password_setup boolean not null default true;
-alter table agents add column if not exists password_plain text;
+alter table agents add column if not exists is_admin boolean not null default false;
 alter table agents alter column email drop not null;
 
 -- ── 3. אינדקסים ──────────────────────────────────────────────────────────────
@@ -165,7 +170,7 @@ alter table chat_presence enable row level security;
 alter table chat_settings enable row level security;
 alter table agents enable row level security;
 
--- מדיניות פתוחה לצוות פנימי (אפשר להחמיר later עם Supabase Auth)
+-- מדיניות RLS: security_phase0a → … → security_phase9 (ראה סעיף 9)
 drop policy if exists "anon_all_break_registrations" on break_registrations;
 drop policy if exists "anon_all_break_settings" on break_settings;
 drop policy if exists "anon_all_shift_registrations" on shift_registrations;
@@ -178,26 +183,6 @@ drop policy if exists "anon_all_chat_presence" on chat_presence;
 drop policy if exists "anon_all_chat_settings" on chat_settings;
 drop policy if exists "anon_read_active_agents" on agents;
 drop policy if exists "anon_manage_agents" on agents;
-
-create policy "anon_all_break_registrations" on break_registrations for all using (true) with check (true);
-create policy "anon_all_break_settings" on break_settings for all using (true) with check (true);
-create policy "anon_all_shift_registrations" on shift_registrations for all using (true) with check (true);
-create policy "anon_all_shift_unavailabilities" on shift_unavailabilities for all using (true) with check (true);
-create policy "anon_all_vacation_requests" on vacation_requests for all using (true) with check (true);
-create policy "anon_all_constraint_confirmations" on constraint_confirmations for all using (true) with check (true);
-create policy "anon_all_constraints_week_settings" on constraints_week_settings for all using (true) with check (true);
-create policy "anon_all_chat_messages" on chat_messages for all using (true) with check (true);
-create policy "anon_all_chat_presence" on chat_presence for all using (true) with check (true);
-create policy "anon_all_chat_settings" on chat_settings for all using (true) with check (true);
-
-create policy "anon_read_active_agents" on agents
-  for select
-  using (active = true and deleted_at is null);
-
-create policy "anon_manage_agents" on agents
-  for all
-  using (true)
-  with check (true);
 
 -- ── 5. טריגרים — agents.updated_at ───────────────────────────────────────────
 create or replace function agents_set_updated_at()
@@ -340,3 +325,25 @@ begin
     end;
   end loop;
 end $$;
+
+-- ── 9. אבטחה — הרצה חובה לפרודקשן ───────────────────────────────────────────
+-- הריצו **אחרי** bootstrap זה ואחרי קבצי feature אופציונליים (אם רלוונטי).
+-- **אל** תריצו security_phase0b_lockdown.sql בפרודקשן (נועד לסביבות בדיקה בלבד).
+--
+-- קבצי feature אופציונליים (לפני שלבי האבטחה):
+--   support_sessions.sql, support_session_chat.sql, support_files_storage.sql,
+--   screen_recordings_storage.sql, screen_recordings_retention.sql,
+--   knowledge.sql, knowledge_pgvector.sql, knowledge_images_gaps.sql,
+--   training_schedule.sql, agent_metrics.sql, chat_feature.sql
+--
+-- סדר שלבי אבטחה:
+--   1. security_phase0a_immediate.sql
+--   2. מיגרציית נציגים ל-Supabase Auth:
+--      node scripts/migrate-agents-to-supabase-auth.mjs
+--   3. security_phase1_auth.sql
+--   4. security_phase2_authenticated_data.sql (+ deploy JWT code)
+--   5. security_phase3_revoke_anon_write.sql (+ AdminGate deploy)
+--   6. security_phase4_guest_signed_tokens.sql (+ GUEST_LINK_SECRET)
+--   7. security_phase5_storage_hardening.sql
+--   8. security_phase6_file_allowlist.sql
+--   9. security_phase9_agent_rls.sql (+ הגדר is_admin למנהלים)

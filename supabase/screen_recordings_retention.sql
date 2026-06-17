@@ -77,46 +77,12 @@ create index if not exists idx_screen_recordings_created_at
 alter table screen_recordings enable row level security;
 
 drop policy if exists "anon_all_screen_recordings" on screen_recordings;
-create policy "anon_all_screen_recordings" on screen_recordings
-  for all
-  using (true)
-  with check (true);
 
+-- מדיניות RLS/Storage: security_phase5_storage_hardening.sql (ראה RUN_IN_SUPABASE.sql)
 drop policy if exists "screen_recordings_storage_select" on storage.objects;
-create policy "screen_recordings_storage_select"
-on storage.objects
-for select
-to anon, authenticated
-using (bucket_id = 'screen-recordings');
-
 drop policy if exists "screen_recordings_storage_insert" on storage.objects;
-create policy "screen_recordings_storage_insert"
-on storage.objects
-for insert
-to anon, authenticated
-with check (
-  bucket_id = 'screen-recordings'
-  and (storage.foldername(name))[1] is not null
-  and name ~ '^[^/]+/ss_rec[^/]+\.webm$'
-);
-
 drop policy if exists "screen_recordings_storage_update" on storage.objects;
-create policy "screen_recordings_storage_update"
-on storage.objects
-for update
-to anon, authenticated
-using (bucket_id = 'screen-recordings')
-with check (
-  bucket_id = 'screen-recordings'
-  and name ~ '^[^/]+/ss_rec[^/]+\.webm$'
-);
-
 drop policy if exists "screen_recordings_storage_delete" on storage.objects;
-create policy "screen_recordings_storage_delete"
-on storage.objects
-for delete
-to anon, authenticated
-using (bucket_id = 'screen-recordings');
 
 -- ── 1. מדיניות שמירה 7 ימים ─────────────────────────────────────────────────
 

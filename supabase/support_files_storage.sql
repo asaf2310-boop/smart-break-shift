@@ -63,48 +63,14 @@ create index if not exists idx_support_session_files_created_at
 alter table support_session_files enable row level security;
 
 drop policy if exists "anon_all_support_session_files" on support_session_files;
-create policy "anon_all_support_session_files" on support_session_files
-  for all
-  using (true)
-  with check (true);
 
--- קריאה — signed URL מהאפליקציה
+-- מדיניות RLS: security_phase0a → … → security_phase9 (ראה RUN_IN_SUPABASE.sql)
+-- מדיניות Storage: security_phase5_storage_hardening.sql (לא anon policies ב-bootstrap)
+
 drop policy if exists "support_files_storage_select" on storage.objects;
-create policy "support_files_storage_select"
-on storage.objects
-for select
-to anon, authenticated
-using (bucket_id = 'support-files');
-
--- העלאה — נתיב: {session_id}/ss_file_{id}.{ext}
 drop policy if exists "support_files_storage_insert" on storage.objects;
-create policy "support_files_storage_insert"
-on storage.objects
-for insert
-to anon, authenticated
-with check (
-  bucket_id = 'support-files'
-  and (storage.foldername(name))[1] is not null
-  and name ~ '^[^/]+/ss_file_[^/]+\.[^/]+$'
-);
-
 drop policy if exists "support_files_storage_update" on storage.objects;
-create policy "support_files_storage_update"
-on storage.objects
-for update
-to anon, authenticated
-using (bucket_id = 'support-files')
-with check (
-  bucket_id = 'support-files'
-  and name ~ '^[^/]+/ss_file_[^/]+\.[^/]+$'
-);
-
 drop policy if exists "support_files_storage_delete" on storage.objects;
-create policy "support_files_storage_delete"
-on storage.objects
-for delete
-to anon, authenticated
-using (bucket_id = 'support-files');
 
 create or replace function support_session_files_set_updated_at()
 returns trigger

@@ -10,7 +10,8 @@ create table if not exists constraints_week_settings (
 alter table constraints_week_settings enable row level security;
 
 drop policy if exists "anon_all_constraints_week_settings" on constraints_week_settings;
-create policy "anon_all_constraints_week_settings" on constraints_week_settings for all using (true) with check (true);
+
+-- מדיניות RLS: security_phase0a → … → security_phase9 (ראה RUN_IN_SUPABASE.sql)
 
 -- אופציונלי — עדכון מיידי בין אדמין לנציגים (דלג אם כבר ב-publication)
 do $$

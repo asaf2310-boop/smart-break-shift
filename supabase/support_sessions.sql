@@ -26,5 +26,5 @@ create index if not exists idx_support_sessions_customer_email on support_sessio
 alter table support_sessions enable row level security;
 
 drop policy if exists "anon_all_support_sessions" on support_sessions;
-create policy "anon_all_support_sessions" on support_sessions
-  for all using (true) with check (true);
+
+-- מדיניות RLS: security_phase0a → … → security_phase9 (ראה RUN_IN_SUPABASE.sql)

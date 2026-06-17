@@ -188,25 +188,10 @@ alter table knowledge_gaps enable row level security;
 alter table knowledge_feedback enable row level security;
 
 drop policy if exists "anon_read_knowledge_images" on knowledge_images;
-create policy "anon_read_knowledge_images"
-  on knowledge_images for select using (true);
-
 drop policy if exists "service_all_knowledge_images" on knowledge_images;
-create policy "service_all_knowledge_images"
-  on knowledge_images for all using (true) with check (true);
-
 drop policy if exists "anon_read_knowledge_gaps" on knowledge_gaps;
-create policy "anon_read_knowledge_gaps"
-  on knowledge_gaps for select using (true);
-
 drop policy if exists "service_all_knowledge_gaps" on knowledge_gaps;
-create policy "service_all_knowledge_gaps"
-  on knowledge_gaps for all using (true) with check (true);
-
 drop policy if exists "anon_read_knowledge_feedback" on knowledge_feedback;
-create policy "anon_read_knowledge_feedback"
-  on knowledge_feedback for select using (true);
-
 drop policy if exists "service_all_knowledge_feedback" on knowledge_feedback;
-create policy "service_all_knowledge_feedback"
-  on knowledge_feedback for all using (true) with check (true);
+
+-- מדיניות RLS: security_phase0a → … → security_phase9 (ראה RUN_IN_SUPABASE.sql)

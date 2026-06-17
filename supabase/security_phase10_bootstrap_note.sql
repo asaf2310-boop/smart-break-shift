@@ -1,0 +1,15 @@
+-- =============================================================================
+-- Phase 10 — הערת bootstrap (audit trail)
+-- =============================================================================
+-- אין SQL להרצה בקובץ זה — תיעוד בלבד.
+--
+-- החל מ-Phase 10, קבצי bootstrap ב-supabase/ (schema.sql, RUN_IN_SUPABASE.sql,
+-- agents_full_setup.sql, קבצי feature) **לא** יוצרים:
+--   • מדיניות RLS עם using(true) / anon_all_* / anon_manage_agents
+--   • עמודת password_plain בטבלת agents
+--
+-- bootstrap יוצר טבלאות, אינדקסים, טריגרים, ו-enable row level security בלבד.
+-- מדיניות אבטחה: security_phase0a → … → security_phase9 (ראה RUN_IN_SUPABASE.sql סעיף 9).
+--
+-- **אל** תריצו security_phase0b_lockdown.sql בפרודקשן.
+-- =============================================================================

@@ -38,12 +38,7 @@ alter table agent_metrics_uploads enable row level security;
 alter table agent_metrics_rows enable row level security;
 
 drop policy if exists anon_all_agent_metrics_uploads on agent_metrics_uploads;
-create policy anon_all_agent_metrics_uploads on agent_metrics_uploads
-  for all using (true) with check (true);
-
 drop policy if exists anon_all_agent_metrics_rows on agent_metrics_rows;
-create policy anon_all_agent_metrics_rows on agent_metrics_rows
-  for all using (true) with check (true);
 
 -- הגדרות ניקוד פעולות (בונוסים)
 create table if not exists agent_metrics_settings (
@@ -55,5 +50,5 @@ create table if not exists agent_metrics_settings (
 alter table agent_metrics_settings enable row level security;
 
 drop policy if exists anon_all_agent_metrics_settings on agent_metrics_settings;
-create policy anon_all_agent_metrics_settings on agent_metrics_settings
-  for all using (true) with check (true);
+
+-- מדיניות RLS: security_phase0a → … → security_phase9 (ראה RUN_IN_SUPABASE.sql)

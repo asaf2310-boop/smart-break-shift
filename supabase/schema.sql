@@ -1,4 +1,6 @@
 -- הרץ ב-Supabase → SQL Editor (פעם אחת)
+-- אבטחה: bootstrap יוצר טבלאות + RLS מופעל בלבד — ללא מדיניות פתוחות.
+-- לפרודקשן: security_phase0a → … → security_phase9 (ראה RUN_IN_SUPABASE.sql סעיף 9).
 
 create extension if not exists "pgcrypto";
 
@@ -112,7 +114,7 @@ alter table chat_messages enable row level security;
 alter table chat_presence enable row level security;
 alter table chat_settings enable row level security;
 
--- מדיניות פתוחה לצוות פנימי (אפשר להחמיר later עם Supabase Auth)
+-- מדיניות RLS: security_phase0a → … → security_phase9 (ראה RUN_IN_SUPABASE.sql)
 drop policy if exists "anon_all_break_registrations" on break_registrations;
 drop policy if exists "anon_all_break_settings" on break_settings;
 drop policy if exists "anon_all_shift_registrations" on shift_registrations;
@@ -123,17 +125,6 @@ drop policy if exists "anon_all_constraints_week_settings" on constraints_week_s
 drop policy if exists "anon_all_chat_messages" on chat_messages;
 drop policy if exists "anon_all_chat_presence" on chat_presence;
 drop policy if exists "anon_all_chat_settings" on chat_settings;
-
-create policy "anon_all_break_registrations" on break_registrations for all using (true) with check (true);
-create policy "anon_all_break_settings" on break_settings for all using (true) with check (true);
-create policy "anon_all_shift_registrations" on shift_registrations for all using (true) with check (true);
-create policy "anon_all_shift_unavailabilities" on shift_unavailabilities for all using (true) with check (true);
-create policy "anon_all_vacation_requests" on vacation_requests for all using (true) with check (true);
-create policy "anon_all_constraint_confirmations" on constraint_confirmations for all using (true) with check (true);
-create policy "anon_all_constraints_week_settings" on constraints_week_settings for all using (true) with check (true);
-create policy "anon_all_chat_messages" on chat_messages for all using (true) with check (true);
-create policy "anon_all_chat_presence" on chat_presence for all using (true) with check (true);
-create policy "anon_all_chat_settings" on chat_settings for all using (true) with check (true);
 
 -- מניעת הרשמה למשבצת מלאה (גם כששני נציגים לוחצים בו-זמנית)
 create or replace function check_break_slot_capacity()
@@ -178,7 +169,8 @@ before insert on break_registrations
 for each row
 execute function check_break_slot_capacity();
 
--- טבלת נציגים — להשלמה מלאה (password_plain, RLS, טריגר): supabase/agents_full_setup.sql
+-- טבלת נציגים — להשלמה מלאה (RLS, טריגר): supabase/agents_full_setup.sql
+-- אימות: Supabase Auth (security_phase1_auth.sql) — password_plain הוסר ב-Phase 10
 create table if not exists agents (
   id uuid primary key default gen_random_uuid(),
   email text,
@@ -188,15 +180,18 @@ create table if not exists agents (
   blocked boolean not null default false,
   needs_password_setup boolean not null default true,
   deleted_at timestamptz,
-  password_plain text,
+  is_admin boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
-alter table agents add column if not exists password_plain text;
+alter table agents add column if not exists is_admin boolean not null default false;
 alter table agents alter column email drop not null;
 drop index if exists idx_agents_email_lower;
 create unique index if not exists idx_agents_email_lower
   on agents (lower(trim(email)))
   where email is not null and trim(email) <> '';
 alter table agents enable row level security;
+
+drop policy if exists "anon_read_active_agents" on agents;
+drop policy if exists "anon_manage_agents" on agents;

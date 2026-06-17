@@ -1,6 +1,8 @@
 -- =============================================================================
 -- שלב 9 — RLS לפי נציג (auth.uid → agents) + is_admin
 -- =============================================================================
+-- Phase 10: קבצי bootstrap (schema.sql, RUN_IN_SUPABASE.sql, feature SQL) נוקו
+-- ממדיניות anon_all/using(true) ו-password_plain — ראה security_phase10_bootstrap_note.sql
 -- הרץ **אחרי**:
 --   1. security_phase0a_immediate.sql
 --   2. security_phase1_auth.sql

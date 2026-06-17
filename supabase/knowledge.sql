@@ -30,12 +30,9 @@ alter table knowledge_documents enable row level security;
 alter table knowledge_index enable row level security;
 
 drop policy if exists "anon_all_knowledge_documents" on knowledge_documents;
-create policy "anon_all_knowledge_documents"
-  on knowledge_documents for all using (true) with check (true);
-
 drop policy if exists "anon_all_knowledge_index" on knowledge_index;
-create policy "anon_all_knowledge_index"
-  on knowledge_index for all using (true) with check (true);
+
+-- מדיניות RLS: security_phase0a → … → security_phase9 (ראה RUN_IN_SUPABASE.sql)
 
 do $$
 begin

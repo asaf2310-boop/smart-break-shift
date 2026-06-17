@@ -27,12 +27,9 @@ alter table training_schedule_settings enable row level security;
 alter table training_presentation_meta enable row level security;
 
 drop policy if exists "anon_all_training_schedule_settings" on training_schedule_settings;
-create policy "anon_all_training_schedule_settings"
-  on training_schedule_settings for all using (true) with check (true);
-
 drop policy if exists "anon_all_training_presentation_meta" on training_presentation_meta;
-create policy "anon_all_training_presentation_meta"
-  on training_presentation_meta for all using (true) with check (true);
+
+-- מדיניות RLS: security_phase0a → … → security_phase9 (ראה RUN_IN_SUPABASE.sql)
 
 -- Realtime (בטוח להרצה חוזרת)
 do $$

@@ -20,10 +20,8 @@ create index if not exists idx_support_session_messages_created_at
 alter table support_session_messages enable row level security;
 
 drop policy if exists "anon_all_support_session_messages" on support_session_messages;
-create policy "anon_all_support_session_messages" on support_session_messages
-  for all
-  using (true)
-  with check (true);
+
+-- מדיניות RLS: security_phase0a → … → security_phase9 (ראה RUN_IN_SUPABASE.sql)
 
 do $$
 begin

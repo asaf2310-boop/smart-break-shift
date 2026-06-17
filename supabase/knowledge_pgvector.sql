@@ -109,20 +109,11 @@ alter table knowledge_chunks enable row level security;
 alter table knowledge_query_logs enable row level security;
 
 drop policy if exists "anon_read_knowledge_chunks" on knowledge_chunks;
-create policy "anon_read_knowledge_chunks"
-  on knowledge_chunks for select using (true);
-
 drop policy if exists "service_all_knowledge_chunks" on knowledge_chunks;
-create policy "service_all_knowledge_chunks"
-  on knowledge_chunks for all using (true) with check (true);
-
 drop policy if exists "anon_read_knowledge_query_logs" on knowledge_query_logs;
-create policy "anon_read_knowledge_query_logs"
-  on knowledge_query_logs for select using (true);
-
 drop policy if exists "service_all_knowledge_query_logs" on knowledge_query_logs;
-create policy "service_all_knowledge_query_logs"
-  on knowledge_query_logs for all using (true) with check (true);
+
+-- מדיניות RLS: security_phase0a → … → security_phase9 (ראה RUN_IN_SUPABASE.sql)
 
 -- Realtime (אופציונלי)
 do $$

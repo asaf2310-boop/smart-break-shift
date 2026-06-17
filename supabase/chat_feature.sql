@@ -26,8 +26,7 @@ alter table chat_presence enable row level security;
 drop policy if exists "anon_all_chat_messages" on chat_messages;
 drop policy if exists "anon_all_chat_presence" on chat_presence;
 
-create policy "anon_all_chat_messages" on chat_messages for all using (true) with check (true);
-create policy "anon_all_chat_presence" on chat_presence for all using (true) with check (true);
+-- מדיניות RLS: security_phase0a → … → security_phase9 (ראה RUN_IN_SUPABASE.sql)
 
 -- Realtime
 alter publication supabase_realtime add table chat_messages;
