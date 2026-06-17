@@ -646,7 +646,11 @@ export default function KnowledgeAdmin() {
                 </label>
                 {hasPdfPages ? (
                   <>
-                    <KnowledgePdfPagesPreview pages={form.pages} needsServerOcr={form.needsServerOcr} />
+                    <KnowledgePdfPagesPreview
+                      pages={form.pages}
+                      needsServerOcr={form.needsServerOcr}
+                      documentTitle={form.title}
+                    />
                     <details className="mt-3">
                       <summary className="m3-label-medium cursor-pointer text-on-surface-variant">
                         טקסט מחולץ לחיפוש (אופציונלי)

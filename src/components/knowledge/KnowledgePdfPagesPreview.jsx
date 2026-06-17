@@ -1,7 +1,12 @@
 import React from "react";
+import KnowledgeImageLightbox from "@/components/knowledge/KnowledgeImageLightbox";
 
 /** Scrollable grid of rendered PDF page images for admin preview. */
-export default function KnowledgePdfPagesPreview({ pages, needsServerOcr = false }) {
+export default function KnowledgePdfPagesPreview({
+  pages,
+  needsServerOcr = false,
+  documentTitle = "",
+}) {
   const allPages = pages || [];
   const withThumbs = allPages.filter((p) => p?.thumbnail);
 
@@ -25,25 +30,20 @@ export default function KnowledgePdfPagesPreview({ pages, needsServerOcr = false
   return (
     <div className="space-y-2">
       <p className="m3-label-medium text-on-surface-variant">
-        {withThumbs.length} עמודים — תצוגה כמו במקור
+        {withThumbs.length} עמודים — תצוגה כמו במקור · לחצו «הגדל» לתצוגה מלאה
         {needsServerOcr ? " · OCR בשרת לאחר שמירה" : ""}
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[52vh] overflow-y-auto p-1">
         {withThumbs.map((p) => (
-          <figure
+          <KnowledgeImageLightbox
             key={p.pageNumber}
-            className="m-0 rounded-xl border border-outline/20 overflow-hidden bg-white shadow-sm"
-          >
-            <img
-              src={p.thumbnail}
-              alt={`עמוד ${p.pageNumber}`}
-              className="w-full h-auto block"
-              loading="lazy"
-            />
-            <figcaption className="text-xs text-center py-1.5 bg-surface-container-low text-on-surface-variant">
-              עמוד {p.pageNumber}
-            </figcaption>
-          </figure>
+            img={{
+              src: p.thumbnail,
+              documentTitle: documentTitle || "מסמך",
+              pageNumber: p.pageNumber,
+            }}
+            thumbnailMaxHeight="max-h-64"
+          />
         ))}
       </div>
     </div>

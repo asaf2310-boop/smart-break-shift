@@ -18,9 +18,13 @@ function buildImageCaption(img) {
 }
 
 /**
- * Thumbnail with click-to-zoom lightbox for knowledge page screenshots.
+ * Thumbnail with expand button and click-to-zoom lightbox for knowledge page screenshots.
  */
-export default function KnowledgeImageLightbox({ img, className = "" }) {
+export default function KnowledgeImageLightbox({
+  img,
+  className = "",
+  thumbnailMaxHeight = "max-h-56",
+}) {
   const [open, setOpen] = useState(false);
   const src = img?.url || img?.src;
   if (!src) return null;
@@ -28,40 +32,50 @@ export default function KnowledgeImageLightbox({ img, className = "" }) {
   const alt = buildImageAlt(img);
   const caption = buildImageCaption(img);
 
+  const openLightbox = () => setOpen(true);
+
   return (
     <>
       <figure className={`m-0 group ${className}`.trim()}>
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="relative block w-full rounded-lg border border-outline/20 overflow-hidden bg-white text-start focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-          aria-label={`הגדלת תמונה: ${alt}`}
-        >
-          <img
-            src={src}
-            alt={alt}
-            className="w-full h-auto max-h-56 object-contain bg-white transition-opacity group-hover:opacity-95"
-            loading="lazy"
-          />
-          <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-md bg-black/55 px-2 py-1 text-[10px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-            <ZoomIn className="h-3 w-3" />
-            לחץ להגדלה
-          </span>
-        </button>
+        <div className="relative rounded-lg border border-outline/20 overflow-hidden bg-white">
+          <button
+            type="button"
+            onClick={openLightbox}
+            className="block w-full text-start focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40"
+            aria-label={`הגדל תמונה: ${alt}`}
+          >
+            <img
+              src={src}
+              alt={alt}
+              className={`w-full h-auto ${thumbnailMaxHeight} object-contain bg-white transition-opacity group-hover:opacity-95`}
+              loading="lazy"
+            />
+          </button>
+          <button
+            type="button"
+            onClick={openLightbox}
+            className="absolute top-2 end-2 z-10 inline-flex items-center gap-1 rounded-lg bg-black/60 px-2 py-1.5 text-[11px] font-medium text-white shadow-sm hover:bg-black/75 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            aria-label="הגדל תמונה"
+            title="הגדל תמונה"
+          >
+            <ZoomIn className="h-3.5 w-3.5 shrink-0" />
+            <span className="hidden sm:inline">הגדל</span>
+          </button>
+        </div>
         <figcaption className="text-[10px] text-on-surface-variant mt-1">{caption}</figcaption>
       </figure>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
-          className="max-w-[min(96vw,56rem)] w-full p-2 sm:p-3 gap-2 border-outline/20"
+          className="max-w-[min(98vw,72rem)] w-full p-2 sm:p-3 gap-2 border-outline/20"
           dir="rtl"
         >
           <DialogTitle className="text-sm font-semibold pe-8">{caption}</DialogTitle>
-          <div className="overflow-auto max-h-[85vh] rounded-lg bg-white border border-outline/15">
+          <div className="overflow-auto max-h-[88vh] rounded-lg bg-white border border-outline/15 flex items-center justify-center">
             <img
               src={src}
               alt={alt}
-              className="w-full h-auto max-h-[82vh] object-contain mx-auto"
+              className="w-auto h-auto max-w-full max-h-[85vh] object-contain mx-auto"
             />
           </div>
         </DialogContent>
