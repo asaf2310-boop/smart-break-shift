@@ -1,4 +1,4 @@
-/** Vercel serverless — agent auth (password admin, reset SMS, setup complete). */
+/** Vercel serverless — agent auth + signed guest support links (mint + resolve). */
 
 import { json, readJsonBody, handleOptions, isSameOrigin } from "../server/knowledge/httpUtils.js";
 import { isPgVectorConfigured } from "../server/knowledge/supabaseAdmin.js";
@@ -12,6 +12,11 @@ import {
   verifyBearerAgent,
 } from "../server/agent/agentAuthService.js";
 import { requestPasswordResetByEmail, requestFirstLoginByEmail } from "../server/agent/agentPasswordResetService.js";
+import {
+  guestLinkApiReady,
+  mintGuestLinkForSession,
+  resolveGuestLinkFromToken,
+} from "../server/guest/guestLinkService.js";
 
 const PASSWORD_MIN_LENGTH = 6;
 
@@ -177,6 +182,60 @@ export default async function handler(req, res) {
           : "לא הצלחנו ליצור משתמש Auth";
       return json(res, 500, { error: err.message || "provision_failed", message }, req);
     }
+  }
+
+  if (action === "mint" || action === "resolve") {
+    if (!guestLinkApiReady()) {
+      return json(
+        res,
+        503,
+        {
+          error: "guest_link_not_configured",
+          message: "הגדר GUEST_LINK_SECRET ב-Vercel (32+ תווים אקראיים)",
+        },
+        req
+      );
+    }
+
+    if (action === "mint") {
+      const auth = await verifyBearerAgent(req);
+      if (!auth?.agent) {
+        return json(res, 401, { error: "unauthorized", message: "נדרשת התחברות נציג" }, req);
+      }
+
+      const sessionId = String(body.sessionId || "").trim();
+      const kind = body.kind === "consent" ? "consent" : body.kind === "screen" ? "screen" : null;
+      const result = await mintGuestLinkForSession({
+        sessionId,
+        kind,
+        agent: auth.agent,
+      });
+
+      if (!result.ok) {
+        const status =
+          result.error === "forbidden"
+            ? 403
+            : result.error === "not_found"
+              ? 404
+              : 400;
+        return json(res, status, result, req);
+      }
+
+      return json(res, 200, result, req);
+    }
+
+    const token = String(body.token || "").trim();
+    if (!token) {
+      return json(res, 400, { error: "invalid_token" }, req);
+    }
+
+    const result = await resolveGuestLinkFromToken(token);
+    if (!result.ok) {
+      const status = result.error === "ended" ? 410 : result.error === "expired" ? 410 : 404;
+      return json(res, status, result, req);
+    }
+
+    return json(res, 200, result, req);
   }
 
   return json(res, 400, { error: "unknown_action" }, req);

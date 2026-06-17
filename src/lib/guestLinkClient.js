@@ -17,7 +17,7 @@ async function authHeaders() {
 
 export async function apiMintGuestLink({ sessionId, kind }) {
   try {
-    const response = await fetch("/api/guest-link", {
+    const response = await fetch("/api/agent-auth", {
       method: "POST",
       headers: await authHeaders(),
       body: JSON.stringify({
@@ -39,7 +39,7 @@ export async function apiMintGuestLink({ sessionId, kind }) {
 
 export async function apiResolveGuestLink(token) {
   try {
-    const response = await fetch("/api/guest-link", {
+    const response = await fetch("/api/agent-auth", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
