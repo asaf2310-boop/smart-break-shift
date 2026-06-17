@@ -15,6 +15,7 @@
  */
 
 import { verifyBearerAgent } from "../server/agent/agentAuthService.js";
+import { isSameOrigin } from "../server/knowledge/httpUtils.js";
 import {
   DEFAULT_SIP_CREDENTIAL_TTL_SEC,
   redeemSipCredentialToken,
@@ -22,28 +23,14 @@ import {
   sipCredentialTokenConfigured,
 } from "../server/sip/sipCredentialToken.js";
 
-function getSiteOrigin(req) {
+function corsHeaders(req) {
   const host = req.headers["x-forwarded-host"] || req.headers.host;
-  if (!host || Array.isArray(host)) return null;
+  if (!host || Array.isArray(host)) return {};
   const protoHeader = req.headers["x-forwarded-proto"];
   const proto =
     (typeof protoHeader === "string" ? protoHeader.split(",")[0] : null) ||
     (String(host).includes("localhost") ? "http" : "https");
-  return `${proto}://${host}`;
-}
-
-function isSameOrigin(req) {
-  const siteOrigin = getSiteOrigin(req);
-  if (!siteOrigin) return false;
-  const origin = req.headers.origin;
-  if (typeof origin === "string" && origin === siteOrigin) return true;
-  const referer = req.headers.referer;
-  if (typeof referer === "string" && referer.startsWith(siteOrigin)) return true;
-  return false;
-}
-
-function corsHeaders(req) {
-  const siteOrigin = getSiteOrigin(req);
+  const siteOrigin = `${proto}://${host}`;
   const origin = req.headers.origin;
   if (siteOrigin && typeof origin === "string" && origin === siteOrigin) {
     return {
@@ -171,6 +158,9 @@ export default async function handler(req, res) {
   Object.entries(corsHeaders(req)).forEach(([k, v]) => res.setHeader(k, v));
 
   if (req.method === "OPTIONS") {
+    if (!isSameOrigin(req)) {
+      return res.status(403).json({ ok: false, reason: "Forbidden" });
+    }
     return res.status(204).end();
   }
 

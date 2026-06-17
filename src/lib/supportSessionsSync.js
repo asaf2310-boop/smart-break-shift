@@ -1,6 +1,6 @@
 import { demoModeEnabled } from "@/api/demoClient";
 import { supabase, supabaseConfigured } from "@/api/supabase";
-import { apiGuestSessionState } from "@/lib/guestLinkClient";
+import { apiGuestSessionState, apiEndSupportSession } from "@/lib/guestLinkClient";
 import { getGuestLinkToken } from "@/lib/guestLinkTokenStore";
 import {
   fetchCloudScreenRecordings,
@@ -14,6 +14,22 @@ const SESSION_TYPE_RUSTDESK = "rustdesk";
 /** Sync session metadata to Supabase in production (not demo). */
 export function cloudSessionSyncEnabled() {
   return supabaseConfigured && !demoModeEnabled && Boolean(supabase);
+}
+
+async function syncEndedSupportSessionToCloud(session, mapRow, recordingCount) {
+  const apiResult = await apiEndSupportSession({
+    sessionId: session.id,
+    endedReason: session.endedReason || "agent_ended",
+  });
+  if (apiResult.ok) return { ok: true };
+
+  const row = mapRow(session, recordingCount);
+  const { error } = await supabase.from("support_sessions").upsert(row, { onConflict: "id" });
+  if (error) {
+    console.warn("[supportSessionsSync] ended session upsert failed", error.message);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
 }
 
 function toIso(value) {
@@ -81,6 +97,10 @@ function mapRustDeskRow(session) {
  */
 export function syncScreenShareSessionToCloud(session, { recordingCount } = {}) {
   if (!cloudSessionSyncEnabled() || !session?.id) return;
+  if (session.status === "ended") {
+    void syncEndedSupportSessionToCloud(session, rowForCloudUpsert, recordingCount);
+    return;
+  }
   const row = rowForCloudUpsert(session, recordingCount);
   void supabase
     .from("support_sessions")
@@ -93,6 +113,9 @@ export function syncScreenShareSessionToCloud(session, { recordingCount } = {}) 
 /** Upsert ממתין — לפני FK של screen_recordings. */
 export async function syncScreenShareSessionToCloudAwait(session, options = {}) {
   if (!cloudSessionSyncEnabled() || !session?.id) return { ok: true };
+  if (session.status === "ended") {
+    return syncEndedSupportSessionToCloud(session, rowForCloudUpsert, options.recordingCount);
+  }
   const row = rowForCloudUpsert(session, options.recordingCount);
   const { error } = await supabase.from("support_sessions").upsert(row, { onConflict: "id" });
   if (error) {
@@ -104,6 +127,10 @@ export async function syncScreenShareSessionToCloudAwait(session, options = {}) 
 
 export function syncRustDeskSessionToCloud(session) {
   if (!cloudSessionSyncEnabled() || !session?.id) return;
+  if (session.status === "ended") {
+    void syncEndedSupportSessionToCloud(session, mapRustDeskRow);
+    return;
+  }
   const row = mapRustDeskRow(session);
   void supabase
     .from("support_sessions")
@@ -115,6 +142,9 @@ export function syncRustDeskSessionToCloud(session) {
 
 export async function syncRustDeskSessionToCloudAwait(session) {
   if (!cloudSessionSyncEnabled() || !session?.id) return { ok: true };
+  if (session.status === "ended") {
+    return syncEndedSupportSessionToCloud(session, mapRustDeskRow);
+  }
   const row = mapRustDeskRow(session);
   const { error } = await supabase.from("support_sessions").upsert(row, { onConflict: "id" });
   if (error) {

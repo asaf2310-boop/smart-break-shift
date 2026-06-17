@@ -1,7 +1,11 @@
 import { getSupabaseAdmin } from "../knowledge/supabaseAdmin.js";
 import { verifyGuestLinkToken } from "../guest/guestLinkToken.js";
 import { verifyBearerAgent } from "../agent/agentAuthService.js";
-import { validateSupportFileType } from "./supportFileAllowlist.js";
+import {
+  validateSupportFileType,
+  validateSupportFileContent,
+  SUPPORT_ZIP_MAX_COMPRESSED_BYTES,
+} from "./supportFileAllowlist.js";
 
 export const SUPPORT_FILES_BUCKET = "support-files";
 export const SCREEN_RECORDINGS_BUCKET = "screen-recordings";
@@ -176,6 +180,20 @@ export async function handleSupportFileUpload(req, body) {
     }
     if (buffer.length > MAX_DIRECT_UPLOAD_BYTES) {
       return { ok: false, error: "file_too_large", message: "הקובץ גדול מדי לשליחה ישירה — השתמשו ב-signedUrl" };
+    }
+    if (typeCheck.extension === ".zip" && buffer.length > SUPPORT_ZIP_MAX_COMPRESSED_BYTES) {
+      return { ok: false, error: "zip_too_large", message: "קובץ ZIP גדול מדי" };
+    }
+    const contentCheck = validateSupportFileContent({
+      extension: typeCheck.extension,
+      buffer,
+    });
+    if (!contentCheck.ok) {
+      return {
+        ok: false,
+        error: contentCheck.error || "invalid_file_content",
+        message: contentCheck.message,
+      };
     }
     const uploaded = await uploadBufferToStorage({
       bucket: SUPPORT_FILES_BUCKET,

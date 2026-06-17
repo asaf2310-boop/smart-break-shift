@@ -131,3 +131,26 @@ export async function apiGuestChatSend({ sessionId, token, messageId, body, send
 export function getGuestTokenForSession(sessionId) {
   return getGuestLinkToken(sessionId);
 }
+
+/** Production: end support session via server (audit log + RLS-safe update). */
+export async function apiEndSupportSession({ sessionId, endedReason }) {
+  try {
+    const response = await fetch("/api/agent-auth", {
+      method: "POST",
+      headers: await authHeaders(),
+      body: JSON.stringify({
+        action: "end_support_session",
+        sessionId,
+        endedReason,
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return { ok: false, error: data.error || "end_failed", message: data.message };
+    }
+    return { ok: true, ...data };
+  } catch (err) {
+    console.warn("[guestLinkClient] end_support_session failed", err);
+    return { ok: false, error: "network_error" };
+  }
+}

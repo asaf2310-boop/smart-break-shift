@@ -4,8 +4,11 @@ import { json, readJsonBody, handleOptions, isSameOrigin } from "../server/knowl
 import { isPgVectorConfigured } from "../server/knowledge/supabaseAdmin.js";
 import {
   checkIpRateLimit,
+  checkRateLimit,
   getClientIp,
+  getRateLimitKey,
   recordIpRateLimit,
+  recordRateLimit,
 } from "../server/http/rateLimit.js";
 import {
   handleRecordingUpload,
@@ -39,17 +42,25 @@ import {
 } from "../server/guest/guestSupportService.js";
 import { verifyGuestLinkToken } from "../server/guest/guestLinkToken.js";
 import { handleIceServersRequest, DEFAULT_STUN_SERVERS } from "../server/webrtc/iceServersService.js";
+import { logSecurityEvent } from "../server/security/auditLog.js";
+import { endSupportSessionByAgent } from "../server/support/supportSessionEndService.js";
 
 const PASSWORD_MIN_LENGTH = 12;
 
 const guestResolveRateByIp = new Map();
 const guestSessionRateByIp = new Map();
 const guestChatRateByIp = new Map();
+const guestMintRateByUser = new Map();
+const adminActionRateByUser = new Map();
+const supportEndRateByUser = new Map();
 
 const GUEST_RESOLVE_RATE_MAX = 60;
 const GUEST_SESSION_POLL_RATE_MAX = 240;
 const GUEST_CHAT_RATE_MAX = 120;
 const ICE_SERVERS_RATE_MAX = 120;
+const GUEST_MINT_RATE_MAX = 120;
+const ADMIN_ACTION_RATE_MAX = 60;
+const SUPPORT_END_RATE_MAX = 120;
 
 function rateLimitResponse(res, req, retryAfterSec) {
   return json(
@@ -75,10 +86,24 @@ function enforceIpRateLimit(res, req, store, max) {
   return true;
 }
 
+function enforceUserRateLimit(res, req, store, max, userId) {
+  const key = getRateLimitKey(req, userId);
+  const check = checkRateLimit(store, key, max);
+  if (!check.allowed) {
+    rateLimitResponse(res, req, check.retryAfterSec);
+    return false;
+  }
+  recordRateLimit(check.entry);
+  return true;
+}
+
 async function requireAdminAgent(req, res, body) {
   const auth = await verifyAdminAgent(req, body);
   if (!auth?.agent) {
     json(res, 403, { error: "forbidden", message: "נדרשת הרשאת מנהל" }, req);
+    return null;
+  }
+  if (!enforceUserRateLimit(res, req, adminActionRateByUser, ADMIN_ACTION_RATE_MAX, auth.agent.id)) {
     return null;
   }
   return auth;
@@ -206,7 +231,8 @@ export default async function handler(req, res) {
   }
 
   if (action === "admin_set_password") {
-    if (!(await requireAdminAgent(req, res, body))) return;
+    const auth = await requireAdminAgent(req, res, body);
+    if (!auth) return;
 
     const agentId = String(body.agentId || body.id || "").trim();
     const password = String(body.password || "");
@@ -236,6 +262,15 @@ export default async function handler(req, res) {
         await markAgentPasswordSetupComplete(agentId);
       }
 
+      void logSecurityEvent({
+        action: "admin_set_password",
+        actorAgentId: auth.agent.id,
+        resourceType: "agent",
+        resourceId: agentId,
+        metadata: { forceSetup },
+        req,
+      });
+
       return json(res, 200, { ok: true, authUserId: provisioned.authUserId }, req);
     } catch (err) {
       console.error("[agent-auth] admin_set_password", err);
@@ -249,7 +284,8 @@ export default async function handler(req, res) {
   }
 
   if (action === "admin_create_break_registration") {
-    if (!(await requireAdminAgent(req, res, body))) return;
+    const auth = await requireAdminAgent(req, res, body);
+    if (!auth) return;
 
     const agent_name = String(body.agent_name || "").trim();
     const break_type = String(body.break_type || "").trim();
@@ -272,6 +308,14 @@ export default async function handler(req, res) {
         time_slot,
         date,
       });
+      void logSecurityEvent({
+        action: "admin_create_break_registration",
+        actorAgentId: auth.agent.id,
+        resourceType: "break_registration",
+        resourceId: registration?.id,
+        metadata: { agent_name, break_type, time_slot, date },
+        req,
+      });
       return json(res, 200, { ok: true, registration }, req);
     } catch (err) {
       console.error("[agent-auth] admin_create_break_registration", err);
@@ -286,7 +330,8 @@ export default async function handler(req, res) {
   }
 
   if (action === "admin_delete_break_registration") {
-    if (!(await requireAdminAgent(req, res, body))) return;
+    const auth = await requireAdminAgent(req, res, body);
+    if (!auth) return;
 
     const registrationId = String(body.id || "").trim();
     if (!registrationId) {
@@ -300,6 +345,13 @@ export default async function handler(req, res) {
 
     try {
       await adminDeleteBreakRegistration(registrationId);
+      void logSecurityEvent({
+        action: "admin_delete_break_registration",
+        actorAgentId: auth.agent.id,
+        resourceType: "break_registration",
+        resourceId: registrationId,
+        req,
+      });
       return json(res, 200, { ok: true }, req);
     } catch (err) {
       console.error("[agent-auth] admin_delete_break_registration", err);
@@ -312,7 +364,8 @@ export default async function handler(req, res) {
   }
 
   if (action === "provision_auth") {
-    if (!(await requireAdminAgent(req, res, body))) return;
+    const auth = await requireAdminAgent(req, res, body);
+    if (!auth) return;
 
     const agentId = String(body.agentId || body.id || "").trim();
     if (!agentId) {
@@ -326,6 +379,14 @@ export default async function handler(req, res) {
       }
 
       const result = await provisionAuthUserForAgent(agent);
+      void logSecurityEvent({
+        action: "provision_auth",
+        actorAgentId: auth.agent.id,
+        resourceType: "agent",
+        resourceId: agentId,
+        metadata: { authUserId: result.authUserId },
+        req,
+      });
       return json(res, 200, { ok: true, ...result }, req);
     } catch (err) {
       console.error("[agent-auth] provision_auth", err);
@@ -355,6 +416,9 @@ export default async function handler(req, res) {
       if (!auth?.agent) {
         return json(res, 401, { error: "unauthorized", message: "נדרשת התחברות נציג" }, req);
       }
+      if (!enforceUserRateLimit(res, req, guestMintRateByUser, GUEST_MINT_RATE_MAX, auth.agent.id)) {
+        return;
+      }
 
       const sessionId = String(body.sessionId || "").trim();
       const kind = body.kind === "consent" ? "consent" : body.kind === "screen" ? "screen" : null;
@@ -375,6 +439,14 @@ export default async function handler(req, res) {
       }
 
       auditGuestAccess("mint_ok", { req, sessionId, extra: { agent: auth.agent.displayName } });
+      void logSecurityEvent({
+        action: "guest_link_mint",
+        actorAgentId: auth.agent.id,
+        resourceType: "support_session",
+        resourceId: sessionId,
+        metadata: { kind },
+        req,
+      });
       return json(res, 200, result, req);
     }
 
@@ -465,6 +537,57 @@ export default async function handler(req, res) {
     }
     auditGuestAccess("guest_chat_send", { req, sessionId });
     return json(res, 200, result, req);
+  }
+
+  if (action === "end_support_session") {
+    const auth = await verifyBearerAgent(req);
+    if (!auth?.agent) {
+      return json(res, 401, { error: "unauthorized", message: "נדרשת התחברות" }, req);
+    }
+    if (!enforceUserRateLimit(res, req, supportEndRateByUser, SUPPORT_END_RATE_MAX, auth.agent.id)) {
+      return;
+    }
+
+    const sessionId = String(body.sessionId || "").trim();
+    const endedReason = String(body.endedReason || "agent_ended").trim();
+
+    if (!sessionId) {
+      return json(res, 400, { error: "invalid_fields", message: "חסר מזהה סשן" }, req);
+    }
+
+    try {
+      const result = await endSupportSessionByAgent({
+        sessionId,
+        agent: auth.agent,
+        endedReason,
+      });
+
+      if (!result.ok) {
+        const status =
+          result.error === "forbidden"
+            ? 403
+            : result.error === "not_found"
+              ? 404
+              : 400;
+        return json(res, status, result, req);
+      }
+
+      if (!result.alreadyEnded) {
+        void logSecurityEvent({
+          action: "support_session_end",
+          actorAgentId: auth.agent.id,
+          resourceType: "support_session",
+          resourceId: sessionId,
+          metadata: { endedReason: result.endedReason, sessionType: result.sessionType },
+          req,
+        });
+      }
+
+      return json(res, 200, { ok: true, ...result }, req);
+    } catch (err) {
+      console.error("[agent-auth] end_support_session", err);
+      return json(res, 500, { error: "end_failed", message: "לא הצלחנו לסיים את הסשן" }, req);
+    }
   }
 
   if (action === "support_file_upload") {

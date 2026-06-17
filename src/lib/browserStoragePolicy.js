@@ -1,9 +1,30 @@
 import { demoModeEnabled } from "@/api/demoMode";
 
+/**
+ * Browser storage policy — production vs demo.
+ *
+ * Production-safe (sessionStorage after migrateLegacyBrowserStorage):
+ *   smart-break-agent-session-v1 — JWT session metadata (no passwords)
+ *   smart-break-shift-screen-share-v1 / remote-support — support sessions (passwords stripped)
+ *
+ * Demo-only (localStorage):
+ *   smart-break-shift-demo-store — full offline demo DB
+ *   smart_break_admin_unlocked — demo admin PIN unlock flag (sessionStorage; not a secret)
+ *   CRM/knowledge/training local caches — see respective *Store.js modules
+ *
+ * Never persist in browser: admin PIN, SIP passwords, service keys, ADMIN_PIN.
+ */
 const AGENT_SESSION_KEY = "smart-break-agent-session-v1";
 const LEGACY_AGENT_NAME_KEY = "agent_name";
 const SCREEN_SHARE_STORAGE_KEY = "smart-break-shift-screen-share-v1";
 const REMOTE_SUPPORT_STORAGE_KEY = "smart-break-shift-remote-support-v1";
+const LEGACY_ADMIN_PIN_KEYS = [
+  "admin_pin",
+  "smart_break_admin_pin",
+  "VITE_ADMIN_PIN",
+  "smart-break-admin-pin",
+];
+const DEMO_ADMIN_UNLOCK_KEY = "smart_break_admin_unlocked";
 
 export function getAgentSessionStorage() {
   if (typeof window === "undefined") return null;
@@ -71,7 +92,14 @@ export function migrateLegacyBrowserStorage() {
   localStorage.removeItem(AGENT_SESSION_KEY);
   localStorage.removeItem(LEGACY_AGENT_NAME_KEY);
 
+  for (const legacyPinKey of LEGACY_ADMIN_PIN_KEYS) {
+    localStorage.removeItem(legacyPinKey);
+    sessionStorage.removeItem(legacyPinKey);
+  }
+
   if (!demoModeEnabled) {
+    sessionStorage.removeItem(DEMO_ADMIN_UNLOCK_KEY);
+
     for (const key of [SCREEN_SHARE_STORAGE_KEY, REMOTE_SUPPORT_STORAGE_KEY]) {
       if (!sessionStorage.getItem(key)) {
         const legacy = localStorage.getItem(key);

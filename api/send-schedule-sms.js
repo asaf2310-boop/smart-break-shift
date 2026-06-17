@@ -1,11 +1,17 @@
 /** Vercel serverless — שליחת SMS שיבוץ דרך Inforu (פרטי חשבון ב-process.env בלבד) */
 
 import { verifyAdminAgent } from "../server/agent/agentAuthService.js";
+import { json, readJsonBody, handleOptions, isSameOrigin } from "../server/knowledge/httpUtils.js";
+import {
+  checkRateLimit as checkRateLimitEntry,
+  getRateLimitKey,
+  recordRateLimit,
+} from "../server/http/rateLimit.js";
 
 const INFORU_SMS_URL = "https://api.inforu.co.il/SendMessageXml.ashx";
 const RATE_LIMIT_MAX = 120;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
-const rateByIp = new Map();
+const rateByKey = new Map();
 
 const INFORU_STATUS_MESSAGES = {
   1: "נשלח בהצלחה",
@@ -24,83 +30,14 @@ const INFORU_STATUS_MESSAGES = {
   "-94": "שולח לא ברשימת המורשים",
 };
 
-function getClientIp(req) {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (typeof forwarded === "string" && forwarded.length > 0) {
-    return forwarded.split(",")[0].trim();
+function enforceSmsRateLimit(req, userId) {
+  const key = getRateLimitKey(req, userId);
+  const check = checkRateLimitEntry(rateByKey, key, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
+  if (!check.allowed) {
+    return { allowed: false, retryAfterSec: check.retryAfterSec };
   }
-  return req.socket?.remoteAddress || "unknown";
-}
-
-function checkRateLimit(ip) {
-  const now = Date.now();
-  let entry = rateByIp.get(ip);
-  if (!entry || now >= entry.resetAt) {
-    entry = { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
-    rateByIp.set(ip, entry);
-  }
-  if (entry.count >= RATE_LIMIT_MAX) {
-    return { allowed: false, retryAfterSec: Math.max(1, Math.ceil((entry.resetAt - now) / 1000)) };
-  }
-  entry.count += 1;
+  recordRateLimit(check.entry);
   return { allowed: true };
-}
-
-function getSiteOrigin(req) {
-  const host = req.headers["x-forwarded-host"] || req.headers.host;
-  if (!host || Array.isArray(host)) return null;
-  const protoHeader = req.headers["x-forwarded-proto"];
-  const proto =
-    (typeof protoHeader === "string" ? protoHeader.split(",")[0] : null) ||
-    (String(host).includes("localhost") ? "http" : "https");
-  return `${proto}://${host}`;
-}
-
-function isSameOrigin(req) {
-  const siteOrigin = getSiteOrigin(req);
-  if (!siteOrigin) return false;
-  const origin = req.headers.origin;
-  if (typeof origin === "string" && origin === siteOrigin) return true;
-  const referer = req.headers.referer;
-  if (typeof referer === "string" && referer.startsWith(siteOrigin)) return true;
-  return false;
-}
-
-function corsHeaders(req) {
-  const siteOrigin = getSiteOrigin(req);
-  const origin = req.headers.origin;
-  if (siteOrigin && typeof origin === "string" && origin === siteOrigin) {
-    return {
-      "Access-Control-Allow-Origin": origin,
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      Vary: "Origin",
-    };
-  }
-  return { Vary: "Origin" };
-}
-
-function json(res, status, body, req) {
-  res.statusCode = status;
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
-  Object.entries(corsHeaders(req)).forEach(([k, v]) => res.setHeader(k, v));
-  res.end(JSON.stringify(body));
-}
-
-function readJsonBody(req) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    req.on("data", (chunk) => chunks.push(chunk));
-    req.on("end", () => {
-      try {
-        const raw = Buffer.concat(chunks).toString("utf8");
-        resolve(raw ? JSON.parse(raw) : {});
-      } catch {
-        reject(new Error("invalid_json"));
-      }
-    });
-    req.on("error", reject);
-  });
 }
 
 function escapeXml(value) {
@@ -185,12 +122,7 @@ export async function sendInforuSms({ userName, apiToken, sender, to, message })
 
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") {
-    if (!isSameOrigin(req)) {
-      return json(res, 403, { error: "forbidden" }, req);
-    }
-    res.statusCode = 204;
-    Object.entries(corsHeaders(req)).forEach(([k, v]) => res.setHeader(k, v));
-    res.end();
+    handleOptions(req, res);
     return;
   }
 
@@ -225,7 +157,7 @@ export default async function handler(req, res) {
     );
   }
 
-  const rate = checkRateLimit(getClientIp(req));
+  const rate = enforceSmsRateLimit(req, adminAuth.agent.id);
   if (!rate.allowed) {
     return json(
       res,

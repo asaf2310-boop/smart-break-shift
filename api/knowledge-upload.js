@@ -15,11 +15,43 @@ import {
 } from "../server/knowledge/documentIngestService.js";
 import { ingestDocumentImages, listDocumentPageImages } from "../server/knowledge/imageIngestService.js";
 import { importHypPayPackage } from "../server/knowledge/hypPayPackageImport.js";
+import { logSecurityEvent } from "../server/security/auditLog.js";
+import {
+  checkRateLimit,
+  getRateLimitKey,
+  recordRateLimit,
+} from "../server/http/rateLimit.js";
 
-async function requireKnowledgeAccess(req, res) {
+const knowledgeUploadRateByUser = new Map();
+const KNOWLEDGE_UPLOAD_RATE_MAX = 120;
+
+function enforceKnowledgeRateLimit(res, req, auth) {
+  const key = getRateLimitKey(req, auth?.agent?.id);
+  const check = checkRateLimit(knowledgeUploadRateByUser, key, KNOWLEDGE_UPLOAD_RATE_MAX);
+  if (!check.allowed) {
+    json(
+      res,
+      429,
+      {
+        error: "rate_limited",
+        retryAfterSec: check.retryAfterSec,
+        message: `יותר מדי בקשות — נסו שוב בעוד ${check.retryAfterSec} שניות`,
+      },
+      req
+    );
+    return false;
+  }
+  recordRateLimit(check.entry);
+  return true;
+}
+
+async function requireKnowledgeAccess(req, res, { rateLimit = false } = {}) {
   const auth = await verifyKnowledgeAccess(req);
   if (!auth?.agent) {
     json(res, 401, { error: "unauthorized", message: "נדרשת התחברות עם הרשאת ידע" }, req);
+    return null;
+  }
+  if (rateLimit && !enforceKnowledgeRateLimit(res, req, auth)) {
     return null;
   }
   return auth;
@@ -127,7 +159,8 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "DELETE") {
-    if (!(await requireKnowledgeAccess(req, res))) return;
+    const auth = await requireKnowledgeAccess(req, res, { rateLimit: true });
+    if (!auth) return;
 
     let body = {};
     try {
@@ -140,6 +173,13 @@ export default async function handler(req, res) {
 
     const result = await deleteDocument(documentId);
     if (!result.ok) return json(res, 500, { error: result.error }, req);
+    void logSecurityEvent({
+      action: "knowledge_delete",
+      actorAgentId: auth.agent.id,
+      resourceType: "knowledge_document",
+      resourceId: documentId,
+      req,
+    });
     return json(res, 200, { ok: true, documentId }, req);
   }
 
@@ -147,7 +187,8 @@ export default async function handler(req, res) {
     return json(res, 405, { error: "method_not_allowed" }, req);
   }
 
-  if (!(await requireKnowledgeAccess(req, res))) return;
+  const auth = await requireKnowledgeAccess(req, res, { rateLimit: true });
+  if (!auth) return;
 
   let body;
   try {
@@ -163,6 +204,13 @@ export default async function handler(req, res) {
     if (!documentId) return json(res, 400, { error: "document_id_required" }, req);
     const result = await deleteDocument(documentId);
     if (!result.ok) return json(res, 500, { error: result.error }, req);
+    void logSecurityEvent({
+      action: "knowledge_delete",
+      actorAgentId: auth.agent.id,
+      resourceType: "knowledge_document",
+      resourceId: documentId,
+      req,
+    });
     return json(res, 200, { ok: true, documentId }, req);
   }
 
@@ -290,6 +338,14 @@ export default async function handler(req, res) {
         req,
       );
     }
+    void logSecurityEvent({
+      action: "knowledge_upload",
+      actorAgentId: auth.agent.id,
+      resourceType: "knowledge_document",
+      resourceId: doc.id,
+      metadata: { title: doc.title, fileName: doc.fileName || null },
+      req,
+    });
     return json(res, 200, result, req);
   } catch (err) {
     console.error("[knowledge-upload] ingest", err);

@@ -1,7 +1,7 @@
 const DEFAULT_WINDOW_MS = 60 * 60 * 1000;
 
 /**
- * In-memory per-IP rate limiter (serverless best-effort).
+ * In-memory rate limiter (serverless best-effort).
  * @param {Map<string, { count: number, resetAt: number }>} store
  */
 export function getClientIp(req) {
@@ -12,12 +12,20 @@ export function getClientIp(req) {
   return req.socket?.remoteAddress || "unknown";
 }
 
-export function checkIpRateLimit(store, ip, max, windowMs = DEFAULT_WINDOW_MS) {
+/** Prefer authenticated user id; fallback to client IP. */
+export function getRateLimitKey(req, userId) {
+  const uid = String(userId || "").trim();
+  if (uid) return `user:${uid}`;
+  return `ip:${getClientIp(req)}`;
+}
+
+export function checkRateLimit(store, key, max, windowMs = DEFAULT_WINDOW_MS) {
+  const rateKey = String(key || "").trim() || "unknown";
   const now = Date.now();
-  let entry = store.get(ip);
+  let entry = store.get(rateKey);
   if (!entry || now >= entry.resetAt) {
     entry = { count: 0, resetAt: now + windowMs };
-    store.set(ip, entry);
+    store.set(rateKey, entry);
   }
   if (entry.count >= max) {
     return {
@@ -28,6 +36,16 @@ export function checkIpRateLimit(store, ip, max, windowMs = DEFAULT_WINDOW_MS) {
   return { allowed: true, entry };
 }
 
-export function recordIpRateLimit(entry) {
+export function recordRateLimit(entry) {
   if (entry) entry.count += 1;
+}
+
+/** @deprecated use checkRateLimit with `ip:${ip}` key */
+export function checkIpRateLimit(store, ip, max, windowMs = DEFAULT_WINDOW_MS) {
+  return checkRateLimit(store, `ip:${ip}`, max, windowMs);
+}
+
+/** @deprecated use recordRateLimit */
+export function recordIpRateLimit(entry) {
+  recordRateLimit(entry);
 }
