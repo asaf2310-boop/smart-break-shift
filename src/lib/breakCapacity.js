@@ -134,6 +134,15 @@ export async function createBreakRegistration(dataClient, payload, options = {})
     allowNonTodayDate: options.allowNonTodayDate ?? false,
   });
 
+  if (options.admin) {
+    const { demoModeEnabled } = await import("@/api/demoClient");
+    const { isSupabaseBackend } = await import("@/api/dataClient");
+    if (!demoModeEnabled && isSupabaseBackend()) {
+      const { apiAdminCreateBreakRegistration } = await import("@/lib/agentAuthClient");
+      return apiAdminCreateBreakRegistration(normalizedPayload);
+    }
+  }
+
   return dataClient.entities.BreakRegistration.create(normalizedPayload);
 }
 

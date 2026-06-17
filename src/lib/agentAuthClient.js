@@ -77,6 +77,20 @@ export async function apiProvisionAgentAuth(agentId) {
   });
 }
 
+export async function apiAdminCreateBreakRegistration(payload) {
+  const result = await postAgentAuth({
+    action: "admin_create_break_registration",
+    agent_name: payload.agent_name,
+    break_type: payload.break_type,
+    time_slot: payload.time_slot,
+    date: payload.date,
+  });
+  if (!result.ok) {
+    throw new Error(result.message || "לא הצלחנו לשמור את ההרשמה");
+  }
+  return result.registration;
+}
+
 export async function apiAdminDeleteBreakRegistration(id) {
   const result = await postAgentAuth({
     action: "admin_delete_break_registration",

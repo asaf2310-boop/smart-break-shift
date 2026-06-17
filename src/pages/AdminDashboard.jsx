@@ -19,10 +19,12 @@ import { customerChatEnabled, crmEnabled, demoModeEnabled, knowledgeEnabled } fr
 import AdminLocalhostLinksPanel from "@/components/admin/AdminLocalhostLinksPanel";
 import {
   BreakRegistrationError,
+  agentOwnsBreakRegistration,
   createBreakRegistration,
   deleteBreakRegistration,
   getBreakLimits,
 } from "@/lib/breakCapacity";
+import { listManagedAgents } from "@/lib/agentsApi";
 import { getLiveQueryOptions } from "@/lib/liveQuery";
 import HypPageLayout from "@/components/hyp/HypPageLayout";
 import { hypHeaderIconClass } from "@/lib/hypPage";
@@ -30,7 +32,7 @@ import { hypHeaderIconClass } from "@/lib/hypPage";
 export default function AdminDashboard() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [addingTo, setAddingTo] = useState(null); // { slot, breakType }
-  const [newName, setNewName] = useState("");
+  const [selectedAgentName, setSelectedAgentName] = useState("");
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -47,6 +49,21 @@ export default function AdminDashboard() {
     queryFn: () => dataClient.entities.BreakSettings.filter({ date: dateStr }),
     ...getLiveQueryOptions(),
   });
+
+  const { data: managedAgents = [] } = useQuery({
+    queryKey: ["managed-agents"],
+    queryFn: listManagedAgents,
+    retry: 1,
+  });
+
+  const agentNames = useMemo(
+    () =>
+      [...managedAgents]
+        .map((agent) => String(agent.name || "").trim())
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b, "he")),
+    [managedAgents]
+  );
   const settings = settingsList[0] || null;
   const limits = getBreakLimits(settings);
 
@@ -55,11 +72,12 @@ export default function AdminDashboard() {
       createBreakRegistration(dataClient, data, {
         skipDeadlineCheck: true,
         allowNonTodayDate: true,
+        admin: true,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["break-registrations", dateStr] });
       setAddingTo(null);
-      setNewName("");
+      setSelectedAgentName("");
       toast({ title: "✓ נציג נוסף בהצלחה" });
     },
     onError: (error) => {
@@ -68,7 +86,8 @@ export default function AdminDashboard() {
         toast({ title: "לא ניתן להוסיף", description: error.message });
         return;
       }
-      toast({ title: "שגיאה", description: "לא הצלחנו לשמור את ההרשמה" });
+      const message = String(error?.message || "");
+      toast({ title: "שגיאה", description: message || "לא הצלחנו לשמור את ההרשמה" });
     },
   });
 
@@ -89,13 +108,39 @@ export default function AdminDashboard() {
     },
   });
 
-  const handleAdd = (slot, breakType) => {
-    if (!newName.trim()) return;
-    createMutation.mutate({ agent_name: newName.trim(), break_type: breakType, time_slot: slot, date: dateStr });
-  };
-
   const getSlotRegs = (slot, breakType) =>
     registrations.filter(r => r.time_slot === slot && r.break_type === breakType);
+
+  const getAvailableAgents = (slot, breakType) =>
+    agentNames.filter((name) => {
+      const inSlot = getSlotRegs(slot, breakType).some((reg) =>
+        agentOwnsBreakRegistration(reg, name)
+      );
+      if (inSlot) return false;
+
+      const sameTypeToday = registrations.some(
+        (reg) =>
+          reg.break_type === breakType &&
+          agentOwnsBreakRegistration(reg, name)
+      );
+      return !sameTypeToday;
+    });
+
+  const openAddFlow = (slot, breakType) => {
+    const available = getAvailableAgents(slot, breakType);
+    setAddingTo({ slot, breakType });
+    setSelectedAgentName(available[0] || "");
+  };
+
+  const handleAdd = (slot, breakType) => {
+    if (!selectedAgentName) return;
+    createMutation.mutate({
+      agent_name: selectedAgentName,
+      break_type: breakType,
+      time_slot: slot,
+      date: dateStr,
+    });
+  };
 
   const renderSection = (title, slots, breakType, color) => (
     <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -108,6 +153,7 @@ export default function AdminDashboard() {
           const slotRegs = getSlotRegs(slot, breakType);
           const isFull = slotRegs.length >= limits[breakType];
           const isAdding = addingTo?.slot === slot && addingTo?.breakType === breakType;
+          const availableAgents = isAdding ? getAvailableAgents(slot, breakType) : [];
 
           return (
             <div key={slot} className={`rounded-2xl border p-3 flex flex-col gap-2 ${isFull ? "border-slate-100 bg-slate-50" : "border-slate-200 bg-white"}`}>
@@ -131,20 +177,55 @@ export default function AdminDashboard() {
               ))}
 
               {isAdding ? (
-                <div className="flex gap-1">
-                  <input
-                    autoFocus
-                    value={newName}
-                    onChange={e => setNewName(e.target.value)}
-                    onKeyDown={e => { if (e.key === "Enter") handleAdd(slot, breakType); if (e.key === "Escape") { setAddingTo(null); setNewName(""); } }}
-                    placeholder="שם הנציג..."
-                    className="flex-1 text-xs border border-slate-200 rounded-lg px-2 py-1 outline-none focus:border-indigo-400 min-w-0"
-                  />
-                  <button onClick={() => handleAdd(slot, breakType)} className="text-xs bg-indigo-500 text-white rounded-lg px-2 py-1 hover:bg-indigo-600 transition-all">הוסף</button>
+                <div className="flex flex-col gap-1.5">
+                  {availableAgents.length > 0 ? (
+                    <div className="flex gap-1">
+                      <select
+                        autoFocus
+                        value={selectedAgentName}
+                        onChange={(e) => setSelectedAgentName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleAdd(slot, breakType);
+                          if (e.key === "Escape") {
+                            setAddingTo(null);
+                            setSelectedAgentName("");
+                          }
+                        }}
+                        className="flex-1 text-xs border border-slate-200 rounded-lg px-2 py-1 outline-none focus:border-indigo-400 min-w-0 bg-white"
+                      >
+                        {availableAgents.map((name) => (
+                          <option key={name} value={name}>
+                            {name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => handleAdd(slot, breakType)}
+                        disabled={!selectedAgentName || createMutation.isPending}
+                        className="text-xs bg-indigo-500 text-white rounded-lg px-2 py-1 hover:bg-indigo-600 transition-all disabled:opacity-50"
+                      >
+                        הוסף
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-400 text-center leading-snug">
+                      אין נציגים זמינים למשבצת זו
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddingTo(null);
+                      setSelectedAgentName("");
+                    }}
+                    className="text-[11px] text-slate-400 hover:text-slate-600 self-end"
+                  >
+                    ביטול
+                  </button>
                 </div>
               ) : !isFull && (
                 <button
-                  onClick={() => { setAddingTo({ slot, breakType }); setNewName(""); }}
+                  onClick={() => openAddFlow(slot, breakType)}
                   className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-600 transition-colors"
                 >
                   <Plus className="w-3.5 h-3.5" />

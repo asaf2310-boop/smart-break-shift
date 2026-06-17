@@ -30,6 +30,8 @@ export function mapCustomerRowToLocal(row) {
     phone: row.phone || "",
     email: row.email || "",
     company: row.company || "",
+    tax_id: row.tax_id || "",
+    address: row.address || "",
     notes: row.notes || "",
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -43,12 +45,68 @@ export function mapCustomerToRow(customer, { createdByAgentId } = {}) {
     phone: customer.phone || null,
     email: customer.email || null,
     company: customer.company || null,
+    tax_id: customer.tax_id || null,
+    address: customer.address || null,
     notes: customer.notes || null,
     created_at: customer.created_at,
     updated_at: customer.updated_at,
   };
   if (createdByAgentId) row.created_by_agent_id = createdByAgentId;
   return row;
+}
+
+export function mapContactRowToLocal(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    customer_id: row.customer_id,
+    name: row.name || "",
+    role_title: row.role_title || "",
+    phone: row.phone || "",
+    email: row.email || "",
+    notes: row.notes || "",
+    sort_order: row.sort_order ?? 0,
+    created_at: row.created_at,
+  };
+}
+
+export function mapContactToRow(contact) {
+  return {
+    id: isCloudUuid(contact.id) ? contact.id : undefined,
+    customer_id: contact.customer_id,
+    name: String(contact.name || "").trim(),
+    role_title: contact.role_title || null,
+    phone: contact.phone || null,
+    email: contact.email || null,
+    notes: contact.notes || null,
+    sort_order: contact.sort_order ?? 0,
+    created_at: contact.created_at,
+  };
+}
+
+export function mapProductRowToLocal(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    customer_id: row.customer_id,
+    product_name: row.product_name || "",
+    product_code: row.product_code || "",
+    status: row.status || "",
+    notes: row.notes || "",
+    created_at: row.created_at,
+  };
+}
+
+export function mapProductToRow(product) {
+  return {
+    id: isCloudUuid(product.id) ? product.id : undefined,
+    customer_id: product.customer_id,
+    product_name: String(product.product_name || "").trim(),
+    product_code: product.product_code || null,
+    status: product.status || null,
+    notes: product.notes || null,
+    created_at: product.created_at,
+  };
 }
 
 export function mapReferralRowToLocal(row) {
@@ -179,20 +237,32 @@ async function fetchTable(table) {
 
 export async function loadCrmFromCloud() {
   if (!isCrmCloudEnabled() || !supabase) {
-    return { customers: [], referrals: [], callLogs: [], emailLogs: [] };
+    return {
+      customers: [],
+      referrals: [],
+      callLogs: [],
+      emailLogs: [],
+      customerContacts: [],
+      customerProducts: [],
+    };
   }
   await loadAgentCache();
-  const [customers, referrals, callLogs, emailLogs] = await Promise.all([
-    fetchTable("crm_customers"),
-    fetchTable("crm_referrals"),
-    fetchTable("crm_call_logs"),
-    fetchTable("crm_email_logs"),
-  ]);
+  const [customers, referrals, callLogs, emailLogs, customerContacts, customerProducts] =
+    await Promise.all([
+      fetchTable("crm_customers"),
+      fetchTable("crm_referrals"),
+      fetchTable("crm_call_logs"),
+      fetchTable("crm_email_logs"),
+      fetchTable("crm_customer_contacts"),
+      fetchTable("crm_customer_products"),
+    ]);
   return {
     customers: customers.map(mapCustomerRowToLocal).filter(Boolean),
     referrals: referrals.map(mapReferralRowToLocal).filter(Boolean),
     callLogs: callLogs.map(mapCallLogRowToLocal).filter(Boolean),
     emailLogs: emailLogs.map(mapEmailLogRowToLocal).filter(Boolean),
+    customerContacts: customerContacts.map(mapContactRowToLocal).filter(Boolean),
+    customerProducts: customerProducts.map(mapProductRowToLocal).filter(Boolean),
   };
 }
 
@@ -252,6 +322,26 @@ export async function migrateLocalStoreToCloud(localStore) {
       customer_id: remap(log.customer_id),
     });
     const { error } = await supabase.from("crm_email_logs").insert(row);
+    if (error) throw error;
+  }
+
+  for (const contact of localStore.customerContacts || []) {
+    const row = mapContactToRow({
+      ...contact,
+      id: newCloudId(),
+      customer_id: remap(contact.customer_id),
+    });
+    const { error } = await supabase.from("crm_customer_contacts").insert(row);
+    if (error) throw error;
+  }
+
+  for (const product of localStore.customerProducts || []) {
+    const row = mapProductToRow({
+      ...product,
+      id: newCloudId(),
+      customer_id: remap(product.customer_id),
+    });
+    const { error } = await supabase.from("crm_customer_products").insert(row);
     if (error) throw error;
   }
 
@@ -346,6 +436,48 @@ export async function persistEmailLog(log) {
 export async function deleteEmailLogFromCloud(id) {
   if (!isCrmCloudEnabled() || !supabase || !isCloudUuid(id)) return;
   const { error } = await supabase.from("crm_email_logs").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function persistContact(contact) {
+  if (!isCrmCloudEnabled() || !supabase) return contact;
+  const row = mapContactToRow(contact);
+  if (isCloudUuid(contact.id)) {
+    const { error } = await supabase.from("crm_customer_contacts").update(row).eq("id", contact.id);
+    if (error) throw error;
+  } else {
+    const id = newCloudId();
+    const { error } = await supabase.from("crm_customer_contacts").insert({ ...row, id });
+    if (error) throw error;
+    contact = { ...contact, id };
+  }
+  return contact;
+}
+
+export async function deleteContactFromCloud(id) {
+  if (!isCrmCloudEnabled() || !supabase || !isCloudUuid(id)) return;
+  const { error } = await supabase.from("crm_customer_contacts").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function persistProduct(product) {
+  if (!isCrmCloudEnabled() || !supabase) return product;
+  const row = mapProductToRow(product);
+  if (isCloudUuid(product.id)) {
+    const { error } = await supabase.from("crm_customer_products").update(row).eq("id", product.id);
+    if (error) throw error;
+  } else {
+    const id = newCloudId();
+    const { error } = await supabase.from("crm_customer_products").insert({ ...row, id });
+    if (error) throw error;
+    product = { ...product, id };
+  }
+  return product;
+}
+
+export async function deleteProductFromCloud(id) {
+  if (!isCrmCloudEnabled() || !supabase || !isCloudUuid(id)) return;
+  const { error } = await supabase.from("crm_customer_products").delete().eq("id", id);
   if (error) throw error;
 }
 

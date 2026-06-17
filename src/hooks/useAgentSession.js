@@ -8,7 +8,8 @@ import {
 
 export function useAgentSession() {
   const [session, setSession] = useState(() => getAgentSession());
-  const [bootstrapped, setBootstrapped] = useState(false);
+  // Unblock login/home immediately; validate session in the background.
+  const [bootstrapped] = useState(true);
 
   const refresh = useCallback(async () => {
     const valid = await validateAndRefreshAgentSession();
@@ -21,11 +22,13 @@ export function useAgentSession() {
 
     const bootstrap = async () => {
       const restored = await restoreSupabaseAgentSession();
-      const valid = restored || (await validateAndRefreshAgentSession());
-      if (!cancelled) {
-        setSession(valid);
-        setBootstrapped(true);
+      if (cancelled) return;
+      if (restored) {
+        setSession(restored);
+        return;
       }
+      const valid = await validateAndRefreshAgentSession();
+      if (!cancelled) setSession(valid);
     };
 
     void bootstrap();

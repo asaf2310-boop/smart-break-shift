@@ -16,7 +16,10 @@ import {
   verifyAdminPin,
   verifyBearerAgent,
 } from "../server/agent/agentAuthService.js";
-import { adminDeleteBreakRegistration } from "../server/agent/breakRegistrationAdminService.js";
+import {
+  adminCreateBreakRegistration,
+  adminDeleteBreakRegistration,
+} from "../server/agent/breakRegistrationAdminService.js";
 import { requestPasswordResetByEmail, requestFirstLoginByEmail } from "../server/agent/agentPasswordResetService.js";
 import {
   guestLinkApiReady,
@@ -164,6 +167,45 @@ export default async function handler(req, res) {
         { error: "password_update_failed", message: "לא הצלחנו לעדכן סיסמה" },
         req
       );
+    }
+  }
+
+  if (action === "admin_create_break_registration") {
+    if (!verifyAdminPin(body)) {
+      return json(res, 403, { error: "forbidden", message: "אין הרשאה" }, req);
+    }
+
+    const agent_name = String(body.agent_name || "").trim();
+    const break_type = String(body.break_type || "").trim();
+    const time_slot = String(body.time_slot || "").trim();
+    const date = String(body.date || "").trim();
+
+    if (!agent_name || !break_type || !time_slot || !date) {
+      return json(
+        res,
+        400,
+        { error: "invalid_fields", message: "חסרים שדות חובה להרשמה" },
+        req
+      );
+    }
+
+    try {
+      const registration = await adminCreateBreakRegistration({
+        agent_name,
+        break_type,
+        time_slot,
+        date,
+      });
+      return json(res, 200, { ok: true, registration }, req);
+    } catch (err) {
+      console.error("[agent-auth] admin_create_break_registration", err);
+      const message =
+        err?.code === "insert_rejected"
+          ? err.message
+          : String(err?.message || "") === "invalid_fields"
+            ? "חסרים שדות חובה להרשמה"
+            : "לא הצלחנו לשמור את ההרשמה";
+      return json(res, 500, { error: "create_failed", message }, req);
     }
   }
 

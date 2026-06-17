@@ -103,7 +103,7 @@ const showAdminDemoHint =
   (import.meta.env.DEV || demoModeEnabled) && isAdminPinConfigured();
 
 function HomeContent() {
-  const { displayName, isLoggedIn, bootstrapped, refresh } = useAgentSession();
+  const { displayName, isLoggedIn, refresh } = useAgentSession();
   const { modules } = useAgentModules();
   const visibleCards = filterItemsByModules(homeCards, modules);
   const agentCount = getAgentNamesList().length;
@@ -118,14 +118,6 @@ function HomeContent() {
     await agentLogout();
     refresh();
   };
-
-  if (!bootstrapped) {
-    return (
-      <div className="min-h-[40vh] flex items-center justify-center text-slate-500 text-sm">
-        בודק התחברות...
-      </div>
-    );
-  }
 
   if (!isLoggedIn) {
     return <AgentLogin onSuccess={handleLoginSuccess} />;

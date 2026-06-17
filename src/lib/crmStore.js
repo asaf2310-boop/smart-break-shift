@@ -3,15 +3,19 @@ import { isCrmCloudEnabled } from "@/api/crmCloudMode";
 import { getDepartmentName, getDepartmentsForAgent, isCrmDepartmentsHydrated } from "@/lib/crmDepartments";
 import {
   deleteCallLogFromCloud,
+  deleteContactFromCloud,
   deleteCustomerFromCloud,
   deleteEmailLogFromCloud,
+  deleteProductFromCloud,
   invalidateCrmCloudCache,
   loadCrmFromCloud,
   logReferralEvent,
   migrateLocalStoreToCloud,
   persistCallLog,
+  persistContact,
   persistCustomer,
   persistEmailLog,
+  persistProduct,
   persistReferral,
 } from "@/lib/crmCloudSync";
 
@@ -25,7 +29,14 @@ let hydratePromise = null;
 let cloudHydrated = false;
 
 function emptyStore() {
-  return { customers: [], callLogs: [], emailLogs: [], referrals: [] };
+  return {
+    customers: [],
+    callLogs: [],
+    emailLogs: [],
+    referrals: [],
+    customerContacts: [],
+    customerProducts: [],
+  };
 }
 
 function warnCloudPersist(err, op) {
@@ -257,11 +268,11 @@ function migrateReferralsInStore(store) {
 }
 
 function createSeedStore() {
-  const c1 = { id: "crm_c_01", name: "דנה כהן", phone: "050-1234567", email: "dana@example.co.il", company: "כהן לוגיסטיקה", notes: "לקוחה ותיקה, מעדיפה התקשרות בבוקר", created_at: daysAgo(30), updated_at: daysAgo(2) };
-  const c2 = { id: "crm_c_02", name: "יוסי לוי", phone: "052-9876543", email: "yossi.levi@gmail.com", company: "", notes: "ביקש הצעת מחיר לחבילת פרימיום", created_at: daysAgo(14), updated_at: daysAgo(1) };
-  const c3 = { id: "crm_c_03", name: "מיכל אברהם", phone: "054-5551234", email: "michal@startup.io", company: "סטארטאפ.io", notes: "", created_at: daysAgo(7), updated_at: daysAgo(7) };
-  const c4 = { id: "crm_c_04", name: "אלי רוזן", phone: "03-1234567", email: "eli@rozen.co.il", company: "רוזן בע\"מ", notes: "איש קשר: מזכירה שרה", created_at: daysAgo(5), updated_at: daysAgo(0) };
-  const c5 = { id: "crm_c_05", name: "נועה שמש", phone: "058-7778899", email: "noa@demo.local", company: null, notes: "ליד חדש מהאתר", created_at: daysAgo(1), updated_at: daysAgo(1) };
+  const c1 = { id: "crm_c_01", name: "דנה כהן", phone: "050-1234567", email: "dana@example.co.il", company: "כהן לוגיסטיקה", tax_id: "514123456", address: "רחוב הרצל 12, תל אביב", notes: "לקוחה ותיקה, מעדיפה התקשרות בבוקר", created_at: daysAgo(30), updated_at: daysAgo(2) };
+  const c2 = { id: "crm_c_02", name: "יוסי לוי", phone: "052-9876543", email: "yossi.levi@gmail.com", company: "", tax_id: "", address: "", notes: "ביקש הצעת מחיר לחבילת פרימיום", created_at: daysAgo(14), updated_at: daysAgo(1) };
+  const c3 = { id: "crm_c_03", name: "מיכל אברהם", phone: "054-5551234", email: "michal@startup.io", company: "סטארטאפ.io", tax_id: "558765432", address: "פארק ההייטק, חיפה", notes: "", created_at: daysAgo(7), updated_at: daysAgo(7) };
+  const c4 = { id: "crm_c_04", name: "אלי רוזן", phone: "03-1234567", email: "eli@rozen.co.il", company: "רוזן בע\"מ", tax_id: "512345678", address: "דרך בגין 100, רמת גן", notes: "איש קשר: מזכירה שרה", created_at: daysAgo(5), updated_at: daysAgo(0) };
+  const c5 = { id: "crm_c_05", name: "נועה שמש", phone: "058-7778899", email: "noa@demo.local", company: null, tax_id: "", address: "", notes: "ליד חדש מהאתר", created_at: daysAgo(1), updated_at: daysAgo(1) };
 
   return {
     customers: [c1, c2, c3, c4, c5],
@@ -289,6 +300,15 @@ function createSeedStore() {
       },
     ],
     referrals: null,
+    customerContacts: [
+      { id: "crm_contact_01", customer_id: c4.id, name: "שרה כהן", role_title: "מזכירה", phone: "03-1234568", email: "sara@rozen.co.il", notes: "", sort_order: 0, created_at: daysAgo(5) },
+      { id: "crm_contact_02", customer_id: c1.id, name: "רון כהן", role_title: "מנהל תפעול", phone: "050-1234568", email: "ron@example.co.il", notes: "אחראי על חשבוניות", sort_order: 0, created_at: daysAgo(20) },
+    ],
+    customerProducts: [
+      { id: "crm_product_01", customer_id: c1.id, product_name: "חבילת לוגיסטיקה", product_code: "LOG-PRO", status: "active", notes: "חידוש שנתי", created_at: daysAgo(25) },
+      { id: "crm_product_02", customer_id: c2.id, product_name: "פרימיום", product_code: "PRM-01", status: "pending", notes: "ממתין לאישור", created_at: daysAgo(3) },
+      { id: "crm_product_03", customer_id: c4.id, product_name: "סליקה", product_code: "PAY-STD", status: "active", notes: "", created_at: daysAgo(10) },
+    ],
   };
 }
 
@@ -307,6 +327,8 @@ function parseStoredCrm(raw) {
     callLogs: parsed.callLogs || [],
     emailLogs: parsed.emailLogs || [],
     referrals: parsed.referrals,
+    customerContacts: parsed.customerContacts || [],
+    customerProducts: parsed.customerProducts || [],
   };
   normalizeReferralsArray(store, !hadReferralsField);
   return store;
@@ -324,7 +346,9 @@ function isStoreEmpty(store) {
     !store.customers?.length &&
     !store.callLogs?.length &&
     !store.emailLogs?.length &&
-    !store.referrals?.length
+    !store.referrals?.length &&
+    !store.customerContacts?.length &&
+    !store.customerProducts?.length
   );
 }
 
@@ -386,6 +410,8 @@ function writeStore(store) {
     callLogs: store.callLogs || [],
     emailLogs: store.emailLogs || [],
     referrals: store.referrals || [],
+    customerContacts: store.customerContacts || [],
+    customerProducts: store.customerProducts || [],
   };
   cacheStoreToLocalStorage(memoryStore);
   window.dispatchEvent(new CustomEvent(CRM_CHANGE_EVENT));
@@ -396,7 +422,9 @@ function cloudHasData(store) {
     store.customers?.length > 0 ||
     store.referrals?.length > 0 ||
     store.callLogs?.length > 0 ||
-    store.emailLogs?.length > 0
+    store.emailLogs?.length > 0 ||
+    store.customerContacts?.length > 0 ||
+    store.customerProducts?.length > 0
   );
 }
 
@@ -489,7 +517,7 @@ export function searchCustomers(query) {
   const q = String(query || "").trim().toLowerCase();
   if (!q) return listCustomers();
   return listCustomers().filter((c) => {
-    const hay = [c.name, c.phone, c.email, c.company, c.notes].filter(Boolean).join(" ").toLowerCase();
+    const hay = [c.name, c.phone, c.email, c.company, c.tax_id, c.notes].filter(Boolean).join(" ").toLowerCase();
     return hay.includes(q);
   });
 }
@@ -531,7 +559,7 @@ export function getCustomerByPhone(phone) {
   );
 }
 
-export function createCustomer({ name, phone, email, company, notes }) {
+export function createCustomer({ name, phone, email, company, tax_id, address, notes }) {
   const store = readStore();
   const now = new Date().toISOString();
   const customer = {
@@ -540,6 +568,8 @@ export function createCustomer({ name, phone, email, company, notes }) {
     phone: String(phone || "").trim(),
     email: String(email || "").trim(),
     company: company ? String(company).trim() : "",
+    tax_id: tax_id ? String(tax_id).trim() : "",
+    address: address ? String(address).trim() : "",
     notes: notes ? String(notes).trim() : "",
     created_at: now,
     updated_at: now,
@@ -564,6 +594,8 @@ export function updateCustomer(id, patch) {
       phone: patch.phone !== undefined ? String(patch.phone).trim() : c.phone,
       email: patch.email !== undefined ? String(patch.email).trim() : c.email,
       company: patch.company !== undefined ? (patch.company ? String(patch.company).trim() : "") : c.company,
+      tax_id: patch.tax_id !== undefined ? (patch.tax_id ? String(patch.tax_id).trim() : "") : (c.tax_id || ""),
+      address: patch.address !== undefined ? (patch.address ? String(patch.address).trim() : "") : (c.address || ""),
       notes: patch.notes !== undefined ? String(patch.notes).trim() : c.notes,
       updated_at: new Date().toISOString(),
     };
@@ -582,6 +614,8 @@ export function deleteCustomer(id) {
   store.callLogs = store.callLogs.filter((log) => log.customer_id !== id);
   store.emailLogs = (store.emailLogs || []).filter((log) => log.customer_id !== id);
   store.referrals = (store.referrals || []).filter((ref) => ref.customer_id !== id);
+  store.customerContacts = (store.customerContacts || []).filter((c) => c.customer_id !== id);
+  store.customerProducts = (store.customerProducts || []).filter((p) => p.customer_id !== id);
   writeStore(store);
   if (isCrmCloudEnabled()) {
     deleteCustomerFromCloud(id).catch((err) => warnCloudPersist(err, "deleteCustomer"));
@@ -1041,6 +1075,137 @@ export function tryAutoReopenReferrals(customerId, { referralTopic = null, activ
 
 export function getCallTypeLabel(value) {
   return CALL_TYPES.find((t) => t.value === value)?.label || value;
+}
+
+export const CUSTOMER_PRODUCT_STATUSES = [
+  { value: "active", label: "פעיל" },
+  { value: "pending", label: "ממתין" },
+  { value: "inactive", label: "לא פעיל" },
+  { value: "cancelled", label: "בוטל" },
+];
+
+export function getCustomerProductStatusLabel(status) {
+  return CUSTOMER_PRODUCT_STATUSES.find((s) => s.value === status)?.label || status || "—";
+}
+
+export function listContactsForCustomer(customerId) {
+  const { customerContacts } = readStore();
+  return (customerContacts || [])
+    .filter((c) => c.customer_id === customerId)
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || new Date(a.created_at) - new Date(b.created_at));
+}
+
+export function createContact({ customer_id, name, role_title, phone, email, notes, sort_order }) {
+  const store = readStore();
+  const now = new Date().toISOString();
+  const existing = (store.customerContacts || []).filter((c) => c.customer_id === customer_id);
+  const contact = {
+    id: makeId("crm_contact"),
+    customer_id,
+    name: String(name || "").trim(),
+    role_title: role_title ? String(role_title).trim() : "",
+    phone: phone ? String(phone).trim() : "",
+    email: email ? String(email).trim() : "",
+    notes: notes ? String(notes).trim() : "",
+    sort_order: sort_order ?? existing.length,
+    created_at: now,
+  };
+  store.customerContacts = [...(store.customerContacts || []), contact];
+  writeStore(store);
+  if (isCrmCloudEnabled()) {
+    persistContact(contact).catch((err) => warnCloudPersist(err, "persistContact"));
+  }
+  return contact;
+}
+
+export function updateContact(id, patch) {
+  const store = readStore();
+  let updated = null;
+  store.customerContacts = (store.customerContacts || []).map((c) => {
+    if (c.id !== id) return c;
+    updated = {
+      ...c,
+      ...patch,
+      name: patch.name !== undefined ? String(patch.name).trim() : c.name,
+      role_title: patch.role_title !== undefined ? String(patch.role_title || "").trim() : c.role_title,
+      phone: patch.phone !== undefined ? String(patch.phone || "").trim() : c.phone,
+      email: patch.email !== undefined ? String(patch.email || "").trim() : c.email,
+      notes: patch.notes !== undefined ? String(patch.notes || "").trim() : c.notes,
+    };
+    return updated;
+  });
+  writeStore(store);
+  if (isCrmCloudEnabled() && updated) {
+    persistContact(updated).catch((err) => warnCloudPersist(err, "persistContact"));
+  }
+  return updated;
+}
+
+export function deleteContact(id) {
+  const store = readStore();
+  store.customerContacts = (store.customerContacts || []).filter((c) => c.id !== id);
+  writeStore(store);
+  if (isCrmCloudEnabled()) {
+    deleteContactFromCloud(id).catch((err) => warnCloudPersist(err, "deleteContact"));
+  }
+}
+
+export function listProductsForCustomer(customerId) {
+  const { customerProducts } = readStore();
+  return (customerProducts || [])
+    .filter((p) => p.customer_id === customerId)
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+}
+
+export function createProduct({ customer_id, product_name, product_code, status, notes }) {
+  const store = readStore();
+  const now = new Date().toISOString();
+  const product = {
+    id: makeId("crm_product"),
+    customer_id,
+    product_name: String(product_name || "").trim(),
+    product_code: product_code ? String(product_code).trim() : "",
+    status: status ? String(status).trim() : "",
+    notes: notes ? String(notes).trim() : "",
+    created_at: now,
+  };
+  store.customerProducts = [...(store.customerProducts || []), product];
+  writeStore(store);
+  if (isCrmCloudEnabled()) {
+    persistProduct(product).catch((err) => warnCloudPersist(err, "persistProduct"));
+  }
+  return product;
+}
+
+export function updateProduct(id, patch) {
+  const store = readStore();
+  let updated = null;
+  store.customerProducts = (store.customerProducts || []).map((p) => {
+    if (p.id !== id) return p;
+    updated = {
+      ...p,
+      ...patch,
+      product_name: patch.product_name !== undefined ? String(patch.product_name).trim() : p.product_name,
+      product_code: patch.product_code !== undefined ? String(patch.product_code || "").trim() : p.product_code,
+      status: patch.status !== undefined ? String(patch.status || "").trim() : p.status,
+      notes: patch.notes !== undefined ? String(patch.notes || "").trim() : p.notes,
+    };
+    return updated;
+  });
+  writeStore(store);
+  if (isCrmCloudEnabled() && updated) {
+    persistProduct(updated).catch((err) => warnCloudPersist(err, "persistProduct"));
+  }
+  return updated;
+}
+
+export function deleteProduct(id) {
+  const store = readStore();
+  store.customerProducts = (store.customerProducts || []).filter((p) => p.id !== id);
+  writeStore(store);
+  if (isCrmCloudEnabled()) {
+    deleteProductFromCloud(id).catch((err) => warnCloudPersist(err, "deleteProduct"));
+  }
 }
 
 export function subscribeCrmStore(callback) {

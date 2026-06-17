@@ -5,14 +5,19 @@ import {
   ArrowRight,
   Building2,
   FolderOpen,
+  Hash,
   Mail,
+  MapPin,
   MessageSquare,
+  Package,
   Pencil,
   Phone,
   ArrowLeftRight,
+  Plus,
   RotateCcw,
   Send,
   Trash2,
+  UserRound,
 } from "lucide-react";
 import { getStoredAgentName } from "@/constants/scheduling";
 import {
@@ -20,27 +25,38 @@ import {
   canReopenReferral,
   closeReferral,
   createCallLog,
+  createContact,
   createEmailLog,
   createInboundEmailLog,
+  createProduct,
   createReferral,
   crmDemoAvailable,
   deleteCallLog,
+  deleteContact,
   deleteCustomer,
   deleteEmailLog,
+  deleteProduct,
   getCallTypeLabel,
   getCustomerById,
+  getCustomerProductStatusLabel,
   getEmailStatusLabel,
   getDepartmentName,
   getReferralAssignmentLabel,
   getReferralStatusLabel,
   listCallLogsForCustomer,
+  listContactsForCustomer,
   listEmailLogsForCustomer,
+  listProductsForCustomer,
   listReferralsForCustomer,
   reopenReferralFromCustomerResponse,
   subscribeCrmStore,
+  updateContact,
   updateCustomer,
+  updateProduct,
 } from "@/lib/crmStore";
 import CustomerForm from "@/components/crm/CustomerForm";
+import CustomerContactForm from "@/components/crm/CustomerContactForm";
+import CustomerProductForm from "@/components/crm/CustomerProductForm";
 import CallLogForm, { formatCallDatetime } from "@/components/crm/CallLogForm";
 import EmailSendForm, { formatEmailDatetime } from "@/components/crm/EmailSendForm";
 import ReferralForm from "@/components/crm/ReferralForm";
@@ -85,9 +101,13 @@ export default function CrmCustomerDetail() {
   const [calls, setCalls] = useState([]);
   const [emails, setEmails] = useState([]);
   const [referrals, setReferrals] = useState([]);
+  const [contacts, setContacts] = useState([]);
+  const [products, setProducts] = useState([]);
   const [activeTab, setActiveTab] = useState("calls");
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [contactDialog, setContactDialog] = useState(null);
+  const [productDialog, setProductDialog] = useState(null);
   const [transferRef, setTransferRef] = useState(null);
   const { toast } = useToast();
   const { dialNumber } = useTelephony();
@@ -97,6 +117,8 @@ export default function CrmCustomerDetail() {
     setCalls(listCallLogsForCustomer(id));
     setEmails(listEmailLogsForCustomer(id));
     setReferrals(listReferralsForCustomer(id));
+    setContacts(listContactsForCustomer(id));
+    setProducts(listProductsForCustomer(id));
   }, [id]);
 
   useEffect(() => {
@@ -224,6 +246,42 @@ export default function CrmCustomerDetail() {
     refresh();
   };
 
+  const handleSaveContact = (data) => {
+    if (contactDialog?.mode === "edit" && contactDialog.contact) {
+      updateContact(contactDialog.contact.id, data);
+      toast({ title: "נשמר", description: "איש הקשר עודכן" });
+    } else {
+      createContact({ customer_id: customer.id, ...data });
+      toast({ title: "נוסף", description: "איש קשר נוסף ללקוח" });
+    }
+    setContactDialog(null);
+    refresh();
+  };
+
+  const handleDeleteContact = (contactId) => {
+    deleteContact(contactId);
+    toast({ title: "הוסר", description: "איש הקשר נמחק" });
+    refresh();
+  };
+
+  const handleSaveProduct = (data) => {
+    if (productDialog?.mode === "edit" && productDialog.product) {
+      updateProduct(productDialog.product.id, data);
+      toast({ title: "נשמר", description: "המוצר עודכן" });
+    } else {
+      createProduct({ customer_id: customer.id, ...data });
+      toast({ title: "נוסף", description: "מוצר שויך ללקוח" });
+    }
+    setProductDialog(null);
+    refresh();
+  };
+
+  const handleDeleteProduct = (productId) => {
+    deleteProduct(productId);
+    toast({ title: "הוסר", description: "המוצר הוסר מהלקוח" });
+    refresh();
+  };
+
   return (
     <HypPageLayout variant="scheduling" withNav={false} contentClassName="max-w-3xl px-4 py-6 sm:py-10 pb-24">
         <Link to="/crm" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-indigo-600 mb-4">
@@ -238,6 +296,7 @@ export default function CrmCustomerDetail() {
         >
           <div className="flex items-start justify-between gap-3 mb-4">
             <div>
+              <p className="text-xs font-semibold text-indigo-600 mb-1">כרטיס לקוח</p>
               <h1 className="text-2xl font-extrabold text-slate-800">{customer.name}</h1>
               {customer.company && (
                 <p className="text-sm text-slate-500 flex items-center gap-1 mt-1">
@@ -266,6 +325,19 @@ export default function CrmCustomerDetail() {
             </div>
           </div>
           <div className="grid sm:grid-cols-2 gap-3 text-sm text-slate-600">
+            {customer.tax_id && (
+              <p className="flex items-center gap-2">
+                <Hash className="w-4 h-4 shrink-0 text-slate-400" />
+                <span className="text-slate-500">ח.פ / ת.ז:</span>
+                <span dir="ltr">{customer.tax_id}</span>
+              </p>
+            )}
+            {customer.address && (
+              <p className="flex items-start gap-2 sm:col-span-2">
+                <MapPin className="w-4 h-4 shrink-0 text-slate-400 mt-0.5" />
+                <span>{customer.address}</span>
+              </p>
+            )}
             {customer.phone && (
               telephonyDemoAvailable() ? (
                 <button
@@ -311,6 +383,145 @@ export default function CrmCustomerDetail() {
           </div>
           <CustomerScreenRecordings crmCustomerId={customer.id} />
         </motion.div>
+
+        <section className="mb-6">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <UserRound className="w-5 h-5 text-indigo-600" />
+              אנשי קשר נוספים
+            </h2>
+            <button
+              type="button"
+              onClick={() => setContactDialog({ mode: "add" })}
+              className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-xl border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              הוספה
+            </button>
+          </div>
+          {contacts.length === 0 ? (
+            <p className="text-sm text-slate-500 text-center py-4 rounded-2xl border border-dashed border-slate-200">
+              אין אנשי קשר נוספים
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {contacts.map((contact) => (
+                <div key={contact.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-800">{contact.name}</p>
+                      {contact.role_title && (
+                        <p className="text-xs text-slate-500 mt-0.5">{contact.role_title}</p>
+                      )}
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-slate-600">
+                        {contact.phone && (
+                          <span className="inline-flex items-center gap-1" dir="ltr">
+                            <Phone className="w-3.5 h-3.5" />
+                            {contact.phone}
+                          </span>
+                        )}
+                        {contact.email && (
+                          <a href={`mailto:${contact.email}`} className="inline-flex items-center gap-1 hover:text-indigo-600 truncate" dir="ltr">
+                            <Mail className="w-3.5 h-3.5 shrink-0" />
+                            {contact.email}
+                          </a>
+                        )}
+                      </div>
+                      {contact.notes && (
+                        <p className="text-xs text-slate-500 mt-2 bg-slate-50 rounded-lg p-2">{contact.notes}</p>
+                      )}
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setContactDialog({ mode: "edit", contact })}
+                        className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
+                        aria-label="עריכת איש קשר"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteContact(contact.id)}
+                        className="p-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50"
+                        aria-label="מחיקת איש קשר"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="mb-6">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <Package className="w-5 h-5 text-teal-600" />
+              מוצרים
+            </h2>
+            <button
+              type="button"
+              onClick={() => setProductDialog({ mode: "add" })}
+              className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-xl border border-teal-200 text-teal-700 bg-teal-50 hover:bg-teal-100"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              הוספה
+            </button>
+          </div>
+          {products.length === 0 ? (
+            <p className="text-sm text-slate-500 text-center py-4 rounded-2xl border border-dashed border-slate-200">
+              אין מוצרים משויכים
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {products.map((product) => (
+                <div key={product.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold text-slate-800">{product.product_name}</p>
+                        {product.status && (
+                          <span className="text-xs font-semibold text-teal-800 bg-teal-50 border border-teal-200 rounded-lg px-2 py-0.5">
+                            {getCustomerProductStatusLabel(product.status)}
+                          </span>
+                        )}
+                      </div>
+                      {product.product_code && (
+                        <p className="text-xs text-slate-500 mt-1" dir="ltr">
+                          קוד: {product.product_code}
+                        </p>
+                      )}
+                      {product.notes && (
+                        <p className="text-xs text-slate-500 mt-2">{product.notes}</p>
+                      )}
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setProductDialog({ mode: "edit", product })}
+                        className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
+                        aria-label="עריכת מוצר"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteProduct(product.id)}
+                        className="p-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50"
+                        aria-label="מחיקת מוצר"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
 
         <section className="mb-6">
           <ReferralForm agentName={agentName} onSubmit={handleAddReferral} />
@@ -573,12 +784,40 @@ export default function CrmCustomerDetail() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={Boolean(contactDialog)} onOpenChange={(open) => !open && setContactDialog(null)}>
+        <DialogContent className="sm:max-w-md rounded-2xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>{contactDialog?.mode === "edit" ? "עריכת איש קשר" : "איש קשר חדש"}</DialogTitle>
+          </DialogHeader>
+          <CustomerContactForm
+            initial={contactDialog?.mode === "edit" ? contactDialog.contact : null}
+            onSubmit={handleSaveContact}
+            onCancel={() => setContactDialog(null)}
+            submitLabel={contactDialog?.mode === "edit" ? "שמירה" : "הוספה"}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(productDialog)} onOpenChange={(open) => !open && setProductDialog(null)}>
+        <DialogContent className="sm:max-w-md rounded-2xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>{productDialog?.mode === "edit" ? "עריכת מוצר" : "מוצר חדש"}</DialogTitle>
+          </DialogHeader>
+          <CustomerProductForm
+            initial={productDialog?.mode === "edit" ? productDialog.product : null}
+            onSubmit={handleSaveProduct}
+            onCancel={() => setProductDialog(null)}
+            submitLabel={productDialog?.mode === "edit" ? "שמירה" : "הוספה"}
+          />
+        </DialogContent>
+      </Dialog>
+
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
             <AlertDialogTitle>למחוק את {customer.name}?</AlertDialogTitle>
             <AlertDialogDescription>
-              פעולה זו תמחק גם את כל תיעודי השיחות והמיילים של הלקוח. לא ניתן לבטל.
+              פעולה זו תמחק גם את כל תיעודי השיחות, המיילים, אנשי הקשר והמוצרים של הלקוח. לא ניתן לבטל.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 sm:gap-2">

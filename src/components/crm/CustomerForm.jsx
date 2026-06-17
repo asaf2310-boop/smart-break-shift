@@ -9,6 +9,8 @@ const emptyForm = {
   phone: "",
   email: "",
   company: "",
+  tax_id: "",
+  address: "",
   notes: "",
 };
 
@@ -23,6 +25,8 @@ export default function CustomerForm({ initial, onSubmit, onCancel, submitLabel 
         phone: initial.phone || "",
         email: initial.email || "",
         company: initial.company || "",
+        tax_id: initial.tax_id || "",
+        address: initial.address || "",
         notes: initial.notes || "",
       });
     } else {
@@ -46,6 +50,8 @@ export default function CustomerForm({ initial, onSubmit, onCancel, submitLabel 
       phone: form.phone,
       email: form.email,
       company: form.company,
+      tax_id: form.tax_id,
+      address: form.address,
       notes: form.notes,
     });
   };
@@ -69,6 +75,16 @@ export default function CustomerForm({ initial, onSubmit, onCancel, submitLabel 
       <div className="space-y-2">
         <Label htmlFor="crm-company">חברה (אופציונלי)</Label>
         <Input id="crm-company" value={form.company} onChange={handleChange("company")} placeholder="שם החברה" className="rounded-xl" />
+      </div>
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="crm-tax-id">ח.פ / ת.ז</Label>
+          <Input id="crm-tax-id" value={form.tax_id} onChange={handleChange("tax_id")} placeholder="מספר ח.פ או ת.ז" className="rounded-xl" dir="ltr" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="crm-address">כתובת</Label>
+          <Input id="crm-address" value={form.address} onChange={handleChange("address")} placeholder="רחוב, עיר" className="rounded-xl" />
+        </div>
       </div>
       <div className="space-y-2">
         <Label htmlFor="crm-notes">הערות</Label>

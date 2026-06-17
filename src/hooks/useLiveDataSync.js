@@ -45,6 +45,8 @@ const TABLE_QUERY_PREFIXES = {
   crm_email_logs: ["crm"],
   crm_departments: ["crm"],
   crm_department_members: ["crm"],
+  crm_customer_contacts: ["crm"],
+  crm_customer_products: ["crm"],
 };
 
 const TRAINING_REALTIME_HANDLERS = {
@@ -77,6 +79,8 @@ const CRM_REALTIME_TABLES = new Set([
   "crm_email_logs",
   "crm_departments",
   "crm_department_members",
+  "crm_customer_contacts",
+  "crm_customer_products",
 ]);
 
 function handleCrmRealtimeChange() {

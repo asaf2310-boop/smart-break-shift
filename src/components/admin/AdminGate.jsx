@@ -19,21 +19,13 @@ import {
 import { rememberAdminPinForApi } from "@/lib/adminPinClient";
 
 export default function AdminGate({ children }) {
-  const { isLoggedIn, bootstrapped, refresh } = useAgentSession();
+  const { isLoggedIn, refresh } = useAgentSession();
   const isAdmin = useIsAdmin();
   const pinRequired = isAdminPinConfigured();
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
 
   if (!demoModeEnabled) {
-    if (!bootstrapped) {
-      return (
-        <div className="min-h-[40vh] flex items-center justify-center text-slate-500 text-sm">
-          בודק התחברות...
-        </div>
-      );
-    }
-
     if (!isLoggedIn) {
       return (
         <AgentLogin

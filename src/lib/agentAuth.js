@@ -251,7 +251,10 @@ export async function validateAndRefreshAgentSession() {
     return null;
   }
 
-  const agent = await resolveAgentForSession(session);
+  const [agent, supabaseAuthUserId] = await Promise.all([
+    resolveAgentForSession(session),
+    demoModeEnabled ? Promise.resolve(null) : getSupabaseAuthUserId(),
+  ]);
   if (!agent) {
     // Transient backend/read timeout should not force-logout an already authenticated user.
     return session;
@@ -260,8 +263,6 @@ export async function validateAndRefreshAgentSession() {
     await agentLogout();
     return null;
   }
-
-  const supabaseAuthUserId = await getSupabaseAuthUserId();
   const effectiveAuthUserId = demoModeEnabled
     ? agent.authUserId || session.authUserId
     : resolveEffectiveAuthUserId(session, agent, supabaseAuthUserId);
@@ -639,7 +640,10 @@ export async function restoreSupabaseAgentSession() {
   }
 
   if (existing?.authUserId === authSession.user.id) {
-    return validateAndRefreshAgentSession();
+    void validateAndRefreshAgentSession().catch((err) => {
+      console.warn("[agentAuth] background session validation failed", err);
+    });
+    return existing;
   }
 
   const session = sessionFromAgent({ ...agent, authUserId: authSession.user.id });
