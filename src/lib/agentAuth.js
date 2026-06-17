@@ -13,7 +13,11 @@ import { normalizeAgentModules } from "@/constants/agentModules";
 import { getAgentNamesList } from "@/constants/scheduling";
 import { normalizeAgentPhone } from "@/lib/agentPhone";
 import { requestAgentPasswordResetSms } from "@/lib/agentPasswordReset";
-import { apiCompleteAgentPasswordSetup, apiRequestFirstLogin } from "@/lib/agentAuthClient";
+import {
+  apiCompleteAgentPasswordSetup,
+  apiRequestFirstLogin,
+  apiSyncAgentAuth,
+} from "@/lib/agentAuthClient";
 
 export const AGENT_SESSION_KEY = "smart-break-agent-session-v1";
 export const INVALID_CREDENTIALS_MSG = "אימייל או סיסמה שגויים";
@@ -125,6 +129,30 @@ function sessionFromAgent(agent) {
   };
 }
 
+async function getSupabaseAuthUserId() {
+  if (!supabase || demoModeEnabled) return null;
+  try {
+    const { data: { session: authSession } } = await withAuthTimeout(supabase.auth.getSession());
+    return authSession?.user?.id || null;
+  } catch {
+    return null;
+  }
+}
+
+/** DB link may lag after login; trust session when Supabase Auth session matches. */
+function resolveEffectiveAuthUserId(session, agent, supabaseAuthUserId) {
+  if (agent?.authUserId) return agent.authUserId;
+  if (!session?.authUserId || !supabaseAuthUserId) return null;
+  return session.authUserId === supabaseAuthUserId ? session.authUserId : null;
+}
+
+function scheduleAgentAuthLinkSync() {
+  if (demoModeEnabled || !supabase) return;
+  void apiSyncAgentAuth().catch((err) => {
+    console.warn("[agentAuth] sync_auth failed", err);
+  });
+}
+
 export function canAgentAuthenticate(agent) {
   return Boolean(agent?.active && !agent?.blocked);
 }
@@ -227,7 +255,12 @@ export async function validateAndRefreshAgentSession() {
     return null;
   }
 
-  if (!demoModeEnabled && !agent.authUserId) {
+  const supabaseAuthUserId = await getSupabaseAuthUserId();
+  const effectiveAuthUserId = demoModeEnabled
+    ? agent.authUserId || session.authUserId
+    : resolveEffectiveAuthUserId(session, agent, supabaseAuthUserId);
+
+  if (!demoModeEnabled && !effectiveAuthUserId) {
     await agentLogout();
     return null;
   }
@@ -241,9 +274,13 @@ export async function validateAndRefreshAgentSession() {
     return null;
   }
 
+  if (!demoModeEnabled && !agent.authUserId && effectiveAuthUserId) {
+    scheduleAgentAuthLinkSync();
+  }
+
   const refreshed = sessionFromAgent({
     ...agent,
-    authUserId: session.authUserId,
+    authUserId: effectiveAuthUserId || session.authUserId,
   });
 
   const modulesChanged =
@@ -456,6 +493,7 @@ export async function agentLoginWithPassword(email, password) {
     authUserId: authUserId || refreshedAgent.authUserId,
   });
   setAgentSession(session);
+  scheduleAgentAuthLinkSync();
   return { ok: true, session };
 }
 
@@ -518,6 +556,7 @@ export async function agentSetupPassword(email, password) {
     needsPasswordSetup: false,
   });
   setAgentSession(session);
+  scheduleAgentAuthLinkSync();
   return { ok: true, session };
 }
 

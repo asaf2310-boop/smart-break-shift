@@ -62,11 +62,19 @@ export default async function handler(req, res) {
 
     try {
       await markAgentPasswordSetupComplete(auth.agent.id);
-      return json(res, 200, { ok: true }, req);
+      return json(res, 200, { ok: true, authUserId: auth.authUser.id }, req);
     } catch (err) {
       console.error("[agent-auth] complete_setup", err);
       return json(res, 500, { error: "update_failed", message: "לא הצלחנו לעדכן" }, req);
     }
+  }
+
+  if (action === "sync_auth") {
+    const auth = await verifyBearerAgent(req);
+    if (!auth?.agent) {
+      return json(res, 401, { error: "unauthorized", message: "נדרשת התחברות" }, req);
+    }
+    return json(res, 200, { ok: true, authUserId: auth.authUser.id }, req);
   }
 
   if (action === "request_password_reset") {

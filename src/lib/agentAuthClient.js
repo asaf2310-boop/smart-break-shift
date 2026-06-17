@@ -42,6 +42,11 @@ export async function apiCompleteAgentPasswordSetup(accessToken = null) {
   return postAgentAuth({ action: "complete_setup" }, { requireBearer: true, accessToken });
 }
 
+/** Links agents.auth_user_id to the signed-in Supabase user (service role). */
+export async function apiSyncAgentAuth(accessToken = null) {
+  return postAgentAuth({ action: "sync_auth" }, { requireBearer: true, accessToken });
+}
+
 export async function apiAdminSetAgentPassword(agentId, password, { forceSetup = true } = {}) {
   return postAgentAuth({
     action: "admin_set_password",
