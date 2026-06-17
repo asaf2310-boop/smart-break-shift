@@ -42,6 +42,7 @@ import {
   getEmailStatusLabel,
   getDepartmentName,
   getReferralAssignmentLabel,
+  getReferralPriorityLabel,
   getReferralStatusLabel,
   listCallLogsForCustomer,
   listContactsForCustomer,
@@ -561,6 +562,9 @@ export default function CrmCustomerDetail() {
                           }`}
                         >
                           {getReferralStatusLabel(ref.status)}
+                        </span>
+                        <span className="text-xs font-semibold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5">
+                          {getReferralPriorityLabel(ref.priority)}
                         </span>
                         {ref.reopened_at && (
                           <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-0.5">

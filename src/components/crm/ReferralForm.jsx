@@ -10,7 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { REFERRAL_STATUSES } from "@/lib/crmStore";
+import { REFERRAL_STATUSES, REFERRAL_PRIORITIES } from "@/lib/crmStore";
 import { ReferralTopicCombobox } from "@/components/crm/CallLogForm";
 import ReferralAssignmentFields from "@/components/crm/ReferralAssignmentFields";
 
@@ -23,6 +23,7 @@ export default function ReferralForm({ agentName, onSubmit }) {
   const [form, setForm] = useState({
     referral_topic: "",
     description: "",
+    priority: "normal",
   });
   const [saveAs, setSaveAs] = useState("open");
   const [assignment, setAssignment] = useState({
@@ -56,11 +57,12 @@ export default function ReferralForm({ agentName, onSubmit }) {
     onSubmit({
       referral_topic: form.referral_topic,
       description: form.description,
+      priority: form.priority,
       agent_name: agentName,
       status,
       ...assignment,
     });
-    setForm({ referral_topic: "", description: "" });
+    setForm({ referral_topic: "", description: "", priority: "normal" });
     setAssignment({
       assigned_to_type: "agent",
       assigned_agent_name: agentName || "",
@@ -102,6 +104,21 @@ export default function ReferralForm({ agentName, onSubmit }) {
           placeholder="פרטי הבקשה, מה נדרש מהלקוח..."
           className="rounded-xl min-h-[90px]"
         />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="ref-priority">עדיפות</Label>
+        <select
+          id="ref-priority"
+          value={form.priority}
+          onChange={(e) => setForm((prev) => ({ ...prev, priority: e.target.value }))}
+          className="flex h-9 w-full rounded-xl border border-input bg-white px-3 py-1 text-sm shadow-sm"
+        >
+          {REFERRAL_PRIORITIES.map((p) => (
+            <option key={p.value} value={p.value}>
+              {p.label}
+            </option>
+          ))}
+        </select>
       </div>
       <div className="space-y-2">
         <Label>יוצר הפניה</Label>

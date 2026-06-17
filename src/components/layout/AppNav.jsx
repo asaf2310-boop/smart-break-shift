@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { BarChart3, BookOpen, CalendarClock, CalendarDays, Contact, Film, GraduationCap, Home, MessageCircle, Monitor, ShieldCheck } from "lucide-react";
+import { BarChart3, BookOpen, CalendarClock, CalendarDays, Contact, Film, GraduationCap, Home, LayoutDashboard, MessageCircle, Monitor, ShieldCheck } from "lucide-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useAgentModules } from "@/hooks/useAgentModules";
 import { customerChatEnabled, crmEnabled, demoModeEnabled, knowledgeEnabled } from "@/api/demoClient";
@@ -167,6 +167,13 @@ export default function AppNav() {
                   <Link to="/crm" className={tabClass(isCrm)}>
                     <Contact className="w-4 h-4" />
                     CRM
+                  </Link>
+                  <Link
+                    to="/admin/crm"
+                    className={tabClass(location.pathname === "/admin/crm")}
+                  >
+                    <LayoutDashboard className="w-4 h-4" />
+                    דשבורד CRM
                   </Link>
                   <Link to="/admin/crm/departments" className={tabClass(location.pathname === "/admin/crm/departments")}>
                     <ShieldCheck className="w-4 h-4" />

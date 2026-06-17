@@ -265,6 +265,9 @@ export default function AdminDashboard() {
               <Link to="/crm" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">
                 CRM
               </Link>
+              <Link to="/admin/crm" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">
+                דשבורד CRM
+              </Link>
               <Link to="/admin/crm/departments" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">
                 מחלקות CRM
               </Link>

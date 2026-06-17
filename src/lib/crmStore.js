@@ -104,6 +104,24 @@ export const REFERRAL_STATUSES = {
   closed: { value: "closed", label: "הסתיים טיפול" },
 };
 
+export const REFERRAL_PRIORITIES = [
+  { value: "low", label: "נמוכה" },
+  { value: "normal", label: "רגילה" },
+  { value: "high", label: "גבוהה" },
+  { value: "urgent", label: "דחופה" },
+];
+
+const REFERRAL_PRIORITY_WEIGHT = { urgent: 0, high: 1, normal: 2, low: 3 };
+
+function normalizeReferralPriority(value) {
+  const v = String(value || "normal").trim();
+  return REFERRAL_PRIORITIES.some((p) => p.value === v) ? v : "normal";
+}
+
+export function getReferralPriorityLabel(priority) {
+  return REFERRAL_PRIORITIES.find((p) => p.value === normalizeReferralPriority(priority))?.label || priority;
+}
+
 export const CALL_TYPES = [
   { value: "incoming", label: "שיחה נכנסת" },
   { value: "outgoing", label: "שיחה יוצאת" },
@@ -143,6 +161,7 @@ function createSeedReferrals(customers) {
   const closedOld = daysAgo(12, 10);
 
   const deptQueueAt = daysAgo(1, 8);
+  const agingWeekAt = daysAgo(9, 10);
 
   return [
     {
@@ -156,6 +175,7 @@ function createSeedReferrals(customers) {
       assigned_agent_name: "נציג 02",
       assigned_department_id: null,
       status: "open",
+      priority: "high",
       opened_at: openAt,
       closed_at: null,
       last_activity_at: openAt,
@@ -207,11 +227,30 @@ function createSeedReferrals(customers) {
       assigned_agent_name: null,
       assigned_department_id: "service",
       status: "open",
+      priority: "normal",
       opened_at: deptQueueAt,
       closed_at: null,
       last_activity_at: deptQueueAt,
       reopened_at: null,
       created_at: deptQueueAt,
+    },
+    {
+      id: "crm_ref_05",
+      customer_id: c2.id,
+      referral_topic: "סליקה",
+      description: "אישור מסגרת אשראי — ממתין מעל שבוע",
+      agent_name: "נציג 04",
+      original_agent_name: "נציג 04",
+      assigned_to_type: "agent",
+      assigned_agent_name: "נציג 04",
+      assigned_department_id: null,
+      status: "open",
+      priority: "urgent",
+      opened_at: agingWeekAt,
+      closed_at: null,
+      last_activity_at: agingWeekAt,
+      reopened_at: null,
+      created_at: agingWeekAt,
     },
   ];
 }
@@ -245,10 +284,11 @@ function buildReferralAssignment({
 
 export function migrateReferral(ref) {
   if (!ref) return ref;
-  if (ref.original_agent_name && ref.assigned_to_type) return ref;
-  const creator = ref.original_agent_name || ref.agent_name || "";
+  const withPriority = { ...ref, priority: normalizeReferralPriority(ref.priority) };
+  if (withPriority.original_agent_name && withPriority.assigned_to_type) return withPriority;
+  const creator = withPriority.original_agent_name || withPriority.agent_name || "";
   return {
-    ...ref,
+    ...withPriority,
     ...buildReferralAssignment({
       creatorName: creator,
       assigned_to_type: "agent",
@@ -883,12 +923,31 @@ export function listDepartmentQueuesForAgent(agentName) {
   }));
 }
 
+function sortOpenReferralsForSupervisor(referrals) {
+  return [...referrals].sort((a, b) => {
+    const pa = REFERRAL_PRIORITY_WEIGHT[normalizeReferralPriority(a.priority)] ?? 2;
+    const pb = REFERRAL_PRIORITY_WEIGHT[normalizeReferralPriority(b.priority)] ?? 2;
+    if (pa !== pb) return pa - pb;
+    return new Date(a.opened_at) - new Date(b.opened_at);
+  });
+}
+
+/** כל הפניות הפתוחות — תצוגת מפקח */
+export function listAllOpenReferrals() {
+  const { referrals, customers } = readStore();
+  const open = (referrals || [])
+    .map(migrateReferral)
+    .filter((ref) => ref.status === "open");
+  return enrichReferralsWithCustomer(sortOpenReferralsForSupervisor(open), customers);
+}
+
 export function createReferral({
   customer_id,
   referral_topic,
   description,
   agent_name,
   status = "open",
+  priority = "normal",
   assigned_to_type = "agent",
   assigned_agent_name,
   assigned_department_id,
@@ -919,6 +978,7 @@ export function createReferral({
     description: String(description || "").trim(),
     ...assignment,
     status: isClosed ? "closed" : "open",
+    priority: normalizeReferralPriority(priority),
     opened_at: now,
     closed_at: isClosed ? now : null,
     last_activity_at: now,
@@ -932,6 +992,30 @@ export function createReferral({
     logReferralEvent(referral.id, "created", {}, referral).catch(() => {});
   }
   return referral;
+}
+
+export function updateReferralPriority(id, priority) {
+  const store = readStore();
+  const target = (store.referrals || []).find((ref) => ref.id === id);
+  if (!target) return null;
+  const now = new Date().toISOString();
+  const normalized = normalizeReferralPriority(priority);
+  let updated = null;
+  store.referrals = store.referrals.map((ref) => {
+    if (ref.id !== id) return ref;
+    updated = {
+      ...ref,
+      priority: normalized,
+      last_activity_at: now,
+    };
+    return updated;
+  });
+  writeStore(store);
+  if (isCrmCloudEnabled() && updated) {
+    persistReferral(updated).catch((err) => warnCloudPersist(err, "persistReferral"));
+    logReferralEvent(id, "priority_changed", { priority: target.priority }, updated).catch(() => {});
+  }
+  return updated;
 }
 
 export function assignReferral(id, { assigned_to_type, assigned_agent_name, assigned_department_id }) {
