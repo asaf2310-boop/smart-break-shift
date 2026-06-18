@@ -15,6 +15,34 @@ const RECORDING_PATH_RE = /^[^/]+\/ss_rec[^/]+\.webm$/;
 
 const MAX_DIRECT_UPLOAD_BYTES = 3_500_000;
 
+function validateSupportUploadBuffer({ typeCheck, buffer }) {
+  if (!buffer?.length) {
+    return { ok: true, hasBuffer: false };
+  }
+  if (buffer.length > MAX_DIRECT_UPLOAD_BYTES && typeCheck.extension !== ".zip") {
+    return {
+      ok: false,
+      error: "file_too_large",
+      message: "הקובץ גדול מדי לשליחה ישירה — השתמשו ב-signedUrl",
+    };
+  }
+  if (typeCheck.extension === ".zip" && buffer.length > SUPPORT_ZIP_MAX_COMPRESSED_BYTES) {
+    return { ok: false, error: "zip_too_large", message: "קובץ ZIP גדול מדי" };
+  }
+  const contentCheck = validateSupportFileContent({
+    extension: typeCheck.extension,
+    buffer,
+  });
+  if (!contentCheck.ok) {
+    return {
+      ok: false,
+      error: contentCheck.error || "invalid_file_content",
+      message: contentCheck.message,
+    };
+  }
+  return { ok: true, hasBuffer: true, buffer };
+}
+
 function normalizeName(value) {
   return String(value || "").trim().toLowerCase();
 }
@@ -173,36 +201,32 @@ export async function handleSupportFileUpload(req, body) {
     };
   }
 
+  if (typeCheck.extension === ".zip" && !fileBase64) {
+    return {
+      ok: false,
+      error: "zip_validation_required",
+      message: "קובץ ZIP דורש אימות לפני העלאה — שלחו את הקובץ לבדיקה",
+    };
+  }
+
   if (fileBase64) {
     const buffer = Buffer.from(fileBase64, "base64");
     if (!buffer.length) {
       return { ok: false, error: "empty_file" };
     }
-    if (buffer.length > MAX_DIRECT_UPLOAD_BYTES) {
-      return { ok: false, error: "file_too_large", message: "הקובץ גדול מדי לשליחה ישירה — השתמשו ב-signedUrl" };
+    const validated = validateSupportUploadBuffer({ typeCheck, buffer });
+    if (!validated.ok) return validated;
+
+    if (buffer.length <= MAX_DIRECT_UPLOAD_BYTES) {
+      const uploaded = await uploadBufferToStorage({
+        bucket: SUPPORT_FILES_BUCKET,
+        storagePath,
+        buffer,
+        contentType: mimeType,
+      });
+      if (!uploaded.ok) return uploaded;
+      return { ok: true, storagePath, uploadedBy: authz.uploadedBy };
     }
-    if (typeCheck.extension === ".zip" && buffer.length > SUPPORT_ZIP_MAX_COMPRESSED_BYTES) {
-      return { ok: false, error: "zip_too_large", message: "קובץ ZIP גדול מדי" };
-    }
-    const contentCheck = validateSupportFileContent({
-      extension: typeCheck.extension,
-      buffer,
-    });
-    if (!contentCheck.ok) {
-      return {
-        ok: false,
-        error: contentCheck.error || "invalid_file_content",
-        message: contentCheck.message,
-      };
-    }
-    const uploaded = await uploadBufferToStorage({
-      bucket: SUPPORT_FILES_BUCKET,
-      storagePath,
-      buffer,
-      contentType: mimeType,
-    });
-    if (!uploaded.ok) return uploaded;
-    return { ok: true, storagePath, uploadedBy: authz.uploadedBy };
   }
 
   const signed = await createSignedStorageUploadUrl({

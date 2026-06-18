@@ -28,6 +28,7 @@ export const GUEST_LINK_ERROR = {
   NOT_FOUND: "not_found",
   EXPIRED: "expired",
   ENDED: "ended",
+  ALREADY_USED: "already_used",
 };
 
 export const SIGNED_GUEST_LINK_PREFIX = "g1.";
@@ -44,6 +45,8 @@ export function messageForGuestLinkError(code) {
       return "קישור לא נמצא. ודאו שהעתקתם את הקישור המלא או בקשו קישור חדש מהנציג.";
     case GUEST_LINK_ERROR.EXPIRED:
       return "פג תוקף הקישור. בקשו מהנציג קישור חדש.";
+    case GUEST_LINK_ERROR.ALREADY_USED:
+      return "קישור זה כבר נוצל. בקשו מהנציג קישור חדש.";
     default:
       return "קישור לא תקין. בקשו מהנציג קישור חדש.";
   }
@@ -147,6 +150,7 @@ function resolveFromUrlBootstrap(urlBootstrap, { bootstrapScreen, bootstrapConse
 function mapApiError(error) {
   if (error === "expired") return GUEST_LINK_ERROR.EXPIRED;
   if (error === "ended") return GUEST_LINK_ERROR.ENDED;
+  if (error === "already_used") return GUEST_LINK_ERROR.ALREADY_USED;
   if (error === "not_found") return GUEST_LINK_ERROR.NOT_FOUND;
   return GUEST_LINK_ERROR.INVALID;
 }

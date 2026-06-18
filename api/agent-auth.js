@@ -7,8 +7,10 @@ import {
   checkRateLimit,
   getClientIp,
   getRateLimitKey,
+  rateLimitHebrewMessage,
   recordIpRateLimit,
   recordRateLimit,
+  setRateLimitHeaders,
 } from "../server/http/rateLimit.js";
 import {
   handleRecordingUpload,
@@ -43,6 +45,7 @@ import {
 import { verifyGuestLinkToken } from "../server/guest/guestLinkToken.js";
 import { handleIceServersRequest, DEFAULT_STUN_SERVERS } from "../server/webrtc/iceServersService.js";
 import { logSecurityEvent } from "../server/security/auditLog.js";
+import { listSecurityAuditLog } from "../server/security/auditLogListService.js";
 import { endSupportSessionByAgent } from "../server/support/supportSessionEndService.js";
 
 const PASSWORD_MIN_LENGTH = 12;
@@ -63,13 +66,14 @@ const ADMIN_ACTION_RATE_MAX = 60;
 const SUPPORT_END_RATE_MAX = 120;
 
 function rateLimitResponse(res, req, retryAfterSec) {
+  const sec = setRateLimitHeaders(res, retryAfterSec);
   return json(
     res,
     429,
     {
       error: "rate_limited",
-      retryAfterSec,
-      message: `יותר מדי בקשות — נסו שוב בעוד ${retryAfterSec} שניות`,
+      retryAfterSec: sec,
+      message: rateLimitHebrewMessage(sec),
     },
     req
   );
@@ -329,6 +333,31 @@ export default async function handler(req, res) {
     }
   }
 
+  if (action === "admin_list_audit_log") {
+    const auth = await requireAdminAgent(req, res, body);
+    if (!auth) return;
+
+    try {
+      const result = await listSecurityAuditLog({
+        limit: body.limit,
+        offset: body.offset,
+        action: body.filterAction,
+      });
+      if (!result.ok) {
+        return json(res, 500, result, req);
+      }
+      return json(res, 200, result, req);
+    } catch (err) {
+      console.error("[agent-auth] admin_list_audit_log", err);
+      return json(
+        res,
+        500,
+        { error: "load_failed", message: "לא הצלחנו לטעון את יומן הביקורת" },
+        req
+      );
+    }
+  }
+
   if (action === "admin_delete_break_registration") {
     const auth = await requireAdminAgent(req, res, body);
     if (!auth) return;
@@ -459,7 +488,12 @@ export default async function handler(req, res) {
 
     const result = await resolveGuestLinkFromToken(token, { req });
     if (!result.ok) {
-      const status = result.error === "ended" ? 410 : result.error === "expired" ? 410 : 404;
+      const status =
+        result.error === "ended" || result.error === "already_used"
+          ? 410
+          : result.error === "expired"
+            ? 410
+            : 404;
       return json(res, status, result, req);
     }
 

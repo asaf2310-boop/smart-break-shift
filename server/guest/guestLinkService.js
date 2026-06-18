@@ -6,6 +6,11 @@ import {
   verifyGuestLinkToken,
 } from "./guestLinkToken.js";
 import { auditGuestAccess } from "./guestSupportService.js";
+import {
+  guestLinkOneTimeEnabled,
+  isGuestLinkTokenConsumed,
+  markGuestLinkTokenConsumed,
+} from "./guestLinkOneTime.js";
 
 function normalizeName(value) {
   return String(value || "").trim().toLowerCase();
@@ -94,6 +99,15 @@ export async function resolveGuestLinkFromToken(token, { req } = {}) {
     return verified;
   }
 
+  if (isGuestLinkTokenConsumed(token)) {
+    return {
+      ok: false,
+      error: "already_used",
+      message: "קישור זה כבר נוצל (שימוש חד-פעמי)",
+      oneTime: guestLinkOneTimeEnabled(),
+    };
+  }
+
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from("support_sessions")
@@ -121,11 +135,13 @@ export async function resolveGuestLinkFromToken(token, { req } = {}) {
     return { ok: false, error: "invalid_token" };
   }
 
+  markGuestLinkTokenConsumed(token);
   auditGuestAccess("resolve_ok", { req, sessionId: session.sessionId });
 
   return {
     ok: true,
     session,
     kind: verified.kind,
+    oneTime: guestLinkOneTimeEnabled(),
   };
 }

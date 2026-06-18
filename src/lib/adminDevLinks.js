@@ -6,6 +6,7 @@ const ADMIN_DEV_ROUTES_CORE = [
   { path: "/admin/users", label: "נציגים" },
   { path: "/admin/recordings", label: "הקלטות" },
   { path: "/admin/metrics", label: "מדדים" },
+  { path: "/admin/security-audit", label: "יומן ביקורת אבטחה" },
 ];
 
 const ADMIN_DEV_ROUTES_KNOWLEDGE = [{ path: "/admin/knowledge", label: "ניהול ידע" }];

@@ -73,6 +73,7 @@ export async function apiPrepareSupportFileUpload({
   mimeType,
   uploadedBy = "agent",
   guestToken = null,
+  fileBase64 = null,
 }) {
   const token =
     guestToken || (uploadedBy === "guest" ? getGuestLinkToken(sessionId) : null);
@@ -83,6 +84,7 @@ export async function apiPrepareSupportFileUpload({
       storagePath,
       mimeType,
       uploadedBy,
+      ...(fileBase64 ? { fileBase64 } : {}),
     },
     { requireBearer: uploadedBy === "agent", guestToken: token }
   );

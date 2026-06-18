@@ -19,6 +19,7 @@ import {
   apiSyncAgentAuth,
 } from "@/lib/agentAuthClient";
 import {
+  clearSensitiveClientStorage,
   getAgentSessionStorage,
   readJson,
   removeKey,
@@ -614,6 +615,7 @@ export async function agentRequestFirstLogin(email) {
 
 export async function agentLogout() {
   clearAgentSession();
+  clearSensitiveClientStorage();
   if (!demoModeEnabled && supabase) {
     await supabase.auth.signOut();
   }

@@ -55,6 +55,7 @@ import AdminMetrics from './pages/AdminMetrics';
 import AdminCrmDepartments from './pages/AdminCrmDepartments';
 import AdminCrmRouting from './pages/AdminCrmRouting';
 import AdminCrmDashboard from './pages/AdminCrmDashboard';
+import AdminSecurityAudit from './pages/AdminSecurityAudit';
 import AgentMetricsPage from './pages/AgentMetricsPage';
 import AgentMetricsRankingPage from './pages/AgentMetricsRankingPage';
 import RouteErrorBoundary from '@/components/RouteErrorBoundary';
@@ -143,6 +144,7 @@ const AuthenticatedApp = () => {
         <Route path="/admin/crm" element={<AdminGate><CrmGate><RouteErrorBoundary><AdminCrmDashboard /></RouteErrorBoundary></CrmGate></AdminGate>} />
         <Route path="/admin/crm/departments" element={<AdminGate><CrmGate><AdminCrmDepartments /></CrmGate></AdminGate>} />
         <Route path="/admin/crm/routing" element={<AdminGate><CrmGate><AdminCrmRouting /></CrmGate></AdminGate>} />
+        <Route path="/admin/security-audit" element={<AdminGate><AdminSecurityAudit /></AdminGate>} />
         <Route
           path="/admin/recordings/play"
           element={

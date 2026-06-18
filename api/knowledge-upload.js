@@ -19,7 +19,9 @@ import { logSecurityEvent } from "../server/security/auditLog.js";
 import {
   checkRateLimit,
   getRateLimitKey,
+  rateLimitHebrewMessage,
   recordRateLimit,
+  setRateLimitHeaders,
 } from "../server/http/rateLimit.js";
 
 const knowledgeUploadRateByUser = new Map();
@@ -29,13 +31,14 @@ function enforceKnowledgeRateLimit(res, req, auth) {
   const key = getRateLimitKey(req, auth?.agent?.id);
   const check = checkRateLimit(knowledgeUploadRateByUser, key, KNOWLEDGE_UPLOAD_RATE_MAX);
   if (!check.allowed) {
+    const sec = setRateLimitHeaders(res, check.retryAfterSec);
     json(
       res,
       429,
       {
         error: "rate_limited",
-        retryAfterSec: check.retryAfterSec,
-        message: `יותר מדי בקשות — נסו שוב בעוד ${check.retryAfterSec} שניות`,
+        retryAfterSec: sec,
+        message: rateLimitHebrewMessage(sec),
       },
       req
     );

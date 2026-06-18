@@ -255,6 +255,7 @@ export default function AdminDashboard() {
           <Link to="/admin/training" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">הדרכה</Link>
           <Link to="/admin/recordings" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">הקלטות</Link>
           <Link to="/admin/metrics" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">מדדים</Link>
+          <Link to="/admin/security-audit" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">יומן ביקורת</Link>
           {(demoModeEnabled || knowledgeEnabled) && (
             <Link to="/admin/knowledge" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">
               ניהול ידע

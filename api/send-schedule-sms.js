@@ -5,7 +5,9 @@ import { json, readJsonBody, handleOptions, isSameOrigin } from "../server/knowl
 import {
   checkRateLimit as checkRateLimitEntry,
   getRateLimitKey,
+  rateLimitHebrewMessage,
   recordRateLimit,
+  setRateLimitHeaders,
 } from "../server/http/rateLimit.js";
 
 const INFORU_SMS_URL = "https://api.inforu.co.il/SendMessageXml.ashx";
@@ -159,12 +161,14 @@ export default async function handler(req, res) {
 
   const rate = enforceSmsRateLimit(req, adminAuth.agent.id);
   if (!rate.allowed) {
+    const sec = setRateLimitHeaders(res, rate.retryAfterSec);
     return json(
       res,
       429,
       {
         error: "rate_limited",
-        message: `יותר מדי בקשות SMS. נסו שוב בעוד ${rate.retryAfterSec} שניות.`,
+        retryAfterSec: sec,
+        message: rateLimitHebrewMessage(sec),
       },
       req
     );

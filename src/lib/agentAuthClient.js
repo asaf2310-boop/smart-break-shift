@@ -119,3 +119,15 @@ export async function apiAdminDeleteBreakRegistration(id) {
   }
   return result;
 }
+
+export async function apiAdminListAuditLog({ limit = 50, offset = 0, filterAction = null } = {}) {
+  return postAgentAuth(
+    {
+      action: "admin_list_audit_log",
+      limit,
+      offset,
+      filterAction,
+    },
+    { requireBearer: true }
+  );
+}

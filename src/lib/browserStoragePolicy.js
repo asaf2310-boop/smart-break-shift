@@ -1,4 +1,6 @@
 import { demoModeEnabled } from "@/api/demoMode";
+import { clearAllGuestLinkTokens } from "@/lib/guestLinkTokenStore";
+import { CRM_STORAGE_KEY } from "@/lib/crmStore";
 
 /**
  * Browser storage policy — production vs demo.
@@ -25,6 +27,10 @@ const LEGACY_ADMIN_PIN_KEYS = [
   "smart-break-admin-pin",
 ];
 const DEMO_ADMIN_UNLOCK_KEY = "smart_break_admin_unlocked";
+const CRM_STORAGE_KEY_V2 = "smart-break-shift-crm-v2";
+const CRM_REFERRAL_EVENTS_KEY = "smart-break-shift-crm-referral-events-v1";
+const CRM_ROUTING_RULES_KEY = "smart-break-shift-crm-routing-rules-v1";
+const CRM_DEPARTMENTS_KEY = "smart-break-shift-crm-departments-v1";
 
 export function getAgentSessionStorage() {
   if (typeof window === "undefined") return null;
@@ -120,4 +126,57 @@ export function migrateLegacyBrowserStorage() {
       localStorage.removeItem(key);
     }
   }
+
+  clearLegacyGuestLinkTokensFromLocalStorage();
+}
+
+function clearLegacyGuestLinkTokensFromLocalStorage() {
+  if (typeof localStorage === "undefined") return;
+  try {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (key?.startsWith("guest-link-token:")) keys.push(key);
+    }
+    keys.forEach((key) => localStorage.removeItem(key));
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Clear sensitive client-side caches on agent logout (incremental hardening).
+ */
+export function clearSensitiveClientStorage() {
+  if (typeof window === "undefined") return;
+
+  const { sessionStorage, localStorage } = window;
+
+  removeKey(sessionStorage, AGENT_SESSION_KEY);
+  removeKey(sessionStorage, SCREEN_SHARE_STORAGE_KEY);
+  removeKey(sessionStorage, REMOTE_SUPPORT_STORAGE_KEY);
+  removeKey(sessionStorage, DEMO_ADMIN_UNLOCK_KEY);
+
+  for (const legacyPinKey of LEGACY_ADMIN_PIN_KEYS) {
+    removeKey(localStorage, legacyPinKey);
+    removeKey(sessionStorage, legacyPinKey);
+  }
+
+  removeKey(localStorage, AGENT_SESSION_KEY);
+  removeKey(localStorage, LEGACY_AGENT_NAME_KEY);
+  removeKey(localStorage, SCREEN_SHARE_STORAGE_KEY);
+  removeKey(localStorage, REMOTE_SUPPORT_STORAGE_KEY);
+
+  for (const crmKey of [
+    CRM_STORAGE_KEY,
+    CRM_STORAGE_KEY_V2,
+    CRM_REFERRAL_EVENTS_KEY,
+    CRM_ROUTING_RULES_KEY,
+    CRM_DEPARTMENTS_KEY,
+  ]) {
+    removeKey(localStorage, crmKey);
+  }
+
+  clearAllGuestLinkTokens();
+  clearLegacyGuestLinkTokensFromLocalStorage();
 }

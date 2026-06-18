@@ -44,6 +44,25 @@ function makeFileId() {
   return `ss_file_${generateShortCode(8)}`;
 }
 
+const MAX_ZIP_VALIDATION_BYTES = 3_500_000;
+
+async function fileToBase64(file) {
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 1) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+function isZipSupportFile(file, originalName) {
+  const name = String(originalName || file?.name || "").toLowerCase();
+  if (name.endsWith(".zip")) return true;
+  const mime = String(file?.type || "").toLowerCase();
+  return mime === "application/zip" || mime === "application/x-zip-compressed";
+}
+
 export function formatSupportFileSize(bytes) {
   if (!bytes || bytes <= 0) return "—";
   const mb = bytes / (1024 * 1024);
@@ -144,11 +163,32 @@ export async function uploadSupportSessionFile(file, options = {}) {
     uploadStatus: "uploading",
   });
 
+  let fileBase64 = null;
+  if (isZipSupportFile(file, originalName)) {
+    if (file.size > MAX_ZIP_VALIDATION_BYTES) {
+      const message = `קובץ ZIP גדול מדי לאימות בשרת — מקסימום ${formatSupportFileSize(MAX_ZIP_VALIDATION_BYTES)}`;
+      await upsertCloudSupportFileMeta({
+        sessionId,
+        fileId,
+        storagePath,
+        originalName,
+        uploadedBy,
+        uploaderLabel,
+        uploadStatus: "failed",
+        uploadError: message,
+        fileSizeBytes: file.size,
+      });
+      return { ok: false, message, uploadStatus: "failed", fileId };
+    }
+    fileBase64 = await fileToBase64(file);
+  }
+
   const prep = await apiPrepareSupportFileUpload({
     sessionId,
     storagePath,
     mimeType,
     uploadedBy,
+    fileBase64,
   });
 
   if (!prep.ok) {
