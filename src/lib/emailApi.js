@@ -4,6 +4,7 @@
  */
 
 import { demoSendRealEmailEnabled } from "@/api/demoClient";
+import { getAgentBearerHeaders } from "@/lib/agentAuthClient";
 
 function hebrewHintForResendMessage(message, resendStatus) {
   const m = String(message || "").toLowerCase();
@@ -45,6 +46,9 @@ export function formatSendEmailError(data = {}, status) {
         : null;
     const suffix = retryMin ? ` — נסו שוב בעוד כ-${retryMin} דקות` : "";
     return (data.message || "יותר מדי שליחות מהשרת") + suffix;
+  }
+  if (status === 401) {
+    return "נדרשת התחברות נציג לשליחת מייל";
   }
   if (status === 403) {
     return "גישה נדחתה — פתחו את האפליקציה מהדומיין הרשמי (CORS)";
@@ -190,9 +194,10 @@ export function formatEmailDiagnosticReport(status, buildFlags = {}) {
 export async function postSendEmail({ to, subject, html, text }) {
   let res;
   try {
+    const headers = await getAgentBearerHeaders({ "Content-Type": "application/json" });
     res = await fetch("/api/send-email", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ to, subject, html, text }),
     });
   } catch {

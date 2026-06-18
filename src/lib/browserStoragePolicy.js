@@ -8,10 +8,11 @@ import { CRM_STORAGE_KEY } from "@/lib/crmStore";
  * Production-safe (sessionStorage after migrateLegacyBrowserStorage):
  *   smart-break-agent-session-v1 — JWT session metadata (no passwords)
  *   smart-break-shift-screen-share-v1 / remote-support — support sessions (passwords stripped)
+ *   smart-break-shift-telephony-v1 — call logs / status (no SIP secrets)
+ *   smart-break-shift-support-chat-v1 / support-files — session-scoped caches
  *
  * Demo-only (localStorage):
  *   smart-break-shift-demo-store — full offline demo DB
- *   smart_break_admin_unlocked — demo admin PIN unlock flag (sessionStorage; not a secret)
  *   CRM/knowledge/training local caches — see respective *Store.js modules
  *
  * Never persist in browser: admin PIN, SIP passwords, service keys, ADMIN_PIN.
@@ -20,6 +21,9 @@ const AGENT_SESSION_KEY = "smart-break-agent-session-v1";
 const LEGACY_AGENT_NAME_KEY = "agent_name";
 const SCREEN_SHARE_STORAGE_KEY = "smart-break-shift-screen-share-v1";
 const REMOTE_SUPPORT_STORAGE_KEY = "smart-break-shift-remote-support-v1";
+const TELEPHONY_STORAGE_KEY = "smart-break-shift-telephony-v1";
+const SUPPORT_CHAT_STORAGE_KEY = "smart-break-shift-support-chat-v1";
+const SUPPORT_FILES_STORAGE_KEY = "smart-break-shift-support-files-v1";
 const LEGACY_ADMIN_PIN_KEYS = [
   "admin_pin",
   "smart_break_admin_pin",
@@ -40,6 +44,11 @@ export function getAgentSessionStorage() {
 export function getSupportSessionStorage(demoMode) {
   if (typeof window === "undefined") return null;
   return demoMode ? window.localStorage : window.sessionStorage;
+}
+
+/** Telephony / support chat / files — session-scoped in production. */
+export function getSessionScopedStorage(demoMode = demoModeEnabled) {
+  return getSupportSessionStorage(demoMode);
 }
 
 export function readJson(storage, key) {
@@ -105,8 +114,17 @@ export function migrateLegacyBrowserStorage() {
 
   if (!demoModeEnabled) {
     sessionStorage.removeItem(DEMO_ADMIN_UNLOCK_KEY);
+    localStorage.removeItem(DEMO_ADMIN_UNLOCK_KEY);
 
-    for (const key of [SCREEN_SHARE_STORAGE_KEY, REMOTE_SUPPORT_STORAGE_KEY]) {
+    const productionSessionKeys = [
+      SCREEN_SHARE_STORAGE_KEY,
+      REMOTE_SUPPORT_STORAGE_KEY,
+      TELEPHONY_STORAGE_KEY,
+      SUPPORT_CHAT_STORAGE_KEY,
+      SUPPORT_FILES_STORAGE_KEY,
+    ];
+
+    for (const key of productionSessionKeys) {
       if (!sessionStorage.getItem(key)) {
         const legacy = localStorage.getItem(key);
         if (legacy) {
@@ -155,6 +173,9 @@ export function clearSensitiveClientStorage() {
   removeKey(sessionStorage, AGENT_SESSION_KEY);
   removeKey(sessionStorage, SCREEN_SHARE_STORAGE_KEY);
   removeKey(sessionStorage, REMOTE_SUPPORT_STORAGE_KEY);
+  removeKey(sessionStorage, TELEPHONY_STORAGE_KEY);
+  removeKey(sessionStorage, SUPPORT_CHAT_STORAGE_KEY);
+  removeKey(sessionStorage, SUPPORT_FILES_STORAGE_KEY);
   removeKey(sessionStorage, DEMO_ADMIN_UNLOCK_KEY);
 
   for (const legacyPinKey of LEGACY_ADMIN_PIN_KEYS) {
@@ -166,6 +187,9 @@ export function clearSensitiveClientStorage() {
   removeKey(localStorage, LEGACY_AGENT_NAME_KEY);
   removeKey(localStorage, SCREEN_SHARE_STORAGE_KEY);
   removeKey(localStorage, REMOTE_SUPPORT_STORAGE_KEY);
+  removeKey(localStorage, TELEPHONY_STORAGE_KEY);
+  removeKey(localStorage, SUPPORT_CHAT_STORAGE_KEY);
+  removeKey(localStorage, SUPPORT_FILES_STORAGE_KEY);
 
   for (const crmKey of [
     CRM_STORAGE_KEY,

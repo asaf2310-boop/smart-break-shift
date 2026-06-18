@@ -1,20 +1,13 @@
-import { useSyncExternalStore } from "react";
-import { demoModeEnabled } from "@/api/demoClient";
 import { useAgentSession } from "@/hooks/useAgentSession";
 
-const ADMIN_SESSION_KEY = "smart_break_admin_unlocked";
-
-/** Demo-only: hardcoded PIN for local preview (never from VITE_* env). */
-export const DEMO_ADMIN_PIN = "1234";
-
-/** @deprecated Use isDemoAdminUnlocked / useIsAdmin instead. */
+/** @deprecated Demo PIN unlock removed (phase 16). */
 export function isAdminPinConfigured() {
-  return demoModeEnabled;
+  return false;
 }
 
 /** @deprecated */
 export function isDemoAdminPinRequired() {
-  return demoModeEnabled;
+  return false;
 }
 
 /** @deprecated */
@@ -22,61 +15,30 @@ export function isProductionAdminOpen() {
   return false;
 }
 
-function subscribeAdminSession(onStoreChange) {
-  const onStorage = (e) => {
-    if (e.key === ADMIN_SESSION_KEY) onStoreChange();
-  };
-  window.addEventListener("storage", onStorage);
-  window.addEventListener("admin-session-changed", onStoreChange);
-  return () => {
-    window.removeEventListener("storage", onStorage);
-    window.removeEventListener("admin-session-changed", onStoreChange);
-  };
-}
-
-function getAdminSessionSnapshot() {
-  try {
-    return sessionStorage.getItem(ADMIN_SESSION_KEY) === "true";
-  } catch {
-    return false;
-  }
-}
-
-/** Demo: local admin UI unlock flag (not used in production). */
+/** @deprecated Demo PIN unlock removed — use session.isAdmin. */
 export function isDemoAdminUnlocked() {
-  return demoModeEnabled && getAdminSessionSnapshot();
+  return false;
 }
 
-/** @deprecated Prefer useIsAdmin. */
+/** @deprecated */
 export function isAdminSessionActive() {
-  return isDemoAdminUnlocked();
+  return false;
 }
 
+/** @deprecated No-op — kept for logout cleanup compatibility. */
 export function unlockAdminSession() {
-  sessionStorage.setItem(ADMIN_SESSION_KEY, "true");
-  window.dispatchEvent(new CustomEvent("admin-session-changed"));
+  /* removed phase 16 */
 }
 
+/** @deprecated No-op — kept for logout cleanup compatibility. */
 export function clearAdminSession() {
-  sessionStorage.removeItem(ADMIN_SESSION_KEY);
-  window.dispatchEvent(new CustomEvent("admin-session-changed"));
+  /* removed phase 16 */
 }
 
 /**
- * Admin UI permissions — production: agents.is_admin from server session.
- * Demo: local unlock flag after demo PIN.
+ * Admin UI permissions — production and demo: agents.is_admin from session.
  */
 export function useIsAdmin() {
   const { session, isLoggedIn } = useAgentSession();
-  const demoUnlocked = useSyncExternalStore(
-    subscribeAdminSession,
-    getAdminSessionSnapshot,
-    () => false
-  );
-
-  if (demoModeEnabled) {
-    return demoUnlocked;
-  }
-
   return Boolean(isLoggedIn && session?.isAdmin === true);
 }

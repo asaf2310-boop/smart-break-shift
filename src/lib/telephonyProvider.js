@@ -186,6 +186,8 @@ async function fetchSipCredentials() {
   }
 }
 
+/** SIP password is held in memory only for sip.js — never logged or persisted. */
+
 function ensureRemoteAudio() {
   if (remoteAudioEl) return remoteAudioEl;
   if (typeof document === "undefined") return null;

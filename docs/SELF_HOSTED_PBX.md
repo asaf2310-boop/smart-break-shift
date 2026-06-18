@@ -30,7 +30,7 @@ flowchart LR
   Q --> E110[שלוחה 110]
   subgraph vercel [Vercel]
     APP[smart-break-shift]
-    API["/api/sip-token"]
+    API["/api/agent-auth"]
   end
   N1[נציג 1] --> APP
   N10[נציג 10] --> APP
@@ -191,7 +191,7 @@ flowchart LR
 - [ ] הגדרת `VITE_SIP_WS_URL` + משתני שרת SIP ב-Vercel
 - [ ] `SIP_AGENT_MAP` + `SIP_USER_101`…`SIP_PASSWORD_110`
 - [ ] הסרת `VITE_DEMO_MODE=true` מפרויקט הפרודקשן
-- [ ] Redeploy + בדיקת `/api/sip-token?agent=101`
+- [ ] Redeploy + בדיקת `POST /api/agent-auth` עם `sip_token_mint`
 
 #### יום 5: coturn (אופציונלי — נציגים מאחורי VPN)
 
@@ -373,7 +373,7 @@ VITE_ICE_SERVERS=[{"urls":"stun:stun.l.google.com:19302"},{"urls":"turn:pbx.your
 
 > **אל** תגדירו `VITE_SIP_PASSWORD` בפרודקשן.
 
-### 7.2 משתני שרת (Vercel — ל-`/api/sip-token` בלבד)
+### 7.2 משתני שרת (Vercel — ל-SIP דרך `/api/agent-auth`)
 
 **נציג יחיד (בדיקה ראשונה):**
 
@@ -397,7 +397,7 @@ SIP_PASSWORD_102=***
 # … עד SIP_USER_110 / SIP_PASSWORD_110
 ```
 
-האפליקציה קוראת אוטומטית: `GET /api/sip-token?agent=<שם נציג>`.
+האפליקציה קוראת: `POST /api/agent-auth` — `sip_token_mint` / `sip_token_redeem` (Bearer JWT).
 
 ### 7.3 מעבר מדמו
 
@@ -424,7 +424,7 @@ npx vercel dev
 - [ ] `wss://...` — אין שגיאת TLS בדפדפן (Chrome)
 - [ ] נציג 1: «התחבר» → סטטוס **רשום** (Registered)
 - [ ] נציג 2 (שלוחה 102): אותו דבר
-- [ ] `/api/sip-token?agent=...` מחזיר שלוחה נכונה (same-origin)
+- [ ] `sip_token_mint` + `sip_token_redeem` מחזירים שלוחה נכונה (JWT + same-origin)
 - [ ] אין סיסמאות SIP ב-build (`dist/assets/*.js`)
 - [ ] מיקרופון + `<audio>` — שומעים צד שני
 - [ ] תור: חיוג ל-6000 מגיע לנציג בתור
@@ -444,7 +444,7 @@ npx vercel dev
 | תסמין | פתרון |
 |--------|--------|
 | `WebRTC דורש HTTPS` | פרסום ב-Vercel; localhost לפיתוח בלבד |
-| `403` ב-sip-token | קריאה חייבת same-origin |
+| `403` ב-SIP | JWT חסר / same-origin / הרשאת נציג |
 | `503 SIP לא מוגדר` | חסרים משתני שרת — Redeploy |
 | רשום אבל אין שמע | UDP 10000–20000; ICE/TURN |
 | נציג מקבל שלוחה של אחר | בדקו `SIP_AGENT_MAP` + שם ב-localStorage |
@@ -458,7 +458,7 @@ npx vercel dev
 | רכיב | תפקיד |
 |------|--------|
 | `telephonyProvider.js` | sip.js — WSS, ICE, הרשמה, שיחות |
-| `api/sip-token.js` | אישורי SIP לפי נציג |
+| `api/agent-auth.js` | SIP + Auth (כולל `sip_token_mint` / `sip_token_redeem`) |
 | `SoftphoneWidget.jsx` | UI — חיוג, מענה, disposition |
 | `telephonyStore.js` | דמו: סימולציית תור; לייב: SIP אמיתי |
 

@@ -168,7 +168,7 @@ export async function apiAdminSmsStatsByAgent({ days = 30, fromDate = null, toDa
   );
 }
 
-/** Mint short-lived encrypted SIP credential token (phase 15 — prefer over GET /api/sip-token). */
+/** Mint short-lived encrypted SIP credential token via POST /api/agent-auth. */
 export async function apiSipTokenMint({ agentName = null } = {}) {
   return postAgentAuth(
     {

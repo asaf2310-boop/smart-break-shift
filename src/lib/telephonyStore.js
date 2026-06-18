@@ -1,6 +1,7 @@
 import { demoModeEnabled } from "@/api/demoClient";
 import { createCallLog, crmDemoAvailable, getCustomerByPhone } from "@/lib/crmStore";
 import { getAgentNamesList } from "@/constants/scheduling";
+import { getSessionScopedStorage } from "@/lib/browserStoragePolicy";
 import {
   answerSipCall,
   connectSip,
@@ -218,9 +219,14 @@ function normalizeQueueCalls(raw) {
     }));
 }
 
+function getStorage() {
+  return getSessionScopedStorage(demoModeEnabled);
+}
+
 function readPersisted() {
   try {
-    const raw = localStorage.getItem(TELEPHONY_STORAGE_KEY);
+    const storage = getStorage();
+    const raw = storage?.getItem(TELEPHONY_STORAGE_KEY);
     if (!raw) {
       return {
         callLogs: [],
@@ -260,7 +266,10 @@ function readPersisted() {
 function writePersisted(partial) {
   const current = readPersisted();
   const next = { ...current, ...partial };
-  localStorage.setItem(TELEPHONY_STORAGE_KEY, JSON.stringify(next));
+  const storage = getStorage();
+  if (storage) {
+    storage.setItem(TELEPHONY_STORAGE_KEY, JSON.stringify(next));
+  }
   window.dispatchEvent(new CustomEvent(TELEPHONY_CHANGE_EVENT));
 }
 

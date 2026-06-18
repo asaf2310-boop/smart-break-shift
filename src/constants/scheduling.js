@@ -2,7 +2,6 @@ import { addDays, format, isAfter } from "date-fns";
 import { demoModeEnabled } from "@/api/demoClient";
 import { listDemoAppUsers } from "@/lib/appUsersStore";
 import { getAgentSession } from "@/lib/agentAuth";
-import { clearAdminSession, isDemoAdminUnlocked } from "@/hooks/useIsAdmin";
 
 export const REAL_AGENT_NAMES = [
   "רחלה מנשה",
@@ -65,10 +64,6 @@ export function getStoredAgentName() {
       return "";
     }
     return session.displayName;
-  }
-
-  if (isDemoAdminUnlocked()) {
-    clearAdminSession();
   }
 
   return "";

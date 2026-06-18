@@ -118,7 +118,22 @@ const MAGIC_BYTE_CHECKS = {
   ".xls": (buf) => bufferStartsWith(buf, [0xd0, 0xcf, 0x11, 0xe0]),
   ".docx": (buf) => bufferStartsWith(buf, [0x50, 0x4b, 0x03, 0x04]),
   ".xlsx": (buf) => bufferStartsWith(buf, [0x50, 0x4b, 0x03, 0x04]),
-  ".zip": (buf) => bufferStartsWith(buf, [0x50, 0x4b, 0x03, 0x04]),
+  ".zip": (buf) =>
+    bufferStartsWith(buf, [0x50, 0x4b, 0x03, 0x04]) ||
+    bufferStartsWith(buf, [0x50, 0x4b, 0x05, 0x06]) ||
+    bufferStartsWith(buf, [0x50, 0x4b, 0x07, 0x08]),
+  ".heic": (buf) =>
+    buf.length >= 12 &&
+    bufferStartsWithAscii(buf.subarray(4), "ftyp") &&
+    (bufferStartsWithAscii(buf.subarray(8), "heic") ||
+      bufferStartsWithAscii(buf.subarray(8), "heix") ||
+      bufferStartsWithAscii(buf.subarray(8), "mif1")),
+  ".heif": (buf) =>
+    buf.length >= 12 &&
+    bufferStartsWithAscii(buf.subarray(4), "ftyp") &&
+    (bufferStartsWithAscii(buf.subarray(8), "heic") ||
+      bufferStartsWithAscii(buf.subarray(8), "heix") ||
+      bufferStartsWithAscii(buf.subarray(8), "mif1")),
 };
 
 /**

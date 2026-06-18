@@ -1,5 +1,7 @@
 import { remoteSupportEnabled } from "@/api/demoClient";
 import { generateShortCode } from "@/lib/guestLinkCodec";
+import { demoModeEnabled } from "@/api/demoMode";
+import { getSessionScopedStorage } from "@/lib/browserStoragePolicy";
 
 export const SUPPORT_CHAT_STORAGE_KEY = "smart-break-shift-support-chat-v1";
 export const SUPPORT_CHAT_CHANGE_EVENT = "support-session-chat-changed";
@@ -8,12 +10,16 @@ function makeMessageId() {
   return `ss_chat_${generateShortCode(8)}`;
 }
 
+function getStorage() {
+  return getSessionScopedStorage(demoModeEnabled);
+}
+
 function readStore() {
   if (!remoteSupportEnabled || typeof window === "undefined") {
     return { messages: [] };
   }
   try {
-    const raw = localStorage.getItem(SUPPORT_CHAT_STORAGE_KEY);
+    const raw = getStorage()?.getItem(SUPPORT_CHAT_STORAGE_KEY);
     if (!raw) return { messages: [] };
     const parsed = JSON.parse(raw);
     return {
@@ -26,7 +32,10 @@ function readStore() {
 
 function writeStore({ messages }) {
   if (!remoteSupportEnabled || typeof window === "undefined") return;
-  localStorage.setItem(SUPPORT_CHAT_STORAGE_KEY, JSON.stringify({ messages }));
+  const storage = getStorage();
+  if (storage) {
+    storage.setItem(SUPPORT_CHAT_STORAGE_KEY, JSON.stringify({ messages }));
+  }
   window.dispatchEvent(new CustomEvent(SUPPORT_CHAT_CHANGE_EVENT));
 }
 

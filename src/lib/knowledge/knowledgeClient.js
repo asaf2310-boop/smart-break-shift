@@ -248,14 +248,14 @@ export async function listKnowledgeGaps({ status = null } = {}) {
   const tenantId = getKnowledgeTenantId();
   if (tenantId) params.set("tenantId", tenantId);
 
-  const res = await fetchWithTimeout(`/api/knowledge-feedback?${params}`);
+  const res = await authenticatedFetch(`/api/knowledge-feedback?${params}`);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "list_gaps_failed");
   return data.gaps || [];
 }
 
 export async function updateKnowledgeGap(gapId, { manualAnswer, status }) {
-  const res = await fetchWithTimeout("/api/knowledge-feedback", {
+  const res = await authenticatedFetch("/api/knowledge-feedback", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -272,7 +272,7 @@ export async function updateKnowledgeGap(gapId, { manualAnswer, status }) {
 }
 
 export async function submitKnowledgeFeedback({ question, answer, helpful, confidence }) {
-  const res = await fetchWithTimeout("/api/knowledge-feedback", {
+  const res = await authenticatedFetch("/api/knowledge-feedback", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -314,7 +314,7 @@ export async function askKnowledgeWebSearch(query, { onPhase } = {}) {
 
   let res;
   try {
-    res = await fetchWithTimeout("/api/ask-web", {
+    res = await authenticatedFetch("/api/ask-web", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query: trimmed }),
@@ -421,7 +421,7 @@ export async function askKnowledgeServer(query, { onPhase, tenantId } = {}) {
 
   let res;
   try {
-    res = await fetchWithTimeout("/api/knowledge-chat", {
+    res = await authenticatedFetch("/api/knowledge-chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

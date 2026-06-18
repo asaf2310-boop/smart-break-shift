@@ -15,6 +15,7 @@ import {
   isPageReferenceOnlyQuestion,
 } from "@/lib/knowledgePrompt";
 import { askKnowledgeServer, shouldUseServerRag, getKnowledgeTenantId } from "@/lib/knowledge/knowledgeClient";
+import { getAgentBearerHeaders } from "@/lib/agentAuthClient";
 import { formatAssistantDisplayMarkdown as applyBidiDisplayMarkdown, stripAnswerMetadataLeakage } from "@/lib/knowledge/assistantBidi";
 import { sanitizeHebrewText, advancedHebrewSanitizer } from "@/lib/knowledge/sanitizeHebrewText";
 
@@ -521,9 +522,10 @@ async function fetchEmbedBatchWithRetry(inputs) {
     }
 
     try {
+      const headers = await getAgentBearerHeaders({ "Content-Type": "application/json" });
       const res = await fetchWithTimeout("/api/knowledge-embed", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ inputs }),
       });
       const data = await res.json().catch(() => ({}));
@@ -991,12 +993,8 @@ function logRetrievalDebug(payload) {
   }
 }
 
-function hasClientOpenAiKey() {
-  return Boolean(String(import.meta.env.VITE_OPENAI_API_KEY ?? "").trim());
-}
-
 export function isOpenAiConfigured() {
-  return hasClientOpenAiKey() || import.meta.env.PROD;
+  return import.meta.env.PROD;
 }
 
 let openAiProbeCache = null;
@@ -1043,12 +1041,6 @@ export async function probeOpenAiAvailability({ force = false } = {}) {
     }
   } catch {
     // local dev without vercel dev
-  }
-
-  if (hasClientOpenAiKey()) {
-    openAiProbeCache = { available: true, source: "client", rateLimited: false };
-    openAiProbeAt = Date.now();
-    return openAiProbeCache;
   }
 
   openAiProbeCache = { available: false, source: null, rateLimited: false };
@@ -1119,9 +1111,10 @@ async function callOpenAiViaServer(query, chunks, context) {
       await sleep(waitMs);
     }
 
+    const headers = await getAgentBearerHeaders({ "Content-Type": "application/json" });
     const res = await fetchWithTimeout("/api/knowledge-chat", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         query,
         context,
@@ -1160,60 +1153,8 @@ async function callOpenAiViaServer(query, chunks, context) {
   throw lastErr || new Error("openai_error:429");
 }
 
-async function callOpenAiViaClient(query, chunks, context) {
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-  const model = import.meta.env.VITE_OPENAI_MODEL || "gpt-4o-mini";
-
-  const user = `קטעי הקשר (היחידים המותרים לשימוש):\n${context || "(ריק)"}\n\nשאלת הנציג: ${query}\n\n${KNOWLEDGE_ANSWER_FORMAT_HINT}${
-    isHowToQuestion(query) ? "\n\nסוג שאלה: הדרכה / תהליך — השתמש בפירוט לפי סעיפים." : ""
-  }`;
-
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.2,
-      max_tokens: isHowToQuestion(query) ? 480 : 380,
-      messages: [
-        { role: "system", content: `${KNOWLEDGE_SYSTEM_PROMPT}\n\n${KNOWLEDGE_ANSWER_FORMAT_HINT}` },
-        { role: "user", content: user },
-      ],
-    }),
-  });
-
-  if (!res.ok) {
-    const errText = await res.text().catch(() => "");
-    throw new Error(`openai_error:${res.status}:${errText.slice(0, 120)}`);
-  }
-
-  const data = await res.json();
-  const raw = data.choices?.[0]?.message?.content?.trim() || KNOWLEDGE_NO_CONTEXT_ANSWER;
-  return {
-    answer: polishModelAnswer(raw),
-    citations: uniqueCitations(chunks),
-    mode: "openai",
-  };
-}
-
 async function callOpenAi(query, chunks, context) {
-  const tryServerFirst = import.meta.env.PROD || !hasClientOpenAiKey();
-
-  if (tryServerFirst) {
-    try {
-      return await callOpenAiViaServer(query, chunks, context);
-    } catch (serverErr) {
-      if (hasClientOpenAiKey()) {
-        return callOpenAiViaClient(query, chunks, context);
-      }
-      throw serverErr;
-    }
-  }
-
-  return callOpenAiViaClient(query, chunks, context);
+  return callOpenAiViaServer(query, chunks, context);
 }
 
 function polishModelAnswer(raw) {

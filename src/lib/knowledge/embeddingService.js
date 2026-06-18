@@ -1,5 +1,7 @@
 /** Client embedding API — delegates to /api/knowledge-embed (batch). */
 
+import { getAgentBearerHeaders } from "@/lib/agentAuthClient";
+
 const EMBED_BATCH_SIZE = 48;
 
 export async function embedTextsClient(inputs) {
@@ -9,9 +11,10 @@ export async function embedTextsClient(inputs) {
   const allEmbeddings = [];
   for (let offset = 0; offset < texts.length; offset += EMBED_BATCH_SIZE) {
     const batch = texts.slice(offset, offset + EMBED_BATCH_SIZE);
+    const headers = await getAgentBearerHeaders({ "Content-Type": "application/json" });
     const res = await fetch("/api/knowledge-embed", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ inputs: batch }),
     });
     const data = await res.json().catch(() => ({}));

@@ -25,6 +25,8 @@
 2. `verifyBearerAgent` / `verifyKnowledgeAccess` / `verifyAdminAgent` — לפי רגישות
 3. Rate limits — SMS, מייל, העלאות, SIP
 
+**בסיס ידע:** `GET /api/knowledge-upload` — מודול knowledge או מנהל; `POST`/`DELETE` (ingest/delete) — **מנהל בלבד**.
+
 ### נקודות קצה ציבוריות (ללא JWT)
 
 | Endpoint | סיבה |
@@ -42,9 +44,28 @@
 ## העלאות קבצים (ZIP)
 
 - Magic bytes + מגבלות zip-bomb (`supportZipValidation.js`)
-- פרודקשן: ZIP חסום עד `UPLOAD_AV_WEBHOOK_URL` (או `SUPPORT_ZIP_ALLOW_WITHOUT_AV=true` במודע)
+- **ברירת מחדל בפרודקשן: ZIP חסום** — אין צורך במשתני סביבה אם לא נדרש AV
+- לאפשר ZIP בלי סריקה (לא מומלץ): `SUPPORT_ZIP_ALLOW_WITHOUT_AV=true`
+- לאפשר ZIP עם סריקה: `UPLOAD_AV_WEBHOOK_URL`
 
 ## דמו מול פרודקשן
 
 - גישת מנהל בדמו: נציג מחובר עם `is_admin` (למשל `agent01@demo.local`) — **אין** PIN 1234 בקוד
 - `VITE_DEMO_MODE=true` רק בפרויקט דמו Vercel
+
+## hypsmart — צ'קליסט פרודקשן (חובה)
+
+| משתנה | היכן | הערה |
+|--------|------|------|
+| `VITE_SUPABASE_URL` | Vercel build | קליינט |
+| `VITE_SUPABASE_ANON_KEY` | Vercel build | קליינט |
+| `SUPABASE_SERVICE_ROLE_KEY` | Vercel server | `/api/agent-auth`, RAG, storage |
+| `RESEND_API_KEY` + `EMAIL_FROM` | Vercel server | מייל תמיכה / שיתוף מסך |
+| `GUEST_LINK_SECRET` | Vercel server | חתימת קישורי אורח |
+| `GEMINI_API_KEY` (או `OPENAI_API_KEY`) | Vercel server | בסיס ידע — **לא** `VITE_*` |
+| `INFORU_USERNAME` + `INFORU_API_TOKEN` | Vercel server | SMS שיבוץ (אם בשימוש) |
+| `VITE_APP_URL` | Vercel build | קישורים במייל/SMS |
+
+**Supabase SQL (בסדר):** `security_phase0a` → … → `security_phase16.sql` + `knowledge_pgvector.sql` לפי הצורך.
+
+**אחרי שינוי env:** Redeploy ב-Vercel. **אל** להגדיר `VITE_DEMO_MODE` בפרודקשן.

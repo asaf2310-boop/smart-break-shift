@@ -2,7 +2,10 @@
 
 import { json, readJsonBody, handleOptions, isSameOrigin } from "../server/knowledge/httpUtils.js";
 import { isPgVectorConfigured, getSupabaseUrl, getSupabaseAdmin } from "../server/knowledge/supabaseAdmin.js";
-import { verifyKnowledgeAccess } from "../server/agent/agentAuthService.js";
+import {
+  requireKnowledgeAccess as requireKnowledgeRouteAccess,
+  requireKnowledgeAdminAccess as requireKnowledgeAdminRouteAccess,
+} from "../server/knowledge/requireKnowledgeAccess.js";
 import {
   ingestDocument,
   deleteDocument,
@@ -49,11 +52,17 @@ function enforceKnowledgeRateLimit(res, req, auth) {
 }
 
 async function requireKnowledgeAccess(req, res, { rateLimit = false } = {}) {
-  const auth = await verifyKnowledgeAccess(req);
-  if (!auth?.agent) {
-    json(res, 401, { error: "unauthorized", message: "נדרשת התחברות עם הרשאת ידע" }, req);
+  const auth = await requireKnowledgeRouteAccess(req, res);
+  if (!auth) return null;
+  if (rateLimit && !enforceKnowledgeRateLimit(res, req, auth)) {
     return null;
   }
+  return auth;
+}
+
+async function requireKnowledgeAdminAccess(req, res, { rateLimit = false } = {}) {
+  const auth = await requireKnowledgeAdminRouteAccess(req, res);
+  if (!auth) return null;
   if (rateLimit && !enforceKnowledgeRateLimit(res, req, auth)) {
     return null;
   }
@@ -162,7 +171,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "DELETE") {
-    const auth = await requireKnowledgeAccess(req, res, { rateLimit: true });
+    const auth = await requireKnowledgeAdminAccess(req, res, { rateLimit: true });
     if (!auth) return;
 
     let body = {};
@@ -190,7 +199,7 @@ export default async function handler(req, res) {
     return json(res, 405, { error: "method_not_allowed" }, req);
   }
 
-  const auth = await requireKnowledgeAccess(req, res, { rateLimit: true });
+  const auth = await requireKnowledgeAdminAccess(req, res, { rateLimit: true });
   if (!auth) return;
 
   let body;

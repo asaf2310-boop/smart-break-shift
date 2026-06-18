@@ -1,7 +1,7 @@
 import { demoModeEnabled } from "./demoMode";
 
 /**
- * CRM — בדמו תמיד; בפרודקשן פעיל כברירת מחדל (נתונים ב-localStorage עד חיבור Supabase).
+ * CRM — בדמו: localStorage; בפרודקשן: Supabase כש-isCrmCloudEnabled() (ראו crmCloudMode.js).
  * כיבוי מפורש: VITE_CRM_ENABLED=false
  */
 export const crmEnabled =

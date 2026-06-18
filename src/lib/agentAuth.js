@@ -8,7 +8,6 @@ import {
   setDemoUserPassword,
   verifyDemoUserPassword,
 } from "@/lib/appUsersStore";
-import { clearAdminSession } from "@/hooks/useIsAdmin";
 import { getAgentNamesList } from "@/constants/scheduling";
 import { normalizeAgentPhone } from "@/lib/agentPhone";
 import { requestAgentPasswordResetSms } from "@/lib/agentPasswordReset";
@@ -129,6 +128,7 @@ function mapDemoAgent(user) {
     phone: user.phone || "",
     active: user.active !== false,
     blocked: user.blocked === true,
+    isAdmin: user.isAdmin === true,
     modules: coerceStoredModules(user.modules),
   };
 }
@@ -341,13 +341,11 @@ export function getAgentSession() {
 }
 
 export function setAgentSession(session) {
-  clearAdminSession();
   writeJson(getAgentSessionStorage(), AGENT_SESSION_KEY, session);
   window.dispatchEvent(new CustomEvent("agent-session-changed"));
 }
 
 export function clearAgentSession() {
-  clearAdminSession();
   removeKey(getAgentSessionStorage(), AGENT_SESSION_KEY);
   if (typeof window !== "undefined") {
     window.localStorage.removeItem("agent_name");

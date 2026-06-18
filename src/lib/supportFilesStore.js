@@ -1,5 +1,7 @@
 import { remoteSupportEnabled } from "@/api/demoClient";
 import { generateShortCode } from "@/lib/guestLinkCodec";
+import { demoModeEnabled } from "@/api/demoMode";
+import { getSessionScopedStorage } from "@/lib/browserStoragePolicy";
 
 export const SUPPORT_FILES_STORAGE_KEY = "smart-break-shift-support-files-v1";
 export const SUPPORT_FILES_CHANGE_EVENT = "support-files-changed";
@@ -10,12 +12,16 @@ function makeFileId() {
   return `ss_file_${generateShortCode(8)}`;
 }
 
+function getStorage() {
+  return getSessionScopedStorage(demoModeEnabled);
+}
+
 function readStore() {
   if (!remoteSupportEnabled || typeof window === "undefined") {
     return { files: [] };
   }
   try {
-    const raw = localStorage.getItem(SUPPORT_FILES_STORAGE_KEY);
+    const raw = getStorage()?.getItem(SUPPORT_FILES_STORAGE_KEY);
     if (!raw) return { files: [] };
     const parsed = JSON.parse(raw);
     return {
@@ -28,7 +34,10 @@ function readStore() {
 
 function writeStore({ files }) {
   if (!remoteSupportEnabled || typeof window === "undefined") return;
-  localStorage.setItem(SUPPORT_FILES_STORAGE_KEY, JSON.stringify({ files }));
+  const storage = getStorage();
+  if (storage) {
+    storage.setItem(SUPPORT_FILES_STORAGE_KEY, JSON.stringify({ files }));
+  }
   window.dispatchEvent(new CustomEvent(SUPPORT_FILES_CHANGE_EVENT));
 }
 

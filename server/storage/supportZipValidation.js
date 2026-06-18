@@ -51,6 +51,9 @@ export function validateSupportZipBuffer(buffer) {
     };
   }
   if (buffer.readUInt32LE(0) !== LOCAL_FILE_HEADER) {
+    if (buffer.length >= 22 && buffer.readUInt32LE(0) === END_OF_CENTRAL_DIR) {
+      return { ok: true, fileCount: 0, totalUncompressed: 0 };
+    }
     return { ok: false, error: "invalid_zip", message: "קובץ ZIP לא תקין" };
   }
 

@@ -14,8 +14,7 @@
 | `SoftphoneWidget` | וידג'ט צף/מוצמד: לוח חיוג, חיוג, ניתוק, השתקה (דמו), סטטוס שיחה |
 | `telephonyStore.js` | סימולציית שיחות + היסטוריה ב-`localStorage` (דמו בלבד) |
 | CRM | בכרטיס לקוח: **חיוג** ממלא מספר ופותח את הטלפון (דמו) |
-| `telephonyProvider.js` | WebRTC/SIP בדפדפן (sip.js) — WSS + הרשמה; דמו כשלא מוגדר |
-| `api/sip-token.js` | אישורי SIP מהשרת (Vercel) — לא ב-build של Vite |
+| `telephonyProvider.js` | WebRTC/SIP (sip.js) — אישורים דרך `agent-auth`; דמו כשלא מוגדר |
 
 ---
 
@@ -104,7 +103,7 @@ flowchart LR
 
 1. `npm install` (כולל `sip.js`)
 2. `.env.local`: `VITE_SIP_WS_URL` + `SIP_USER`, `SIP_PASSWORD`, `SIP_DOMAIN`, `SIP_WS_URL`
-3. `npx vercel dev` — מפעיל גם `/api/sip-token`
+3. `npx vercel dev` — מפעיל גם `/api/agent-auth` (כולל SIP)
 4. **לא** `VITE_DEMO_MODE` — פתחו את האפליקציה, התחברו בווידג'ט, אשרו מיקרופון
 5. שיחה נכנסת → screen pop + מענה; ניתוק → disposition ל-CRM
 
@@ -158,7 +157,7 @@ flowchart LR
 - `src/components/telephony/SoftphoneWidget.jsx`
 - `src/lib/telephonyStore.js`
 - `src/lib/telephonyProvider.js`
-- `api/sip-token.js`
+- `api/agent-auth.js` (פעולות `sip_token_mint` / `sip_token_redeem` — ראו `docs/SIP_SECURITY.md`)
 - `src/context/TelephonyContext.jsx`
 
 **עדיין stub / שלבים עתידיים:** Twilio Voice, TURN ייעודי, תור מרכזייה אמיתי, CDR אוטומטי ל-Supabase, הקלטות, Zoiper (לא נדרש — softphone מובנה).
