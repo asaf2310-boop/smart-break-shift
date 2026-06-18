@@ -32,6 +32,7 @@ function maskPhoneForAudit(phone) {
 export async function sendReviewSmsToCustomer({
   phone,
   customMessage,
+  allowCustomMessage = false,
   actorAgentId,
   actorName,
   req,
@@ -46,7 +47,8 @@ export async function sendReviewSmsToCustomer({
     return { ok: false, error: "invalid_phone", message: "מספר טלפון לא תקין" };
   }
 
-  const built = buildReviewSmsMessage({ reviewUrl: resolved.url, customMessage });
+  const effectiveCustom = allowCustomMessage ? customMessage : "";
+  const built = buildReviewSmsMessage({ reviewUrl: resolved.url, customMessage: effectiveCustom });
   if (!built.ok) return built;
 
   const lengthCheck = validateReviewSmsMessageLength(built.message);

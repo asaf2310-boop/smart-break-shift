@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { BarChart3, BookOpen, CalendarClock, CalendarDays, Contact, Film, GraduationCap, Home, LayoutDashboard, MessageCircle, Monitor, ShieldCheck } from "lucide-react";
+import { BarChart3, BookOpen, CalendarClock, CalendarDays, Contact, Film, GraduationCap, Home, LayoutDashboard, MessageCircle, Monitor, ShieldCheck, Star } from "lucide-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useAgentModules } from "@/hooks/useAgentModules";
 import { customerChatEnabled, crmEnabled, demoModeEnabled, knowledgeEnabled } from "@/api/demoClient";
@@ -22,6 +22,7 @@ export default function AppNav() {
   const isCrm = location.pathname.startsWith("/crm");
   const isKnowledge = location.pathname.startsWith("/knowledge");
   const isRemoteSupport = location.pathname.startsWith("/remote-support");
+  const isGoogleReview = location.pathname.startsWith("/review-sms");
   const isCustomerChat = location.pathname.startsWith("/customer-chat");
 
   const useBrandNav = brandVisualEnabled;
@@ -86,6 +87,12 @@ export default function AppNav() {
             <Link to="/remote-support" className={tabClass(isRemoteSupport)}>
               <Monitor className="w-4 h-4" />
               השתלטות מרחוק
+            </Link>
+          )}
+          {showTab("google_review") && (
+            <Link to="/review-sms" className={tabClass(isGoogleReview)}>
+              <Star className="w-4 h-4" />
+              דירוג גוגל
             </Link>
           )}
           {customerChatEnabled && !demoModeEnabled && showTab("customer_chat") && (

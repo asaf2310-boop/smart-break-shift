@@ -448,12 +448,16 @@ export default async function handler(req, res) {
     recordRateLimit(rateCheck.entry);
 
     const phone = String(body.phone || body.to || "").trim();
-    const customMessage = String(body.message || body.customMessage || "").trim();
+    const allowCustomMessage = Boolean(auth.agent.isAdmin);
+    const customMessage = allowCustomMessage
+      ? String(body.message || body.customMessage || "").trim()
+      : "";
 
     try {
       const result = await sendReviewSmsToCustomer({
         phone,
         customMessage,
+        allowCustomMessage,
         actorAgentId: auth.agent.id,
         actorName: auth.agent.name,
         req,

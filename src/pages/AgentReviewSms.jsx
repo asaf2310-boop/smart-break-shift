@@ -10,7 +10,6 @@ import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { formatAgentPhoneDisplay, normalizeAgentPhone } from "@/lib/agentPhone";
 import {
   buildReviewSmsPreview,
-  DEFAULT_REVIEW_SMS_TEMPLATE,
   fetchReviewSmsConfig,
   REVIEW_SMS_MAX_LENGTH,
   sendReviewSms,
@@ -22,8 +21,6 @@ export default function AgentReviewSms() {
   const { isLoggedIn } = useAgentSession();
   const isAdmin = useIsAdmin();
   const [phone, setPhone] = useState("");
-  const [customMessage, setCustomMessage] = useState("");
-  const [useCustom, setUseCustom] = useState(false);
   const [sending, setSending] = useState(false);
   const [smsConfig, setSmsConfig] = useState({
     loading: true,
@@ -49,10 +46,7 @@ export default function AgentReviewSms() {
   }, []);
 
   const normalizedPhone = useMemo(() => normalizeAgentPhone(phone), [phone]);
-  const preview = useMemo(
-    () => buildReviewSmsPreview(useCustom ? customMessage : "", smsConfig.smsUrl),
-    [useCustom, customMessage, smsConfig.smsUrl]
-  );
+  const preview = useMemo(() => buildReviewSmsPreview(smsConfig.smsUrl), [smsConfig.smsUrl]);
   const lengthCheck = useMemo(() => validateReviewSmsLength(preview), [preview]);
   const previewTooLong = !lengthCheck.ok;
   const smsUrlMissing = !smsConfig.loading && !smsConfig.ok;
@@ -74,10 +68,7 @@ export default function AgentReviewSms() {
 
     setSending(true);
     try {
-      const result = await sendReviewSms({
-        phone: normalizedPhone,
-        message: useCustom ? customMessage : "",
-      });
+      const result = await sendReviewSms({ phone: normalizedPhone });
 
       if (!result.ok) {
         toast({
@@ -95,7 +86,6 @@ export default function AgentReviewSms() {
           : `נשלח ל-${formatAgentPhoneDisplay(result.phone)}`,
       });
       setPhone("");
-      if (useCustom) setCustomMessage("");
     } finally {
       setSending(false);
     }
@@ -213,41 +203,6 @@ export default function AgentReviewSms() {
           )}
           {normalizedPhone && (
             <p className="mt-1.5 text-xs text-slate-400">יישלח ל: {formatAgentPhoneDisplay(normalizedPhone)}</p>
-          )}
-        </div>
-
-        <div className="space-y-3">
-          <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={useCustom}
-              onChange={(e) => setUseCustom(e.target.checked)}
-              className="rounded border-slate-300"
-              disabled={sending}
-            />
-            התאמת תוכן ההודעה
-          </label>
-
-          {useCustom ? (
-            <div>
-              <textarea
-                id="review-message"
-                rows={3}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 resize-y min-h-[80px]"
-                placeholder={DEFAULT_REVIEW_SMS_TEMPLATE}
-                value={customMessage}
-                onChange={(e) => setCustomMessage(e.target.value)}
-                disabled={sending}
-              />
-              <p className="mt-1.5 text-xs text-slate-400">
-                השאירו ריק לתבנית ברירת מחדל, או השתמשו ב-<code className="text-[11px]">{"{url}"}</code>{" "}
-                למיקום הקישור
-              </p>
-            </div>
-          ) : (
-            <p className="text-xs text-slate-500 rounded-xl bg-slate-50 border border-slate-100 px-3 py-2 leading-relaxed">
-              תבנית ברירת מחדל: {DEFAULT_REVIEW_SMS_TEMPLATE}
-            </p>
           )}
         </div>
 

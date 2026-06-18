@@ -12,16 +12,9 @@ function getClientPreviewSmsUrl() {
   return cleanEnvValue(import.meta.env.VITE_GOOGLE_REVIEW_SMS_URL) || null;
 }
 
-export function buildReviewSmsPreview(customMessage, smsUrl) {
+export function buildReviewSmsPreview(smsUrl) {
   const url = String(smsUrl || getClientPreviewSmsUrl() || "[קישור דירוג לא מוגדר]").trim();
-  const custom = String(customMessage || "").trim();
-  if (!custom) {
-    return DEFAULT_REVIEW_SMS_TEMPLATE.replace(/\{url\}/g, url);
-  }
-  if (custom.includes("{url}")) {
-    return custom.replace(/\{url\}/g, url);
-  }
-  return `${custom} ${url}`;
+  return DEFAULT_REVIEW_SMS_TEMPLATE.replace(/\{url\}/g, url);
 }
 
 export function validateReviewSmsLength(message) {
@@ -81,7 +74,7 @@ export async function fetchReviewSmsConfig() {
 }
 
 /** שליחת SMS ללקוח עם קישור לדירוג בגוגל */
-export async function sendReviewSms({ phone, message }) {
+export async function sendReviewSms({ phone }) {
   const normalized = normalizeAgentPhone(phone);
   if (!normalized) {
     return { ok: false, error: "invalid_phone", message: "מספר טלפון לא תקין" };
@@ -96,7 +89,7 @@ export async function sendReviewSms({ phone, message }) {
         message: config.message || "קישור דירוג לא מוגדר",
       };
     }
-    const preview = buildReviewSmsPreview(message, config.smsUrl);
+    const preview = buildReviewSmsPreview(config.smsUrl);
     const lengthCheck = validateReviewSmsLength(preview);
     if (!lengthCheck.ok) {
       return lengthCheck;
@@ -104,10 +97,7 @@ export async function sendReviewSms({ phone, message }) {
     return { ok: true, simulated: true, phone: normalized, preview };
   }
 
-  const result = await apiSendReviewSms({
-    phone: normalized,
-    message: String(message || "").trim(),
-  });
+  const result = await apiSendReviewSms({ phone: normalized });
 
   if (!result.ok) {
     return result;
