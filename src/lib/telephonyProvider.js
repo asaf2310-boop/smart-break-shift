@@ -8,7 +8,8 @@
 
 import { Web } from "sip.js";
 import { parseIceServersAsync } from "@/lib/webrtcConfig";
-import { getAgentBearerHeaders } from "@/lib/agentAuthClient";
+import { apiSipTokenMint, apiSipTokenRedeem } from "@/lib/agentAuthClient";
+import { getAgentSession } from "@/lib/agentAuth";
 
 /** @typedef {'idle' | 'connecting' | 'registered' | 'unregistered' | 'error'} SipRegistrationState */
 
@@ -119,7 +120,7 @@ function extractCallerPhone(session) {
 function getCurrentAgentNameForSip() {
   if (typeof window === "undefined") return "";
   try {
-    return localStorage.getItem("agent_name")?.trim() || "";
+    return getAgentSession()?.displayName?.trim() || "";
   } catch {
     return "";
   }
@@ -162,42 +163,24 @@ async function fetchSipCredentials() {
 
   try {
     const agentName = getCurrentAgentNameForSip();
-    const params = agentName ? `?agent=${encodeURIComponent(agentName)}` : "";
-    const headers = await getAgentBearerHeaders(
-      agentName ? { "x-agent-name": agentName } : {}
-    );
-    const res = await fetch(`/api/sip-token${params}`, {
-      credentials: "same-origin",
-      headers,
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data?.ok) {
+    const mint = await apiSipTokenMint({ agentName: agentName || null });
+    if (!mint.ok) {
       return {
-        error: data?.reason || `שגיאת שרת SIP (${res.status})`,
+        error: mint.reason || mint.message || "שגיאת שרת SIP",
       };
     }
 
-    if (data.credentialToken) {
-      const redeemHeaders = await getAgentBearerHeaders({ "Content-Type": "application/json" });
-      const redeemRes = await fetch("/api/sip-token", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: redeemHeaders,
-        body: JSON.stringify({
-          action: "redeem",
-          credentialToken: data.credentialToken,
-        }),
-      });
-      const redeemed = await redeemRes.json().catch(() => ({}));
-      if (!redeemRes.ok || !redeemed?.ok || !redeemed.password) {
+    if (mint.credentialToken) {
+      const redeemed = await apiSipTokenRedeem(mint.credentialToken);
+      if (!redeemed.ok || !redeemed.password) {
         return {
-          error: redeemed?.reason || `שגיאת אימות SIP (${redeemRes.status})`,
+          error: redeemed.reason || redeemed.message || "שגיאת אימות SIP",
         };
       }
       return { ...redeemed, source: "server" };
     }
 
-    return { ...data, source: "server" };
+    return { ...mint, source: "server" };
   } catch (err) {
     return { error: err?.message || "לא ניתן להתחבר לשרת SIP" };
   }

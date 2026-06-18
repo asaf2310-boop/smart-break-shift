@@ -162,6 +162,29 @@ export function markAgentPeerReady(id) {
 }
 
 /** מזהה PeerJS אקראי של הנציג — הלקוח מתקשר אליו (לא ל-sessionId) */
+export const AGENT_PEER_MAX_AGE_MS = 30 * 60 * 1000;
+
+/** Reject peer ids that equal sessionId or look invalid (phase 15). */
+export function isValidAgentPeerId(peerId, sessionId) {
+  const pid = String(peerId || "").trim();
+  if (!pid || pid.length < 8 || pid.length > 64) return false;
+  const sid = String(sessionId || "").trim();
+  if (sid && pid === sid) return false;
+  return /^[a-zA-Z0-9_-]+$/.test(pid);
+}
+
+export function isAgentPeerStale(session) {
+  if (!session?.agentPeerReadyAt) return false;
+  const readyAt = Date.parse(session.agentPeerReadyAt);
+  if (!Number.isFinite(readyAt)) return false;
+  return Date.now() - readyAt > AGENT_PEER_MAX_AGE_MS;
+}
+
+export function clearStaleAgentPeer(id) {
+  const session = getSession(id);
+  if (!session || !isAgentPeerStale(session)) return session;
+  return updateSession(id, { agentPeerReadyAt: null, agentPeerId: null });
+}
 export function setAgentPeerId(id, peerId) {
   const pid = String(peerId || "").trim();
   if (!pid) return getSession(id);
@@ -543,21 +566,24 @@ export async function waitForAgentPeerId(id, { timeoutMs = 45000, intervalMs = 5
   const started = Date.now();
 
   while (Date.now() - started < timeoutMs) {
+    clearStaleAgentPeer(id);
     const local = getSession(id);
     const localPeerId = String(local?.agentPeerId || "").trim();
-    if (localPeerId) return localPeerId;
+    if (localPeerId && isValidAgentPeerId(localPeerId, id)) return localPeerId;
 
     if (cloudSessionSyncEnabled()) {
       await pullSessionFieldsFromCloud(id);
+      clearStaleAgentPeer(id);
       const afterCloud = getSession(id);
       const cloudPeerId = String(afterCloud?.agentPeerId || "").trim();
-      if (cloudPeerId) return cloudPeerId;
+      if (cloudPeerId && isValidAgentPeerId(cloudPeerId, id)) return cloudPeerId;
     }
 
     await sleepMs(intervalMs);
   }
 
-  return String(getSession(id)?.agentPeerId || "").trim() || null;
+  const finalPeerId = String(getSession(id)?.agentPeerId || "").trim();
+  return isValidAgentPeerId(finalPeerId, id) ? finalPeerId : null;
 }
 
 /** Poll cloud for guest consent while an agent session is active (cross-device). */

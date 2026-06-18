@@ -5,8 +5,9 @@
 import Peer from "peerjs";
 import { getPeerJsOptionsAsync } from "@/lib/webrtcConfig";
 import { apiMintWebrtcJoinToken } from "@/lib/webrtcJoinClient";
+import { AGENT_PEER_MAX_AGE_MS } from "@/lib/screenShareStore";
 
-/** @typedef {{ peer: import('peerjs').Peer | null, creating: boolean, listenersAttached: boolean, activeCall: import('peerjs').MediaConnection | null, remoteStream: MediaStream | null, refCount: number }} AgentPeerEntry */
+/** @typedef {{ peer: import('peerjs').Peer | null, creating: boolean, listenersAttached: boolean, activeCall: import('peerjs').MediaConnection | null, remoteStream: MediaStream | null, refCount: number, openedAt: number | null }} AgentPeerEntry */
 
 /** @type {Map<string, AgentPeerEntry>} */
 const entries = new Map();
@@ -70,8 +71,13 @@ export async function openAgentPeer(sessionId) {
   let entry = entries.get(sessionId);
 
   if (entry?.peer && !entry.peer.destroyed) {
-    entry.refCount += 1;
-    return { peer: entry.peer, entry, reusing: true, created: false };
+    const openedAt = entry.openedAt || 0;
+    if (openedAt && Date.now() - openedAt > AGENT_PEER_MAX_AGE_MS) {
+      destroyAgentPeer(sessionId, entry.peer);
+    } else {
+      entry.refCount += 1;
+      return { peer: entry.peer, entry, reusing: true, created: false };
+    }
   }
 
   if (entry?.creating) {
@@ -86,6 +92,7 @@ export async function openAgentPeer(sessionId) {
     activeCall: null,
     remoteStream: null,
     refCount: 1,
+    openedAt: null,
   };
   entries.set(sessionId, entry);
 
@@ -101,6 +108,10 @@ export async function openAgentPeer(sessionId) {
   const peer = new Peer(peerOptions);
   entry.peer = peer;
   entry.creating = false;
+  peer.on("open", () => {
+    const current = entries.get(sessionId);
+    if (current) current.openedAt = Date.now();
+  });
 
   return { peer, entry, reusing: false, created: true };
 }

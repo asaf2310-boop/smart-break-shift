@@ -61,6 +61,10 @@ import {
   maskReviewSmsUrl,
   setStoredGoogleReviewSmsUrl,
 } from "../server/review/reviewSmsSettingsService.js";
+import {
+  mintSipTokenForAgent,
+  redeemSipTokenForAgent,
+} from "../server/sip/sipTokenService.js";
 
 const PASSWORD_MIN_LENGTH = 12;
 
@@ -73,6 +77,7 @@ const webrtcJoinRateByUser = new Map();
 const adminActionRateByUser = new Map();
 const supportEndRateByUser = new Map();
 const reviewSmsRateByUser = new Map();
+const sipTokenRateByUser = new Map();
 
 const GUEST_RESOLVE_RATE_MAX = 60;
 const GUEST_SESSION_POLL_RATE_MAX = 240;
@@ -84,6 +89,8 @@ const ADMIN_ACTION_RATE_MAX = 60;
 const SUPPORT_END_RATE_MAX = 120;
 const REVIEW_SMS_RATE_MAX = 30;
 const REVIEW_SMS_RATE_WINDOW_MS = 60 * 60 * 1000;
+const SIP_TOKEN_RATE_MAX = 30;
+const SIP_TOKEN_RATE_WINDOW_MS = 60 * 60 * 1000;
 
 function rateLimitResponse(res, req, retryAfterSec) {
   const sec = setRateLimitHeaders(res, retryAfterSec);
@@ -1004,6 +1011,71 @@ export default async function handler(req, res) {
       return json(res, status, result, req);
     }
     return json(res, 200, result, req);
+  }
+
+  if (action === "sip_token_mint") {
+    const auth = await verifyBearerAgent(req);
+    if (!auth?.agent) {
+      return json(res, 401, { error: "unauthorized", message: "נדרשת התחברות נציג" }, req);
+    }
+    if (
+      !enforceUserRateLimit(
+        res,
+        req,
+        sipTokenRateByUser,
+        SIP_TOKEN_RATE_MAX,
+        auth.agent.id
+      )
+    ) {
+      return;
+    }
+
+    const agentKey = String(body.agent || body.agentName || "").trim() || null;
+    const result = await mintSipTokenForAgent({ req, auth, agentKey });
+    if (!result.ok) {
+      return json(
+        res,
+        result.status || 400,
+        { ok: false, reason: result.reason, error: result.reason },
+        req
+      );
+    }
+    const { status: _status, ...payload } = result;
+    return json(res, 200, payload, req);
+  }
+
+  if (action === "sip_token_redeem") {
+    const auth = await verifyBearerAgent(req);
+    if (!auth?.agent) {
+      return json(res, 401, { error: "unauthorized", message: "נדרשת התחברות נציג" }, req);
+    }
+    if (
+      !enforceUserRateLimit(
+        res,
+        req,
+        sipTokenRateByUser,
+        SIP_TOKEN_RATE_MAX,
+        auth.agent.id
+      )
+    ) {
+      return;
+    }
+
+    const result = await redeemSipTokenForAgent({
+      req,
+      auth,
+      credentialToken: body.credentialToken,
+    });
+    if (!result.ok) {
+      return json(
+        res,
+        result.status || 400,
+        { ok: false, reason: result.reason, error: result.reason },
+        req
+      );
+    }
+    const { status: _status, ...payload } = result;
+    return json(res, 200, payload, req);
   }
 
   return json(res, 400, { error: "unknown_action" }, req);

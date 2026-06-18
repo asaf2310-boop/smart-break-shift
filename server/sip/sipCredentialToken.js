@@ -1,7 +1,15 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
 export const SIP_CREDENTIAL_TOKEN_PREFIX = "s1.";
-export const DEFAULT_SIP_CREDENTIAL_TTL_SEC = 5 * 60;
+export const DEFAULT_SIP_CREDENTIAL_TTL_SEC = 2 * 60;
+
+export function getSipCredentialTtlSec() {
+  const raw = process.env.SIP_CREDENTIAL_TTL_SEC?.trim();
+  if (!raw) return DEFAULT_SIP_CREDENTIAL_TTL_SEC;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 60) return DEFAULT_SIP_CREDENTIAL_TTL_SEC;
+  return Math.min(parsed, 600);
+}
 
 function getSipTokenSecret() {
   return String(
@@ -23,13 +31,14 @@ export function signSipCredentialToken({
   wsUrl,
   domain,
   extension = null,
-  ttlSec = DEFAULT_SIP_CREDENTIAL_TTL_SEC,
+  ttlSec = getSipCredentialTtlSec(),
 }) {
   const secret = getSipTokenSecret();
   if (!secret) throw new Error("sip_token_secret_missing");
 
   const iat = Math.floor(Date.now() / 1000);
-  const exp = iat + Math.max(60, Number(ttlSec) || DEFAULT_SIP_CREDENTIAL_TTL_SEC);
+  const effectiveTtl = Number(ttlSec) || getSipCredentialTtlSec();
+  const exp = iat + Math.max(60, Math.min(effectiveTtl, 600));
   const payload = {
     u: String(user || ""),
     p: String(password || ""),
@@ -86,6 +95,7 @@ export function redeemSipCredentialToken(token) {
       domain: payload.d,
       extension: payload.e || null,
       exp: payload.exp,
+      nonce: payload.n || null,
     };
   } catch {
     return { ok: false, error: "invalid_token" };

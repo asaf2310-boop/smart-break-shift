@@ -256,7 +256,23 @@ export async function resolveAgentForSession(session) {
  * בודק שהסשן תקף (סיסמה הוגדרה, לא חסום) — אחרת מנתק.
  * מחזיר null אם אין סשן או שנותק.
  */
+async function refreshSupabaseSessionIfNeeded() {
+  if (demoModeEnabled || !supabase) return;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.expires_at) return;
+    const refreshThresholdMs = 5 * 60 * 1000;
+    if (session.expires_at * 1000 - Date.now() < refreshThresholdMs) {
+      await supabase.auth.refreshSession();
+    }
+  } catch {
+    /* ignore transient refresh errors */
+  }
+}
+
 export async function validateAndRefreshAgentSession() {
+  await refreshSupabaseSessionIfNeeded();
+
   const session = getAgentSession();
   if (!session?.email || !session?.userId) return null;
 

@@ -23,6 +23,7 @@ import {
   startSessionCloudPoll,
   subscribeScreenShare,
   waitForAgentPeerId,
+  isValidAgentPeerId,
 } from "@/lib/screenShareStore";
 import { cloudSessionSyncEnabled } from "@/lib/supportSessionsSync";
 import {
@@ -270,7 +271,7 @@ export default function ScreenShareGuestPage() {
     (peer, stream, agentPeerId) => {
       if (!sessionId || !stream) return false;
       const targetPeerId = String(agentPeerId || "").trim();
-      if (!targetPeerId) {
+      if (!targetPeerId || !isValidAgentPeerId(targetPeerId, sessionId)) {
         setError("ממתין לחיבור הנציג — ודאו שהנציג פתח את מסך הצפייה");
         return false;
       }

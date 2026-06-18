@@ -167,3 +167,25 @@ export async function apiAdminSmsStatsByAgent({ days = 30, fromDate = null, toDa
     { requireBearer: true }
   );
 }
+
+/** Mint short-lived encrypted SIP credential token (phase 15 — prefer over GET /api/sip-token). */
+export async function apiSipTokenMint({ agentName = null } = {}) {
+  return postAgentAuth(
+    {
+      action: "sip_token_mint",
+      agent: agentName,
+    },
+    { requireBearer: true }
+  );
+}
+
+/** Redeem one-time SIP credential token for WSS password. */
+export async function apiSipTokenRedeem(credentialToken) {
+  return postAgentAuth(
+    {
+      action: "sip_token_redeem",
+      credentialToken,
+    },
+    { requireBearer: true }
+  );
+}

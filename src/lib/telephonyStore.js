@@ -406,10 +406,15 @@ function ensureDemoTelephonyTicker() {
 
 function getCurrentAgentNameHint() {
   try {
-    return localStorage.getItem("agent_name") || "";
+    const raw = sessionStorage.getItem("smart-break-agent-session-v1");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.displayName) return String(parsed.displayName);
+    }
   } catch {
-    return "";
+    /* ignore */
   }
+  return "";
 }
 
 function stopDemoTelephonyTicker() {

@@ -1,27 +1,25 @@
 /**
- * Vercel serverless — SIP credentials for in-browser WebRTC softphone.
- * Secrets live in server env only — not embedded in Vite build.
- *
- * Multi-agent:
- *   GET /api/sip-token?agent=101
- *   GET /api/sip-token?agent=רחלה%20מנשה
- *   Header: Authorization: Bearer <supabase-jwt>
- *
- * Env patterns:
- *   SIP_USER_101 / SIP_PASSWORD_101  — per extension
- *   SIP_AGENT_MAP={"שם נציג":"101",...}  — name → extension
- *   SIP_USER / SIP_PASSWORD — fallback when no agent resolved
- *   SIP_TOKEN_SECRET (or GUEST_LINK_SECRET) — encrypts short-lived credential tokens
+ * @deprecated Phase 15 — SIP moved to POST /api/agent-auth (sip_token_mint / sip_token_redeem).
+ * Thin backward-compat shim; remove after clients migrate.
  */
-
-import { verifyBearerAgent } from "../server/agent/agentAuthService.js";
 import { isSameOrigin } from "../server/knowledge/httpUtils.js";
 import {
-  DEFAULT_SIP_CREDENTIAL_TTL_SEC,
-  redeemSipCredentialToken,
-  signSipCredentialToken,
-  sipCredentialTokenConfigured,
-} from "../server/sip/sipCredentialToken.js";
+  mintSipTokenForAgent,
+  redeemSipTokenForAgent,
+  requireAuthenticatedAgentForSip,
+  resolveSipAgentKey,
+} from "../server/sip/sipTokenService.js";
+import {
+  checkRateLimit,
+  getRateLimitKey,
+  rateLimitHebrewMessage,
+  recordRateLimit,
+  setRateLimitHeaders,
+} from "../server/http/rateLimit.js";
+
+const sipTokenRateByIp = new Map();
+const SIP_TOKEN_RATE_MAX = 30;
+const SIP_TOKEN_RATE_WINDOW_MS = 60 * 60 * 1000;
 
 function corsHeaders(req) {
   const host = req.headers["x-forwarded-host"] || req.headers.host;
@@ -41,91 +39,6 @@ function corsHeaders(req) {
     };
   }
   return {};
-}
-
-function parseAgentMap() {
-  const raw = process.env.SIP_AGENT_MAP?.trim();
-  if (!raw) return {};
-  try {
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function resolveAgentKey(req) {
-  const queryAgent = req.query?.agent;
-  if (typeof queryAgent === "string" && queryAgent.trim()) {
-    return queryAgent.trim();
-  }
-  const header = req.headers["x-agent-name"];
-  if (typeof header === "string" && header.trim()) {
-    return header.trim();
-  }
-  return null;
-}
-
-function resolveExtension(agentKey) {
-  if (!agentKey) return null;
-  if (/^\d{3,5}$/.test(agentKey)) return agentKey;
-  const map = parseAgentMap();
-  const mapped = map[agentKey];
-  if (mapped != null && String(mapped).trim()) {
-    return String(mapped).replace(/\D/g, "") || String(mapped).trim();
-  }
-  return null;
-}
-
-function resolveSipCredentials(extension) {
-  const domain = process.env.SIP_DOMAIN?.trim();
-  const wsUrl =
-    process.env.SIP_WS_URL?.trim() || process.env.VITE_SIP_WS_URL?.trim() || "";
-
-  if (extension) {
-    const ext = String(extension).replace(/\D/g, "") || extension;
-    const user = process.env[`SIP_USER_${ext}`]?.trim();
-    const password = process.env[`SIP_PASSWORD_${ext}`]?.trim();
-    if (user && password && domain && wsUrl) {
-      return { wsUrl, user, password, domain, extension: ext };
-    }
-  }
-
-  const user = process.env.SIP_USER?.trim();
-  const password = process.env.SIP_PASSWORD?.trim();
-  if (user && password && domain && wsUrl) {
-    return { wsUrl, user, password, domain, extension: null };
-  }
-
-  return null;
-}
-
-function normalizeName(value) {
-  return String(value || "").trim().toLowerCase();
-}
-
-async function requireAuthenticatedAgent(req, res) {
-  const auth = await verifyBearerAgent(req);
-  if (!auth?.agent) {
-    res.status(401).json({ ok: false, reason: "נדרשת התחברות נציג" });
-    return null;
-  }
-  return auth;
-}
-
-function agentMatchesRequested(auth, agentKey) {
-  if (!agentKey) return true;
-  const requested = normalizeName(agentKey);
-  const displayName = normalizeName(auth.agent.displayName);
-  if (displayName && (displayName === requested || displayName.includes(requested))) {
-    return true;
-  }
-  const extension = resolveExtension(agentKey);
-  if (extension) {
-    const creds = resolveSipCredentials(extension);
-    if (creds?.user) return true;
-  }
-  return !agentKey;
 }
 
 async function readJsonBody(req) {
@@ -154,6 +67,28 @@ async function readJsonBody(req) {
   });
 }
 
+function enforceSipRateLimit(res, req, userId) {
+  const key = getRateLimitKey(req, userId);
+  const check = checkRateLimit(
+    sipTokenRateByIp,
+    key,
+    SIP_TOKEN_RATE_MAX,
+    SIP_TOKEN_RATE_WINDOW_MS
+  );
+  if (!check.allowed) {
+    const sec = setRateLimitHeaders(res, check.retryAfterSec);
+    res.status(429).json({
+      ok: false,
+      reason: "rate_limited",
+      retryAfterSec: sec,
+      message: rateLimitHebrewMessage(sec),
+    });
+    return false;
+  }
+  recordRateLimit(check.entry);
+  return true;
+}
+
 export default async function handler(req, res) {
   Object.entries(corsHeaders(req)).forEach(([k, v]) => res.setHeader(k, v));
 
@@ -168,10 +103,13 @@ export default async function handler(req, res) {
     return res.status(403).json({ ok: false, reason: "Forbidden" });
   }
 
-  if (req.method === "POST") {
-    const auth = await requireAuthenticatedAgent(req, res);
-    if (!auth) return;
+  const auth = await requireAuthenticatedAgentForSip(req);
+  if (!auth) {
+    return res.status(401).json({ ok: false, reason: "נדרשת התחברות נציג" });
+  }
+  if (!enforceSipRateLimit(res, req, auth.agent.id)) return;
 
+  if (req.method === "POST") {
     let body = {};
     try {
       body = await readJsonBody(req);
@@ -183,76 +121,30 @@ export default async function handler(req, res) {
       return res.status(400).json({ ok: false, reason: "unknown_action" });
     }
 
-    const token = String(body.credentialToken || "").trim();
-    if (!token) {
-      return res.status(400).json({ ok: false, reason: "credential_token_required" });
-    }
-
-    const redeemed = redeemSipCredentialToken(token);
-    if (!redeemed.ok) {
-      const status = redeemed.error === "expired" ? 410 : 403;
-      return res.status(status).json({ ok: false, reason: redeemed.error });
-    }
-
-    const clientUser = process.env.VITE_SIP_USER?.trim() || redeemed.user;
-    return res.status(200).json({
-      ok: true,
-      wsUrl: redeemed.wsUrl,
-      user: clientUser,
-      password: redeemed.password,
-      domain: redeemed.domain,
-      extension: redeemed.extension,
-      aor: `sip:${clientUser}@${redeemed.domain}`,
+    const result = await redeemSipTokenForAgent({
+      req,
+      auth,
+      credentialToken: body.credentialToken,
     });
+    if (!result.ok) {
+      return res.status(result.status || 403).json({ ok: false, reason: result.reason });
+    }
+    const { status: _s, ...payload } = result;
+    return res.status(200).json(payload);
   }
 
   if (req.method !== "GET") {
     return res.status(405).json({ ok: false, reason: "Method not allowed" });
   }
 
-  const auth = await requireAuthenticatedAgent(req, res);
-  if (!auth) return;
-
-  const agentKey = resolveAgentKey(req);
-  if (!agentMatchesRequested(auth, agentKey)) {
-    return res.status(403).json({ ok: false, reason: "אין הרשאה לנציג המבוקש" });
-  }
-
-  const extension = resolveExtension(agentKey);
-  const creds = resolveSipCredentials(extension);
-
-  if (!creds) {
-    const hint = agentKey
-      ? `לא נמצאו אישורי SIP לנציג «${agentKey}» (SIP_USER_${extension || "XXX"} / SIP_AGENT_MAP)`
-      : "SIP לא מוגדר בשרת (SIP_WS_URL, SIP_USER, SIP_PASSWORD, SIP_DOMAIN)";
-    return res.status(503).json({ ok: false, reason: hint });
-  }
-
-  if (!sipCredentialTokenConfigured()) {
-    return res.status(503).json({
-      ok: false,
-      reason: "הגדר SIP_TOKEN_SECRET (או GUEST_LINK_SECRET) ב-Vercel",
-    });
-  }
-
-  const clientUser = process.env.VITE_SIP_USER?.trim() || creds.user;
-  const credentialToken = signSipCredentialToken({
-    user: creds.user,
-    password: creds.password,
-    wsUrl: creds.wsUrl,
-    domain: creds.domain,
-    extension: creds.extension,
-    ttlSec: DEFAULT_SIP_CREDENTIAL_TTL_SEC,
+  const agentKey = resolveSipAgentKey({
+    queryAgent: req.query?.agent,
+    headerAgent: req.headers["x-agent-name"],
   });
-
-  return res.status(200).json({
-    ok: true,
-    wsUrl: creds.wsUrl,
-    user: clientUser,
-    domain: creds.domain,
-    extension: creds.extension,
-    aor: `sip:${clientUser}@${creds.domain}`,
-    credentialToken,
-    expiresInSec: DEFAULT_SIP_CREDENTIAL_TTL_SEC,
-  });
+  const result = await mintSipTokenForAgent({ req, auth, agentKey });
+  if (!result.ok) {
+    return res.status(result.status || 400).json({ ok: false, reason: result.reason });
+  }
+  const { status: _s, ...payload } = result;
+  return res.status(200).json(payload);
 }
