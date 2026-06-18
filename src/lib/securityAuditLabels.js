@@ -1,4 +1,4 @@
-/** Hebrew labels for security_audit_log.action values (phase 12–13). */
+/** Hebrew labels for security_audit_log.action values (phase 12–18). */
 
 export const SECURITY_AUDIT_ACTION_LABELS = {
   admin_set_password: "הגדרת סיסמה (מנהל)",
@@ -8,8 +8,8 @@ export const SECURITY_AUDIT_ACTION_LABELS = {
   guest_link_mint: "יצירת קישור אורח",
   guest_link_created: "יצירת קישור אורח",
   guest_link_redeemed: "מימוש קישור אורח",
-  remote_session_start: "תחילת סשן תמיכה מרחוק",
-  remote_session_end: "סיום סשן תמיכה מרחוק",
+  remote_session_start: "תחילת חיבור WebRTC (תמיכה מרחוק)",
+  remote_session_end: "סיום חיבור WebRTC (תמיכה מרחוק)",
   support_session_end: "סיום סשן תמיכה",
   knowledge_upload: "העלאת מסמך ידע",
   knowledge_delete: "מחיקת מסמך ידע",

@@ -1,4 +1,4 @@
-# אבטחת מידע — Phase 16 (סיכום)
+# אבטחת מידע — Phase 18 (סיכום)
 
 מסמך מרכזי להגדרות אבטחה. פירוט לפי תחום: `SIP_SECURITY.md`, `PEERJS_SECURITY.md`, `DEMO_VS_PRODUCTION.md`.
 
@@ -10,7 +10,7 @@
 | API רגיש | `POST /api/agent-auth` עם `Authorization: Bearer <access_token>` |
 | מנהל | `agents.is_admin === true` ב-DB; אופציונלי `ADMIN_PIN` בשרת בלבד |
 | RLS | נציגים רואים רק שורות משויכות; anon ללא גישה לטבלאות רגישות |
-| מיגרציה | `security_phase0a` → `security_phase1_auth.sql` → … → `security_phase16.sql` |
+| מיגרציה | `security_phase0a` → `security_phase1_auth.sql` → … → `security_phase18.sql` |
 
 ### ADMIN_PIN (אופציונלי, שרת בלבד)
 
@@ -23,7 +23,7 @@
 
 1. `isSameOrigin` — הגנת CSRF/CORS (defense-in-depth)
 2. `verifyBearerAgent` / `verifyKnowledgeAccess` / `verifyAdminAgent` — לפי רגישות
-3. Rate limits — SMS, מייל, העלאות, SIP
+3. Rate limits — SMS, מייל, העלאות, SIP, איפוס סיסמה, guest resolve, storage
 
 **בסיס ידע:** `GET /api/knowledge-upload` — מודול knowledge או מנהל; `POST`/`DELETE` (ingest/delete) — **מנהל בלבד**.
 
@@ -32,12 +32,14 @@
 | Endpoint | סיבה |
 |----------|------|
 | `GET /api/email-status`, `GET /api/sms-status` | בדיקת הגדרה בלבד, ללא סודות |
-| `GET /api/knowledge-chat?health=1` | health לפרוב |
+| `GET /api/knowledge-chat?health=1`, `GET /api/knowledge-embed?health=1` | health לפרוב |
 | `GET /go/review` | הפניה לדירוג גוגל |
+| `POST /api/agent-auth` — `request_password_reset`, `request_first_login` | איפוס/כניסה ראשונה (rate limit לפי IP + cooldown לפי אימייל) |
+| `POST /api/agent-auth` — `resolve`, `guest_session`, `guest_chat_*`, `ice_servers` (אורח) | קישור אורח חתום + fingerprint |
 
 ## אחסון בדפדפן
 
-- **פרודקשן:** JWT וסשני תמיכה ב-`sessionStorage`; ניקוי ב-logout (`clearSensitiveClientStorage`)
+- **פרודקשן:** JWT וסשני תמיכה ב-`sessionStorage`; ניקוי ב-logout (`clearSensitiveClientStorage` + `supabase.auth.signOut` + ניתוק SIP)
 - **דמו:** `localStorage` לנתוני דמו בלבד — לא לפרודקשן
 - CRM בענן: `isCrmCloudEnabled()` — Supabase + RLS; בדמו/localStorage ראו `crmCloudMode.js`
 
@@ -66,6 +68,32 @@
 | `INFORU_USERNAME` + `INFORU_API_TOKEN` | Vercel server | SMS שיבוץ (אם בשימוש) |
 | `VITE_APP_URL` | Vercel build | קישורים במייל/SMS |
 
-**Supabase SQL (בסדר):** `security_phase0a` → … → `security_phase16.sql` + `knowledge_pgvector.sql` לפי הצורך.
+**Supabase SQL (בסדר):** `security_phase0a` → … → `security_phase18.sql` + `knowledge_pgvector.sql` לפי הצורך.
 
 **אחרי שינוי env:** Redeploy ב-Vercel. **אל** להגדיר `VITE_DEMO_MODE` בפרודקשן.
+
+## סטטוס אחרי Phase 17 (ומה נסגר ב-Phase 18)
+
+### נסגר (Phases 0–18)
+
+| תחום | מצב |
+|------|-----|
+| אימות API | JWT + `is_admin` לכל נקודות קצה רגישות; ingest ידע — מנהל בלבד |
+| סיסמאות | מינימום 12 תווים; אין `VITE_ADMIN_PIN`; אין OpenAI בקליינט |
+| אחסון דפדפן | פרודקשן: `sessionStorage`; logout מנקה JWT, SIP, guest/webrtc tokens |
+| תמיכה מרחוק | קישורי אורח חד-פעמיים, join tokens, fingerprint, יומן ביקורת |
+| SIP | mint/redeem דרך `agent-auth` בלבד (shim `/api/sip-token` הוסר) |
+| העלאות | ZIP חסום בפרודקשן כברירת מחדל; allowlist + magic bytes |
+| Rate limits | SMS, מייל, guest, WebRTC, SIP, admin, איפוס סיסמה (IP), storage |
+| כותרות | CSP (כולל `object-src 'none'`), X-Frame-Options, וכו' ב-`vercel.json` |
+| יומן ביקורת | UI בעברית לכל פעולות phase 12–17 |
+
+### עתידי (דורש תשתית נוספת)
+
+| פריט | למה לא בוצע |
+|------|-------------|
+| **SIP proxy** | סיסמת SIP עדיין מגיעה לדפדפן ב-`sip_token_redeem` — ראו `SIP_SECURITY.md` |
+| **Redis / Upstash** | rate limits ו-redemption maps בזיכרון serverless (best-effort) |
+| **PeerJS self-host** | PeerJS ציבורי / TURN — ראו `PEERJS_SECURITY.md` |
+| **CSP מלא** | `unsafe-inline` / `unsafe-eval` עדיין נדרשים ל-Vite build |
+| **AV ל-ZIP** | לא נדרש ללקוח; אופציונלי דרך `UPLOAD_AV_WEBHOOK_URL` |

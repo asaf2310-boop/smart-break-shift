@@ -1,5 +1,6 @@
 import { demoModeEnabled } from "@/api/demoMode";
 import { clearAllGuestLinkTokens } from "@/lib/guestLinkTokenStore";
+import { clearAllWebrtcJoinTokens } from "@/lib/webrtcJoinTokenStore";
 import { CRM_STORAGE_KEY } from "@/lib/crmStore";
 
 /**
@@ -202,5 +203,6 @@ export function clearSensitiveClientStorage() {
   }
 
   clearAllGuestLinkTokens();
+  clearAllWebrtcJoinTokens();
   clearLegacyGuestLinkTokensFromLocalStorage();
 }

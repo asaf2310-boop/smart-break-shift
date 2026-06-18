@@ -635,6 +635,12 @@ export async function agentRequestFirstLogin(email) {
 export async function agentLogout() {
   clearAgentSession();
   clearSensitiveClientStorage();
+  try {
+    const { disconnectSip } = await import("@/lib/telephonyProvider");
+    await disconnectSip();
+  } catch {
+    /* telephony optional */
+  }
   if (!demoModeEnabled && supabase) {
     await supabase.auth.signOut();
   }

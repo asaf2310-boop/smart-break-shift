@@ -26,3 +26,17 @@ export function clearWebrtcJoinToken(sessionId) {
     /* ignore */
   }
 }
+
+export function clearAllWebrtcJoinTokens() {
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    const keys = [];
+    for (let i = 0; i < sessionStorage.length; i += 1) {
+      const key = sessionStorage.key(i);
+      if (key?.startsWith(STORAGE_PREFIX)) keys.push(key);
+    }
+    keys.forEach((key) => sessionStorage.removeItem(key));
+  } catch {
+    /* ignore */
+  }
+}

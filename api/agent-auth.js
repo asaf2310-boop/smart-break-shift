@@ -78,6 +78,8 @@ const adminActionRateByUser = new Map();
 const supportEndRateByUser = new Map();
 const reviewSmsRateByUser = new Map();
 const sipTokenRateByUser = new Map();
+const passwordResetRateByIp = new Map();
+const storageUploadRateByKey = new Map();
 
 const GUEST_RESOLVE_RATE_MAX = 60;
 const GUEST_SESSION_POLL_RATE_MAX = 240;
@@ -91,6 +93,9 @@ const REVIEW_SMS_RATE_MAX = 30;
 const REVIEW_SMS_RATE_WINDOW_MS = 60 * 60 * 1000;
 const SIP_TOKEN_RATE_MAX = 30;
 const SIP_TOKEN_RATE_WINDOW_MS = 60 * 60 * 1000;
+const PASSWORD_RESET_RATE_MAX = 12;
+const PASSWORD_RESET_RATE_WINDOW_MS = 60 * 60 * 1000;
+const STORAGE_UPLOAD_RATE_MAX = 90;
 
 function rateLimitResponse(res, req, retryAfterSec) {
   const sec = setRateLimitHeaders(res, retryAfterSec);
@@ -117,9 +122,34 @@ function enforceIpRateLimit(res, req, store, max) {
   return true;
 }
 
-function enforceUserRateLimit(res, req, store, max, userId) {
+function enforceUserRateLimit(res, req, store, max, userId, windowMs) {
   const key = getRateLimitKey(req, userId);
-  const check = checkRateLimit(store, key, max);
+  const check = checkRateLimit(store, key, max, windowMs);
+  if (!check.allowed) {
+    rateLimitResponse(res, req, check.retryAfterSec);
+    return false;
+  }
+  recordRateLimit(check.entry);
+  return true;
+}
+
+function enforceIpRateLimitWindow(res, req, store, max, windowMs) {
+  const ip = getClientIp(req);
+  const check = checkRateLimit(store, `ip:${ip}`, max, windowMs);
+  if (!check.allowed) {
+    rateLimitResponse(res, req, check.retryAfterSec);
+    return false;
+  }
+  recordRateLimit(check.entry);
+  return true;
+}
+
+async function enforceStorageUploadRateLimit(res, req) {
+  const auth = await verifyBearerAgent(req);
+  const key = auth?.agent?.id
+    ? getRateLimitKey(req, auth.agent.id)
+    : `ip:${getClientIp(req)}`;
+  const check = checkRateLimit(storageUploadRateByKey, key, STORAGE_UPLOAD_RATE_MAX);
   if (!check.allowed) {
     rateLimitResponse(res, req, check.retryAfterSec);
     return false;
@@ -359,6 +389,18 @@ export default async function handler(req, res) {
   }
 
   if (action === "request_password_reset") {
+    if (
+      !enforceIpRateLimitWindow(
+        res,
+        req,
+        passwordResetRateByIp,
+        PASSWORD_RESET_RATE_MAX,
+        PASSWORD_RESET_RATE_WINDOW_MS
+      )
+    ) {
+      return;
+    }
+
     const email = String(body.email || "").trim();
     try {
       const result = await requestPasswordResetByEmail(email);
@@ -376,6 +418,18 @@ export default async function handler(req, res) {
   }
 
   if (action === "request_first_login") {
+    if (
+      !enforceIpRateLimitWindow(
+        res,
+        req,
+        passwordResetRateByIp,
+        PASSWORD_RESET_RATE_MAX,
+        PASSWORD_RESET_RATE_WINDOW_MS
+      )
+    ) {
+      return;
+    }
+
     const email = String(body.email || "").trim();
     try {
       const result = await requestFirstLoginByEmail(email);
@@ -962,6 +1016,7 @@ export default async function handler(req, res) {
   }
 
   if (action === "support_file_upload") {
+    if (!(await enforceStorageUploadRateLimit(res, req))) return;
     const result = await handleSupportFileUpload(req, body);
     if (!result.ok) {
       const status =
@@ -980,6 +1035,7 @@ export default async function handler(req, res) {
   }
 
   if (action === "support_file_signed_url") {
+    if (!(await enforceStorageUploadRateLimit(res, req))) return;
     const result = await handleSupportFileSignedUrl(req, body);
     if (!result.ok) {
       const status =
@@ -998,6 +1054,7 @@ export default async function handler(req, res) {
   }
 
   if (action === "recording_upload") {
+    if (!(await enforceStorageUploadRateLimit(res, req))) return;
     const result = await handleRecordingUpload(req, body);
     if (!result.ok) {
       const status =
