@@ -9,7 +9,6 @@ import {
   verifyDemoUserPassword,
 } from "@/lib/appUsersStore";
 import { clearAdminSession } from "@/hooks/useIsAdmin";
-import { normalizeAgentModules } from "@/constants/agentModules";
 import { getAgentNamesList } from "@/constants/scheduling";
 import { normalizeAgentPhone } from "@/lib/agentPhone";
 import { requestAgentPasswordResetSms } from "@/lib/agentPasswordReset";
@@ -97,6 +96,12 @@ function isInvalidCredentialsError(error) {
   );
 }
 
+function coerceStoredModules(modules) {
+  if (modules === undefined || modules === null) return null;
+  if (!Array.isArray(modules)) return null;
+  return modules;
+}
+
 function mapSupabaseAgent(row) {
   if (!row) return null;
   return {
@@ -109,7 +114,7 @@ function mapSupabaseAgent(row) {
     active: row.active !== false && !row.deleted_at,
     blocked: row.blocked === true,
     isAdmin: row.is_admin === true,
-    modules: normalizeAgentModules(row.modules),
+    modules: coerceStoredModules(row.modules),
   };
 }
 
@@ -124,7 +129,7 @@ function mapDemoAgent(user) {
     phone: user.phone || "",
     active: user.active !== false,
     blocked: user.blocked === true,
-    modules: normalizeAgentModules(user.modules),
+    modules: coerceStoredModules(user.modules),
   };
 }
 
@@ -137,7 +142,7 @@ function sessionFromAgent(agent) {
     userId: agent.id,
     email: normalizedEmail,
     displayName,
-    modules: normalizeAgentModules(agent.modules),
+    modules: coerceStoredModules(agent.modules),
     needsPasswordSetup: agent.needsPasswordSetup === true,
     isAdmin: agent.isAdmin === true,
     ...(agent.authUserId ? { authUserId: agent.authUserId } : {}),

@@ -27,7 +27,7 @@ import {
   updateManagedAgentModules,
 } from "@/lib/agentsApi";
 import AgentModulesPicker from "@/components/admin/AgentModulesPicker";
-import { formatModulesSummary } from "@/constants/agentModules";
+import { formatModulesSummary, modulesForPicker } from "@/constants/agentModules";
 import { PASSWORD_MIN_LENGTH, PASSWORD_MIN_LENGTH_MSG } from "@/lib/agentAuth";
 import { formatAgentPhoneDisplay, normalizeAgentPhone } from "@/lib/agentPhone";
 import { demoModeEnabled } from "@/api/demoClient";
@@ -195,7 +195,7 @@ export default function AdminUsers() {
   };
 
   const openModules = (user) => {
-    setModulesForm(user.modules || []);
+    setModulesForm(modulesForPicker(user.modules));
     setDialog({ mode: "modules", id: user.id, userName: user.name });
   };
 

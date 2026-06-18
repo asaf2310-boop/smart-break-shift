@@ -11,7 +11,7 @@ import {
 } from "@/lib/appUsersStore";
 import { ensureAgentsSeeded } from "@/lib/agentSeed";
 import { PASSWORD_MIN_LENGTH } from "@/lib/agentAuth";
-import { DEFAULT_AGENT_MODULES, normalizeAgentModules } from "@/constants/agentModules";
+import { DEFAULT_AGENT_MODULES, modulesFromPicker } from "@/constants/agentModules";
 import { REAL_AGENT_NAMES } from "@/constants/scheduling";
 import { normalizeAgentPhone } from "@/lib/agentPhone";
 import { apiAdminSetAgentPassword, apiProvisionAgentAuth } from "@/lib/agentAuthClient";
@@ -42,7 +42,7 @@ function mapSupabaseRow(row) {
     blocked: row.blocked === true,
     needsPasswordSetup: row.needs_password_setup === true,
     authUserId: row.auth_user_id,
-    modules: normalizeAgentModules(row.modules),
+    modules: Array.isArray(row.modules) ? row.modules : [...DEFAULT_AGENT_MODULES],
     phone: row.phone || "",
   };
 }
@@ -56,7 +56,7 @@ function mapDemoRow(u) {
     blocked: u.blocked === true,
     needsPasswordSetup: u.needsPasswordSetup === true,
     password: u.password || null,
-    modules: normalizeAgentModules(u.modules),
+    modules: Array.isArray(u.modules) ? u.modules : [...DEFAULT_AGENT_MODULES],
     phone: u.phone || "",
   };
 }
@@ -201,16 +201,16 @@ export async function setManagedAgentBlocked(id, blocked) {
 }
 
 export async function updateManagedAgentModules(id, modules) {
-  const normalized = Array.isArray(modules)
-    ? normalizeAgentModules(modules)
+  const stored = Array.isArray(modules)
+    ? modulesFromPicker(modules)
     : [...DEFAULT_AGENT_MODULES];
 
   if (demoModeEnabled) {
-    const u = updateDemoAppUser(id, { modules: normalized });
+    const u = updateDemoAppUser(id, { modules: stored });
     return mapDemoRow(u);
   }
 
-  const row = await dataClient.entities.Agent.update(id, { modules: normalized });
+  const row = await dataClient.entities.Agent.update(id, { modules: stored });
   return mapSupabaseRow(row);
 }
 

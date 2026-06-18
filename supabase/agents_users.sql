@@ -13,7 +13,7 @@ create table if not exists agents (
   needs_password_setup boolean not null default true,
   deleted_at timestamptz,
   is_admin boolean not null default false,
-  modules jsonb not null default '["breaks","shifts","training","metrics","remote_support","customer_chat","internal_chat","crm","knowledge"]'::jsonb,
+  modules jsonb not null default '["breaks","shifts","training","metrics","remote_support","customer_chat","internal_chat","crm","knowledge","google_review"]'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -22,7 +22,7 @@ create table if not exists agents (
 alter table agents add column if not exists blocked boolean not null default false;
 alter table agents add column if not exists deleted_at timestamptz;
 alter table agents add column if not exists is_admin boolean not null default false;
-alter table agents add column if not exists modules jsonb not null default '["breaks","shifts","training","metrics","remote_support","customer_chat","internal_chat","crm","knowledge"]'::jsonb;
+alter table agents add column if not exists modules jsonb not null default '["breaks","shifts","training","metrics","remote_support","customer_chat","internal_chat","crm","knowledge","google_review"]'::jsonb;
 alter table agents add column if not exists phone text;
 alter table agents alter column email drop not null;
 

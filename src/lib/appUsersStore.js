@@ -1,5 +1,5 @@
 import { demoModeEnabled } from "@/api/demoMode";
-import { DEFAULT_AGENT_MODULES, normalizeAgentModules } from "@/constants/agentModules";
+import { DEFAULT_AGENT_MODULES } from "@/constants/agentModules";
 
 export const APP_USERS_STORAGE_KEY = "app-users-v1";
 
@@ -36,7 +36,7 @@ function readRawUsers() {
       return users.map((u) => ({
         blocked: false,
         ...u,
-        modules: normalizeAgentModules(u.modules),
+        modules: Array.isArray(u.modules) ? u.modules : [...DEFAULT_AGENT_MODULES],
       }));
     }
   } catch {
@@ -114,7 +114,9 @@ export function updateDemoAppUser(id, { email, name, phone, active, blocked, mod
     ...(name !== undefined ? { name: String(name).trim() } : {}),
     ...(active !== undefined ? { active } : {}),
     ...(blocked !== undefined ? { blocked: Boolean(blocked) } : {}),
-    ...(modules !== undefined ? { modules: normalizeAgentModules(modules) } : {}),
+    ...(modules !== undefined
+      ? { modules: Array.isArray(modules) ? modules : [...DEFAULT_AGENT_MODULES] }
+      : {}),
     ...(phone !== undefined ? { phone: phone ? String(phone).trim() : null } : {}),
   };
   users[index] = updated;

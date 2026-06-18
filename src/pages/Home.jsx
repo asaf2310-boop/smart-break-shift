@@ -81,8 +81,8 @@ const crmCard = {
   iconTile: "m3-icon-tile",
 };
 
-/** זמין לכל נציג מחובר — ללא מודול ייעודי */
 const reviewSmsCard = {
+  module: "google_review",
   to: "/review-sms",
   title: "דירוג גוגל",
   desc: "שליחת SMS ללקוח עם קישור לדירוג בגוגל",
@@ -112,8 +112,8 @@ const showAdminDemoHint = import.meta.env.DEV || demoModeEnabled;
 
 function HomeContent() {
   const { displayName, isLoggedIn, refresh } = useAgentSession();
-  const { modules } = useAgentModules();
-  const visibleCards = filterItemsByModules(homeCards, modules);
+  const { rawModules } = useAgentModules();
+  const visibleCards = filterItemsByModules(homeCards, rawModules);
   const agentCount = getAgentNamesList().length;
 
   const handleLoginSuccess = (session) => {

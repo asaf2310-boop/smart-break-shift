@@ -124,7 +124,7 @@ const AuthenticatedApp = () => {
         <Route path="/crm/lookup" element={<ModuleGate module="crm"><CrmGate><RouteErrorBoundary><CrmLookupDeepLink /></RouteErrorBoundary></CrmGate></ModuleGate>} />
         <Route path="/crm/:id" element={<ModuleGate module="crm"><CrmGate><RouteErrorBoundary><CrmCustomerDetail /></RouteErrorBoundary></CrmGate></ModuleGate>} />
         <Route path="/remote-support" element={<ModuleGate module="remote_support"><RemoteSupportPage /></ModuleGate>} />
-        <Route path="/review-sms" element={<AgentReviewSms />} />
+        <Route path="/review-sms" element={<ModuleGate module="google_review"><AgentReviewSms /></ModuleGate>} />
         <Route
           path="/remote-support/recordings/play"
           element={<DemoGate><DemoRecordingPlayPage /></DemoGate>}
