@@ -1,4 +1,4 @@
-# אבטחת מידע — Phase 18 (סיכום)
+# אבטחת מידע — Phase 20 (סיכום)
 
 מסמך מרכזי להגדרות אבטחה. פירוט לפי תחום: `SIP_SECURITY.md`, `PEERJS_SECURITY.md`, `DEMO_VS_PRODUCTION.md`.
 
@@ -10,22 +10,22 @@
 | API רגיש | `POST /api/agent-auth` עם `Authorization: Bearer <access_token>` |
 | מנהל | `agents.is_admin === true` ב-DB; אופציונלי `ADMIN_PIN` בשרת בלבד |
 | RLS | נציגים רואים רק שורות משויכות; anon ללא גישה לטבלאות רגישות |
-| מיגרציה | `security_phase0a` → `security_phase1_auth.sql` → … → `security_phase18.sql` |
+| מיגרציה | `security_phase0a` → … → `security_phase20.sql` |
 
 ### ADMIN_PIN (אופציונלי, שרת בלבד)
 
 - משתנה: `ADMIN_PIN` ב-Vercel — **ללא** `VITE_`
 - כשמוגדר: פעולות מנהל ב-API דורשות `adminPin` בגוף הבקשה **בנוסף** ל-JWT + `is_admin`
 - **אל תגדירו PIN חלש** (1234, 0000). אם לא נדרש שכבה שנייה — השאירו ריק.
-- הלקוח **לא** שולח PIN מ-build (`VITE_ADMIN_PIN` הוסר)
+- הלקוח **לא** שולח PIN מ-build (`VITE_ADMIN_PIN` הוסר; מפתחות legacy נמחקים ב-logout)
 
 ## API — שכבות הגנה
 
 1. `isSameOrigin` — הגנת CSRF/CORS (defense-in-depth)
 2. `verifyBearerAgent` / `verifyKnowledgeAccess` / `verifyAdminAgent` — לפי רגישות
-3. Rate limits — SMS, מייל, העלאות, SIP, איפוס סיסמה, guest resolve, storage
+3. Rate limits — SMS, מייל, העלאות, SIP, איפוס סיסמה, guest resolve, storage, knowledge search/feedback
 
-**בסיס ידע:** `GET /api/knowledge-upload` — מודול knowledge או מנהל; `POST`/`DELETE` (ingest/delete) — **מנהל בלבד**.
+**בסיס ידע:** `GET /api/knowledge-upload` — מודול knowledge או מנהל; `POST`/`DELETE` (ingest/delete) — **מנהל בלבד**. `GET /api/knowledge-chat?welcome=1` — JWT + מודול knowledge (phase 20).
 
 ### נקודות קצה ציבוריות (ללא JWT)
 
@@ -41,7 +41,17 @@
 
 - **פרודקשן:** JWT וסשני תמיכה ב-`sessionStorage`; ניקוי ב-logout (`clearSensitiveClientStorage` + `supabase.auth.signOut` + ניתוק SIP)
 - **דמו:** `localStorage` לנתוני דמו בלבד — לא לפרודקשן
+- **אורח:** טוקני קישור/WebRTC ב-`sessionStorage`; ניקוי אוטומטי כשהסשן פג / הסתיים (`guestSessionTokenCleanup.js`)
 - CRM בענן: `isCrmCloudEnabled()` — Supabase + RLS; בדמו/localStorage ראו `crmCloudMode.js`
+
+## סודות בקליינט (`VITE_*`)
+
+| משתנה | בטוח? | הערה |
+|--------|--------|------|
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | כן | מיועד לקליינט; RLS מגן |
+| `VITE_SIP_WS_URL`, `VITE_SIP_USER` | זהירות | ללא סיסמה — SIP דרך `sip_token_*` בשרת בלבד (phase 19) |
+| `VITE_TWILIO_*` | זהירות | בקוד: רק בדיקת נוכחות (Boolean), לא ערכים מלאים |
+| `VITE_*_API_KEY`, `VITE_ADMIN_PIN`, `VITE_OPENAI_*` | **לא** | אסור בפרודקשן — מפתחות AI/SMS/מייל בשרת בלבד |
 
 ## העלאות קבצים (ZIP)
 
@@ -65,28 +75,29 @@
 | `RESEND_API_KEY` + `EMAIL_FROM` | Vercel server | מייל תמיכה / שיתוף מסך |
 | `GUEST_LINK_SECRET` | Vercel server | חתימת קישורי אורח |
 | `GEMINI_API_KEY` (או `OPENAI_API_KEY`) | Vercel server | בסיס ידע — **לא** `VITE_*` |
-| `INFORU_USERNAME` + `INFORU_API_TOKEN` | Vercel server | SMS שיבוץ (אם בשימוש) |
+| `INFORU_USERNAME` + `INFORU_API_TOKEN` | Vercel server | SMS שיבוץ / איפוס סיסמה |
 | `VITE_APP_URL` | Vercel build | קישורים במייל/SMS |
+| `ADMIN_PIN` | Vercel server (אופציונלי) | שכבה שנייה למנהל — לא בקליינט |
 
-**Supabase SQL (בסדר):** `security_phase0a` → … → `security_phase18.sql` + `knowledge_pgvector.sql` לפי הצורך.
+**Supabase SQL (בסדר):** `security_phase0a` → … → `security_phase20.sql` + `knowledge_pgvector.sql` לפי הצורך.
 
 **אחרי שינוי env:** Redeploy ב-Vercel. **אל** להגדיר `VITE_DEMO_MODE` בפרודקשן.
 
-## סטטוס אחרי Phase 17 (ומה נסגר ב-Phase 18)
+## סטטוס אחרי Phase 20
 
-### נסגר (Phases 0–18)
+### נסגר (Phases 0–20)
 
 | תחום | מצב |
 |------|-----|
 | אימות API | JWT + `is_admin` לכל נקודות קצה רגישות; ingest ידע — מנהל בלבד |
-| סיסמאות | מינימום 12 תווים; אין `VITE_ADMIN_PIN`; אין OpenAI בקליינט |
+| סיסמאות | מינימום 12 תווים; איפוס/כניסה ראשונה — rate limit IP + cooldown אימייל (תשובה גנרית, ללא enumeration) |
 | אחסון דפדפן | פרודקשן: `sessionStorage`; logout מנקה JWT, SIP, guest/webrtc tokens |
-| תמיכה מרחוק | קישורי אורח חד-פעמיים, join tokens, fingerprint, יומן ביקורת |
-| SIP | mint/redeem דרך `agent-auth` בלבד (shim `/api/sip-token` הוסר) |
+| תמיכה מרחוק | קישורי אורח חד-פעמיים, join tokens, fingerprint, TTL, ניקוי טוקנים stale בקליינט |
+| SIP | mint/redeem דרך `agent-auth` בלבד; **אין** fallback סיסמה ב-`VITE_*` (phase 19) |
 | העלאות | ZIP חסום בפרודקשן כברירת מחדל; allowlist + magic bytes |
-| Rate limits | SMS, מייל, guest, WebRTC, SIP, admin, איפוס סיסמה (IP), storage |
+| Rate limits | SMS, מייל, guest, WebRTC, SIP, admin, איפוס סיסמה, storage, knowledge search/feedback |
 | כותרות | CSP (כולל `object-src 'none'`), X-Frame-Options, וכו' ב-`vercel.json` |
-| יומן ביקורת | UI בעברית לכל פעולות phase 12–17 |
+| יומן ביקורת | UI בעברית; phase 20: `admin_agent_*`, `crm_routing_change` |
 
 ### עתידי (דורש תשתית נוספת)
 

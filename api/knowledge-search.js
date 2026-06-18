@@ -3,9 +3,40 @@
 import { json, readJsonBody, handleOptions, isSameOrigin } from "../server/knowledge/httpUtils.js";
 import { requireKnowledgeAccess } from "../server/knowledge/requireKnowledgeAccess.js";
 import { isPgVectorConfigured } from "../server/knowledge/supabaseAdmin.js";
+import {
+  checkRateLimit,
+  getRateLimitKey,
+  rateLimitHebrewMessage,
+  recordRateLimit,
+  setRateLimitHeaders,
+} from "../server/http/rateLimit.js";
 import { embedQuery, isEmbeddingConfigured } from "../server/knowledge/embeddingService.js";
 import { searchKnowledgeChunks } from "../server/knowledge/vectorSearchService.js";
 import { truncateSnippet } from "../server/knowledge/chatAnswerService.js";
+
+const knowledgeSearchRateByUser = new Map();
+const KNOWLEDGE_SEARCH_RATE_MAX = 120;
+
+function enforceKnowledgeSearchRateLimit(res, req, auth) {
+  const key = getRateLimitKey(req, auth?.agent?.id);
+  const check = checkRateLimit(knowledgeSearchRateByUser, key, KNOWLEDGE_SEARCH_RATE_MAX);
+  if (!check.allowed) {
+    const sec = setRateLimitHeaders(res, check.retryAfterSec);
+    json(
+      res,
+      429,
+      {
+        error: "rate_limited",
+        retryAfterSec: sec,
+        message: rateLimitHebrewMessage(sec),
+      },
+      req
+    );
+    return false;
+  }
+  recordRateLimit(check.entry);
+  return true;
+}
 
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") {
@@ -38,7 +69,9 @@ export default async function handler(req, res) {
     return json(res, 405, { error: "method_not_allowed" }, req);
   }
 
-  if (!(await requireKnowledgeAccess(req, res))) return;
+  const auth = await requireKnowledgeAccess(req, res);
+  if (!auth) return;
+  if (!enforceKnowledgeSearchRateLimit(res, req, auth)) return;
 
   if (!isPgVectorConfigured()) {
     return json(res, 503, { error: "pgvector_not_configured" }, req);

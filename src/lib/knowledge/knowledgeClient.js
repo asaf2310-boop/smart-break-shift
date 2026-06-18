@@ -84,7 +84,7 @@ export async function probeServerRagHealth() {
 }
 
 export async function fetchKnowledgeWelcome() {
-  const res = await fetchWithTimeout("/api/knowledge-chat?welcome=1");
+  const res = await authenticatedFetch("/api/knowledge-chat?welcome=1");
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "welcome_failed");
   return {

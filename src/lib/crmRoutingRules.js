@@ -1,5 +1,7 @@
 import { getAgentNamesList } from "@/constants/scheduling";
+import { demoModeEnabled } from "@/api/demoMode";
 import { isCrmCloudEnabled } from "@/api/crmCloudMode";
+import { apiLogAdminAgentChange } from "@/lib/agentAuthClient";
 import {
   deleteRoutingRuleFromCloud,
   loadRoutingRulesFromCloud,
@@ -31,6 +33,15 @@ const DEFAULT_ROUTING_RULES = [
 let memoryRules = null;
 let hydrateRulesPromise = null;
 let cloudRulesHydrated = false;
+
+function auditCrmRoutingChange(ruleId, operation, metadata = {}) {
+  if (demoModeEnabled || !ruleId) return;
+  apiLogAdminAgentChange({
+    agentId: ruleId,
+    changeType: "crm_routing",
+    metadata: { operation, ...metadata },
+  });
+}
 
 function normalizeRule(rule) {
   if (!rule) return null;
@@ -197,6 +208,7 @@ export function createCrmRoutingRule(rule) {
   }
   const updated = [...rules, { ...next, sort_order: rules.length }];
   writeRulesStore(updated);
+  auditCrmRoutingChange(next.id, "create", { topic: next.referral_topic });
   return next;
 }
 
@@ -219,13 +231,16 @@ export function updateCrmRoutingRule(id, patch = {}) {
     throw new Error("כבר קיים כלל לנושא זה");
   }
   writeRulesStore(updated);
+  auditCrmRoutingChange(changed.id, "update", { topic: changed.referral_topic });
   return changed;
 }
 
 export function deleteCrmRoutingRule(id) {
   const rules = readRulesStore();
+  const removed = rules.find((rule) => rule.id === id);
   const updated = rules.filter((rule) => rule.id !== id);
   writeRulesStore(updated);
+  auditCrmRoutingChange(id, "delete", { topic: removed?.referral_topic || null });
   if (isCrmCloudEnabled()) {
     deleteRoutingRuleFromCloud(id).catch((err) => {
       console.warn("[crmRoutingRules] cloud delete failed", err);

@@ -1,5 +1,14 @@
 import { supabase } from "@/api/supabase";
 import { getGuestLinkToken } from "@/lib/guestLinkTokenStore";
+import {
+  isStaleGuestAuthError,
+  purgeStaleGuestSessionTokens,
+} from "@/lib/guestSessionTokenCleanup";
+
+function handleStaleGuestApiError(error, sessionId) {
+  if (!isStaleGuestAuthError(error)) return;
+  purgeStaleGuestSessionTokens(sessionId);
+}
 
 async function authHeaders() {
   const headers = { "Content-Type": "application/json" };
@@ -52,7 +61,9 @@ export async function apiResolveGuestLink(token) {
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      return { ok: false, error: data.error || "resolve_failed" };
+      const error = data.error || "resolve_failed";
+      handleStaleGuestApiError(error);
+      return { ok: false, error };
     }
     return { ok: true, session: data.session, kind: data.kind };
   } catch (err) {
@@ -75,7 +86,9 @@ export async function apiGuestSessionState({ sessionId, token }) {
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      return { ok: false, error: data.error || "guest_session_failed" };
+      const error = data.error || "guest_session_failed";
+      handleStaleGuestApiError(error, sessionId);
+      return { ok: false, error };
     }
     return { ok: true, session: data.session, ended: data.ended === true };
   } catch (err) {
@@ -98,7 +111,9 @@ export async function apiGuestChatList({ sessionId, token }) {
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      return { ok: false, error: data.error || "guest_chat_list_failed" };
+      const error = data.error || "guest_chat_list_failed";
+      handleStaleGuestApiError(error, sessionId);
+      return { ok: false, error };
     }
     return { ok: true, messages: data.messages || [] };
   } catch (err) {
@@ -124,7 +139,9 @@ export async function apiGuestChatSend({ sessionId, token, messageId, body, send
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      return { ok: false, error: data.error || "guest_chat_send_failed" };
+      const error = data.error || "guest_chat_send_failed";
+      handleStaleGuestApiError(error, sessionId);
+      return { ok: false, error };
     }
     return { ok: true, message: data.message };
   } catch (err) {

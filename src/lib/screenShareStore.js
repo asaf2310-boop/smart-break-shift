@@ -25,6 +25,7 @@ import {
 } from "@/lib/supportSessionsSync";
 import { apiGuestSessionState } from "@/lib/guestLinkClient";
 import { getGuestLinkToken } from "@/lib/guestLinkTokenStore";
+import { isStaleGuestAuthError, purgeStaleGuestSessionTokens } from "@/lib/guestSessionTokenCleanup";
 import { buildShortGuestUrl, finalizeCloudGuestLink } from "@/lib/shortGuestLink";
 import { requestAgentEndGuestNotify } from "@/lib/screenShareSessionEnd";
 import {
@@ -496,7 +497,12 @@ export async function pullSessionFieldsFromCloud(id) {
   if (guestToken) {
     try {
       const api = await apiGuestSessionState({ sessionId: id, token: guestToken });
-      if (!api.ok || !api.session) return getSession(id);
+      if (!api.ok || !api.session) {
+        if (!api.ok && isStaleGuestAuthError(api.error)) {
+          purgeStaleGuestSessionTokens(id);
+        }
+        return getSession(id);
+      }
       const row = {
         id: api.session.sessionId,
         status: api.session.status,

@@ -168,6 +168,19 @@ export async function apiAdminSmsStatsByAgent({ days = 30, fromDate = null, toDa
   );
 }
 
+/** Fire-and-forget security audit for admin agent / CRM changes (production). */
+export function apiLogAdminAgentChange({ agentId, changeType, metadata = {} } = {}) {
+  void postAgentAuth(
+    {
+      action: "admin_log_agent_change",
+      agentId,
+      changeType,
+      metadata,
+    },
+    { requireBearer: true }
+  );
+}
+
 /** Mint short-lived encrypted SIP credential token via POST /api/agent-auth. */
 export async function apiSipTokenMint({ agentName = null } = {}) {
   return postAgentAuth(

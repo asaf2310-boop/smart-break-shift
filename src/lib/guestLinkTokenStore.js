@@ -18,6 +18,21 @@ export function getGuestLinkToken(sessionId) {
   }
 }
 
+export function clearGuestLinkToken(sessionId) {
+  if (!sessionId || typeof sessionStorage === "undefined") return;
+  try {
+    sessionStorage.removeItem(`${STORAGE_PREFIX}${sessionId}`);
+  } catch {
+    /* ignore */
+  }
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.removeItem(`${STORAGE_PREFIX}${sessionId}`);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function clearAllGuestLinkTokens() {
   if (typeof sessionStorage === "undefined") return;
   try {

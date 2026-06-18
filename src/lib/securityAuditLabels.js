@@ -1,9 +1,16 @@
-/** Hebrew labels for security_audit_log.action values (phase 12–18). */
+/** Hebrew labels for security_audit_log.action values (phase 12–20). */
 
 export const SECURITY_AUDIT_ACTION_LABELS = {
   admin_set_password: "הגדרת סיסמה (מנהל)",
   admin_create_break_registration: "יצירת הרשמת הפסקה",
   admin_delete_break_registration: "מחיקת הרשמת הפסקה",
+  admin_agent_create: "יצירת נציג",
+  admin_agent_update: "עדכון נציג",
+  admin_agent_modules: "עדכון מודולים לנציג",
+  admin_agent_block: "חסימת נציג",
+  admin_agent_unblock: "ביטול חסימת נציג",
+  admin_agent_delete: "מחיקת נציג (רך)",
+  crm_routing_change: "שינוי כללי ניתוב CRM",
   provision_auth: "הקמת משתמש Auth לנציג",
   guest_link_mint: "יצירת קישור אורח",
   guest_link_created: "יצירת קישור אורח",

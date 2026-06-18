@@ -14,7 +14,7 @@ import { PASSWORD_MIN_LENGTH } from "@/lib/agentAuth";
 import { DEFAULT_AGENT_MODULES, modulesFromPicker } from "@/constants/agentModules";
 import { REAL_AGENT_NAMES } from "@/constants/scheduling";
 import { normalizeAgentPhone } from "@/lib/agentPhone";
-import { apiAdminSetAgentPassword, apiProvisionAgentAuth } from "@/lib/agentAuthClient";
+import { apiAdminSetAgentPassword, apiProvisionAgentAuth, apiLogAdminAgentChange } from "@/lib/agentAuthClient";
 import {
   fetchAgentByIdFromSupabase,
   fetchAgentsFromSupabase,
@@ -26,6 +26,11 @@ function notifyAgentUsersChanged() {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("app-users-changed"));
   }
+}
+
+function auditAdminAgentChange(agentId, changeType, metadata = {}) {
+  if (demoModeEnabled || !agentId) return;
+  apiLogAdminAgentChange({ agentId, changeType, metadata });
 }
 
 export function isPlaceholderAgentEmail(email) {
@@ -140,6 +145,11 @@ export async function createManagedAgent({ email, name, phone }) {
     }
   }
 
+  auditAdminAgentChange(row.id, "create", {
+    email: normalized || null,
+    name: displayName,
+  });
+
   return mapSupabaseRow(row);
 }
 
@@ -163,6 +173,9 @@ export async function updateManagedAgent(id, { email, name, phone }) {
   }
   const row = await dataClient.entities.Agent.update(id, payload);
   notifyAgentUsersChanged();
+  auditAdminAgentChange(id, "update", {
+    fields: Object.keys(payload),
+  });
   return mapSupabaseRow(row);
 }
 
@@ -197,6 +210,7 @@ export async function setManagedAgentBlocked(id, blocked) {
   }
   const row = await dataClient.entities.Agent.update(id, { blocked: Boolean(blocked) });
   notifyAgentUsersChanged();
+  auditAdminAgentChange(id, blocked ? "block" : "unblock");
   return mapSupabaseRow(row);
 }
 
@@ -211,6 +225,7 @@ export async function updateManagedAgentModules(id, modules) {
   }
 
   const row = await dataClient.entities.Agent.update(id, { modules: stored });
+  auditAdminAgentChange(id, "modules", { modules: stored });
   return mapSupabaseRow(row);
 }
 
@@ -223,4 +238,5 @@ export async function deleteManagedAgent(id) {
     active: false,
     deleted_at: new Date().toISOString(),
   });
+  auditAdminAgentChange(id, "delete");
 }

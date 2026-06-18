@@ -64,10 +64,7 @@ export async function requestPasswordResetByEmail(email) {
 
   const cooldown = checkResetCooldown(normalized);
   if (!cooldown.allowed) {
-    return {
-      ok: false,
-      message: `ניתן לבקש איפוס שוב בעוד ${cooldown.waitSec} שניות`,
-    };
+    return { ok: true, message: GENERIC_RESET_OK_MSG };
   }
 
   const phone = normalizeIsraeliPhone(agent.phone);

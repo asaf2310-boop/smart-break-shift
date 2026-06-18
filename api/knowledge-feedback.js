@@ -14,6 +14,37 @@ import {
   listKnowledgeFeedback,
 } from "../server/knowledge/gapFeedbackService.js";
 import { logSecurityEvent } from "../server/security/auditLog.js";
+import {
+  checkRateLimit,
+  getRateLimitKey,
+  rateLimitHebrewMessage,
+  recordRateLimit,
+  setRateLimitHeaders,
+} from "../server/http/rateLimit.js";
+
+const knowledgeFeedbackRateByUser = new Map();
+const KNOWLEDGE_FEEDBACK_RATE_MAX = 120;
+
+function enforceKnowledgeFeedbackRateLimit(res, req, auth) {
+  const key = getRateLimitKey(req, auth?.agent?.id);
+  const check = checkRateLimit(knowledgeFeedbackRateByUser, key, KNOWLEDGE_FEEDBACK_RATE_MAX);
+  if (!check.allowed) {
+    const sec = setRateLimitHeaders(res, check.retryAfterSec);
+    json(
+      res,
+      429,
+      {
+        error: "rate_limited",
+        retryAfterSec: sec,
+        message: rateLimitHebrewMessage(sec),
+      },
+      req
+    );
+    return false;
+  }
+  recordRateLimit(check.entry);
+  return true;
+}
 
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") {
@@ -66,6 +97,7 @@ export default async function handler(req, res) {
   if (action === "log_gap") {
     const auth = await requireKnowledgeAccess(req, res);
     if (!auth) return;
+    if (!enforceKnowledgeFeedbackRateLimit(res, req, auth)) return;
     const result = await logKnowledgeGap({
       question: body.question,
       tenantId,
@@ -102,6 +134,7 @@ export default async function handler(req, res) {
 
   const auth = await requireKnowledgeAccess(req, res);
   if (!auth) return;
+  if (!enforceKnowledgeFeedbackRateLimit(res, req, auth)) return;
 
   const helpful = body.helpful === true || body.rating === "helpful";
   const notHelpful = body.helpful === false || body.rating === "not_helpful";

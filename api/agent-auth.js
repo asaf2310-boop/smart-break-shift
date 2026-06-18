@@ -766,6 +766,45 @@ export default async function handler(req, res) {
     }
   }
 
+  if (action === "admin_log_agent_change") {
+    const auth = await requireAdminAgent(req, res, body);
+    if (!auth) return;
+
+    const agentId = String(body.agentId || body.id || "").trim();
+    const changeType = String(body.changeType || body.change_type || "").trim();
+    if (!agentId || !changeType) {
+      return json(res, 400, { error: "invalid_fields", message: "חסרים שדות חובה" }, req);
+    }
+
+    const actionByChange = {
+      create: "admin_agent_create",
+      update: "admin_agent_update",
+      modules: "admin_agent_modules",
+      block: "admin_agent_block",
+      unblock: "admin_agent_unblock",
+      delete: "admin_agent_delete",
+      crm_routing: "crm_routing_change",
+    };
+    const auditAction = actionByChange[changeType];
+    if (!auditAction) {
+      return json(res, 400, { error: "invalid_change_type" }, req);
+    }
+
+    const metadata =
+      body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata)
+        ? body.metadata
+        : {};
+    void logSecurityEvent({
+      action: auditAction,
+      actorAgentId: auth.agent.id,
+      resourceType: changeType === "crm_routing" ? "crm_routing_rule" : "agent",
+      resourceId: agentId,
+      metadata: { changeType, ...metadata },
+      req,
+    });
+    return json(res, 200, { ok: true }, req);
+  }
+
   if (action === "provision_auth") {
     const auth = await requireAdminAgent(req, res, body);
     if (!auth) return;

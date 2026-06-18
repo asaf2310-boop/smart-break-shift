@@ -322,6 +322,7 @@ export default async function handler(req, res) {
       );
     }
     if (url.searchParams.get("welcome") === "1") {
+      if (!(await requireKnowledgeAccess(req, res))) return;
       if (!isGeminiConfigured()) {
         return json(
           res,
