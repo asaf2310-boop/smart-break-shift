@@ -120,6 +120,17 @@ export async function apiAdminDeleteBreakRegistration(id) {
   return result;
 }
 
+export async function apiSendReviewSms({ phone, message }) {
+  return postAgentAuth(
+    {
+      action: "send_review_sms",
+      phone,
+      message,
+    },
+    { requireBearer: true }
+  );
+}
+
 export async function apiAdminListAuditLog({ limit = 50, offset = 0, filterAction = null } = {}) {
   return postAgentAuth(
     {

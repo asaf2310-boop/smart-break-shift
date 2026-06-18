@@ -56,6 +56,7 @@ import AdminCrmDepartments from './pages/AdminCrmDepartments';
 import AdminCrmRouting from './pages/AdminCrmRouting';
 import AdminCrmDashboard from './pages/AdminCrmDashboard';
 import AdminSecurityAudit from './pages/AdminSecurityAudit';
+import AgentReviewSms from './pages/AgentReviewSms';
 import AgentMetricsPage from './pages/AgentMetricsPage';
 import AgentMetricsRankingPage from './pages/AgentMetricsRankingPage';
 import RouteErrorBoundary from '@/components/RouteErrorBoundary';
@@ -123,6 +124,7 @@ const AuthenticatedApp = () => {
         <Route path="/crm/lookup" element={<ModuleGate module="crm"><CrmGate><RouteErrorBoundary><CrmLookupDeepLink /></RouteErrorBoundary></CrmGate></ModuleGate>} />
         <Route path="/crm/:id" element={<ModuleGate module="crm"><CrmGate><RouteErrorBoundary><CrmCustomerDetail /></RouteErrorBoundary></CrmGate></ModuleGate>} />
         <Route path="/remote-support" element={<ModuleGate module="remote_support"><RemoteSupportPage /></ModuleGate>} />
+        <Route path="/review-sms" element={<AgentReviewSms />} />
         <Route
           path="/remote-support/recordings/play"
           element={<DemoGate><DemoRecordingPlayPage /></DemoGate>}

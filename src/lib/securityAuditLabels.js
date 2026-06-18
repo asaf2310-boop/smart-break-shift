@@ -9,6 +9,7 @@ export const SECURITY_AUDIT_ACTION_LABELS = {
   support_session_end: "סיום סשן תמיכה",
   knowledge_upload: "העלאת מסמך ידע",
   knowledge_delete: "מחיקת מסמך ידע",
+  send_review_sms: "שליחת SMS דירוג גוגל",
 };
 
 export function securityAuditActionLabel(action) {

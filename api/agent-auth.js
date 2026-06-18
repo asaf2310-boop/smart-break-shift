@@ -47,6 +47,7 @@ import { handleIceServersRequest, DEFAULT_STUN_SERVERS } from "../server/webrtc/
 import { logSecurityEvent } from "../server/security/auditLog.js";
 import { listSecurityAuditLog } from "../server/security/auditLogListService.js";
 import { endSupportSessionByAgent } from "../server/support/supportSessionEndService.js";
+import { sendReviewSmsToCustomer } from "../server/sms/reviewSmsService.js";
 
 const PASSWORD_MIN_LENGTH = 12;
 
@@ -56,6 +57,7 @@ const guestChatRateByIp = new Map();
 const guestMintRateByUser = new Map();
 const adminActionRateByUser = new Map();
 const supportEndRateByUser = new Map();
+const reviewSmsRateByUser = new Map();
 
 const GUEST_RESOLVE_RATE_MAX = 60;
 const GUEST_SESSION_POLL_RATE_MAX = 240;
@@ -64,6 +66,8 @@ const ICE_SERVERS_RATE_MAX = 120;
 const GUEST_MINT_RATE_MAX = 120;
 const ADMIN_ACTION_RATE_MAX = 60;
 const SUPPORT_END_RATE_MAX = 120;
+const REVIEW_SMS_RATE_MAX = 30;
+const REVIEW_SMS_RATE_WINDOW_MS = 60 * 60 * 1000;
 
 function rateLimitResponse(res, req, retryAfterSec) {
   const sec = setRateLimitHeaders(res, retryAfterSec);
@@ -330,6 +334,58 @@ export default async function handler(req, res) {
             ? "חסרים שדות חובה להרשמה"
             : "לא הצלחנו לשמור את ההרשמה";
       return json(res, 500, { error: "create_failed", message }, req);
+    }
+  }
+
+  if (action === "send_review_sms") {
+    const auth = await verifyBearerAgent(req);
+    if (!auth?.agent) {
+      return json(res, 401, { error: "unauthorized", message: "נדרשת התחברות" }, req);
+    }
+
+    const key = getRateLimitKey(req, auth.agent.id);
+    const rateCheck = checkRateLimit(
+      reviewSmsRateByUser,
+      key,
+      REVIEW_SMS_RATE_MAX,
+      REVIEW_SMS_RATE_WINDOW_MS
+    );
+    if (!rateCheck.allowed) {
+      return rateLimitResponse(res, req, rateCheck.retryAfterSec);
+    }
+    recordRateLimit(rateCheck.entry);
+
+    const phone = String(body.phone || body.to || "").trim();
+    const customMessage = String(body.message || body.customMessage || "").trim();
+
+    try {
+      const result = await sendReviewSmsToCustomer({
+        phone,
+        customMessage,
+        actorAgentId: auth.agent.id,
+        actorName: auth.agent.name,
+        req,
+      });
+
+      if (!result.ok) {
+        const status =
+          result.error === "invalid_phone" || result.error === "review_url_not_configured"
+            ? 400
+            : result.error === "sms_not_configured"
+              ? 503
+              : 502;
+        return json(res, status, result, req);
+      }
+
+      return json(res, 200, result, req);
+    } catch (err) {
+      console.error("[agent-auth] send_review_sms", err);
+      return json(
+        res,
+        502,
+        { ok: false, error: "sms_send_failed", message: err.message || "שליחת SMS נכשלה" },
+        req
+      );
     }
   }
 

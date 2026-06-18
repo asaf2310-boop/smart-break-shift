@@ -1,5 +1,5 @@
 import React from "react";
-import { BarChart3, BookOpen, CalendarClock, CalendarDays, Contact, GraduationCap, MessageCircle, Monitor } from "lucide-react";
+import { BarChart3, BookOpen, CalendarClock, CalendarDays, Contact, GraduationCap, MessageCircle, Monitor, Star } from "lucide-react";
 import { getAgentNamesList } from "@/constants/scheduling";
 import AgentLogin from "@/components/auth/AgentLogin";
 import HypHomeShell from "@/components/hyp/HypHomeShell";
@@ -81,6 +81,15 @@ const crmCard = {
   iconTile: "m3-icon-tile",
 };
 
+/** זמין לכל נציג מחובר — ללא מודול ייעודי */
+const reviewSmsCard = {
+  to: "/review-sms",
+  title: "דירוג גוגל",
+  desc: "שליחת SMS ללקוח עם קישור לדירוג בגוגל",
+  icon: Star,
+  iconTile: "m3-icon-tile",
+};
+
 const demoOnlyCards = [
   crmCard,
   knowledgeCard,
@@ -89,13 +98,14 @@ const demoOnlyCards = [
 
 const liveCardsWithOptionalModules = [
   ...productionCards,
+  reviewSmsCard,
   ...(customerChatEnabled && !demoModeEnabled ? [customerChatCard] : []),
   ...(knowledgeEnabled && !demoModeEnabled ? [knowledgeCard] : []),
   ...(crmEnabled && !demoModeEnabled ? [crmCard] : []),
 ];
 
 const homeCards = demoModeEnabled
-  ? [...productionCards, ...demoOnlyCards]
+  ? [...productionCards, reviewSmsCard, ...demoOnlyCards]
   : liveCardsWithOptionalModules;
 
 const showAdminDemoHint = import.meta.env.DEV || demoModeEnabled;
