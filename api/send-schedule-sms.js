@@ -1,6 +1,8 @@
 /** Vercel serverless — שליחת SMS שיבוץ דרך Inforu (פרטי חשבון ב-process.env בלבד) */
 
 import { verifyAdminAgent } from "../server/agent/agentAuthService.js";
+import { getSupabaseAdmin } from "../server/knowledge/supabaseAdmin.js";
+import { logSecurityEvent } from "../server/security/auditLog.js";
 import { json, readJsonBody, handleOptions, isSameOrigin } from "../server/knowledge/httpUtils.js";
 import {
   checkRateLimit as checkRateLimitEntry,
@@ -93,6 +95,25 @@ export function parseInforuResponse(body) {
     description ||
     (status ? INFORU_STATUS_MESSAGES[status] || `Inforu status ${status}` : "תשובה לא מזוהה מ-Inforu");
   return { ok, status, message, raw: text.slice(0, 500) };
+}
+
+function maskPhoneForAudit(phone) {
+  const digits = String(phone || "");
+  if (digits.length <= 4) return "****";
+  return `${"*".repeat(Math.max(0, digits.length - 4))}${digits.slice(-4)}`;
+}
+
+async function resolveTargetAgentIdByName(name) {
+  const trimmed = String(name || "").trim();
+  if (!trimmed) return null;
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return null;
+  const { data } = await supabase
+    .from("agents")
+    .select("id")
+    .eq("display_name", trimmed)
+    .maybeSingle();
+  return data?.id || null;
 }
 
 export async function sendInforuSms({ userName, apiToken, sender, to, message }) {
@@ -213,6 +234,21 @@ export default async function handler(req, res) {
         req
       );
     }
+
+    const targetAgentId = await resolveTargetAgentIdByName(agentName);
+    void logSecurityEvent({
+      action: "send_schedule_sms",
+      actorAgentId: adminAuth.agent.id,
+      resourceType: "agent_phone",
+      resourceId: maskPhoneForAudit(phone),
+      metadata: {
+        targetAgentName: agentName || null,
+        targetAgentId,
+        sentByAdminName: adminAuth.agent.displayName || null,
+        phoneLast4: phone.slice(-4),
+      },
+      req,
+    });
 
     return json(
       res,

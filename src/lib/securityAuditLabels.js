@@ -14,6 +14,7 @@ export const SECURITY_AUDIT_ACTION_LABELS = {
   knowledge_upload: "העלאת מסמך ידע",
   knowledge_delete: "מחיקת מסמך ידע",
   send_review_sms: "שליחת SMS דירוג גוגל",
+  send_schedule_sms: "שליחת SMS שיבוץ",
 };
 
 export function securityAuditActionLabel(action) {

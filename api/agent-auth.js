@@ -49,6 +49,7 @@ import { webrtcJoinRequireEnabled } from "../server/webrtc/webrtcJoinToken.js";
 import { verifyOrBindGuestTokenFingerprint } from "../server/guest/guestLinkRedemption.js";
 import { logSecurityEvent } from "../server/security/auditLog.js";
 import { listSecurityAuditLog } from "../server/security/auditLogListService.js";
+import { getSmsStatsByAgent } from "../server/security/smsStatsService.js";
 import { endSupportSessionByAgent } from "../server/support/supportSessionEndService.js";
 import { sendReviewSmsToCustomer } from "../server/sms/reviewSmsService.js";
 import {
@@ -640,6 +641,31 @@ export default async function handler(req, res) {
         res,
         500,
         { error: "load_failed", message: "לא הצלחנו לטעון את יומן הביקורת" },
+        req
+      );
+    }
+  }
+
+  if (action === "admin_sms_stats_by_agent") {
+    const auth = await requireAdminAgent(req, res, body);
+    if (!auth) return;
+
+    try {
+      const result = await getSmsStatsByAgent({
+        fromDate: body.fromDate ?? body.from_date ?? null,
+        toDate: body.toDate ?? body.to_date ?? null,
+        days: body.days,
+      });
+      if (!result.ok) {
+        return json(res, 500, result, req);
+      }
+      return json(res, 200, result, req);
+    } catch (err) {
+      console.error("[agent-auth] admin_sms_stats_by_agent", err);
+      return json(
+        res,
+        500,
+        { error: "load_failed", message: "לא הצלחנו לטעון סטטיסטיקת SMS" },
         req
       );
     }

@@ -155,3 +155,15 @@ export async function apiAdminListAuditLog({ limit = 50, offset = 0, filterActio
     { requireBearer: true }
   );
 }
+
+export async function apiAdminSmsStatsByAgent({ days = 30, fromDate = null, toDate = null } = {}) {
+  return postAgentAuth(
+    {
+      action: "admin_sms_stats_by_agent",
+      days,
+      fromDate,
+      toDate,
+    },
+    { requireBearer: true }
+  );
+}

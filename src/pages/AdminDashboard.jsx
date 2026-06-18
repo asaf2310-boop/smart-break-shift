@@ -260,6 +260,7 @@ export default function AdminDashboard() {
           <Link to="/admin/recordings" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">הקלטות</Link>
           <Link to="/admin/metrics" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">מדדים</Link>
           <Link to="/admin/security-audit" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">יומן ביקורת</Link>
+          <Link to="/admin/sms-stats" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">סטטיסטיקת SMS</Link>
           <Link to="/review-sms" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">דירוג גוגל (SMS)</Link>
           {(demoModeEnabled || knowledgeEnabled) && (
             <Link to="/admin/knowledge" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">
