@@ -132,7 +132,17 @@ export async function apiSendReviewSms({ phone, message }) {
 }
 
 export async function apiGetReviewSmsConfig() {
-  return postAgentAuth({ action: "review_sms_config" }, { requireBearer: true });
+  return postAgentAuth({ action: "get_review_sms_settings" }, { requireBearer: true });
+}
+
+export async function apiUpdateReviewSmsSettings({ googleReviewSmsUrl }) {
+  return postAgentAuth(
+    {
+      action: "update_review_sms_settings",
+      google_review_sms_url: googleReviewSmsUrl,
+    },
+    { requireBearer: true }
+  );
 }
 
 export async function apiAdminListAuditLog({ limit = 50, offset = 0, filterAction = null } = {}) {

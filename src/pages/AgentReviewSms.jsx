@@ -23,7 +23,13 @@ export default function AgentReviewSms() {
   const [customMessage, setCustomMessage] = useState("");
   const [useCustom, setUseCustom] = useState(false);
   const [sending, setSending] = useState(false);
-  const [smsConfig, setSmsConfig] = useState({ loading: true, ok: false, smsUrl: null, message: null });
+  const [smsConfig, setSmsConfig] = useState({
+    loading: true,
+    ok: false,
+    smsUrl: null,
+    source: null,
+    message: null,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -147,14 +153,17 @@ export default function AgentReviewSms() {
             </code>
           </>
         )}
-        {!smsConfig.loading && (
+        {!smsConfig.loading && smsUrlMissing && (
           <p className="mt-2 text-xs opacity-80">
-            הגדירו <code className="text-[11px]">GOOGLE_REVIEW_SMS_URL</code> ב-Vercel (מומלץ:{" "}
+            מנהל יכול להגדיר קישור קצר (מומלץ{" "}
             <code className="text-[11px]" dir="ltr">
               g.page/r/…/review
             </code>
-            ). אופציונלי: <code className="text-[11px]">GOOGLE_REVIEW_URL</code> ליעד מלא (למשל הפניה
-            מ-/go/review).
+            ) ב{" "}
+            <Link to="/admin" className="underline hover:text-amber-950">
+              דשבורד מנהל
+            </Link>{" "}
+            → קישור דירוג גוגל ל-SMS.
           </p>
         )}
       </div>

@@ -9,6 +9,7 @@ import DateSelector from "../components/breaks/DateSelector";
 import { Link } from "react-router-dom";
 import BreakSettingsPanel from "../components/admin/BreakSettingsPanel";
 import ChatBrandingPanel from "../components/admin/ChatBrandingPanel";
+import ReviewSmsSettingsPanel from "../components/admin/ReviewSmsSettingsPanel";
 import {
   BREAK_REGISTRATION_OVERRIDE_MESSAGE,
   SHORT_BREAK_SLOTS,
@@ -247,6 +248,9 @@ export default function AdminDashboard() {
         </div>
         <div className="mb-6">
           <ChatBrandingPanel />
+        </div>
+        <div className="mb-6">
+          <ReviewSmsSettingsPanel />
         </div>
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between mb-8">
           <Link to="/" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">ראשי</Link>

@@ -47,7 +47,7 @@ export async function fetchReviewSmsConfig() {
       error: smsUrl ? null : "review_sms_url_not_configured",
       message: smsUrl
         ? null
-        : "הגדירו VITE_GOOGLE_REVIEW_SMS_URL לתצוגה מקדימה בדמו, או GOOGLE_REVIEW_SMS_URL בשרת.",
+        : "הגדירו קישור בדשבורד מנהל (או VITE_GOOGLE_REVIEW_SMS_URL בדמו מקומי).",
       template: DEFAULT_REVIEW_SMS_TEMPLATE,
       maxLength: REVIEW_SMS_MAX_LENGTH,
     };
@@ -68,6 +68,7 @@ export async function fetchReviewSmsConfig() {
   return {
     ok: Boolean(result.smsUrl),
     smsUrl: result.smsUrl || null,
+    source: result.source || null,
     error: result.error || null,
     message: result.message || null,
     template: result.template || DEFAULT_REVIEW_SMS_TEMPLATE,

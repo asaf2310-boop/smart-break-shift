@@ -3,15 +3,15 @@ import { logSecurityEvent } from "../security/auditLog.js";
 import {
   DEFAULT_REVIEW_SMS_TEMPLATE,
   buildReviewSmsMessage,
-  resolveReviewSmsUrl,
   validateReviewSmsMessageLength,
 } from "../review/reviewLink.js";
+import { resolveReviewSmsUrl } from "../review/reviewSmsSettingsService.js";
 
 export {
   DEFAULT_REVIEW_SMS_TEMPLATE,
   buildReviewSmsMessage,
-  resolveReviewSmsUrl,
 } from "../review/reviewLink.js";
+export { resolveReviewSmsUrl } from "../review/reviewSmsSettingsService.js";
 
 export function isInforuSmsConfigured() {
   const userName = String(process.env.INFORU_USERNAME || "").trim();
@@ -36,7 +36,7 @@ export async function sendReviewSmsToCustomer({
   actorName,
   req,
 } = {}) {
-  const resolved = resolveReviewSmsUrl();
+  const resolved = await resolveReviewSmsUrl();
   if (!resolved.ok) {
     return resolved;
   }

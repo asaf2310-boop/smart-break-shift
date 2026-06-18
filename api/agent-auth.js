@@ -51,8 +51,12 @@ import { sendReviewSmsToCustomer } from "../server/sms/reviewSmsService.js";
 import {
   DEFAULT_REVIEW_SMS_TEMPLATE,
   REVIEW_SMS_MAX_LENGTH,
-  resolveReviewSmsUrl,
 } from "../server/review/reviewLink.js";
+import {
+  getReviewSmsSettingsPayload,
+  maskReviewSmsUrl,
+  setStoredGoogleReviewSmsUrl,
+} from "../server/review/reviewSmsSettingsService.js";
 
 const PASSWORD_MIN_LENGTH = 12;
 
@@ -342,21 +346,69 @@ export default async function handler(req, res) {
     }
   }
 
-  if (action === "review_sms_config") {
+  if (action === "review_sms_config" || action === "get_review_sms_settings") {
     const auth = await verifyBearerAgent(req);
     if (!auth?.agent) {
       return json(res, 401, { error: "unauthorized", message: "נדרשת התחברות" }, req);
     }
 
-    const resolved = resolveReviewSmsUrl();
+    const settings = await getReviewSmsSettingsPayload();
     return json(
       res,
       200,
       {
-        ok: resolved.ok,
-        smsUrl: resolved.ok ? resolved.url : null,
-        error: resolved.error || null,
-        message: resolved.message || null,
+        ok: settings.ok,
+        smsUrl: settings.smsUrl,
+        source: settings.source,
+        dbUrl: settings.dbUrl,
+        dbUrlMasked: settings.dbUrl ? maskReviewSmsUrl(settings.dbUrl) : null,
+        error: settings.error || null,
+        message: settings.message || null,
+        template: DEFAULT_REVIEW_SMS_TEMPLATE,
+        maxLength: REVIEW_SMS_MAX_LENGTH,
+      },
+      req
+    );
+  }
+
+  if (action === "update_review_sms_settings") {
+    const auth = await requireAdminAgent(req, res, body);
+    if (!auth) return;
+
+    const googleReviewSmsUrl = String(
+      body.google_review_sms_url ?? body.googleReviewSmsUrl ?? body.url ?? ""
+    ).trim();
+
+    const saved = await setStoredGoogleReviewSmsUrl(googleReviewSmsUrl, auth.agent.id);
+    if (!saved.ok) {
+      return json(
+        res,
+        400,
+        { error: saved.error || "invalid_url", message: saved.message || "קישור לא תקין" },
+        req
+      );
+    }
+
+    void logSecurityEvent({
+      action: "update_review_sms_settings",
+      actorAgentId: auth.agent.id,
+      resourceType: "app_settings",
+      resourceId: "google_review_sms_url",
+      metadata: { urlLength: saved.url.length },
+      req,
+    });
+
+    const settings = await getReviewSmsSettingsPayload();
+    return json(
+      res,
+      200,
+      {
+        ok: true,
+        smsUrl: settings.smsUrl,
+        source: settings.source,
+        dbUrl: settings.dbUrl,
+        dbUrlMasked: settings.dbUrl ? maskReviewSmsUrl(settings.dbUrl) : null,
+        message: "קישור דירוג נשמר בהצלחה",
         template: DEFAULT_REVIEW_SMS_TEMPLATE,
         maxLength: REVIEW_SMS_MAX_LENGTH,
       },

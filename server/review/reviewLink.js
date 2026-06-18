@@ -52,16 +52,98 @@ function urlContainsAppDomain(url) {
   }
 }
 
+const BLOCKED_SMS_HOST_SUFFIXES = ["hypsmart.vercel.app", "hypsmart.com"];
+
+function getBlockedSmsHostnames() {
+  const hosts = new Set(BLOCKED_SMS_HOST_SUFFIXES);
+  const appHost = getAppHostname();
+  if (appHost) hosts.add(appHost);
+  return hosts;
+}
+
+function hostnameMatchesBlocked(host, blocked) {
+  const normalized = String(host || "").toLowerCase();
+  if (!normalized) return false;
+  return normalized === blocked || normalized.endsWith(`.${blocked}`);
+}
+
+export function isBlockedReviewSmsHostname(hostname) {
+  for (const blocked of getBlockedSmsHostnames()) {
+    if (hostnameMatchesBlocked(hostname, blocked.toLowerCase())) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Validate URL for SMS review link (admin save + env sanity). */
+export function validateGoogleReviewSmsUrl(rawUrl) {
+  const url = String(rawUrl || "").trim();
+  if (!url) {
+    return { ok: false, error: "empty_url", message: "יש להזין קישור דירוג" };
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return { ok: false, error: "invalid_url", message: "קישור לא תקין — השתמשו בכתובת https מלאה" };
+  }
+
+  if (parsed.protocol !== "https:") {
+    return { ok: false, error: "invalid_protocol", message: "הקישור חייב להתחיל ב-https://" };
+  }
+
+  if (isBlockedReviewSmsHostname(parsed.hostname)) {
+    return {
+      ok: false,
+      error: "app_domain_blocked",
+      message:
+        "אין להשתמש בדומיין האפליקציה (hypsmart) בקישור SMS. השתמשו בקישור קצר של גוגל (g.page/r/…/review).",
+    };
+  }
+
+  if (parsed.pathname === GOOGLE_REVIEW_REDIRECT_PATH || url.includes("/go/review")) {
+    return {
+      ok: false,
+      error: "redirect_path_blocked",
+      message: "אין לשלוח ב-SMS את קישור ההפניה של האפליקציה. השתמשו בקישור g.page ישיר לגוגל.",
+    };
+  }
+
+  if (url.length > REVIEW_SMS_URL_MAX_LENGTH) {
+    return {
+      ok: false,
+      error: "url_too_long",
+      message: `הקישור ארוך מדי (${url.length} תווים). מקסימום ${REVIEW_SMS_URL_MAX_LENGTH} — השתמשו בקישור g.page קצר.`,
+    };
+  }
+
+  return { ok: true, url };
+}
+
 /**
  * URL placed in review SMS — never the app /go/review redirect.
- * 1. GOOGLE_REVIEW_SMS_URL if set
- * 2. else GOOGLE_REVIEW_URL if short and not app domain
- * 3. else Hebrew error (admin must set GOOGLE_REVIEW_SMS_URL)
+ * 1. DB google_review_sms_url if set
+ * 2. GOOGLE_REVIEW_SMS_URL env if set
+ * 3. else GOOGLE_REVIEW_URL if short and not app domain
+ * 4. else Hebrew error (admin must configure link)
  */
-export function resolveReviewSmsUrl() {
+export function resolveReviewSmsUrlFromSources({ dbSmsUrl } = {}) {
+  const dbUrl = String(dbSmsUrl || "").trim();
+  if (dbUrl) {
+    const validation = validateGoogleReviewSmsUrl(dbUrl);
+    if (validation.ok) {
+      return { ok: true, url: validation.url, source: "db" };
+    }
+  }
+
   const smsUrl = getGoogleReviewSmsUrlEnv();
   if (smsUrl) {
-    return { ok: true, url: smsUrl };
+    const validation = validateGoogleReviewSmsUrl(smsUrl);
+    if (validation.ok) {
+      return { ok: true, url: validation.url, source: "env_sms" };
+    }
   }
 
   const fullUrl = getGoogleReviewUrl();
@@ -70,20 +152,25 @@ export function resolveReviewSmsUrl() {
       ok: false,
       error: "review_url_not_configured",
       message:
-        "קישור דירוג גוגל לא מוגדר. הגדירו GOOGLE_REVIEW_SMS_URL (מומלץ: g.page) או GOOGLE_REVIEW_URL ב-Vercel (משתנה שרת) ופרסמו מחדש.",
+        "קישור דירוג גוגל לא מוגדר. מנהל יכול להגדיר קישור קצר (g.page) בדשבורד מנהל → הגדרות דירוג SMS.",
     };
   }
 
   if (fullUrl.length <= REVIEW_SMS_URL_MAX_LENGTH && !urlContainsAppDomain(fullUrl)) {
-    return { ok: true, url: fullUrl };
+    return { ok: true, url: fullUrl, source: "env_fallback" };
   }
 
   return {
     ok: false,
     error: "review_sms_url_not_configured",
     message:
-      "קישור הדירוג ארוך מדי ל-SMS. הגדירו GOOGLE_REVIEW_SMS_URL ב-Vercel לקישור קצר (למשל g.page/r/…/review) ופרסמו מחדש.",
+      "קישור הדירוג ארוך מדי ל-SMS. מנהל יכול להגדיר קישור קצר (g.page/r/…/review) בדשבורד מנהל → הגדרות דירוג SMS.",
   };
+}
+
+/** @deprecated Use resolveReviewSmsUrl from reviewSmsSettingsService (async, includes DB). */
+export function resolveReviewSmsUrl() {
+  return resolveReviewSmsUrlFromSources();
 }
 
 export function buildReviewSmsMessage({ reviewUrl, customMessage } = {}) {
