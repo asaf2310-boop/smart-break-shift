@@ -1,6 +1,19 @@
-/** Vercel serverless — בדיקת הגדרת Inforu SMS (ללא חשיפת סודות) */
+/** Vercel serverless — בדיקת Inforu SMS + הפניה לדירוג גוגל (/go/review) */
+
+import { handleGoogleReviewRedirect } from "../server/review/reviewLink.js";
 
 export default async function handler(req, res) {
+  if (req.query?.redirect === "review") {
+    if (req.method !== "GET" && req.method !== "HEAD") {
+      res.statusCode = 405;
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.end(JSON.stringify({ error: "method_not_allowed" }));
+      return;
+    }
+    handleGoogleReviewRedirect(res);
+    return;
+  }
+
   if (req.method !== "GET") {
     res.statusCode = 405;
     res.setHeader("Content-Type", "application/json; charset=utf-8");

@@ -8,12 +8,13 @@ import { hypHeaderIconClass } from "@/lib/hypPage";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { formatAgentPhoneDisplay, normalizeAgentPhone } from "@/lib/agentPhone";
 import {
+  buildGoogleReviewShortUrl,
   buildReviewSmsPreview,
   DEFAULT_REVIEW_SMS_TEMPLATE,
-  getGoogleReviewUrlPreview,
+  REVIEW_SMS_MAX_LENGTH,
   sendReviewSms,
+  validateReviewSmsLength,
 } from "@/lib/reviewSms";
-import { demoModeEnabled } from "@/api/demoClient";
 
 export default function AgentReviewSms() {
   const { toast } = useToast();
@@ -23,12 +24,14 @@ export default function AgentReviewSms() {
   const [useCustom, setUseCustom] = useState(false);
   const [sending, setSending] = useState(false);
 
-  const reviewUrlConfigured = Boolean(getGoogleReviewUrlPreview());
+  const shortReviewUrl = useMemo(() => buildGoogleReviewShortUrl(), []);
   const normalizedPhone = useMemo(() => normalizeAgentPhone(phone), [phone]);
   const preview = useMemo(
     () => buildReviewSmsPreview(useCustom ? customMessage : ""),
     [useCustom, customMessage]
   );
+  const lengthCheck = useMemo(() => validateReviewSmsLength(preview), [preview]);
+  const previewTooLong = !lengthCheck.ok;
 
   if (!isLoggedIn) {
     return <Navigate to="/" replace />;
@@ -108,12 +111,17 @@ export default function AgentReviewSms() {
         </p>
       </motion.div>
 
-      {!reviewUrlConfigured && !demoModeEnabled && (
-        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 text-center">
-          קישור דירוג גוגל לא מוגדר ב-build. הגדירו <code className="text-xs">VITE_GOOGLE_REVIEW_URL</code>{" "}
-          (תצוגה מקדימה) ו-<code className="text-xs">GOOGLE_REVIEW_URL</code> בשרת Vercel.
-        </div>
-      )}
+      <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 text-center leading-relaxed">
+        הקישור ב-SMS יהיה קצר:{" "}
+        <code className="text-xs font-mono" dir="ltr">
+          {shortReviewUrl}
+        </code>
+        . הגדירו <code className="text-xs">GOOGLE_REVIEW_URL</code> בשרת Vercel (מומלץ:{" "}
+        <code className="text-xs" dir="ltr">
+          g.page/r/…
+        </code>
+        ).
+      </div>
 
       <form onSubmit={handleSend} className="rounded-3xl border border-slate-200 bg-white shadow-sm p-6 space-y-5">
         <div>
@@ -180,14 +188,24 @@ export default function AgentReviewSms() {
             <MessageSquare className="w-3.5 h-3.5" />
             תצוגה מקדימה
           </p>
-          <div className="rounded-xl bg-slate-50 border border-slate-100 px-3 py-2.5 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap break-words">
+          <div
+            className={`rounded-xl border px-3 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words ${
+              previewTooLong
+                ? "bg-red-50 border-red-200 text-red-800"
+                : "bg-slate-50 border-slate-100 text-slate-700"
+            }`}
+          >
             {preview}
           </div>
+          <p className={`mt-1.5 text-xs ${previewTooLong ? "text-red-500" : "text-slate-400"}`}>
+            {lengthCheck.length}/{REVIEW_SMS_MAX_LENGTH} תווים
+            {previewTooLong ? ` — ${lengthCheck.message}` : ""}
+          </p>
         </div>
 
         <button
           type="submit"
-          disabled={sending || !normalizedPhone}
+          disabled={sending || !normalizedPhone || previewTooLong}
           className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 text-white font-semibold py-3 text-sm hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {sending ? (

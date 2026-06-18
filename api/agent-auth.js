@@ -369,7 +369,9 @@ export default async function handler(req, res) {
 
       if (!result.ok) {
         const status =
-          result.error === "invalid_phone" || result.error === "review_url_not_configured"
+          result.error === "invalid_phone" ||
+          result.error === "review_url_not_configured" ||
+          result.error === "message_too_long"
             ? 400
             : result.error === "sms_not_configured"
               ? 503

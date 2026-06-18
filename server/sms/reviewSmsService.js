@@ -1,34 +1,24 @@
 import { normalizeIsraeliPhone, sendInforuSms } from "../../api/send-schedule-sms.js";
 import { logSecurityEvent } from "../security/auditLog.js";
+import {
+  DEFAULT_REVIEW_SMS_TEMPLATE,
+  buildGoogleReviewShortUrl,
+  buildReviewSmsMessage,
+  getGoogleReviewUrl,
+  validateReviewSmsMessageLength,
+} from "../review/reviewLink.js";
 
-export const DEFAULT_REVIEW_SMS_TEMPLATE =
-  "תודה שפנית אלינו! נשמח אם תדרגו אותנו בגוגל: {url}";
-
-export function getGoogleReviewUrl() {
-  return String(process.env.GOOGLE_REVIEW_URL || process.env.VITE_GOOGLE_REVIEW_URL || "").trim();
-}
+export {
+  DEFAULT_REVIEW_SMS_TEMPLATE,
+  buildReviewSmsMessage,
+  getGoogleReviewUrl,
+} from "../review/reviewLink.js";
 
 export function isInforuSmsConfigured() {
   const userName = String(process.env.INFORU_USERNAME || "").trim();
   const apiToken = String(process.env.INFORU_API_TOKEN || "").trim();
   const sender = String(process.env.INFORU_SENDER || "").trim();
   return Boolean(userName && apiToken && sender);
-}
-
-export function buildReviewSmsMessage({ reviewUrl, customMessage } = {}) {
-  const url = String(reviewUrl || "").trim();
-  if (!url) {
-    return { ok: false, error: "review_url_not_configured", message: "קישור דירוג גוגל לא מוגדר" };
-  }
-
-  const custom = String(customMessage || "").trim();
-  if (!custom) {
-    return { ok: true, message: DEFAULT_REVIEW_SMS_TEMPLATE.replace(/\{url\}/g, url) };
-  }
-  if (custom.includes("{url}")) {
-    return { ok: true, message: custom.replace(/\{url\}/g, url) };
-  }
-  return { ok: true, message: `${custom} ${url}` };
 }
 
 function maskPhoneForAudit(phone) {
@@ -62,8 +52,12 @@ export async function sendReviewSmsToCustomer({
     return { ok: false, error: "invalid_phone", message: "מספר טלפון לא תקין" };
   }
 
-  const built = buildReviewSmsMessage({ reviewUrl, customMessage });
+  const shortUrl = buildGoogleReviewShortUrl();
+  const built = buildReviewSmsMessage({ reviewUrl: shortUrl, customMessage });
   if (!built.ok) return built;
+
+  const lengthCheck = validateReviewSmsMessageLength(built.message);
+  if (!lengthCheck.ok) return lengthCheck;
 
   if (!isInforuSmsConfigured()) {
     return {
