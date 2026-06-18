@@ -54,7 +54,9 @@ export async function fetchReviewSmsConfig() {
   }
 
   const result = await apiGetReviewSmsConfig();
-  if (!result.ok) {
+  const configLoaded = result.template != null || result.maxLength != null;
+
+  if (!configLoaded) {
     return {
       ok: false,
       smsUrl: null,
@@ -69,6 +71,8 @@ export async function fetchReviewSmsConfig() {
     ok: Boolean(result.smsUrl),
     smsUrl: result.smsUrl || null,
     source: result.source || null,
+    dbError: result.dbError || null,
+    dbErrorMessage: result.dbErrorMessage || null,
     error: result.error || null,
     message: result.message || null,
     template: result.template || DEFAULT_REVIEW_SMS_TEMPLATE,

@@ -76,8 +76,8 @@ export function isBlockedReviewSmsHostname(hostname) {
   return false;
 }
 
-/** Validate URL for SMS review link (admin save + env sanity). */
-export function validateGoogleReviewSmsUrl(rawUrl) {
+/** Validate review URL pasted by admin (long URLs allowed — may be auto-shortened). */
+export function validateGoogleReviewTargetUrl(rawUrl) {
   const url = String(rawUrl || "").trim();
   if (!url) {
     return { ok: false, error: "empty_url", message: "יש להזין קישור דירוג" };
@@ -111,15 +111,44 @@ export function validateGoogleReviewSmsUrl(rawUrl) {
     };
   }
 
-  if (url.length > REVIEW_SMS_URL_MAX_LENGTH) {
+  return { ok: true, url };
+}
+
+/** Validate URL stored/sent in SMS (must be short). */
+export function validateGoogleReviewSmsUrl(rawUrl) {
+  const target = validateGoogleReviewTargetUrl(rawUrl);
+  if (!target.ok) {
+    return target;
+  }
+
+  if (target.url.length > REVIEW_SMS_URL_MAX_LENGTH) {
     return {
       ok: false,
       error: "url_too_long",
-      message: `הקישור ארוך מדי (${url.length} תווים). מקסימום ${REVIEW_SMS_URL_MAX_LENGTH} — השתמשו בקישור g.page קצר.`,
+      message: `הקישור ארוך מדי (${target.url.length} תווים). מקסימום ${REVIEW_SMS_URL_MAX_LENGTH} — יקוצר אוטומטית בשמירה.`,
     };
   }
 
-  return { ok: true, url };
+  return { ok: true, url: target.url };
+}
+
+/** Whether admin input should be shortened before storing as SMS URL. */
+export function shouldAutoShortenReviewUrl(rawUrl) {
+  const target = validateGoogleReviewTargetUrl(rawUrl);
+  if (!target.ok) {
+    return { shorten: false, validation: target };
+  }
+
+  const sms = validateGoogleReviewSmsUrl(target.url);
+  if (sms.ok) {
+    return { shorten: false, targetUrl: target.url, smsUrl: sms.url };
+  }
+
+  if (sms.error === "url_too_long" || target.url.length > REVIEW_SMS_URL_MAX_LENGTH) {
+    return { shorten: true, targetUrl: target.url };
+  }
+
+  return { shorten: false, validation: sms };
 }
 
 /**
@@ -152,7 +181,7 @@ export function resolveReviewSmsUrlFromSources({ dbSmsUrl } = {}) {
       ok: false,
       error: "review_url_not_configured",
       message:
-        "קישור דירוג גוגל לא מוגדר. מנהל יכול להגדיר קישור קצר (g.page) בדשבורד מנהל → הגדרות דירוג SMS.",
+        "קישור דירוג גוגל לא מוגדר. מנהל יכול להגדיר קישור קצר (g.page) בדשבורד מנהל → קישור דירוג גוגל ל-SMS.",
     };
   }
 
@@ -164,7 +193,7 @@ export function resolveReviewSmsUrlFromSources({ dbSmsUrl } = {}) {
     ok: false,
     error: "review_sms_url_not_configured",
     message:
-      "קישור הדירוג ארוך מדי ל-SMS. מנהל יכול להגדיר קישור קצר (g.page/r/…/review) בדשבורד מנהל → הגדרות דירוג SMS.",
+      "קישור הדירוג ארוך מדי ל-SMS. מנהל יכול להגדיר קישור קצר (g.page/r/…/review) בדשבורד מנהל → קישור דירוג גוגל ל-SMS.",
   };
 }
 

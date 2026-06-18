@@ -4,7 +4,8 @@
 -- הרץ **אחרי** security_phase9_agent_rls.sql (auth_agent_is_admin)
 --
 -- מה זה עושה:
---   • טבלת app_settings (מפתח-ערך) עם google_review_sms_url
+--   • טבלת app_settings (מפתח-ערך) עם google_review_sms_url (קצר ל-SMS)
+--     ו-google_review_target_url (קישור מקורי מלא, אופציונלי)
 --   • SELECT לכל נציג מחובר; INSERT/UPDATE רק למנהל
 --   • השרת כותב גם דרך service role (אחרי בדיקת מנהל ב-API)
 --

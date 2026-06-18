@@ -6,6 +6,7 @@ import { useToast } from "@/components/ui/use-toast";
 import HypPageLayout from "@/components/hyp/HypPageLayout";
 import { hypHeaderIconClass } from "@/lib/hypPage";
 import { useAgentSession } from "@/hooks/useAgentSession";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { formatAgentPhoneDisplay, normalizeAgentPhone } from "@/lib/agentPhone";
 import {
   buildReviewSmsPreview,
@@ -19,6 +20,7 @@ import {
 export default function AgentReviewSms() {
   const { toast } = useToast();
   const { isLoggedIn } = useAgentSession();
+  const isAdmin = useIsAdmin();
   const [phone, setPhone] = useState("");
   const [customMessage, setCustomMessage] = useState("");
   const [useCustom, setUseCustom] = useState(false);
@@ -29,6 +31,8 @@ export default function AgentReviewSms() {
     smsUrl: null,
     source: null,
     message: null,
+    dbError: null,
+    dbErrorMessage: null,
   });
 
   useEffect(() => {
@@ -144,7 +148,11 @@ export default function AgentReviewSms() {
             טוען קישור SMS...
           </span>
         ) : smsUrlMissing ? (
-          <span>{smsConfig.message || "קישור דירוג לא מוגדר ל-SMS."}</span>
+          <span>
+            {smsConfig.dbError === "app_settings_missing" && smsConfig.dbErrorMessage
+              ? smsConfig.dbErrorMessage
+              : smsConfig.message || "קישור דירוג לא מוגדר ל-SMS."}
+          </span>
         ) : (
           <>
             הקישור שיישלח ב-SMS:{" "}
@@ -155,15 +163,30 @@ export default function AgentReviewSms() {
         )}
         {!smsConfig.loading && smsUrlMissing && (
           <p className="mt-2 text-xs opacity-80">
-            מנהל יכול להגדיר קישור קצר (מומלץ{" "}
-            <code className="text-[11px]" dir="ltr">
-              g.page/r/…/review
-            </code>
-            ) ב{" "}
-            <Link to="/admin" className="underline hover:text-amber-950">
-              דשבורד מנהל
-            </Link>{" "}
-            → קישור דירוג גוגל ל-SMS.
+            {isAdmin ? (
+              <>
+                הגדירו קישור קצר (מומלץ{" "}
+                <code className="text-[11px]" dir="ltr">
+                  g.page/r/…/review
+                </code>
+                ) ב{" "}
+                <Link to="/admin" className="underline font-medium hover:text-amber-950">
+                  דשבורד מנהל
+                </Link>{" "}
+                → קישור דירוג גוגל ל-SMS.
+                {smsConfig.dbError === "app_settings_missing" ? (
+                  <span className="block mt-1">
+                    לפני השמירה הראשונה: הריצו{" "}
+                    <code className="text-[11px]" dir="ltr">
+                      app_settings_review_url.sql
+                    </code>{" "}
+                    ב-Supabase.
+                  </span>
+                ) : null}
+              </>
+            ) : (
+              "פנה למנהל להגדרת קישור דירוג גוגל ל-SMS."
+            )}
           </p>
         )}
       </div>
