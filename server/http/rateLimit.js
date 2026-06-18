@@ -1,7 +1,12 @@
+import { checkDistributedRateLimit, getRateLimitBackend } from "./distributedRateLimit.js";
+
 const DEFAULT_WINDOW_MS = 60 * 60 * 1000;
+
+export { getRateLimitBackend };
 
 /**
  * In-memory rate limiter (serverless best-effort).
+ * Falls back when UPSTASH_REDIS_REST_* is unset.
  * @param {Map<string, { count: number, resetAt: number }>} store
  */
 export function getClientIp(req) {
@@ -60,4 +65,31 @@ export function setRateLimitHeaders(res, retryAfterSec) {
   const sec = Math.max(1, Number(retryAfterSec) || 1);
   res.setHeader("Retry-After", String(sec));
   return sec;
+}
+
+/**
+ * Distributed (Upstash) when configured, else in-memory store.
+ * @param {object} opts
+ * @param {string} opts.prefix — Redis namespace
+ * @param {string} opts.key — rate limit key (ip:… / user:…)
+ * @param {Map} opts.store — in-memory fallback
+ * @param {number} opts.max
+ * @param {number} [opts.windowMs]
+ * @returns {Promise<{ allowed: boolean, retryAfterSec?: number, entry?: { count: number, resetAt: number } }>}
+ */
+export async function checkRateLimitHybrid({ prefix, key, store, max, windowMs = DEFAULT_WINDOW_MS }) {
+  const rateKey = String(key || "").trim() || "unknown";
+  const distributed = await checkDistributedRateLimit(prefix, rateKey, max, windowMs);
+  if (distributed) {
+    return distributed;
+  }
+  const check = checkRateLimit(store, rateKey, max, windowMs);
+  if (!check.allowed) {
+    return { allowed: false, retryAfterSec: check.retryAfterSec };
+  }
+  return { allowed: true, entry: check.entry };
+}
+
+export async function recordRateLimitHybrid(entry) {
+  recordRateLimit(entry);
 }

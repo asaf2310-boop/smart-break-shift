@@ -1,4 +1,4 @@
-# אבטחת מידע — Phase 20 (סיכום)
+# אבטחת מידע — Phase 21 (סיכום)
 
 מסמך מרכזי להגדרות אבטחה. פירוט לפי תחום: `SIP_SECURITY.md`, `PEERJS_SECURITY.md`, `DEMO_VS_PRODUCTION.md`.
 
@@ -10,7 +10,7 @@
 | API רגיש | `POST /api/agent-auth` עם `Authorization: Bearer <access_token>` |
 | מנהל | `agents.is_admin === true` ב-DB; אופציונלי `ADMIN_PIN` בשרת בלבד |
 | RLS | נציגים רואים רק שורות משויכות; anon ללא גישה לטבלאות רגישות |
-| מיגרציה | `security_phase0a` → … → `security_phase20.sql` |
+| מיגרציה | `security_phase0a` → … → `security_phase21.sql` |
 
 ### ADMIN_PIN (אופציונלי, שרת בלבד)
 
@@ -24,6 +24,24 @@
 1. `isSameOrigin` — הגנת CSRF/CORS (defense-in-depth)
 2. `verifyBearerAgent` / `verifyKnowledgeAccess` / `verifyAdminAgent` — לפי רגישות
 3. Rate limits — SMS, מייל, העלאות, SIP, איפוס סיסמה, guest resolve, storage, knowledge search/feedback
+   - **Phase 21:** כשמוגדר Upstash — מגבלות משותפות בין instances; אחרת in-memory (best-effort)
+
+### Upstash Redis (אופציונלי, מומלץ לפרודקשן)
+
+| משתנה | היכן | תיאור |
+|--------|------|--------|
+| `UPSTASH_REDIS_REST_URL` | Vercel server | REST URL מ-[Upstash Console](https://console.upstash.com/) |
+| `UPSTASH_REDIS_REST_TOKEN` | Vercel server | טוקן REST — **ללא** `VITE_` |
+
+**הגדרה:**
+
+1. צרו database ב-Upstash (אזור קרוב ל-Vercel)
+2. העתיקו REST URL + Token ל-Vercel → Environment Variables → Production
+3. Redeploy
+
+כשלא מוגדר — fallback אוטומטי ל-in-memory (כמו לפני phase 21).
+
+נקודות קצה עם Upstash (כשמוגדר): איפוס סיסמה, guest resolve/session/chat, SIP mint/redeem, שליחת מייל, storage upload, פעולות מנהל.
 
 **בסיס ידע:** `GET /api/knowledge-upload` — מודול knowledge או מנהל; `POST`/`DELETE` (ingest/delete) — **מנהל בלבד**. `GET /api/knowledge-chat?welcome=1` — JWT + מודול knowledge (phase 20).
 
@@ -79,24 +97,27 @@
 | `VITE_APP_URL` | Vercel build | קישורים במייל/SMS |
 | `ADMIN_PIN` | Vercel server (אופציונלי) | שכבה שנייה למנהל — לא בקליינט |
 
-**Supabase SQL (בסדר):** `security_phase0a` → … → `security_phase20.sql` + `knowledge_pgvector.sql` לפי הצורך.
+**Supabase SQL (בסדר):** `security_phase0a` → … → `security_phase21.sql` + `knowledge_pgvector.sql` לפי הצורך.
+
+**אופציונלי (מומלץ):** `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` — rate limits מבוזרים.
 
 **אחרי שינוי env:** Redeploy ב-Vercel. **אל** להגדיר `VITE_DEMO_MODE` בפרודקשן.
 
-## סטטוס אחרי Phase 20
+## סטטוס אחרי Phase 21
 
-### נסגר (Phases 0–20)
+### נסגר (Phases 0–21)
 
 | תחום | מצב |
 |------|-----|
 | אימות API | JWT + `is_admin` לכל נקודות קצה רגישות; ingest ידע — מנהל בלבד |
 | סיסמאות | מינימום 12 תווים; איפוס/כניסה ראשונה — rate limit IP + cooldown אימייל (תשובה גנרית, ללא enumeration) |
-| אחסון דפדפן | פרודקשן: `sessionStorage`; logout מנקה JWT, SIP, guest/webrtc tokens |
+| אחסון דפדפן | פרודקשן: `sessionStorage`; logout מנקה JWT, SIP, guest/webrtc tokens; דמו localStorage לא נקרא בלי `VITE_DEMO_MODE` |
 | תמיכה מרחוק | קישורי אורח חד-פעמיים, join tokens, fingerprint, TTL, ניקוי טוקנים stale בקליינט |
-| SIP | mint/redeem דרך `agent-auth` בלבד; **אין** fallback סיסמה ב-`VITE_*` (phase 19) |
+| SIP | mint/redeem דרך `agent-auth` בלבד; ניתוק + מחיקת סיסמה מזיכרון ב-logout **ובטאב מוסתר** (phase 21) |
 | העלאות | ZIP חסום בפרודקשן כברירת מחדל; allowlist + magic bytes |
-| Rate limits | SMS, מייל, guest, WebRTC, SIP, admin, איפוס סיסמה, storage, knowledge search/feedback |
-| כותרות | CSP (כולל `object-src 'none'`), X-Frame-Options, וכו' ב-`vercel.json` |
+| Rate limits | Upstash אופציונלי; fallback in-memory; כיסוי password reset, guest, SIP, email, storage |
+| כותרות | CSP (כולל `object-src 'none'`), COOP, CORP, X-Frame-Options, וכו' ב-`vercel.json` |
+| PeerJS | אזהרות build-time אם חסר `VITE_PEERJS_HOST` בפרודקשן |
 | יומן ביקורת | UI בעברית; phase 20: `admin_agent_*`, `crm_routing_change` |
 
 ### עתידי (דורש תשתית נוספת)
@@ -104,7 +125,7 @@
 | פריט | למה לא בוצע |
 |------|-------------|
 | **SIP proxy** | סיסמת SIP עדיין מגיעה לדפדפן ב-`sip_token_redeem` — ראו `SIP_SECURITY.md` |
-| **Redis / Upstash** | rate limits ו-redemption maps בזיכרון serverless (best-effort) |
-| **PeerJS self-host** | PeerJS ציבורי / TURN — ראו `PEERJS_SECURITY.md` |
+| **SIP nonce ב-Redis** | `sipRedeemStore` in-memory — דורש Upstash + מפתחות משותפים לחד-פעמיות בין instances |
+| **PeerJS self-host** | דורש פריסת PeerServer + `VITE_PEERJS_*` — ראו `PEERJS_SECURITY.md` |
 | **CSP מלא** | `unsafe-inline` / `unsafe-eval` עדיין נדרשים ל-Vite build |
 | **AV ל-ZIP** | לא נדרש ללקוח; אופציונלי דרך `UPLOAD_AV_WEBHOOK_URL` |

@@ -1,4 +1,4 @@
-# אבטחת SIP / WebRTC (Phase 16)
+# אבטחת SIP / WebRTC (Phase 16 + 21)
 
 ## מצב נוכחי
 
@@ -8,6 +8,7 @@
 | טוקן מוצפן | `SIP_TOKEN_SECRET` (או `GUEST_LINK_SECRET`) | TTL קצר, מימוש חד-פעמי |
 | Shim ישן | `/api/sip-token` **הוסר** (Phase 16) | השתמשו רק ב-agent-auth |
 | סיסמת SIP בדפדפן | **עדיין נדרשת** ל-WebRTC | sip.js מצפה ל-`authorizationPassword` מקומית |
+| ניקוי סיסמה (phase 21) | logout + `visibilitychange` (טאב מוסתר) | `disconnectSip` מאפס סיסמה בזיכרון; חיבור מחדש דורש redeem |
 
 ### למה הסיסמה עדיין מגיעה ללקוח?
 
@@ -27,10 +28,11 @@
 ## הגנות קיימות
 
 - אימות נציג (Bearer JWT) לפני mint/redeem
-- Rate limit על פעולות SIP
+- Rate limit על פעולות SIP (Upstash אופציונלי — phase 21)
 - רישום ב-`security_audit_log` (`sip_token_mint`, `sip_token_redeem`)
 - אין לוג של סיסמת SIP בשרת
 - תגובת mint **אינה** מחזירה סיסמה — רק `credentialToken`
+- ניתוק אוטומטי כשהטאב מוסתר — מקצר חלון חשיפת סיסמה בזיכרון
 
 ## עתיד (מחוץ לשלב זה)
 

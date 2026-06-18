@@ -1,4 +1,5 @@
 import { demoModeEnabled } from "@/api/demoMode";
+import { purgeDemoLocalStorageInProduction } from "@/lib/demoStorageGuard";
 import { clearAllGuestLinkTokens } from "@/lib/guestLinkTokenStore";
 import { clearAllWebrtcJoinTokens } from "@/lib/webrtcJoinTokenStore";
 import { CRM_STORAGE_KEY } from "@/lib/crmStore";
@@ -147,6 +148,7 @@ export function migrateLegacyBrowserStorage() {
   }
 
   clearLegacyGuestLinkTokensFromLocalStorage();
+  purgeDemoLocalStorageInProduction();
 }
 
 function clearLegacyGuestLinkTokensFromLocalStorage() {

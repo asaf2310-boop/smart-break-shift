@@ -1,4 +1,5 @@
 import { crmEnabled } from "@/api/crmMode";
+import { demoModeEnabled } from "@/api/demoMode";
 import { isCrmCloudEnabled } from "@/api/crmCloudMode";
 import { getDepartmentName, getDepartmentsForAgent, isCrmDepartmentsHydrated } from "@/lib/crmDepartments";
 import { findRoutingRuleForTopic, isCrmRoutingRulesHydrated } from "@/lib/crmRoutingRules";
@@ -401,6 +402,7 @@ function seedAndPersistStore() {
 function readAllLocalReferralEvents() {
   if (memoryReferralEvents) return memoryReferralEvents;
   if (typeof window === "undefined") return [];
+  if (isCrmCloudEnabled() && !demoModeEnabled) return [];
   try {
     const raw = localStorage.getItem(CRM_REFERRAL_EVENTS_KEY);
     if (!raw) return [];
@@ -414,6 +416,7 @@ function readAllLocalReferralEvents() {
 
 function writeAllLocalReferralEvents(events) {
   memoryReferralEvents = events;
+  if (isCrmCloudEnabled() && !demoModeEnabled) return;
   try {
     localStorage.setItem(CRM_REFERRAL_EVENTS_KEY, JSON.stringify(events));
   } catch {
@@ -584,6 +587,7 @@ function isStoreEmpty(store) {
 
 function readLocalStorageStore() {
   if (!crmEnabled || typeof window === "undefined") return emptyStore();
+  if (isCrmCloudEnabled() && !demoModeEnabled) return emptyStore();
   try {
     let raw = localStorage.getItem(CRM_STORAGE_KEY);
     if (!raw) {
@@ -626,6 +630,7 @@ function readStore() {
 }
 
 function cacheStoreToLocalStorage(store) {
+  if (isCrmCloudEnabled() && !demoModeEnabled) return;
   try {
     localStorage.setItem(CRM_STORAGE_KEY, JSON.stringify(store));
   } catch {

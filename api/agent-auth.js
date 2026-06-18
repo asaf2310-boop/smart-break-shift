@@ -3,13 +3,11 @@
 import { json, readJsonBody, handleOptions, isSameOrigin } from "../server/knowledge/httpUtils.js";
 import { isPgVectorConfigured } from "../server/knowledge/supabaseAdmin.js";
 import {
-  checkIpRateLimit,
-  checkRateLimit,
+  checkRateLimitHybrid,
   getClientIp,
   getRateLimitKey,
   rateLimitHebrewMessage,
-  recordIpRateLimit,
-  recordRateLimit,
+  recordRateLimitHybrid,
   setRateLimitHeaders,
 } from "../server/http/rateLimit.js";
 import {
@@ -111,36 +109,53 @@ function rateLimitResponse(res, req, retryAfterSec) {
   );
 }
 
-function enforceIpRateLimit(res, req, store, max) {
+async function enforceIpRateLimit(res, req, store, max, prefix = "ip") {
   const ip = getClientIp(req);
-  const check = checkIpRateLimit(store, ip, max);
+  const check = await checkRateLimitHybrid({
+    prefix,
+    key: `ip:${ip}`,
+    store,
+    max,
+  });
   if (!check.allowed) {
     rateLimitResponse(res, req, check.retryAfterSec);
     return false;
   }
-  recordIpRateLimit(check.entry);
+  await recordRateLimitHybrid(check.entry);
   return true;
 }
 
-function enforceUserRateLimit(res, req, store, max, userId, windowMs) {
+async function enforceUserRateLimit(res, req, store, max, userId, windowMs, prefix = "user") {
   const key = getRateLimitKey(req, userId);
-  const check = checkRateLimit(store, key, max, windowMs);
+  const check = await checkRateLimitHybrid({
+    prefix,
+    key,
+    store,
+    max,
+    windowMs,
+  });
   if (!check.allowed) {
     rateLimitResponse(res, req, check.retryAfterSec);
     return false;
   }
-  recordRateLimit(check.entry);
+  await recordRateLimitHybrid(check.entry);
   return true;
 }
 
-function enforceIpRateLimitWindow(res, req, store, max, windowMs) {
+async function enforceIpRateLimitWindow(res, req, store, max, windowMs, prefix = "ip_window") {
   const ip = getClientIp(req);
-  const check = checkRateLimit(store, `ip:${ip}`, max, windowMs);
+  const check = await checkRateLimitHybrid({
+    prefix,
+    key: `ip:${ip}`,
+    store,
+    max,
+    windowMs,
+  });
   if (!check.allowed) {
     rateLimitResponse(res, req, check.retryAfterSec);
     return false;
   }
-  recordRateLimit(check.entry);
+  await recordRateLimitHybrid(check.entry);
   return true;
 }
 
@@ -149,12 +164,17 @@ async function enforceStorageUploadRateLimit(res, req) {
   const key = auth?.agent?.id
     ? getRateLimitKey(req, auth.agent.id)
     : `ip:${getClientIp(req)}`;
-  const check = checkRateLimit(storageUploadRateByKey, key, STORAGE_UPLOAD_RATE_MAX);
+  const check = await checkRateLimitHybrid({
+    prefix: "storage_upload",
+    key,
+    store: storageUploadRateByKey,
+    max: STORAGE_UPLOAD_RATE_MAX,
+  });
   if (!check.allowed) {
     rateLimitResponse(res, req, check.retryAfterSec);
     return false;
   }
-  recordRateLimit(check.entry);
+  await recordRateLimitHybrid(check.entry);
   return true;
 }
 
@@ -164,7 +184,7 @@ async function requireAdminAgent(req, res, body) {
     json(res, 403, { error: "forbidden", message: "נדרשת הרשאת מנהל" }, req);
     return null;
   }
-  if (!enforceUserRateLimit(res, req, adminActionRateByUser, ADMIN_ACTION_RATE_MAX, auth.agent.id)) {
+  if (!await enforceUserRateLimit(res, req, adminActionRateByUser, ADMIN_ACTION_RATE_MAX, auth.agent.id, undefined, "admin_action")) {
     return null;
   }
   return auth;
@@ -198,7 +218,7 @@ export default async function handler(req, res) {
   const action = String(body.action || "").trim();
 
   if (action === "ice_servers") {
-    if (!enforceIpRateLimit(res, req, guestResolveRateByIp, ICE_SERVERS_RATE_MAX)) return;
+    if (!await enforceIpRateLimit(res, req, guestResolveRateByIp, ICE_SERVERS_RATE_MAX, "ice_servers")) return;
 
     const guestToken = String(body.guestToken || "").trim();
     const joinToken = String(body.joinToken || body.webrtcJoinToken || "").trim();
@@ -282,7 +302,7 @@ export default async function handler(req, res) {
         return json(res, 401, { error: "unauthorized" }, req);
       }
       if (
-        !enforceUserRateLimit(res, req, webrtcJoinRateByUser, WEBRTC_JOIN_RATE_MAX, auth.agent.id)
+        !await enforceUserRateLimit(res, req, webrtcJoinRateByUser, WEBRTC_JOIN_RATE_MAX, auth.agent.id, undefined, "webrtc_join")
       ) {
         return;
       }
@@ -317,7 +337,7 @@ export default async function handler(req, res) {
       return json(res, 200, result, req);
     }
 
-    if (!enforceIpRateLimit(res, req, webrtcJoinRateByIp, WEBRTC_JOIN_RATE_MAX)) return;
+    if (!await enforceIpRateLimit(res, req, webrtcJoinRateByIp, WEBRTC_JOIN_RATE_MAX, "webrtc_join_ip")) return;
 
     const guestToken = String(body.guestToken || body.token || "").trim();
     if (!guestToken) {
@@ -390,12 +410,13 @@ export default async function handler(req, res) {
 
   if (action === "request_password_reset") {
     if (
-      !enforceIpRateLimitWindow(
+      !await enforceIpRateLimitWindow(
         res,
         req,
         passwordResetRateByIp,
         PASSWORD_RESET_RATE_MAX,
-        PASSWORD_RESET_RATE_WINDOW_MS
+        PASSWORD_RESET_RATE_WINDOW_MS,
+        "password_reset"
       )
     ) {
       return;
@@ -419,12 +440,13 @@ export default async function handler(req, res) {
 
   if (action === "request_first_login") {
     if (
-      !enforceIpRateLimitWindow(
+      !await enforceIpRateLimitWindow(
         res,
         req,
         passwordResetRateByIp,
         PASSWORD_RESET_RATE_MAX,
-        PASSWORD_RESET_RATE_WINDOW_MS
+        PASSWORD_RESET_RATE_WINDOW_MS,
+        "first_login"
       )
     ) {
       return;
@@ -630,16 +652,17 @@ export default async function handler(req, res) {
     }
 
     const key = getRateLimitKey(req, auth.agent.id);
-    const rateCheck = checkRateLimit(
-      reviewSmsRateByUser,
+    const rateCheck = await checkRateLimitHybrid({
+      prefix: "review_sms",
       key,
-      REVIEW_SMS_RATE_MAX,
-      REVIEW_SMS_RATE_WINDOW_MS
-    );
+      store: reviewSmsRateByUser,
+      max: REVIEW_SMS_RATE_MAX,
+      windowMs: REVIEW_SMS_RATE_WINDOW_MS,
+    });
     if (!rateCheck.allowed) {
       return rateLimitResponse(res, req, rateCheck.retryAfterSec);
     }
-    recordRateLimit(rateCheck.entry);
+    await recordRateLimitHybrid(rateCheck.entry);
 
     const phone = String(body.phone || body.to || "").trim();
     const allowCustomMessage = Boolean(auth.agent.isAdmin);
@@ -858,7 +881,7 @@ export default async function handler(req, res) {
       if (!auth?.agent) {
         return json(res, 401, { error: "unauthorized", message: "נדרשת התחברות נציג" }, req);
       }
-      if (!enforceUserRateLimit(res, req, guestMintRateByUser, GUEST_MINT_RATE_MAX, auth.agent.id)) {
+      if (!await enforceUserRateLimit(res, req, guestMintRateByUser, GUEST_MINT_RATE_MAX, auth.agent.id, undefined, "guest_mint")) {
         return;
       }
 
@@ -892,7 +915,7 @@ export default async function handler(req, res) {
       return json(res, 200, result, req);
     }
 
-    if (!enforceIpRateLimit(res, req, guestResolveRateByIp, GUEST_RESOLVE_RATE_MAX)) return;
+    if (!await enforceIpRateLimit(res, req, guestResolveRateByIp, GUEST_RESOLVE_RATE_MAX, "guest_resolve")) return;
 
     const token = String(body.token || "").trim();
     if (!token) {
@@ -919,7 +942,7 @@ export default async function handler(req, res) {
     if (!guestLinkApiReady()) {
       return json(res, 503, { error: "guest_link_not_configured" }, req);
     }
-    if (!enforceIpRateLimit(res, req, guestSessionRateByIp, GUEST_SESSION_POLL_RATE_MAX)) return;
+    if (!await enforceIpRateLimit(res, req, guestSessionRateByIp, GUEST_SESSION_POLL_RATE_MAX, "guest_session")) return;
 
     const token = String(body.token || body.guestToken || "").trim();
     const sessionId = String(body.sessionId || "").trim();
@@ -948,7 +971,7 @@ export default async function handler(req, res) {
     if (!guestLinkApiReady()) {
       return json(res, 503, { error: "guest_link_not_configured" }, req);
     }
-    if (!enforceIpRateLimit(res, req, guestChatRateByIp, GUEST_CHAT_RATE_MAX)) return;
+    if (!await enforceIpRateLimit(res, req, guestChatRateByIp, GUEST_CHAT_RATE_MAX, "guest_chat")) return;
 
     const token = String(body.token || body.guestToken || "").trim();
     const sessionId = String(body.sessionId || "").trim();
@@ -1000,7 +1023,7 @@ export default async function handler(req, res) {
     if (!auth?.agent) {
       return json(res, 401, { error: "unauthorized", message: "נדרשת התחברות" }, req);
     }
-    if (!enforceUserRateLimit(res, req, supportEndRateByUser, SUPPORT_END_RATE_MAX, auth.agent.id)) {
+    if (!await enforceUserRateLimit(res, req, supportEndRateByUser, SUPPORT_END_RATE_MAX, auth.agent.id, undefined, "support_end")) {
       return;
     }
 
@@ -1115,12 +1138,14 @@ export default async function handler(req, res) {
       return json(res, 401, { error: "unauthorized", message: "נדרשת התחברות נציג" }, req);
     }
     if (
-      !enforceUserRateLimit(
+      !await enforceUserRateLimit(
         res,
         req,
         sipTokenRateByUser,
         SIP_TOKEN_RATE_MAX,
-        auth.agent.id
+        auth.agent.id,
+        SIP_TOKEN_RATE_WINDOW_MS,
+        "sip_token"
       )
     ) {
       return;
@@ -1146,12 +1171,14 @@ export default async function handler(req, res) {
       return json(res, 401, { error: "unauthorized", message: "נדרשת התחברות נציג" }, req);
     }
     if (
-      !enforceUserRateLimit(
+      !await enforceUserRateLimit(
         res,
         req,
         sipTokenRateByUser,
         SIP_TOKEN_RATE_MAX,
-        auth.agent.id
+        auth.agent.id,
+        SIP_TOKEN_RATE_WINDOW_MS,
+        "sip_token"
       )
     ) {
       return;

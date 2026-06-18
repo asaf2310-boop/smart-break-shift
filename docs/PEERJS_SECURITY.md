@@ -1,8 +1,10 @@
-# PeerJS / WebRTC — הנחיות אבטחה (Phase 15)
+# PeerJS / WebRTC — הנחיות אבטחה (Phase 15 + 21)
 
 ## סקירה
 
 שיתוף מסך משתמש ב-[PeerJS](https://peerjs.com/) לסיגנלינג WebRTC. ברירת המחדל היא **PeerServer הציבורי** — מתאים לדמו בלבד.
+
+**Phase 21:** באתחול האפליקציה (`main.jsx`) — אזהרת console אם build פרודקשן ללא `VITE_PEERJS_HOST`.
 
 ## מה מיושם באפליקציה
 
@@ -37,7 +39,8 @@ WEBRTC_JOIN_TTL_SEC=900
 ## מגבלות ידועות (עתיד)
 
 - אין אימות שרת על מזהה Peer ב-PeerServer הציבורי — תוקף יכול לנחש מזהה אם דלף
-- Redis / proxy SIP — לא במסגרת phase 15
-- סריקת AV לקבצים — phase עתידי
+- **PeerServer עצמי** — דורש פריסת `peerjs-server` + משתני `VITE_PEERJS_*` (ראו למעלה)
+- SIP proxy — לא במסגרת phase 21 (ראו `SIP_SECURITY.md`)
+- סריקת AV לקבצים — אופציונלי
 
 ראו גם: [REMOTE_SUPPORT.md](./REMOTE_SUPPORT.md), [TELEPHONY_SETUP.md](./TELEPHONY_SETUP.md)

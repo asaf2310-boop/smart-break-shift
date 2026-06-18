@@ -24,6 +24,31 @@ let remoteAudioEl = null;
 /** @type {null | ((event: Record<string, unknown>) => void)} */
 let eventHandler = null;
 let connectInFlight = null;
+let sipSecurityListenersBound = false;
+
+function scrubSipCredentialsInMemory() {
+  if (sipConfig && typeof sipConfig === "object") {
+    if ("password" in sipConfig) sipConfig.password = "";
+    sipConfig = null;
+  }
+}
+
+/**
+ * Clear SIP password from memory when tab is hidden (minimize exposure window).
+ * Re-register requires fresh sip_token_redeem.
+ */
+export function initSipSecurityListeners() {
+  if (sipSecurityListenersBound || typeof document === "undefined") return;
+  sipSecurityListenersBound = true;
+
+  const onVisibility = () => {
+    if (!document.hidden) return;
+    if (!simpleUser && !sipConfig) return;
+    void disconnectSip({ reason: "tab_hidden" });
+  };
+
+  document.addEventListener("visibilitychange", onVisibility);
+}
 
 export const SIP_REGISTRATION = {
   idle: "idle",
@@ -85,6 +110,7 @@ export function getSipRegistrationError() {
 export function initSipTelephony({ remoteAudioEl: audioEl = null, onEvent } = {}) {
   if (audioEl) remoteAudioEl = audioEl;
   if (typeof onEvent === "function") eventHandler = onEvent;
+  initSipSecurityListeners();
 }
 
 function emit(event) {
@@ -323,8 +349,9 @@ export async function connectSip() {
 }
 
 /** @returns {Promise<{ ok: boolean, reason?: string }>} */
-export async function disconnectSip() {
+export async function disconnectSip({ reason: _reason } = {}) {
   if (!simpleUser) {
+    scrubSipCredentialsInMemory();
     setRegistrationState(SIP_REGISTRATION.unregistered);
     return { ok: true };
   }
@@ -345,11 +372,13 @@ export async function disconnectSip() {
     }
   } catch (err) {
     const reason = err?.message || "שגיאה בניתוק SIP";
+    scrubSipCredentialsInMemory();
+    simpleUser = null;
     setRegistrationState(SIP_REGISTRATION.error, reason);
     return { ok: false, reason };
   } finally {
     simpleUser = null;
-    sipConfig = null;
+    scrubSipCredentialsInMemory();
     setRegistrationState(SIP_REGISTRATION.unregistered);
   }
 

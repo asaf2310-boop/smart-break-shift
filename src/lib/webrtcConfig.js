@@ -122,3 +122,36 @@ function applyPeerServerEnv(options) {
   if (secureRaw === "true" || secureRaw === "1") options.secure = true;
   if (secureRaw === "false" || secureRaw === "0") options.secure = false;
 }
+
+/**
+ * Production warnings for PeerJS configuration (console + admin diagnostics).
+ * @returns {string[]}
+ */
+export function getPeerJsSecurityWarnings() {
+  const warnings = [];
+  const host = import.meta.env.VITE_PEERJS_HOST?.trim();
+  const isProdBuild = import.meta.env.PROD && !import.meta.env.VITE_DEMO_MODE;
+
+  if (isProdBuild && !host) {
+    warnings.push(
+      "PeerJS: בפרודקשן מומלץ PeerServer עצמי — הגדירו VITE_PEERJS_HOST, VITE_PEERJS_PATH, VITE_PEERJS_SECURE=true"
+    );
+  }
+
+  if (host && import.meta.env.VITE_PEERJS_SECURE !== "true" && import.meta.env.VITE_PEERJS_SECURE !== "1") {
+    warnings.push("PeerJS: VITE_PEERJS_SECURE לא מוגדר ל-true — ודאו WSS בפרודקשן");
+  }
+
+  return warnings;
+}
+
+/** Log PeerJS security warnings once per page load in production. */
+export function logPeerJsSecurityWarningsOnce() {
+  if (typeof window === "undefined" || window.__peerJsSecurityWarned) return;
+  const warnings = getPeerJsSecurityWarnings();
+  if (!warnings.length) return;
+  window.__peerJsSecurityWarned = true;
+  for (const msg of warnings) {
+    console.warn(`[PeerJS security] ${msg}`);
+  }
+}

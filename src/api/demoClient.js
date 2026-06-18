@@ -4,7 +4,8 @@ import {
   softDeleteDemoAppUser,
   updateDemoAppUser,
 } from "@/lib/appUsersStore";
-import { demoModeEnabled } from "./demoMode";
+import { demoModeEnabled } from "@/api/demoMode";
+import { isDemoLocalStorageAllowed } from "@/lib/demoStorageGuard";
 
 export { demoModeEnabled } from "./demoMode";
 export { knowledgeEnabled } from "./knowledgeMode";
@@ -171,6 +172,9 @@ function createSeedStore() {
 }
 
 function readStore() {
+  if (!isDemoLocalStorageAllowed()) {
+    return createSeedStore();
+  }
   const raw = localStorage.getItem(DEMO_STORE_KEY);
   if (raw) {
     const store = JSON.parse(raw);
@@ -204,6 +208,7 @@ function readStore() {
 }
 
 function writeStore(store) {
+  if (!isDemoLocalStorageAllowed()) return;
   localStorage.setItem(DEMO_STORE_KEY, JSON.stringify(store));
   window.dispatchEvent(new CustomEvent("demo-store-changed"));
 }

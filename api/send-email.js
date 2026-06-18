@@ -1,6 +1,11 @@
 /** Vercel serverless — שליחת מייל דרך Resend (מפתח ב-process.env בלבד) */
 
 import { verifyBearerAgent } from "../server/agent/agentAuthService.js";
+import {
+  checkRateLimitHybrid,
+  getClientIp,
+  recordRateLimitHybrid,
+} from "../server/http/rateLimit.js";
 
 const RESEND_URL = "https://api.resend.com/emails";
 const EMAIL_RE =
@@ -24,31 +29,6 @@ function getRateLimitMax(req) {
   const envMax = parseInt(process.env.EMAIL_RATE_LIMIT_MAX || "", 10);
   if (!Number.isNaN(envMax) && envMax > 0) return envMax;
   return isDemoDeployment(req) ? RATE_LIMIT_MAX_DEMO : RATE_LIMIT_MAX_DEFAULT;
-}
-
-function getClientIp(req) {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (typeof forwarded === "string" && forwarded.length > 0) {
-    return forwarded.split(",")[0].trim();
-  }
-  return req.socket?.remoteAddress || "unknown";
-}
-
-function checkRateLimit(ip, max) {
-  const now = Date.now();
-  let entry = rateByIp.get(ip);
-  if (!entry || now >= entry.resetAt) {
-    entry = { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
-    rateByIp.set(ip, entry);
-  }
-  if (entry.count >= max) {
-    return { allowed: false, retryAfterSec: Math.max(1, Math.ceil((entry.resetAt - now) / 1000)) };
-  }
-  return { allowed: true, entry };
-}
-
-function recordRateLimitSend(entry) {
-  entry.count += 1;
 }
 
 function getSiteOrigin(req) {
@@ -187,7 +167,13 @@ export default async function handler(req, res) {
 
   const ip = getClientIp(req);
   const rateLimitMax = getRateLimitMax(req);
-  const rateCheck = checkRateLimit(ip, rateLimitMax);
+  const rateCheck = await checkRateLimitHybrid({
+    prefix: "send_email",
+    key: `ip:${ip}`,
+    store: rateByIp,
+    max: rateLimitMax,
+    windowMs: RATE_LIMIT_WINDOW_MS,
+  });
   if (!rateCheck.allowed) {
     const minutes = Math.max(1, Math.ceil(rateCheck.retryAfterSec / 60));
     return json(
@@ -272,7 +258,7 @@ export default async function handler(req, res) {
         req
       );
     }
-    recordRateLimitSend(rateCheck.entry);
+    await recordRateLimitHybrid(rateCheck.entry);
     console.info("[send-email] accepted by Resend", {
       to,
       id: data.id || null,
