@@ -37,6 +37,7 @@ import { m3PageClass } from "@/lib/hypPage";
 import SessionFileShare from "@/components/remote/SessionFileShare";
 import SessionSupportChat from "@/components/remote/SessionSupportChat";
 import { getPeerJsOptionsAsync, resolveIceServers } from "@/lib/webrtcConfig";
+import { apiMintWebrtcJoinToken } from "@/lib/webrtcJoinClient";
 import {
   acquireDisplayMediaStream,
   attachPeerConnectionDebugLogging,
@@ -467,6 +468,11 @@ export default function ScreenShareGuestPage() {
 
     let peer = peerRef.current;
     if (!peer || peer.destroyed) {
+      const joinMint = await apiMintWebrtcJoinToken({ sessionId, role: "guest" });
+      if (!joinMint.ok) {
+        setError("לא ניתן להתחבר מחדש — בקשו קישור חדש מהנציג");
+        return;
+      }
       peer = new Peer(await getPeerJsOptionsAsync(undefined, { sessionId }));
       peerRef.current = peer;
       bindPeerAgentEndListener(peer);
@@ -661,6 +667,15 @@ export default function ScreenShareGuestPage() {
         logRecordingConsent(session.id);
       }
       setSession(resolveGuestSession(sessionId, bootstrapKey));
+
+      const joinMint = await apiMintWebrtcJoinToken({ sessionId, role: "guest" });
+      if (!joinMint.ok) {
+        throw new Error(
+          joinMint.error === "fingerprint_mismatch"
+            ? "קישור זה נפתח ממכשיר אחר — בקשו קישור חדש מהנציג"
+            : "לא ניתן לאשר חיבור WebRTC — בקשו מהנציג קישור חדש"
+        );
+      }
 
       const peer = new Peer(await getPeerJsOptionsAsync(undefined, { sessionId }));
       peerRef.current = peer;

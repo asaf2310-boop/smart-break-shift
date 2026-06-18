@@ -4,6 +4,7 @@
  */
 import Peer from "peerjs";
 import { getPeerJsOptionsAsync } from "@/lib/webrtcConfig";
+import { apiMintWebrtcJoinToken } from "@/lib/webrtcJoinClient";
 
 /** @typedef {{ peer: import('peerjs').Peer | null, creating: boolean, listenersAttached: boolean, activeCall: import('peerjs').MediaConnection | null, remoteStream: MediaStream | null, refCount: number }} AgentPeerEntry */
 
@@ -88,7 +89,15 @@ export async function openAgentPeer(sessionId) {
   };
   entries.set(sessionId, entry);
 
-  const peerOptions = await getPeerJsOptionsAsync();
+  const joinMint = await apiMintWebrtcJoinToken({ sessionId, role: "agent" });
+  if (!joinMint.ok) {
+    entry.creating = false;
+    entries.delete(sessionId);
+    console.warn("[agentPeerManager] join token mint failed", joinMint.error);
+    return { peer: null, entry, reusing: false, created: false, joinError: joinMint.error };
+  }
+
+  const peerOptions = await getPeerJsOptionsAsync(undefined, { sessionId });
   const peer = new Peer(peerOptions);
   entry.peer = peer;
   entry.creating = false;

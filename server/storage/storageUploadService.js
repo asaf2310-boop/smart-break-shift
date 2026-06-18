@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "../knowledge/supabaseAdmin.js";
 import { verifyGuestLinkToken } from "../guest/guestLinkToken.js";
+import { verifyOrBindGuestTokenFingerprint } from "../guest/guestLinkRedemption.js";
 import { verifyBearerAgent } from "../agent/agentAuthService.js";
 import {
   validateSupportFileType,
@@ -130,6 +131,10 @@ export async function authorizeStorageAccess({
     }
     if (verified.sessionId !== pathSessionId) {
       return { ok: false, error: "session_mismatch" };
+    }
+    const bind = await verifyOrBindGuestTokenFingerprint(guestToken, pathSessionId, req);
+    if (!bind.ok) {
+      return { ok: false, error: bind.error || "fingerprint_mismatch" };
     }
     return { ok: true, session, uploadedBy: "guest" };
   }

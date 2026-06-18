@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "../knowledge/supabaseAdmin.js";
 import { verifyGuestLinkToken } from "./guestLinkToken.js";
+import { verifyOrBindGuestTokenFingerprint } from "./guestLinkRedemption.js";
 
 const MAX_GUEST_CHAT_BODY = 4000;
 const MAX_GUEST_CHAT_LABEL = 120;
@@ -8,12 +9,16 @@ function normalizeName(value) {
   return String(value || "").trim().toLowerCase();
 }
 
-function verifyGuestTokenForSession(token, sessionId) {
+async function verifyGuestTokenForSession(token, sessionId, req) {
   const verified = verifyGuestLinkToken(token);
   if (!verified.ok) return verified;
   const sid = String(sessionId || verified.sessionId).trim();
   if (!sid || verified.sessionId !== sid) {
     return { ok: false, error: "session_mismatch" };
+  }
+  if (req) {
+    const bind = await verifyOrBindGuestTokenFingerprint(token, sid, req);
+    if (!bind.ok) return bind;
   }
   return { ok: true, sessionId: sid, kind: verified.kind };
 }
@@ -63,8 +68,8 @@ export function mapGuestSessionState(row) {
 /**
  * Guest-safe session poll (agent peer id, consent, end status) — requires signed guest token.
  */
-export async function fetchGuestSessionState({ token, sessionId }) {
-  const authz = verifyGuestTokenForSession(token, sessionId);
+export async function fetchGuestSessionState({ token, sessionId, req }) {
+  const authz = await verifyGuestTokenForSession(token, sessionId, req);
   if (!authz.ok) return authz;
 
   const loaded = await loadActiveSession(authz.sessionId);
@@ -82,8 +87,8 @@ export async function fetchGuestSessionState({ token, sessionId }) {
   return { ok: true, session: mapGuestSessionState(loaded.session) };
 }
 
-export async function listGuestSessionChatMessages({ token, sessionId, limit = 500 }) {
-  const authz = verifyGuestTokenForSession(token, sessionId);
+export async function listGuestSessionChatMessages({ token, sessionId, limit = 500, req }) {
+  const authz = await verifyGuestTokenForSession(token, sessionId, req);
   if (!authz.ok) return authz;
 
   const supabase = getSupabaseAdmin();
@@ -123,8 +128,9 @@ export async function insertGuestSessionChatMessage({
   messageId,
   body,
   senderLabel = "לקוח",
+  req,
 }) {
-  const authz = verifyGuestTokenForSession(token, sessionId);
+  const authz = await verifyGuestTokenForSession(token, sessionId, req);
   if (!authz.ok) return authz;
 
   const trimmedBody = String(body || "").trim();

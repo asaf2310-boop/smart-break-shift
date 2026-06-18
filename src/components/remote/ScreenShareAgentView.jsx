@@ -788,7 +788,7 @@ export default function ScreenShareAgentView({
   };
 
   useEffect(() => {
-    void resolveIceServers();
+    void resolveIceServers({ sessionId });
   }, []);
 
   useEffect(() => {

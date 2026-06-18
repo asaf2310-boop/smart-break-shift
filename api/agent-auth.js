@@ -44,6 +44,9 @@ import {
 } from "../server/guest/guestSupportService.js";
 import { verifyGuestLinkToken } from "../server/guest/guestLinkToken.js";
 import { handleIceServersRequest, DEFAULT_STUN_SERVERS } from "../server/webrtc/iceServersService.js";
+import { mintWebrtcJoinToken, authorizeWebrtcJoin } from "../server/webrtc/webrtcJoinService.js";
+import { webrtcJoinRequireEnabled } from "../server/webrtc/webrtcJoinToken.js";
+import { verifyOrBindGuestTokenFingerprint } from "../server/guest/guestLinkRedemption.js";
 import { logSecurityEvent } from "../server/security/auditLog.js";
 import { listSecurityAuditLog } from "../server/security/auditLogListService.js";
 import { endSupportSessionByAgent } from "../server/support/supportSessionEndService.js";
@@ -64,6 +67,8 @@ const guestResolveRateByIp = new Map();
 const guestSessionRateByIp = new Map();
 const guestChatRateByIp = new Map();
 const guestMintRateByUser = new Map();
+const webrtcJoinRateByIp = new Map();
+const webrtcJoinRateByUser = new Map();
 const adminActionRateByUser = new Map();
 const supportEndRateByUser = new Map();
 const reviewSmsRateByUser = new Map();
@@ -73,6 +78,7 @@ const GUEST_SESSION_POLL_RATE_MAX = 240;
 const GUEST_CHAT_RATE_MAX = 120;
 const ICE_SERVERS_RATE_MAX = 120;
 const GUEST_MINT_RATE_MAX = 120;
+const WEBRTC_JOIN_RATE_MAX = 90;
 const ADMIN_ACTION_RATE_MAX = 60;
 const SUPPORT_END_RATE_MAX = 120;
 const REVIEW_SMS_RATE_MAX = 30;
@@ -157,13 +163,34 @@ export default async function handler(req, res) {
     if (!enforceIpRateLimit(res, req, guestResolveRateByIp, ICE_SERVERS_RATE_MAX)) return;
 
     const guestToken = String(body.guestToken || "").trim();
+    const joinToken = String(body.joinToken || body.webrtcJoinToken || "").trim();
+    const sessionId = String(body.sessionId || "").trim();
     let authorized = false;
+    let joinRole = null;
+
     if (guestToken) {
       const verified = verifyGuestLinkToken(guestToken);
-      authorized = verified.ok;
+      if (verified.ok) {
+        if (sessionId && verified.sessionId !== sessionId) {
+          return json(res, 403, { error: "session_mismatch" }, req);
+        }
+        const bind = await verifyOrBindGuestTokenFingerprint(
+          guestToken,
+          verified.sessionId,
+          req
+        );
+        if (!bind.ok) {
+          return json(res, 403, bind, req);
+        }
+        authorized = true;
+        joinRole = "guest";
+      }
     } else {
       const auth = await verifyBearerAgent(req);
-      authorized = Boolean(auth?.agent);
+      if (auth?.agent) {
+        authorized = true;
+        joinRole = "agent";
+      }
     }
 
     if (!authorized) {
@@ -180,7 +207,112 @@ export default async function handler(req, res) {
       );
     }
 
+    if (webrtcJoinRequireEnabled()) {
+      if (!joinToken || !sessionId) {
+        return json(res, 403, { error: "join_token_required" }, req);
+      }
+      const auth = joinRole === "agent" ? await verifyBearerAgent(req) : null;
+      const joinAuth = await authorizeWebrtcJoin({
+        joinToken,
+        sessionId,
+        role: joinRole,
+        agent: auth?.agent || null,
+        req,
+      });
+      if (!joinAuth.ok) {
+        return json(res, 403, joinAuth, req);
+      }
+    }
+
     return handleIceServersRequest(res, req);
+  }
+
+  if (action === "webrtc_join_mint") {
+    if (!guestLinkApiReady()) {
+      return json(res, 503, { error: "guest_link_not_configured" }, req);
+    }
+
+    const sessionId = String(body.sessionId || "").trim();
+    const role = body.role === "guest" ? "guest" : body.role === "agent" ? "agent" : null;
+    if (!sessionId || !role) {
+      return json(res, 400, { error: "invalid_request" }, req);
+    }
+
+    if (role === "agent") {
+      const auth = await verifyBearerAgent(req);
+      if (!auth?.agent) {
+        return json(res, 401, { error: "unauthorized" }, req);
+      }
+      if (
+        !enforceUserRateLimit(res, req, webrtcJoinRateByUser, WEBRTC_JOIN_RATE_MAX, auth.agent.id)
+      ) {
+        return;
+      }
+
+      const result = await mintWebrtcJoinToken({
+        sessionId,
+        role: "agent",
+        agent: auth.agent,
+        req,
+      });
+      if (!result.ok) {
+        const status =
+          result.error === "forbidden"
+            ? 403
+            : result.error === "not_found"
+              ? 404
+              : result.error === "ended"
+                ? 410
+                : 400;
+        return json(res, status, result, req);
+      }
+
+      void logSecurityEvent({
+        action: "remote_session_start",
+        actorAgentId: auth.agent.id,
+        resourceType: "support_session",
+        resourceId: sessionId,
+        metadata: { role: "agent" },
+        req,
+      });
+
+      return json(res, 200, result, req);
+    }
+
+    if (!enforceIpRateLimit(res, req, webrtcJoinRateByIp, WEBRTC_JOIN_RATE_MAX)) return;
+
+    const guestToken = String(body.guestToken || body.token || "").trim();
+    if (!guestToken) {
+      return json(res, 400, { error: "invalid_token" }, req);
+    }
+
+    const result = await mintWebrtcJoinToken({
+      sessionId,
+      role: "guest",
+      guestToken,
+      req,
+    });
+    if (!result.ok) {
+      const status =
+        result.error === "fingerprint_mismatch" || result.error === "invalid_token"
+          ? 403
+          : result.error === "ended"
+            ? 410
+            : result.error === "not_found"
+              ? 404
+              : 400;
+      return json(res, status, result, req);
+    }
+
+    void logSecurityEvent({
+      action: "remote_session_start",
+      resourceType: "support_session",
+      resourceId: sessionId,
+      metadata: { role: "guest" },
+      req,
+    });
+
+    return json(res, 200, result, req);
   }
 
   if (!supabaseReady()) {
@@ -624,7 +756,7 @@ export default async function handler(req, res) {
 
       auditGuestAccess("mint_ok", { req, sessionId, extra: { agent: auth.agent.displayName } });
       void logSecurityEvent({
-        action: "guest_link_mint",
+        action: "guest_link_created",
         actorAgentId: auth.agent.id,
         resourceType: "support_session",
         resourceId: sessionId,
@@ -644,7 +776,9 @@ export default async function handler(req, res) {
     const result = await resolveGuestLinkFromToken(token, { req });
     if (!result.ok) {
       const status =
-        result.error === "ended" || result.error === "already_used"
+        result.error === "ended" ||
+        result.error === "already_used" ||
+        result.error === "fingerprint_mismatch"
           ? 410
           : result.error === "expired"
             ? 410
@@ -667,12 +801,14 @@ export default async function handler(req, res) {
       return json(res, 400, { error: "invalid_request" }, req);
     }
 
-    const result = await fetchGuestSessionState({ token, sessionId });
+    const result = await fetchGuestSessionState({ token, sessionId, req });
     if (!result.ok) {
       const status =
         result.error === "ended"
           ? 410
-          : result.error === "expired" || result.error === "invalid_token"
+          : result.error === "expired" ||
+              result.error === "invalid_token" ||
+              result.error === "fingerprint_mismatch"
             ? 403
             : result.error === "not_found"
               ? 404
@@ -695,12 +831,14 @@ export default async function handler(req, res) {
     }
 
     if (action === "guest_chat_list") {
-      const result = await listGuestSessionChatMessages({ token, sessionId, limit: body.limit });
+      const result = await listGuestSessionChatMessages({ token, sessionId, limit: body.limit, req });
       if (!result.ok) {
         const status =
           result.error === "ended"
             ? 410
-            : result.error === "expired" || result.error === "invalid_token"
+            : result.error === "expired" ||
+                result.error === "invalid_token" ||
+                result.error === "fingerprint_mismatch"
               ? 403
               : 400;
         return json(res, status, result, req);
@@ -714,12 +852,15 @@ export default async function handler(req, res) {
       messageId: body.messageId,
       body: body.body,
       senderLabel: body.senderLabel,
+      req,
     });
     if (!result.ok) {
       const status =
         result.error === "ended"
           ? 410
-          : result.error === "expired" || result.error === "invalid_token"
+          : result.error === "expired" ||
+              result.error === "invalid_token" ||
+              result.error === "fingerprint_mismatch"
             ? 403
             : 400;
       return json(res, status, result, req);
@@ -762,6 +903,14 @@ export default async function handler(req, res) {
       }
 
       if (!result.alreadyEnded) {
+        void logSecurityEvent({
+          action: "remote_session_end",
+          actorAgentId: auth.agent.id,
+          resourceType: "support_session",
+          resourceId: sessionId,
+          metadata: { endedReason: result.endedReason, sessionType: result.sessionType },
+          req,
+        });
         void logSecurityEvent({
           action: "support_session_end",
           actorAgentId: auth.agent.id,

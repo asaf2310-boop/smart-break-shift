@@ -6,11 +6,9 @@ import {
   verifyGuestLinkToken,
 } from "./guestLinkToken.js";
 import { auditGuestAccess } from "./guestSupportService.js";
-import {
-  guestLinkOneTimeEnabled,
-  isGuestLinkTokenConsumed,
-  markGuestLinkTokenConsumed,
-} from "./guestLinkOneTime.js";
+import { guestLinkOneTimeEnabled } from "./guestLinkOneTime.js";
+import { redeemGuestLinkOnResolve } from "./guestLinkRedemption.js";
+import { logSecurityEvent } from "../security/auditLog.js";
 
 function normalizeName(value) {
   return String(value || "").trim().toLowerCase();
@@ -99,15 +97,6 @@ export async function resolveGuestLinkFromToken(token, { req } = {}) {
     return verified;
   }
 
-  if (isGuestLinkTokenConsumed(token)) {
-    return {
-      ok: false,
-      error: "already_used",
-      message: "קישור זה כבר נוצל (שימוש חד-פעמי)",
-      oneTime: guestLinkOneTimeEnabled(),
-    };
-  }
-
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from("support_sessions")
@@ -135,8 +124,22 @@ export async function resolveGuestLinkFromToken(token, { req } = {}) {
     return { ok: false, error: "invalid_token" };
   }
 
-  markGuestLinkTokenConsumed(token);
+  const redemption = await redeemGuestLinkOnResolve(token, session.sessionId, req);
+  if (!redemption.ok) {
+    return {
+      ...redemption,
+      oneTime: guestLinkOneTimeEnabled(),
+    };
+  }
+
   auditGuestAccess("resolve_ok", { req, sessionId: session.sessionId });
+  void logSecurityEvent({
+    action: "guest_link_redeemed",
+    resourceType: "support_session",
+    resourceId: session.sessionId,
+    metadata: { kind: verified.kind, oneTime: guestLinkOneTimeEnabled() },
+    req,
+  });
 
   return {
     ok: true,

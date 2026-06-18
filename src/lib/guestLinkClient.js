@@ -21,6 +21,7 @@ export async function apiMintGuestLink({ sessionId, kind }) {
     const response = await fetch("/api/agent-auth", {
       method: "POST",
       headers: await authHeaders(),
+      credentials: "same-origin",
       body: JSON.stringify({
         action: "mint",
         sessionId,
@@ -43,6 +44,7 @@ export async function apiResolveGuestLink(token) {
     const response = await fetch("/api/agent-auth", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
       body: JSON.stringify({
         action: "resolve",
         token,
@@ -64,6 +66,7 @@ export async function apiGuestSessionState({ sessionId, token }) {
     const response = await fetch("/api/agent-auth", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
       body: JSON.stringify({
         action: "guest_session",
         sessionId,
@@ -86,6 +89,7 @@ export async function apiGuestChatList({ sessionId, token }) {
     const response = await fetch("/api/agent-auth", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
       body: JSON.stringify({
         action: "guest_chat_list",
         sessionId,
@@ -108,6 +112,7 @@ export async function apiGuestChatSend({ sessionId, token, messageId, body, send
     const response = await fetch("/api/agent-auth", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
       body: JSON.stringify({
         action: "guest_chat_send",
         sessionId,
@@ -138,6 +143,7 @@ export async function apiEndSupportSession({ sessionId, endedReason }) {
     const response = await fetch("/api/agent-auth", {
       method: "POST",
       headers: await authHeaders(),
+      credentials: "same-origin",
       body: JSON.stringify({
         action: "end_support_session",
         sessionId,

@@ -1,5 +1,6 @@
 import { supabase } from "@/api/supabase";
 import { getGuestLinkToken } from "@/lib/guestLinkTokenStore";
+import { getWebrtcJoinToken } from "@/lib/webrtcJoinTokenStore";
 
 const ICE_SERVERS_TTL_MS = 5 * 60 * 1000;
 
@@ -43,6 +44,8 @@ export async function fetchIceServers(options = {}) {
       const sessionId = options.sessionId;
       const guestToken =
         options.guestToken || (sessionId ? getGuestLinkToken(sessionId) : null);
+      const joinToken =
+        options.joinToken || (sessionId ? getWebrtcJoinToken(sessionId) : null);
 
       const headers = { "Content-Type": "application/json" };
       if (supabase && !guestToken) {
@@ -62,7 +65,9 @@ export async function fetchIceServers(options = {}) {
         credentials: "same-origin",
         body: JSON.stringify({
           action: "ice_servers",
+          ...(sessionId ? { sessionId } : {}),
           ...(guestToken ? { guestToken } : {}),
+          ...(joinToken ? { joinToken } : {}),
         }),
       });
       const data = await response.json().catch(() => ({}));
