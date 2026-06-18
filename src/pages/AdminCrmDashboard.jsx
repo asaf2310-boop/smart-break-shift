@@ -11,7 +11,10 @@ import {
   Clock,
   ExternalLink,
   FolderOpen,
+  GitBranch,
+  History,
   LayoutDashboard,
+  Loader2,
   Search,
   ShieldCheck,
 } from "lucide-react";
@@ -20,14 +23,18 @@ import { isCrmCloudEnabled } from "@/api/crmCloudMode";
 import {
   assignReferral,
   closeReferral,
+  formatReferralEventSummary,
   getDepartmentName,
   getReferralAssignmentLabel,
+  getReferralEventLabel,
   getReferralPriorityLabel,
   listAllOpenReferrals,
+  listRecentReferralEvents,
   REFERRAL_PRIORITIES,
   subscribeCrmStore,
   updateReferralPriority,
 } from "@/lib/crmStore";
+import ReferralEventsTimeline from "@/components/crm/ReferralEventsTimeline";
 import { listCrmDepartments, subscribeCrmDepartments } from "@/lib/crmDepartments";
 import ReferralTransferDialog from "@/components/crm/ReferralTransferDialog";
 import { useToast } from "@/components/ui/use-toast";
@@ -82,10 +89,17 @@ export default function AdminCrmDashboard() {
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [agingFilter, setAgingFilter] = useState("all");
   const [transferRef, setTransferRef] = useState(null);
+  const [recentEvents, setRecentEvents] = useState([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [auditReferralId, setAuditReferralId] = useState(null);
 
   const refresh = useCallback(() => {
     setOpenReferrals(listAllOpenReferrals());
     setDepartments(listCrmDepartments());
+    setEventsLoading(true);
+    listRecentReferralEvents(50)
+      .then(setRecentEvents)
+      .finally(() => setEventsLoading(false));
   }, []);
 
   useEffect(() => {
@@ -216,6 +230,13 @@ export default function AdminCrmDashboard() {
             >
               <Building2 className="w-4 h-4" />
               ניהול מחלקות
+            </Link>
+            <Link
+              to="/admin/crm/routing"
+              className="inline-flex items-center gap-1 text-sm text-on-surface-variant hover:text-primary"
+            >
+              <GitBranch className="w-4 h-4" />
+              כללי ניתוב
             </Link>
           </div>
           <div className="flex items-start gap-4">
@@ -482,10 +503,69 @@ export default function AdminCrmDashboard() {
           )}
         </section>
 
-        <p className="m3-label-medium text-center text-on-surface-variant">
-          יומן אירועי הפניות (audit) —{" "}
-          <span className="text-on-surface-variant/70">בקרוב · Phase 4</span>
-        </p>
+        <section className="m3-card p-4 mb-6">
+          <h2 className="m3-label-large mb-3 flex items-center gap-2">
+            <History className="w-4 h-4 text-primary" />
+            יומן אירועי הפניות (audit)
+          </h2>
+          {eventsLoading ? (
+            <div className="flex items-center gap-2 text-sm text-on-surface-variant py-4 justify-center">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              טוען אירועים...
+            </div>
+          ) : recentEvents.length === 0 ? (
+            <p className="m3-label-medium text-center py-6 text-on-surface-variant">
+              אין אירועים מתועדים עדיין
+            </p>
+          ) : (
+            <div className="space-y-2 max-h-[420px] overflow-y-auto">
+              {recentEvents.map((event) => {
+                const ref = openReferrals.find((r) => r.id === event.referral_id);
+                return (
+                  <div
+                    key={event.id}
+                    className="rounded-xl border border-outline/15 bg-surface-container-low px-3 py-2.5"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-bold text-primary">
+                          {getReferralEventLabel(event.event_type)}
+                        </span>
+                        {ref?.customer?.name && (
+                          <Link
+                            to={`/crm/${ref.customer_id}`}
+                            className="text-xs font-medium text-on-surface hover:text-primary"
+                          >
+                            {ref.customer.name}
+                          </Link>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-on-surface-variant">{formatDt(event.created_at)}</span>
+                    </div>
+                    <p className="text-xs text-on-surface leading-relaxed">
+                      {formatReferralEventSummary(event)}
+                    </p>
+                    {event.actor_name && (
+                      <p className="text-[10px] text-on-surface-variant mt-1">מבצע: {event.actor_name}</p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAuditReferralId((prev) => (prev === event.referral_id ? null : event.referral_id))
+                      }
+                      className="text-[10px] font-semibold text-primary mt-1.5 hover:underline"
+                    >
+                      {auditReferralId === event.referral_id ? "הסתר ציר זמן מלא" : "ציר זמן מלא לפניה"}
+                    </button>
+                    {auditReferralId === event.referral_id && (
+                      <ReferralEventsTimeline referralId={event.referral_id} compact className="mt-2" />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
       </div>
 
       <ReferralTransferDialog

@@ -11,6 +11,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { REFERRAL_STATUSES, REFERRAL_PRIORITIES } from "@/lib/crmStore";
+import { findRoutingRuleForTopic } from "@/lib/crmRoutingRules";
+import { getDepartmentName } from "@/lib/crmDepartments";
 import { ReferralTopicCombobox } from "@/components/crm/CallLogForm";
 import ReferralAssignmentFields from "@/components/crm/ReferralAssignmentFields";
 
@@ -26,6 +28,7 @@ export default function ReferralForm({ agentName, onSubmit }) {
     priority: "normal",
   });
   const [saveAs, setSaveAs] = useState("open");
+  const [autoRoute, setAutoRoute] = useState(true);
   const [assignment, setAssignment] = useState({
     assigned_to_type: "agent",
     assigned_agent_name: agentName || "",
@@ -60,9 +63,11 @@ export default function ReferralForm({ agentName, onSubmit }) {
       priority: form.priority,
       agent_name: agentName,
       status,
-      ...assignment,
+      explicit_assignment: !autoRoute,
+      ...(autoRoute ? {} : assignment),
     });
     setForm({ referral_topic: "", description: "", priority: "normal" });
+    setAutoRoute(true);
     setAssignment({
       assigned_to_type: "agent",
       assigned_agent_name: agentName || "",
@@ -124,11 +129,34 @@ export default function ReferralForm({ agentName, onSubmit }) {
         <Label>יוצר הפניה</Label>
         <Input value={agentName || "—"} readOnly className="rounded-xl bg-slate-50" />
       </div>
-      <ReferralAssignmentFields
-        value={assignment}
-        onChange={setAssignment}
-        defaultAgentName={agentName}
-      />
+      <label className="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={autoRoute}
+          onChange={(e) => setAutoRoute(e.target.checked)}
+          className="rounded border-slate-300"
+        />
+        שיוך אוטומטי לפי נושא (כללי ניתוב)
+      </label>
+      {autoRoute && form.referral_topic && (
+        <p className="text-xs text-teal-700 bg-teal-50 border border-teal-200 rounded-xl px-3 py-2">
+          {(() => {
+            const rule = findRoutingRuleForTopic(form.referral_topic);
+            if (!rule) return "לא הוגדר כלל לנושא זה — ישויך לנציג היוצר";
+            if (rule.assigned_to_type === "department") {
+              return `ישויך אוטומטית למחלקת ${getDepartmentName(rule.assigned_department_id)}`;
+            }
+            return `ישויך אוטומטית ל${rule.assigned_agent_name}`;
+          })()}
+        </p>
+      )}
+      {!autoRoute && (
+        <ReferralAssignmentFields
+          value={assignment}
+          onChange={setAssignment}
+          defaultAgentName={agentName}
+        />
+      )}
       {error && <p className="text-sm text-red-600 font-medium">{error}</p>}
       <div className="flex justify-end">
         <div className="inline-flex rounded-xl overflow-hidden shadow-sm border border-teal-300">

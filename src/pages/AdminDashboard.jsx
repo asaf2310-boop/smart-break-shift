@@ -271,6 +271,9 @@ export default function AdminDashboard() {
               <Link to="/admin/crm/departments" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">
                 מחלקות CRM
               </Link>
+              <Link to="/admin/crm/routing" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">
+                ניתוב CRM
+              </Link>
             </>
           )}
           {customerChatEnabled && (

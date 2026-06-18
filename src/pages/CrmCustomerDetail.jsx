@@ -40,7 +40,6 @@ import {
   getCustomerById,
   getCustomerProductStatusLabel,
   getEmailStatusLabel,
-  getDepartmentName,
   getReferralAssignmentLabel,
   getReferralPriorityLabel,
   getReferralStatusLabel,
@@ -62,6 +61,7 @@ import CallLogForm, { formatCallDatetime } from "@/components/crm/CallLogForm";
 import EmailSendForm, { formatEmailDatetime } from "@/components/crm/EmailSendForm";
 import ReferralForm from "@/components/crm/ReferralForm";
 import ReferralTransferDialog from "@/components/crm/ReferralTransferDialog";
+import ReferralEventsTimeline from "@/components/crm/ReferralEventsTimeline";
 import InboundEmailForm from "@/components/crm/InboundEmailForm";
 import { format } from "date-fns";
 import {
@@ -110,6 +110,7 @@ export default function CrmCustomerDetail() {
   const [contactDialog, setContactDialog] = useState(null);
   const [productDialog, setProductDialog] = useState(null);
   const [transferRef, setTransferRef] = useState(null);
+  const [expandedAuditId, setExpandedAuditId] = useState(null);
   const { toast } = useToast();
   const { dialNumber } = useTelephony();
 
@@ -169,11 +170,8 @@ export default function CrmCustomerDetail() {
 
   const handleAddReferral = (data) => {
     try {
-      createReferral({ customer_id: customer.id, ...data });
-      const assignLabel =
-        data.assigned_to_type === "department"
-          ? `מחלקת ${getDepartmentName(data.assigned_department_id)}`
-          : data.assigned_agent_name;
+      const created = createReferral({ customer_id: customer.id, ...data });
+      const assignLabel = getReferralAssignmentLabel(created);
       toast({
         title: data.status === "closed" ? "פניה נסגרה" : "פניה נפתחה",
         description:
@@ -579,7 +577,17 @@ export default function CrmCustomerDetail() {
                       </span>
                     </div>
                     <p className="text-sm text-slate-800 leading-relaxed">{ref.description}</p>
-                    <div className="flex flex-wrap gap-2 mt-3 justify-end">
+                    <div className="flex flex-wrap gap-2 mt-3 justify-between items-center">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedAuditId((prev) => (prev === ref.id ? null : ref.id))
+                        }
+                        className="text-xs font-semibold text-slate-500 hover:text-indigo-600"
+                      >
+                        {expandedAuditId === ref.id ? "הסתר יומן" : "יומן אירועים"}
+                      </button>
+                      <div className="flex flex-wrap gap-2 justify-end">
                       {isOpen && (
                         <>
                           <button
@@ -612,7 +620,11 @@ export default function CrmCustomerDetail() {
                       {!isOpen && !mayReopen && ref.closed_at && (
                         <span className="text-xs text-slate-400 py-1.5">חלון 7 ימים לתגובה הסתיים</span>
                       )}
+                      </div>
                     </div>
+                    {expandedAuditId === ref.id && (
+                      <ReferralEventsTimeline referralId={ref.id} compact className="border-t border-slate-100 pt-3" />
+                    )}
                   </div>
                 );
               })}

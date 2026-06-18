@@ -179,6 +179,10 @@ export default function AppNav() {
                     <ShieldCheck className="w-4 h-4" />
                     מחלקות CRM
                   </Link>
+                  <Link to="/admin/crm/routing" className={tabClass(location.pathname === "/admin/crm/routing")}>
+                    <ShieldCheck className="w-4 h-4" />
+                    ניתוב CRM
+                  </Link>
                 </>
               )}
               {customerChatEnabled && (

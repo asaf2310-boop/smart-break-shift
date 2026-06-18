@@ -481,18 +481,143 @@ export async function deleteProductFromCloud(id) {
   if (error) throw error;
 }
 
+export function mapReferralEventRowToLocal(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    referral_id: row.referral_id,
+    event_type: row.event_type,
+    actor_agent_id: row.actor_agent_id,
+    actor_name: getAgentNameById(row.actor_agent_id) || "",
+    old_value: row.old_value || {},
+    new_value: row.new_value || {},
+    created_at: row.created_at,
+  };
+}
+
+export async function loadReferralEventsFromCloud(referralId) {
+  if (!isCrmCloudEnabled() || !supabase || !isCloudUuid(referralId)) return [];
+  await loadAgentCache();
+  const { data, error } = await supabase
+    .from("crm_referral_events")
+    .select("*")
+    .eq("referral_id", referralId)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data || []).map(mapReferralEventRowToLocal).filter(Boolean);
+}
+
+export async function loadRecentReferralEventsFromCloud(limit = 50) {
+  if (!isCrmCloudEnabled() || !supabase) return [];
+  await loadAgentCache();
+  const { data, error } = await supabase
+    .from("crm_referral_events")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data || []).map(mapReferralEventRowToLocal).filter(Boolean);
+}
+
 export async function logReferralEvent(referralId, eventType, oldValue = {}, newValue = {}) {
   if (!isCrmCloudEnabled() || !supabase || !isCloudUuid(referralId)) return;
   await loadAgentCache();
   const actorId = getAgentSession()?.id || null;
+  const cloudEventType = eventType === "priority_changed" ? "comment" : eventType;
+  const cloudNewValue =
+    eventType === "priority_changed"
+      ? { ...newValue, _priority_changed: true, priority: newValue.priority }
+      : newValue;
   const { error } = await supabase.from("crm_referral_events").insert({
     referral_id: referralId,
-    event_type: eventType,
+    event_type: cloudEventType,
     actor_agent_id: actorId,
     old_value: oldValue,
-    new_value: newValue,
+    new_value: cloudNewValue,
   });
   if (error) console.warn("[crmCloudSync] referral event failed", error);
+}
+
+export function mapRoutingRuleRowToLocal(row) {
+  if (!row) return null;
+  const assigned_to_type = row.assigned_to_type === "agent" ? "agent" : "department";
+  if (assigned_to_type === "department") {
+    return {
+      id: row.id,
+      referral_topic: row.referral_topic || "",
+      assigned_to_type: "department",
+      assigned_department_id: row.assigned_department_id || null,
+      assigned_agent_name: null,
+      sort_order: row.sort_order ?? 0,
+    };
+  }
+  return {
+    id: row.id,
+    referral_topic: row.referral_topic || "",
+    assigned_to_type: "agent",
+    assigned_department_id: null,
+    assigned_agent_name: getAgentNameById(row.assigned_agent_id) || "",
+    sort_order: row.sort_order ?? 0,
+  };
+}
+
+export function mapRoutingRuleToRow(rule) {
+  const assigned_to_type = rule.assigned_to_type === "agent" ? "agent" : "department";
+  return {
+    id: rule.id,
+    referral_topic: String(rule.referral_topic || "").trim(),
+    assigned_to_type,
+    assigned_department_id:
+      assigned_to_type === "department" ? rule.assigned_department_id || null : null,
+    assigned_agent_id:
+      assigned_to_type === "agent" ? getAgentIdByName(rule.assigned_agent_name) : null,
+    sort_order: rule.sort_order ?? 0,
+    active: true,
+  };
+}
+
+export async function loadRoutingRulesFromCloud() {
+  if (!isCrmCloudEnabled() || !supabase) return null;
+  await loadAgentCache();
+  const { data, error } = await supabase
+    .from("crm_routing_rules")
+    .select("*")
+    .eq("active", true)
+    .order("sort_order", { ascending: true });
+  if (error) throw error;
+  return (data || []).map(mapRoutingRuleRowToLocal).filter(Boolean);
+}
+
+export async function persistRoutingRulesToCloud(rules) {
+  if (!isCrmCloudEnabled() || !supabase) return;
+  await loadAgentCache();
+  const existing = await fetchTable("crm_routing_rules");
+  const existingIds = new Set(existing.map((r) => r.id));
+  const nextIds = new Set(rules.map((r) => r.id));
+
+  for (const rule of rules) {
+    const payload = mapRoutingRuleToRow(rule);
+    if (existingIds.has(rule.id)) {
+      const { error } = await supabase.from("crm_routing_rules").update(payload).eq("id", rule.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from("crm_routing_rules").insert(payload);
+      if (error) throw error;
+    }
+  }
+
+  for (const id of existingIds) {
+    if (!nextIds.has(id)) {
+      const { error } = await supabase.from("crm_routing_rules").delete().eq("id", id);
+      if (error) throw error;
+    }
+  }
+}
+
+export async function deleteRoutingRuleFromCloud(id) {
+  if (!isCrmCloudEnabled() || !supabase) return;
+  const { error } = await supabase.from("crm_routing_rules").delete().eq("id", id);
+  if (error) throw error;
 }
 
 export async function loadDepartmentsFromCloud() {

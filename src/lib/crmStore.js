@@ -1,6 +1,8 @@
 import { crmEnabled } from "@/api/crmMode";
 import { isCrmCloudEnabled } from "@/api/crmCloudMode";
 import { getDepartmentName, getDepartmentsForAgent, isCrmDepartmentsHydrated } from "@/lib/crmDepartments";
+import { findRoutingRuleForTopic, isCrmRoutingRulesHydrated } from "@/lib/crmRoutingRules";
+import { getStoredAgentName } from "@/constants/scheduling";
 import {
   deleteCallLogFromCloud,
   deleteContactFromCloud,
@@ -9,7 +11,9 @@ import {
   deleteProductFromCloud,
   invalidateCrmCloudCache,
   loadCrmFromCloud,
-  logReferralEvent,
+  loadRecentReferralEventsFromCloud,
+  loadReferralEventsFromCloud,
+  logReferralEvent as logReferralEventToCloud,
   migrateLocalStoreToCloud,
   persistCallLog,
   persistContact,
@@ -21,10 +25,22 @@ import {
 
 export const CRM_STORAGE_KEY = "smart-break-shift-crm-v3";
 const CRM_STORAGE_KEY_V2 = "smart-break-shift-crm-v2";
+const CRM_REFERRAL_EVENTS_KEY = "smart-break-shift-crm-referral-events-v1";
 export const REFERRAL_REOPEN_DAYS = 7;
 export const CRM_CHANGE_EVENT = "crm-store-changed";
 
+export const REFERRAL_EVENT_LABELS = {
+  created: "נוצרה פניה",
+  assigned: "שויכה מחדש",
+  claimed: "נלקחה מהתור",
+  closed: "נסגרה",
+  reopened: "נפתחה מחדש",
+  comment: "הערה",
+  priority_changed: "שינוי עדיפות",
+};
+
 let memoryStore = null;
+let memoryReferralEvents = null;
 let hydratePromise = null;
 let cloudHydrated = false;
 
@@ -378,7 +394,181 @@ function seedAndPersistStore() {
   const seed = createSeedStore();
   seed.referrals = createSeedReferrals(seed.customers);
   writeStore(seed);
+  seedReferralEventsForDemo(seed.referrals);
   return { ...seed, referrals: seed.referrals };
+}
+
+function readAllLocalReferralEvents() {
+  if (memoryReferralEvents) return memoryReferralEvents;
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(CRM_REFERRAL_EVENTS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    memoryReferralEvents = Array.isArray(parsed) ? parsed : [];
+    return memoryReferralEvents;
+  } catch {
+    return [];
+  }
+}
+
+function writeAllLocalReferralEvents(events) {
+  memoryReferralEvents = events;
+  try {
+    localStorage.setItem(CRM_REFERRAL_EVENTS_KEY, JSON.stringify(events));
+  } catch {
+    // ignore
+  }
+}
+
+function appendLocalReferralEvent(referralId, eventType, oldValue, newValue, actorName) {
+  const event = {
+    id: makeId("crm_evt"),
+    referral_id: referralId,
+    event_type: eventType,
+    actor_name: actorName || getStoredAgentName() || "",
+    old_value: oldValue || {},
+    new_value: newValue || {},
+    created_at: new Date().toISOString(),
+  };
+  const events = [...readAllLocalReferralEvents(), event];
+  writeAllLocalReferralEvents(events);
+  return event;
+}
+
+function recordReferralEvent(referralId, eventType, oldValue = {}, newValue = {}) {
+  appendLocalReferralEvent(referralId, eventType, oldValue, newValue);
+  if (isCrmCloudEnabled()) {
+    logReferralEventToCloud(referralId, eventType, oldValue, newValue).catch(() => {});
+  }
+}
+
+function seedReferralEventsForDemo(referrals) {
+  if (readAllLocalReferralEvents().length) return;
+  const events = [];
+  for (const ref of referrals || []) {
+    events.push({
+      id: `crm_evt_${ref.id}_created`,
+      referral_id: ref.id,
+      event_type: "created",
+      actor_name: ref.agent_name || ref.original_agent_name || "",
+      old_value: {},
+      new_value: ref,
+      created_at: ref.opened_at || ref.created_at,
+    });
+    if (ref.status === "closed" && ref.closed_at) {
+      events.push({
+        id: `crm_evt_${ref.id}_closed`,
+        referral_id: ref.id,
+        event_type: "closed",
+        actor_name: ref.assigned_agent_name || ref.agent_name || "",
+        old_value: { status: "open" },
+        new_value: { status: "closed" },
+        created_at: ref.closed_at,
+      });
+    }
+    if (ref.assigned_to_type === "department") {
+      events.push({
+        id: `crm_evt_${ref.id}_assigned`,
+        referral_id: ref.id,
+        event_type: "assigned",
+        actor_name: ref.original_agent_name || ref.agent_name || "",
+        old_value: {},
+        new_value: ref,
+        created_at: ref.opened_at || ref.created_at,
+      });
+    }
+  }
+  if (events.length) writeAllLocalReferralEvents(events);
+}
+
+export function getReferralEventLabel(eventType) {
+  return REFERRAL_EVENT_LABELS[eventType] || eventType;
+}
+
+function summarizeReferralSnapshot(value) {
+  if (!value || typeof value !== "object") return "";
+  const parts = [];
+  if (value.referral_topic) parts.push(`נושא: ${value.referral_topic}`);
+  if (value.priority) parts.push(`עדיפות: ${getReferralPriorityLabel(value.priority)}`);
+  if (value.status) parts.push(`סטטוס: ${getReferralStatusLabel(value.status)}`);
+  const assignment = getReferralAssignmentLabel(value);
+  if (assignment) parts.push(assignment);
+  if (value._priority_changed || (value.new_value && value.new_value._priority_changed)) {
+    parts.push(`עדיפות: ${getReferralPriorityLabel(value.priority)}`);
+  }
+  return parts.join(" · ");
+}
+
+export function formatReferralEventSummary(event) {
+  if (!event) return "";
+  if (event.event_type === "priority_changed") {
+    const oldP = getReferralPriorityLabel(event.old_value?.priority);
+    const newP = getReferralPriorityLabel(event.new_value?.priority);
+    return `מ${oldP} ל${newP}`;
+  }
+  if (event.event_type === "created") {
+    return summarizeReferralSnapshot(event.new_value);
+  }
+  if (event.event_type === "closed") {
+    return "הפניה סומנה כהסתיים טיפול";
+  }
+  if (event.event_type === "reopened") {
+    return summarizeReferralSnapshot(event.new_value) || "הפניה נפתחה מחדש";
+  }
+  if (event.event_type === "claimed") {
+    const from = getReferralAssignmentLabel(event.old_value);
+    const to = getReferralAssignmentLabel(event.new_value);
+    if (from && to) return `מ${from} ל${to}`;
+    return to || from;
+  }
+  if (event.event_type === "assigned") {
+    const from = getReferralAssignmentLabel(event.old_value);
+    const to = getReferralAssignmentLabel(event.new_value);
+    if (from && to && from !== to) return `מ${from} ל${to}`;
+    return to || from || summarizeReferralSnapshot(event.new_value);
+  }
+  if (event.event_type === "comment" && event.new_value?._priority_changed) {
+    const oldP = getReferralPriorityLabel(event.old_value?.priority);
+    const newP = getReferralPriorityLabel(event.new_value?.priority);
+    return `עדיפות: מ${oldP} ל${newP}`;
+  }
+  const oldSummary = summarizeReferralSnapshot(event.old_value);
+  const newSummary = summarizeReferralSnapshot(event.new_value);
+  if (oldSummary && newSummary && oldSummary !== newSummary) {
+    return `מ${oldSummary} ל${newSummary}`;
+  }
+  return newSummary || oldSummary;
+}
+
+export async function listReferralEvents(referralId) {
+  const id = String(referralId || "").trim();
+  if (!id) return [];
+  if (isCrmCloudEnabled()) {
+    try {
+      const cloudEvents = await loadReferralEventsFromCloud(id);
+      if (cloudEvents.length) return cloudEvents;
+    } catch (err) {
+      console.warn("[crmStore] referral events cloud load failed", err);
+    }
+  }
+  return readAllLocalReferralEvents()
+    .filter((e) => e.referral_id === id)
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+}
+
+export async function listRecentReferralEvents(limit = 40) {
+  if (isCrmCloudEnabled()) {
+    try {
+      const cloudEvents = await loadRecentReferralEventsFromCloud(limit);
+      if (cloudEvents.length) return cloudEvents;
+    } catch (err) {
+      console.warn("[crmStore] recent referral events cloud load failed", err);
+    }
+  }
+  return [...readAllLocalReferralEvents()]
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .slice(0, limit);
 }
 
 function isStoreEmpty(store) {
@@ -511,12 +701,13 @@ async function loadCrmStoreFromCloud() {
   return memoryStore;
 }
 
-/** טוען CRM מ-Supabase (כולל מחלקות) */
+/** טוען CRM מ-Supabase (כולל מחלקות וכללי ניתוב) */
 export function hydrateCrmStore() {
   if (!hydratePromise) {
     hydratePromise = (async () => {
       const { hydrateCrmDepartments } = await import("@/lib/crmDepartments");
-      await Promise.all([loadCrmStoreFromCloud(), hydrateCrmDepartments()]);
+      const { hydrateCrmRoutingRules } = await import("@/lib/crmRoutingRules");
+      await Promise.all([loadCrmStoreFromCloud(), hydrateCrmDepartments(), hydrateCrmRoutingRules()]);
     })().finally(() => {
       hydratePromise = null;
       if (typeof window !== "undefined") {
@@ -530,18 +721,22 @@ export function hydrateCrmStore() {
 /** רענון מ-Supabase Realtime */
 export function invalidateCrmStoreCache() {
   memoryStore = null;
+  memoryReferralEvents = null;
   cloudHydrated = false;
   hydratePromise = null;
   invalidateCrmCloudCache();
   import("@/lib/crmDepartments").then(({ clearCrmDepartmentsMemory }) => {
     clearCrmDepartmentsMemory();
   });
+  import("@/lib/crmRoutingRules").then(({ clearCrmRoutingRulesMemory }) => {
+    clearCrmRoutingRulesMemory();
+  });
   return hydrateCrmStore();
 }
 
 export function isCrmStoreHydrated() {
   if (!isCrmCloudEnabled()) return true;
-  return cloudHydrated && isCrmDepartmentsHydrated();
+  return cloudHydrated && isCrmDepartmentsHydrated() && isCrmRoutingRulesHydrated();
 }
 
 export function crmDemoAvailable() {
@@ -951,15 +1146,30 @@ export function createReferral({
   assigned_to_type = "agent",
   assigned_agent_name,
   assigned_department_id,
+  explicit_assignment = false,
 }) {
   const topic = normalizeReferralTopic(referral_topic);
   if (!topic) {
     throw new Error("נושא הפניה הוא שדה חובה");
   }
-  if (assigned_to_type === "department" && !assigned_department_id) {
+
+  let routeType = assigned_to_type;
+  let routeAgent = assigned_agent_name;
+  let routeDept = assigned_department_id;
+
+  if (!explicit_assignment) {
+    const rule = findRoutingRuleForTopic(topic);
+    if (rule) {
+      routeType = rule.assigned_to_type;
+      routeAgent = rule.assigned_agent_name;
+      routeDept = rule.assigned_department_id;
+    }
+  }
+
+  if (routeType === "department" && !routeDept) {
     throw new Error("יש לבחור מחלקה לשיוך");
   }
-  if (assigned_to_type === "agent" && !String(assigned_agent_name || agent_name || "").trim()) {
+  if (routeType === "agent" && !String(routeAgent || agent_name || "").trim()) {
     throw new Error("יש לבחור נציג לשיוך");
   }
   const store = readStore();
@@ -967,9 +1177,9 @@ export function createReferral({
   const isClosed = status === "closed";
   const assignment = buildReferralAssignment({
     creatorName: agent_name,
-    assigned_to_type,
-    assigned_agent_name,
-    assigned_department_id,
+    assigned_to_type: routeType,
+    assigned_agent_name: routeAgent,
+    assigned_department_id: routeDept,
   });
   const referral = {
     id: makeId("crm_ref"),
@@ -987,9 +1197,9 @@ export function createReferral({
   };
   store.referrals = [...(store.referrals || []), referral];
   writeStore(store);
+  recordReferralEvent(referral.id, "created", {}, referral);
   if (isCrmCloudEnabled()) {
     persistReferral(referral).catch((err) => warnCloudPersist(err, "persistReferral"));
-    logReferralEvent(referral.id, "created", {}, referral).catch(() => {});
   }
   return referral;
 }
@@ -1013,7 +1223,9 @@ export function updateReferralPriority(id, priority) {
   writeStore(store);
   if (isCrmCloudEnabled() && updated) {
     persistReferral(updated).catch((err) => warnCloudPersist(err, "persistReferral"));
-    logReferralEvent(id, "priority_changed", { priority: target.priority }, updated).catch(() => {});
+  }
+  if (updated) {
+    recordReferralEvent(id, "priority_changed", { priority: target.priority }, updated);
   }
   return updated;
 }
@@ -1042,7 +1254,9 @@ export function assignReferral(id, { assigned_to_type, assigned_agent_name, assi
   writeStore(store);
   if (isCrmCloudEnabled() && updated) {
     persistReferral(updated).catch((err) => warnCloudPersist(err, "persistReferral"));
-    logReferralEvent(id, "assigned", target, updated).catch(() => {});
+  }
+  if (updated) {
+    recordReferralEvent(id, "assigned", target, updated);
   }
   return updated;
 }
@@ -1055,13 +1269,14 @@ export function claimDepartmentReferral(id, agentName) {
   if (!target || target.status !== "open" || target.assigned_to_type !== "department") {
     return null;
   }
+  const beforeClaim = { ...target };
   const updated = assignReferral(id, {
     assigned_to_type: "agent",
     assigned_agent_name: name,
     assigned_department_id: null,
   });
-  if (isCrmCloudEnabled() && updated) {
-    logReferralEvent(id, "claimed", target, updated).catch(() => {});
+  if (updated) {
+    recordReferralEvent(id, "claimed", beforeClaim, updated);
   }
   return updated;
 }
@@ -1083,7 +1298,9 @@ export function closeReferral(id) {
   writeStore(store);
   if (isCrmCloudEnabled() && updated) {
     persistReferral(updated).catch((err) => warnCloudPersist(err, "persistReferral"));
-    logReferralEvent(id, "closed", { status: "open" }, updated).catch(() => {});
+  }
+  if (updated) {
+    recordReferralEvent(id, "closed", { status: "open" }, updated);
   }
   return updated;
 }
@@ -1118,7 +1335,9 @@ export function reopenReferralFromCustomerResponse(id) {
   writeStore(store);
   if (isCrmCloudEnabled() && updated) {
     persistReferral(updated).catch((err) => warnCloudPersist(err, "persistReferral"));
-    logReferralEvent(id, "reopened", target, updated).catch(() => {});
+  }
+  if (updated) {
+    recordReferralEvent(id, "reopened", target, updated);
   }
   return updated;
 }
@@ -1151,8 +1370,10 @@ export function tryAutoReopenReferrals(customerId, { referralTopic = null, activ
   if (isCrmCloudEnabled()) {
     for (const ref of reopened) {
       persistReferral(ref).catch((err) => warnCloudPersist(err, "persistReferral"));
-      logReferralEvent(ref.id, "reopened", toReopen, ref).catch(() => {});
     }
+  }
+  for (const ref of reopened) {
+    recordReferralEvent(ref.id, "reopened", toReopen, ref);
   }
   return reopened;
 }
