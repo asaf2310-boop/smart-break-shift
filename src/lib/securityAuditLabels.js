@@ -13,6 +13,7 @@ export const SECURITY_AUDIT_ACTION_LABELS = {
   support_session_end: "סיום סשן תמיכה",
   knowledge_upload: "העלאת מסמך ידע",
   knowledge_delete: "מחיקת מסמך ידע",
+  knowledge_gap_update: "עדכון פער ידע",
   send_review_sms: "שליחת SMS דירוג גוגל",
   send_schedule_sms: "שליחת SMS שיבוץ",
   sip_token_mint: "הנפקת טוקן SIP",

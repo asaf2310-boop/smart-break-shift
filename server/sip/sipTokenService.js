@@ -107,7 +107,6 @@ export async function mintSipTokenForAgent({ req, auth, agentKey }) {
   }
 
   const ttlSec = getSipCredentialTtlSec();
-  const clientUser = process.env.VITE_SIP_USER?.trim() || creds.user;
   const credentialToken = signSipCredentialToken({
     user: creds.user,
     password: creds.password,
@@ -130,10 +129,10 @@ export async function mintSipTokenForAgent({ req, auth, agentKey }) {
     ok: true,
     status: 200,
     wsUrl: creds.wsUrl,
-    user: clientUser,
+    user: creds.user,
     domain: creds.domain,
     extension: creds.extension,
-    aor: `sip:${clientUser}@${creds.domain}`,
+    aor: `sip:${creds.user}@${creds.domain}`,
     credentialToken,
     expiresInSec: ttlSec,
   };
@@ -168,16 +167,15 @@ export async function redeemSipTokenForAgent({ req, auth, credentialToken }) {
     req,
   });
 
-  const clientUser = process.env.VITE_SIP_USER?.trim() || redeemed.user;
   return {
     ok: true,
     status: 200,
     wsUrl: redeemed.wsUrl,
-    user: clientUser,
+    user: redeemed.user,
     password: redeemed.password,
     domain: redeemed.domain,
     extension: redeemed.extension,
-    aor: `sip:${clientUser}@${redeemed.domain}`,
+    aor: `sip:${redeemed.user}@${redeemed.domain}`,
   };
 }
 

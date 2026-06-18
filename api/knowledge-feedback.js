@@ -1,7 +1,10 @@
 /** Vercel serverless — knowledge gaps + agent feedback. */
 
 import { json, readJsonBody, handleOptions, isSameOrigin } from "../server/knowledge/httpUtils.js";
-import { requireKnowledgeAccess } from "../server/knowledge/requireKnowledgeAccess.js";
+import {
+  requireKnowledgeAccess,
+  requireKnowledgeAdminAccess,
+} from "../server/knowledge/requireKnowledgeAccess.js";
 import { isPgVectorConfigured } from "../server/knowledge/supabaseAdmin.js";
 import {
   logKnowledgeGap,
@@ -10,6 +13,7 @@ import {
   updateKnowledgeGap,
   listKnowledgeFeedback,
 } from "../server/knowledge/gapFeedbackService.js";
+import { logSecurityEvent } from "../server/security/auditLog.js";
 
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") {
@@ -26,7 +30,8 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "GET") {
-    if (!(await requireKnowledgeAccess(req, res))) return;
+    const auth = await requireKnowledgeAdminAccess(req, res);
+    if (!auth) return;
 
     const url = new URL(req.url || "/", "http://localhost");
     const listType = url.searchParams.get("type") || "gaps";
@@ -48,8 +53,6 @@ export default async function handler(req, res) {
     return json(res, 405, { error: "method_not_allowed" }, req);
   }
 
-  if (!(await requireKnowledgeAccess(req, res))) return;
-
   let body;
   try {
     body = await readJsonBody(req);
@@ -61,6 +64,8 @@ export default async function handler(req, res) {
   const tenantId = body.tenantId ?? body.tenant_id ?? null;
 
   if (action === "log_gap") {
+    const auth = await requireKnowledgeAccess(req, res);
+    if (!auth) return;
     const result = await logKnowledgeGap({
       question: body.question,
       tenantId,
@@ -72,6 +77,8 @@ export default async function handler(req, res) {
   }
 
   if (action === "update_gap") {
+    const auth = await requireKnowledgeAdminAccess(req, res);
+    if (!auth) return;
     const gapId = String(body.gapId || body.id || "").trim();
     if (!gapId) return json(res, 400, { error: "gap_id_required" }, req);
     const result = await updateKnowledgeGap(gapId, {
@@ -79,8 +86,22 @@ export default async function handler(req, res) {
       status: body.status,
     });
     if (!result.ok) return json(res, 500, { error: result.error }, req);
+    void logSecurityEvent({
+      action: "knowledge_gap_update",
+      actorAgentId: auth.agent.id,
+      resourceType: "knowledge_gap",
+      resourceId: gapId,
+      metadata: {
+        status: body.status || (body.manualAnswer ? "answered" : null),
+        hasManualAnswer: body.manualAnswer != null || body.manual_answer != null,
+      },
+      req,
+    });
     return json(res, 200, result, req);
   }
+
+  const auth = await requireKnowledgeAccess(req, res);
+  if (!auth) return;
 
   const helpful = body.helpful === true || body.rating === "helpful";
   const notHelpful = body.helpful === false || body.rating === "not_helpful";

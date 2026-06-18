@@ -36,13 +36,11 @@ export const SIP_REGISTRATION = {
 export function getSipConfig() {
   const wsUrl = import.meta.env.VITE_SIP_WS_URL?.trim();
   const user = import.meta.env.VITE_SIP_USER?.trim();
-  const password = import.meta.env.VITE_SIP_PASSWORD?.trim();
   if (!wsUrl) return null;
   return {
     wsUrl,
     user: user || null,
-    hasClientPassword: Boolean(password),
-    usesServerCredentials: !password,
+    usesServerCredentials: true,
   };
 }
 
@@ -139,27 +137,6 @@ function buildOutboundDestination(phone, domain) {
 async function fetchSipCredentials() {
   const local = getSipConfig();
   if (!local?.wsUrl) return null;
-
-  if (local.hasClientPassword && local.user) {
-    const domain =
-      import.meta.env.VITE_SIP_DOMAIN?.trim() ||
-      (() => {
-        try {
-          const host = new URL(local.wsUrl).hostname;
-          return host.replace(/^ws\./i, "");
-        } catch {
-          return "localhost";
-        }
-      })();
-    return {
-      wsUrl: local.wsUrl,
-      user: local.user,
-      password: import.meta.env.VITE_SIP_PASSWORD?.trim() || "",
-      domain,
-      aor: `sip:${local.user}@${domain}`,
-      source: "client-env",
-    };
-  }
 
   try {
     const agentName = getCurrentAgentNameForSip();
@@ -477,7 +454,7 @@ export async function connectProductionCall() {
 
   return {
     ok: true,
-    reason: `SIP מוכן (${credentials.source === "server" ? "אישורים מהשרת" : "אישורים מקומיים"})`,
+    reason: "SIP מוכן (אישורים קצרי-טווח מהשרת)",
     provider: "sip",
   };
 }
