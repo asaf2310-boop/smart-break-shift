@@ -30,6 +30,17 @@ function agentLabel(row) {
   return row.agentName || row.agentId || "לא ידוע";
 }
 
+function sortAgentsByTotalDesc(rows) {
+  return [...rows].sort((a, b) => {
+    const diff = Number(b.total) - Number(a.total);
+    if (diff !== 0) return diff;
+    return String(a.agentName || a.agentId || "").localeCompare(
+      String(b.agentName || b.agentId || ""),
+      "he"
+    );
+  });
+}
+
 export default function AdminSmsStats() {
   const { toast } = useToast();
   const [days, setDays] = useState(30);
@@ -55,7 +66,7 @@ export default function AdminSmsStats() {
         setRowCount(0);
         return;
       }
-      setAgents(result.agents || []);
+      setAgents(sortAgentsByTotalDesc(result.agents || []));
       setTotals(result.totals || null);
       setPeriod(result.period || null);
       setRowCount(result.rowCount ?? 0);

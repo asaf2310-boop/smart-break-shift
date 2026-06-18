@@ -41,7 +41,6 @@ import AdminKnowledge from './pages/AdminKnowledge';
 import AdminKnowledgeGaps from './pages/AdminKnowledgeGaps';
 import AdminCustomerChat from './pages/AdminCustomerChat';
 import FloatingKnowledgeWidget from '@/components/knowledge/FloatingKnowledgeWidget';
-import MorningMetricsPopup from '@/components/metrics/MorningMetricsPopup';
 import AdminLocalhostLinksFloating from '@/components/admin/AdminLocalhostLinksFloating';
 import RemoteSupportConsentPage from './pages/RemoteSupportConsentPage';
 import RemoteSupportPage from './pages/RemoteSupportPage';
@@ -162,7 +161,6 @@ const AuthenticatedApp = () => {
       </Routes>
       <FloatingChatWidget />
       <FloatingKnowledgeWidget />
-      <MorningMetricsPopup />
       <SoftphoneWidget />
       <AdminLocalhostLinksFloating />
     </div>

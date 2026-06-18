@@ -157,8 +157,12 @@ export async function getSmsStatsByAgent({ fromDate, toDate, days } = {}) {
   }
 
   const agents = [...byAgent.values()].sort((a, b) => {
-    if (b.total !== a.total) return b.total - a.total;
-    return String(a.agentName || "").localeCompare(String(b.agentName || ""), "he");
+    const diff = Number(b.total) - Number(a.total);
+    if (diff !== 0) return diff;
+    return String(a.agentName || a.agentId || "").localeCompare(
+      String(b.agentName || b.agentId || ""),
+      "he"
+    );
   });
 
   const totals = agents.reduce(
