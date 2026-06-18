@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowRight, Loader2, MessageSquare, Star } from "lucide-react";
@@ -8,9 +8,9 @@ import { hypHeaderIconClass } from "@/lib/hypPage";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { formatAgentPhoneDisplay, normalizeAgentPhone } from "@/lib/agentPhone";
 import {
-  buildGoogleReviewShortUrl,
   buildReviewSmsPreview,
   DEFAULT_REVIEW_SMS_TEMPLATE,
+  fetchReviewSmsConfig,
   REVIEW_SMS_MAX_LENGTH,
   sendReviewSms,
   validateReviewSmsLength,
@@ -23,15 +23,29 @@ export default function AgentReviewSms() {
   const [customMessage, setCustomMessage] = useState("");
   const [useCustom, setUseCustom] = useState(false);
   const [sending, setSending] = useState(false);
+  const [smsConfig, setSmsConfig] = useState({ loading: true, ok: false, smsUrl: null, message: null });
 
-  const shortReviewUrl = useMemo(() => buildGoogleReviewShortUrl(), []);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const config = await fetchReviewSmsConfig();
+      if (!cancelled) {
+        setSmsConfig({ loading: false, ...config });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const normalizedPhone = useMemo(() => normalizeAgentPhone(phone), [phone]);
   const preview = useMemo(
-    () => buildReviewSmsPreview(useCustom ? customMessage : ""),
-    [useCustom, customMessage]
+    () => buildReviewSmsPreview(useCustom ? customMessage : "", smsConfig.smsUrl),
+    [useCustom, customMessage, smsConfig.smsUrl]
   );
   const lengthCheck = useMemo(() => validateReviewSmsLength(preview), [preview]);
   const previewTooLong = !lengthCheck.ok;
+  const smsUrlMissing = !smsConfig.loading && !smsConfig.ok;
 
   if (!isLoggedIn) {
     return <Navigate to="/" replace />;
@@ -111,16 +125,38 @@ export default function AgentReviewSms() {
         </p>
       </motion.div>
 
-      <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 text-center leading-relaxed">
-        הקישור ב-SMS יהיה קצר:{" "}
-        <code className="text-xs font-mono" dir="ltr">
-          {shortReviewUrl}
-        </code>
-        . הגדירו <code className="text-xs">GOOGLE_REVIEW_URL</code> בשרת Vercel (מומלץ:{" "}
-        <code className="text-xs" dir="ltr">
-          g.page/r/…
-        </code>
-        ).
+      <div
+        className={`mb-6 rounded-2xl border px-4 py-3 text-sm text-center leading-relaxed ${
+          smsUrlMissing
+            ? "border-amber-200 bg-amber-50 text-amber-900"
+            : "border-slate-200 bg-slate-50 text-slate-700"
+        }`}
+      >
+        {smsConfig.loading ? (
+          <span className="inline-flex items-center gap-2 justify-center">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            טוען קישור SMS...
+          </span>
+        ) : smsUrlMissing ? (
+          <span>{smsConfig.message || "קישור דירוג לא מוגדר ל-SMS."}</span>
+        ) : (
+          <>
+            הקישור שיישלח ב-SMS:{" "}
+            <code className="text-xs font-mono" dir="ltr">
+              {smsConfig.smsUrl}
+            </code>
+          </>
+        )}
+        {!smsConfig.loading && (
+          <p className="mt-2 text-xs opacity-80">
+            הגדירו <code className="text-[11px]">GOOGLE_REVIEW_SMS_URL</code> ב-Vercel (מומלץ:{" "}
+            <code className="text-[11px]" dir="ltr">
+              g.page/r/…/review
+            </code>
+            ). אופציונלי: <code className="text-[11px]">GOOGLE_REVIEW_URL</code> ליעד מלא (למשל הפניה
+            מ-/go/review).
+          </p>
+        )}
       </div>
 
       <form onSubmit={handleSend} className="rounded-3xl border border-slate-200 bg-white shadow-sm p-6 space-y-5">
@@ -205,7 +241,7 @@ export default function AgentReviewSms() {
 
         <button
           type="submit"
-          disabled={sending || !normalizedPhone || previewTooLong}
+          disabled={sending || !normalizedPhone || previewTooLong || smsConfig.loading || smsUrlMissing}
           className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 text-white font-semibold py-3 text-sm hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {sending ? (

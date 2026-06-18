@@ -48,6 +48,11 @@ import { logSecurityEvent } from "../server/security/auditLog.js";
 import { listSecurityAuditLog } from "../server/security/auditLogListService.js";
 import { endSupportSessionByAgent } from "../server/support/supportSessionEndService.js";
 import { sendReviewSmsToCustomer } from "../server/sms/reviewSmsService.js";
+import {
+  DEFAULT_REVIEW_SMS_TEMPLATE,
+  REVIEW_SMS_MAX_LENGTH,
+  resolveReviewSmsUrl,
+} from "../server/review/reviewLink.js";
 
 const PASSWORD_MIN_LENGTH = 12;
 
@@ -337,6 +342,28 @@ export default async function handler(req, res) {
     }
   }
 
+  if (action === "review_sms_config") {
+    const auth = await verifyBearerAgent(req);
+    if (!auth?.agent) {
+      return json(res, 401, { error: "unauthorized", message: "נדרשת התחברות" }, req);
+    }
+
+    const resolved = resolveReviewSmsUrl();
+    return json(
+      res,
+      200,
+      {
+        ok: resolved.ok,
+        smsUrl: resolved.ok ? resolved.url : null,
+        error: resolved.error || null,
+        message: resolved.message || null,
+        template: DEFAULT_REVIEW_SMS_TEMPLATE,
+        maxLength: REVIEW_SMS_MAX_LENGTH,
+      },
+      req
+    );
+  }
+
   if (action === "send_review_sms") {
     const auth = await verifyBearerAgent(req);
     if (!auth?.agent) {
@@ -371,6 +398,7 @@ export default async function handler(req, res) {
         const status =
           result.error === "invalid_phone" ||
           result.error === "review_url_not_configured" ||
+          result.error === "review_sms_url_not_configured" ||
           result.error === "message_too_long"
             ? 400
             : result.error === "sms_not_configured"

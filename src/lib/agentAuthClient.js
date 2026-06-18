@@ -131,6 +131,10 @@ export async function apiSendReviewSms({ phone, message }) {
   );
 }
 
+export async function apiGetReviewSmsConfig() {
+  return postAgentAuth({ action: "review_sms_config" }, { requireBearer: true });
+}
+
 export async function apiAdminListAuditLog({ limit = 50, offset = 0, filterAction = null } = {}) {
   return postAgentAuth(
     {

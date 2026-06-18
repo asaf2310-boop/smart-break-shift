@@ -2,16 +2,15 @@ import { normalizeIsraeliPhone, sendInforuSms } from "../../api/send-schedule-sm
 import { logSecurityEvent } from "../security/auditLog.js";
 import {
   DEFAULT_REVIEW_SMS_TEMPLATE,
-  buildGoogleReviewShortUrl,
   buildReviewSmsMessage,
-  getGoogleReviewUrl,
+  resolveReviewSmsUrl,
   validateReviewSmsMessageLength,
 } from "../review/reviewLink.js";
 
 export {
   DEFAULT_REVIEW_SMS_TEMPLATE,
   buildReviewSmsMessage,
-  getGoogleReviewUrl,
+  resolveReviewSmsUrl,
 } from "../review/reviewLink.js";
 
 export function isInforuSmsConfigured() {
@@ -37,14 +36,9 @@ export async function sendReviewSmsToCustomer({
   actorName,
   req,
 } = {}) {
-  const reviewUrl = getGoogleReviewUrl();
-  if (!reviewUrl) {
-    return {
-      ok: false,
-      error: "review_url_not_configured",
-      message:
-        "קישור דירוג גוגל לא מוגדר. הגדירו GOOGLE_REVIEW_URL ב-Vercel (משתנה שרת) ופרסמו מחדש.",
-    };
+  const resolved = resolveReviewSmsUrl();
+  if (!resolved.ok) {
+    return resolved;
   }
 
   const normalized = normalizeIsraeliPhone(phone);
@@ -52,8 +46,7 @@ export async function sendReviewSmsToCustomer({
     return { ok: false, error: "invalid_phone", message: "מספר טלפון לא תקין" };
   }
 
-  const shortUrl = buildGoogleReviewShortUrl();
-  const built = buildReviewSmsMessage({ reviewUrl: shortUrl, customMessage });
+  const built = buildReviewSmsMessage({ reviewUrl: resolved.url, customMessage });
   if (!built.ok) return built;
 
   const lengthCheck = validateReviewSmsMessageLength(built.message);
