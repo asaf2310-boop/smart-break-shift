@@ -1,6 +1,7 @@
 /** Vercel serverless — knowledge gaps + agent feedback. */
 
 import { json, readJsonBody, handleOptions, isSameOrigin } from "../server/knowledge/httpUtils.js";
+import { requireKnowledgeAccess } from "../server/knowledge/requireKnowledgeAccess.js";
 import { isPgVectorConfigured } from "../server/knowledge/supabaseAdmin.js";
 import {
   logKnowledgeGap,
@@ -25,6 +26,8 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "GET") {
+    if (!(await requireKnowledgeAccess(req, res))) return;
+
     const url = new URL(req.url || "/", "http://localhost");
     const listType = url.searchParams.get("type") || "gaps";
     const tenantId = url.searchParams.get("tenantId") || null;
@@ -44,6 +47,8 @@ export default async function handler(req, res) {
   if (req.method !== "POST") {
     return json(res, 405, { error: "method_not_allowed" }, req);
   }
+
+  if (!(await requireKnowledgeAccess(req, res))) return;
 
   let body;
   try {

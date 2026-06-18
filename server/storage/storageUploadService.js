@@ -7,6 +7,10 @@ import {
   validateSupportFileContent,
   SUPPORT_ZIP_MAX_COMPRESSED_BYTES,
 } from "./supportFileAllowlist.js";
+import {
+  assertZipUploadPolicy,
+  scanUploadBufferWithAv,
+} from "./uploadAvService.js";
 
 export const SUPPORT_FILES_BUCKET = "support-files";
 export const SCREEN_RECORDINGS_BUCKET = "screen-recordings";
@@ -16,7 +20,7 @@ const RECORDING_PATH_RE = /^[^/]+\/ss_rec[^/]+\.webm$/;
 
 const MAX_DIRECT_UPLOAD_BYTES = 3_500_000;
 
-function validateSupportUploadBuffer({ typeCheck, buffer }) {
+async function validateSupportUploadBuffer({ typeCheck, buffer, fileName, mimeType }) {
   if (!buffer?.length) {
     return { ok: true, hasBuffer: false };
   }
@@ -27,8 +31,12 @@ function validateSupportUploadBuffer({ typeCheck, buffer }) {
       message: "הקובץ גדול מדי לשליחה ישירה — השתמשו ב-signedUrl",
     };
   }
-  if (typeCheck.extension === ".zip" && buffer.length > SUPPORT_ZIP_MAX_COMPRESSED_BYTES) {
-    return { ok: false, error: "zip_too_large", message: "קובץ ZIP גדול מדי" };
+  if (typeCheck.extension === ".zip") {
+    const zipPolicy = assertZipUploadPolicy();
+    if (!zipPolicy.ok) return zipPolicy;
+    if (buffer.length > SUPPORT_ZIP_MAX_COMPRESSED_BYTES) {
+      return { ok: false, error: "zip_too_large", message: "קובץ ZIP גדול מדי" };
+    }
   }
   const contentCheck = validateSupportFileContent({
     extension: typeCheck.extension,
@@ -40,6 +48,14 @@ function validateSupportUploadBuffer({ typeCheck, buffer }) {
       error: contentCheck.error || "invalid_file_content",
       message: contentCheck.message,
     };
+  }
+  if (typeCheck.extension === ".zip") {
+    const avScan = await scanUploadBufferWithAv({
+      buffer,
+      fileName,
+      mimeType,
+    });
+    if (!avScan.ok) return avScan;
   }
   return { ok: true, hasBuffer: true, buffer };
 }
@@ -219,7 +235,12 @@ export async function handleSupportFileUpload(req, body) {
     if (!buffer.length) {
       return { ok: false, error: "empty_file" };
     }
-    const validated = validateSupportUploadBuffer({ typeCheck, buffer });
+    const validated = await validateSupportUploadBuffer({
+      typeCheck,
+      buffer,
+      fileName: storagePath.split("/").pop(),
+      mimeType,
+    });
     if (!validated.ok) return validated;
 
     if (buffer.length <= MAX_DIRECT_UPLOAD_BYTES) {

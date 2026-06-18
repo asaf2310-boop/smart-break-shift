@@ -3,6 +3,7 @@
 import { embedTexts, getEmbedModelName, isEmbeddingConfigured } from "../server/knowledge/embeddingService.js";
 import { getAiProvider, getEmbeddingDimensions } from "../server/ai/aiProvider.js";
 import { json, readJsonBody, handleOptions, isSameOrigin } from "../server/knowledge/httpUtils.js";
+import { requireKnowledgeAccess } from "../server/knowledge/requireKnowledgeAccess.js";
 
 const MAX_BATCH = 64;
 
@@ -37,6 +38,8 @@ export default async function handler(req, res) {
   if (!isSameOrigin(req)) {
     return json(res, 403, { error: "forbidden" }, req);
   }
+
+  if (!(await requireKnowledgeAccess(req, res))) return;
 
   if (!isEmbeddingConfigured()) {
     return json(

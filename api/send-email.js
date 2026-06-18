@@ -1,5 +1,7 @@
 /** Vercel serverless — שליחת מייל דרך Resend (מפתח ב-process.env בלבד) */
 
+import { verifyBearerAgent } from "../server/agent/agentAuthService.js";
+
 const RESEND_URL = "https://api.resend.com/emails";
 const EMAIL_RE =
   /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
@@ -76,7 +78,7 @@ function corsHeaders(req) {
     return {
       "Access-Control-Allow-Origin": origin,
       "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
       Vary: "Origin",
     };
   }
@@ -160,6 +162,11 @@ export default async function handler(req, res) {
 
   if (!isSameOrigin(req)) {
     return json(res, 403, { error: "forbidden", message: "CORS: same origin only" }, req);
+  }
+
+  const agentAuth = await verifyBearerAgent(req);
+  if (!agentAuth?.agent) {
+    return json(res, 401, { error: "unauthorized", message: "נדרשת התחברות נציג לשליחת מייל" }, req);
   }
 
   const apiKey = process.env.RESEND_API_KEY;

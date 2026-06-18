@@ -1,6 +1,7 @@
 /** Vercel serverless — vector similarity search (debug / admin). */
 
 import { json, readJsonBody, handleOptions, isSameOrigin } from "../server/knowledge/httpUtils.js";
+import { requireKnowledgeAccess } from "../server/knowledge/requireKnowledgeAccess.js";
 import { isPgVectorConfigured } from "../server/knowledge/supabaseAdmin.js";
 import { embedQuery, isEmbeddingConfigured } from "../server/knowledge/embeddingService.js";
 import { searchKnowledgeChunks } from "../server/knowledge/vectorSearchService.js";
@@ -36,6 +37,8 @@ export default async function handler(req, res) {
   if (req.method !== "POST") {
     return json(res, 405, { error: "method_not_allowed" }, req);
   }
+
+  if (!(await requireKnowledgeAccess(req, res))) return;
 
   if (!isPgVectorConfigured()) {
     return json(res, 503, { error: "pgvector_not_configured" }, req);

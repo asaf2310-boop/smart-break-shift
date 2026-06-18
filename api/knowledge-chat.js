@@ -1,6 +1,7 @@
 /** Vercel serverless — full server-side RAG: hybrid search → Gemini multimodal. */
 
 import { json, readJsonBody, handleOptions, isSameOrigin } from "../server/knowledge/httpUtils.js";
+import { requireKnowledgeAccess } from "../server/knowledge/requireKnowledgeAccess.js";
 import { isPgVectorConfigured } from "../server/knowledge/supabaseAdmin.js";
 import { isEmbeddingConfigured } from "../server/knowledge/embeddingService.js";
 import { MIN_CONFIDENCE } from "../server/knowledge/hybridSearchService.js";
@@ -347,6 +348,8 @@ export default async function handler(req, res) {
   if (!isSameOrigin(req)) {
     return json(res, 403, { error: "forbidden", message: "CORS: same origin only" }, req);
   }
+
+  if (!(await requireKnowledgeAccess(req, res))) return;
 
   let body;
   try {

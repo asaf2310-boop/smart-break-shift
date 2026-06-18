@@ -1,6 +1,7 @@
 /** POST /api/ask-web — Gemini + Google Search grounding (no local RAG). */
 
 import { json, readJsonBody, handleOptions, isSameOrigin } from "../server/knowledge/httpUtils.js";
+import { requireKnowledgeAccess } from "../server/knowledge/requireKnowledgeAccess.js";
 import { isGeminiConfigured } from "../server/ai/geminiClient.js";
 import { generateWebSearchAnswer } from "../server/knowledge/webSearchService.js";
 import { formatGeminiUserError } from "../server/knowledge/geminiErrorMessages.js";
@@ -45,6 +46,8 @@ export default async function handler(req, res) {
   if (!isSameOrigin(req)) {
     return json(res, 403, { error: "forbidden", message: "CORS: same origin only" }, req);
   }
+
+  if (!(await requireKnowledgeAccess(req, res))) return;
 
   let body;
   try {
