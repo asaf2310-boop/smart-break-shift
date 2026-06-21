@@ -1,8 +1,9 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { customerChatEnabled, crmEnabled, demoModeEnabled, knowledgeEnabled } from "@/api/demoClient";
+import { useCrmRole } from "@/hooks/useCrmRole";
 
-function buildAdminNavLinks() {
+function buildAdminNavLinks({ includeCrmAdmin = false } = {}) {
   const links = [
     { path: "/admin", label: "דשבורד", match: "exact" },
     { path: "/admin/shifts", label: "משמרות" },
@@ -19,7 +20,7 @@ function buildAdminNavLinks() {
     links.push({ path: "/admin/knowledge", label: "ניהול ידע", matchPrefix: "/admin/knowledge" });
   }
 
-  if (crmEnabled) {
+  if (includeCrmAdmin && crmEnabled) {
     links.push(
       { path: "/admin/crm", label: "דשבורד CRM", matchPrefix: "/admin/crm" },
       { path: "/admin/crm/departments", label: "מחלקות CRM" },
@@ -43,7 +44,8 @@ function isLinkActive(pathname, link) {
 
 export default function AdminSubNav({ className = "" }) {
   const { pathname } = useLocation();
-  const links = buildAdminNavLinks();
+  const { hasCrmAdminAccess } = useCrmRole();
+  const links = buildAdminNavLinks({ includeCrmAdmin: hasCrmAdminAccess });
 
   return (
     <nav

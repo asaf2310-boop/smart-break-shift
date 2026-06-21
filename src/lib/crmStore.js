@@ -1069,18 +1069,54 @@ function isTodayLocal(isoString) {
   );
 }
 
-/** פניות שנסגרו היום על ידי הנציג (שויך אליו או יוצר בזמן הסגירה) */
-export function countReferralsHandledTodayByAgent(agentName) {
-  const { referrals } = readStore();
+function startOfCurrentMonthLocal() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), 1);
+}
+
+function isSinceMonthStartLocal(isoString) {
+  if (!isoString) return false;
+  const d = new Date(isoString);
+  if (Number.isNaN(d.getTime())) return false;
+  return d >= startOfCurrentMonthLocal();
+}
+
+function referralHandledByAgent(ref, agentName) {
+  const handler = ref.assigned_agent_name || ref.agent_name || ref.original_agent_name;
+  return handler === agentName;
+}
+
+function filterReferralsHandledByAgent(referrals, agentName, { sinceMonthStart = false, todayOnly = false } = {}) {
   const name = String(agentName || "").trim();
-  if (!name) return 0;
+  if (!name) return [];
   return (referrals || [])
     .map(migrateReferral)
     .filter((ref) => {
-      if (ref.status !== "closed" || !ref.closed_at || !isTodayLocal(ref.closed_at)) return false;
-      const handler = ref.assigned_agent_name || ref.agent_name || ref.original_agent_name;
-      return handler === name;
-    }).length;
+      if (ref.status !== "closed" || !ref.closed_at) return false;
+      if (todayOnly && !isTodayLocal(ref.closed_at)) return false;
+      if (sinceMonthStart && !isSinceMonthStartLocal(ref.closed_at)) return false;
+      return referralHandledByAgent(ref, name);
+    });
+}
+
+/** פניות שנסגרו היום על ידי הנציג (שויך אליו או יוצר בזמן הסגירה) */
+export function countReferralsHandledTodayByAgent(agentName) {
+  const { referrals } = readStore();
+  return filterReferralsHandledByAgent(referrals, agentName, { todayOnly: true }).length;
+}
+
+/** פניות שנסגרו מתחילת החודש על ידי הנציג */
+export function countReferralsHandledSinceMonthStartByAgent(agentName) {
+  const { referrals } = readStore();
+  return filterReferralsHandledByAgent(referrals, agentName, { sinceMonthStart: true }).length;
+}
+
+export function listReferralsHandledSinceMonthStartByAgent(agentName) {
+  const { referrals, customers } = readStore();
+  const closed = filterReferralsHandledByAgent(referrals, agentName, { sinceMonthStart: true }).sort(
+    (a, b) => new Date(b.closed_at) - new Date(a.closed_at)
+  );
+  return enrichReferralsWithCustomer(closed, customers);
 }
 
 export function listOpenReferralsForAgent(agentName) {
@@ -1121,6 +1157,109 @@ export function listDepartmentQueuesForAgent(agentName) {
     department: dept,
     referrals: listOpenReferralsForDepartment(dept.id),
   }));
+}
+
+/** פניות פתוחות בתורי המחלקות של הנציג; אם אין מחלקות — כל הפניות הפתוחות */
+export function listOpenReferralsForAgentTeam(agentName) {
+  const departments = getDepartmentsForAgent(agentName);
+  if (!departments.length) {
+    return listAllOpenReferrals();
+  }
+  const deptIds = new Set(departments.map((d) => d.id));
+  const { referrals, customers } = readStore();
+  const seen = new Set();
+  const open = (referrals || [])
+    .map(migrateReferral)
+    .filter((ref) => {
+      if (ref.status !== "open") return false;
+      if (ref.assigned_to_type === "department" && deptIds.has(ref.assigned_department_id)) {
+        if (seen.has(ref.id)) return false;
+        seen.add(ref.id);
+        return true;
+      }
+      if (ref.assigned_to_type === "agent" && ref.assigned_agent_name) {
+        const agentDepts = getDepartmentsForAgent(ref.assigned_agent_name);
+        const inTeam = agentDepts.some((d) => deptIds.has(d.id));
+        if (inTeam) {
+          if (seen.has(ref.id)) return false;
+          seen.add(ref.id);
+          return true;
+        }
+      }
+      return false;
+    })
+    .sort((a, b) => new Date(b.last_activity_at) - new Date(a.last_activity_at));
+  return enrichReferralsWithCustomer(open, customers);
+}
+
+export function countOpenReferralsForAgentTeam(agentName) {
+  return listOpenReferralsForAgentTeam(agentName).length;
+}
+
+/** פניות שיצרתי/פתחתי והן פתוחות בטיפול מחלקה (גורם אחד) */
+export function listMyOpenReferralsInDepartmentHandling(agentName) {
+  const name = String(agentName || "").trim();
+  if (!name) return [];
+  const { referrals, customers } = readStore();
+  const open = (referrals || [])
+    .map(migrateReferral)
+    .filter(
+      (ref) =>
+        ref.status === "open" &&
+        ref.assigned_to_type === "department" &&
+        (ref.original_agent_name === name || ref.agent_name === name)
+    )
+    .sort((a, b) => new Date(b.last_activity_at) - new Date(a.last_activity_at));
+  return enrichReferralsWithCustomer(open, customers);
+}
+
+export const CRM_AGENT_DASHBOARD_FILTERS = {
+  "my-open": {
+    title: "הפניות הפתוחות שלי",
+    description: "פניות פתוחות ששויכו אליך לטיפול אישי",
+  },
+  "team-open": {
+    title: "הפניות הפתוחות של הצוות",
+    description: "פניות פתוחות במחלקות שלך ובטיפול חברי הצוות",
+  },
+  "my-dept": {
+    title: "הפניות שלי שבטיפול גורם אחד",
+    description: "פניות שפתחת והן בטיפול מחלקה",
+  },
+  "handled-month": {
+    title: "פניות שטיפלתי מתחילת החודש",
+    description: "פניות שנסגרו על ידך מתחילת החודש הנוכחי",
+  },
+};
+
+export function listReferralsForAgentDashboardFilter(filterKey, agentName) {
+  switch (filterKey) {
+    case "my-open":
+      return listOpenReferralsForAgent(agentName);
+    case "team-open":
+      return listOpenReferralsForAgentTeam(agentName);
+    case "my-dept":
+      return listMyOpenReferralsInDepartmentHandling(agentName);
+    case "handled-month":
+      return listReferralsHandledSinceMonthStartByAgent(agentName);
+    default:
+      return [];
+  }
+}
+
+export function countReferralsForAgentDashboardFilter(filterKey, agentName) {
+  switch (filterKey) {
+    case "my-open":
+      return listOpenReferralsForAgent(agentName).length;
+    case "team-open":
+      return countOpenReferralsForAgentTeam(agentName);
+    case "my-dept":
+      return listMyOpenReferralsInDepartmentHandling(agentName).length;
+    case "handled-month":
+      return countReferralsHandledSinceMonthStartByAgent(agentName);
+    default:
+      return 0;
+  }
 }
 
 function sortOpenReferralsForSupervisor(referrals) {

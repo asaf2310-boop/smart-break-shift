@@ -1,7 +1,7 @@
 import { supabase, supabaseConfigured } from "@/api/supabase";
 
 export const AGENT_ROW_COLUMNS =
-  "id,email,display_name,auth_user_id,active,blocked,needs_password_setup,deleted_at,phone,modules,created_at,updated_at";
+  "id,email,display_name,auth_user_id,active,blocked,needs_password_setup,deleted_at,phone,modules,crm_role,created_at,updated_at";
 
 export function withAgentsQueryTimeout(promise, ms = 15000) {
   return Promise.race([

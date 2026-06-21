@@ -21,12 +21,13 @@ function mapAgentRow(row) {
     active: row.active !== false && !row.deleted_at,
     blocked: row.blocked === true,
     isAdmin: row.is_admin === true,
+    crmRole: row.crm_role || "none",
     modules: Array.isArray(row.modules) ? row.modules : [],
   };
 }
 
 const AGENT_AUTH_COLUMNS =
-  "id, email, display_name, auth_user_id, needs_password_setup, phone, active, blocked, deleted_at, modules, is_admin";
+  "id, email, display_name, auth_user_id, needs_password_setup, phone, active, blocked, deleted_at, modules, is_admin, crm_role";
 
 export async function getAgentByEmail(email) {
   const normalized = normalizeEmail(email);

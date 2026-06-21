@@ -1,14 +1,15 @@
 import { demoModeEnabled } from "@/api/demoMode";
 import { DEFAULT_AGENT_MODULES } from "@/constants/agentModules";
+import { CRM_ROLES, normalizeCrmRole } from "@/lib/crmRoles";
 
 export const APP_USERS_STORAGE_KEY = "app-users-v1";
 
 const DEMO_SEED_USERS = [
-  { id: "user_demo_01", email: "agent01@demo.local", name: "נציג 01", active: true, blocked: false, needsPasswordSetup: true, password: null, isAdmin: true, modules: [...DEFAULT_AGENT_MODULES] },
-  { id: "user_demo_02", email: "agent02@demo.local", name: "נציג 02", active: true, blocked: false, needsPasswordSetup: true, password: null, isAdmin: false, modules: [...DEFAULT_AGENT_MODULES] },
-  { id: "user_demo_03", email: "agent03@demo.local", name: "נציג 03", active: true, blocked: false, needsPasswordSetup: true, password: null, isAdmin: false, modules: [...DEFAULT_AGENT_MODULES] },
-  { id: "user_demo_04", email: "agent04@demo.local", name: "נציג 04", active: true, blocked: false, needsPasswordSetup: true, password: null, isAdmin: false, modules: [...DEFAULT_AGENT_MODULES] },
-  { id: "user_demo_05", email: "agent05@demo.local", name: "נציג 05", active: true, blocked: false, needsPasswordSetup: true, password: null, isAdmin: false, modules: [...DEFAULT_AGENT_MODULES] },
+  { id: "user_demo_01", email: "agent01@demo.local", name: "נציג 01", active: true, blocked: false, needsPasswordSetup: true, password: null, isAdmin: true, crmRole: CRM_ROLES.MANAGER, modules: [...DEFAULT_AGENT_MODULES] },
+  { id: "user_demo_02", email: "agent02@demo.local", name: "נציג 02", active: true, blocked: false, needsPasswordSetup: true, password: null, isAdmin: false, crmRole: CRM_ROLES.AGENT, modules: [...DEFAULT_AGENT_MODULES] },
+  { id: "user_demo_03", email: "agent03@demo.local", name: "נציג 03", active: true, blocked: false, needsPasswordSetup: true, password: null, isAdmin: false, crmRole: CRM_ROLES.USER, modules: [...DEFAULT_AGENT_MODULES] },
+  { id: "user_demo_04", email: "agent04@demo.local", name: "נציג 04", active: true, blocked: false, needsPasswordSetup: true, password: null, isAdmin: false, crmRole: CRM_ROLES.NONE, modules: [...DEFAULT_AGENT_MODULES] },
+  { id: "user_demo_05", email: "agent05@demo.local", name: "נציג 05", active: true, blocked: false, needsPasswordSetup: true, password: null, isAdmin: false, crmRole: CRM_ROLES.NONE, modules: [...DEFAULT_AGENT_MODULES] },
 ];
 
 function makeId() {
@@ -36,7 +37,9 @@ function readRawUsers() {
       return users.map((u) => ({
         blocked: false,
         isAdmin: false,
+        crmRole: CRM_ROLES.NONE,
         ...u,
+        crmRole: normalizeCrmRole(u.crmRole),
         modules: Array.isArray(u.modules) ? u.modules : [...DEFAULT_AGENT_MODULES],
       }));
     }
@@ -101,7 +104,7 @@ export function createDemoAppUser({ email, name, phone }) {
   return user;
 }
 
-export function updateDemoAppUser(id, { email, name, phone, active, blocked, modules }) {
+export function updateDemoAppUser(id, { email, name, phone, active, blocked, modules, crmRole }) {
   const users = readRawUsers();
   const index = users.findIndex((u) => u.id === id);
   if (index < 0) throw new Error("not_found");
@@ -118,6 +121,7 @@ export function updateDemoAppUser(id, { email, name, phone, active, blocked, mod
     ...(modules !== undefined
       ? { modules: Array.isArray(modules) ? modules : [...DEFAULT_AGENT_MODULES] }
       : {}),
+    ...(crmRole !== undefined ? { crmRole: normalizeCrmRole(crmRole) } : {}),
     ...(phone !== undefined ? { phone: phone ? String(phone).trim() : null } : {}),
   };
   users[index] = updated;

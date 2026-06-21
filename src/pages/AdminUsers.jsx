@@ -9,6 +9,7 @@ import {
   Pencil,
   Plus,
   LayoutGrid,
+  Shield,
   ShieldCheck,
   Trash2,
   UserPlus,
@@ -24,8 +25,11 @@ import {
   listManagedAgents,
   setManagedAgentBlocked,
   updateManagedAgent,
+  updateManagedAgentCrmRole,
   updateManagedAgentModules,
+  formatCrmRoleLabel,
 } from "@/lib/agentsApi";
+import { CRM_ROLE_OPTIONS } from "@/lib/crmRoles";
 import AgentModulesPicker from "@/components/admin/AgentModulesPicker";
 import { formatModulesSummary, modulesForPicker } from "@/constants/agentModules";
 import { PASSWORD_MIN_LENGTH, PASSWORD_MIN_LENGTH_MSG } from "@/lib/agentAuth";
@@ -53,6 +57,7 @@ export default function AdminUsers() {
   const [form, setForm] = useState({ email: "", name: "", phone: "" });
   const [passwordForm, setPasswordForm] = useState({ password: "", forceSetup: true });
   const [modulesForm, setModulesForm] = useState([]);
+  const [crmRoleForm, setCrmRoleForm] = useState("none");
 
   const { data: users = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ["managed-agents"],
@@ -138,6 +143,20 @@ export default function AdminUsers() {
       toast({ title: "שגיאה", description: "לא הצלחנו לעדכן הרשאות", variant: "destructive" }),
   });
 
+  const crmRoleMutation = useMutation({
+    mutationFn: () => updateManagedAgentCrmRole(dialog.id, crmRoleForm),
+    onSuccess: () => {
+      invalidate();
+      setDialog(null);
+      toast({
+        title: "תפקיד CRM עודכן",
+        description: "השינוי יחול בכניסה הבאה של הנציג (או לאחר התנתקות והתחברות מחדש)",
+      });
+    },
+    onError: () =>
+      toast({ title: "שגיאה", description: "לא הצלחנו לעדכן תפקיד CRM", variant: "destructive" }),
+  });
+
   const blockMutation = useMutation({
     mutationFn: ({ id, blocked }) => setManagedAgentBlocked(id, blocked),
     onSuccess: (_, { blocked }) => {
@@ -199,12 +218,18 @@ export default function AdminUsers() {
     setDialog({ mode: "modules", id: user.id, userName: user.name });
   };
 
+  const openCrmRole = (user) => {
+    setCrmRoleForm(user.crmRole || "none");
+    setDialog({ mode: "crmRole", id: user.id, userName: user.name });
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (dialog.mode === "create") createMutation.mutate();
     else if (dialog.mode === "edit") updateMutation.mutate();
     else if (dialog.mode === "password") passwordMutation.mutate();
     else if (dialog.mode === "modules") modulesMutation.mutate();
+    else if (dialog.mode === "crmRole") crmRoleMutation.mutate();
   };
 
   const statusBadge = (user) => {
@@ -267,13 +292,14 @@ export default function AdminUsers() {
       </button>
 
       <div className="bg-white rounded-3xl border border-slate-200 shadow-lg overflow-x-auto">
-        <table className="w-full text-sm min-w-[760px]">
+        <table className="w-full text-sm min-w-[860px]">
           <thead>
             <tr className="bg-slate-50 text-slate-600">
               <th className="text-right px-4 py-3 font-semibold">שם</th>
               <th className="text-right px-4 py-3 font-semibold">אימייל</th>
               <th className="text-right px-4 py-3 font-semibold">טלפון (SMS)</th>
               <th className="text-right px-4 py-3 font-semibold">מודולים</th>
+              <th className="text-right px-4 py-3 font-semibold">תפקיד CRM</th>
               <th className="text-right px-4 py-3 font-semibold">סטטוס</th>
               <th className="px-4 py-3" />
             </tr>
@@ -281,13 +307,13 @@ export default function AdminUsers() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                   טוען...
                 </td>
               </tr>
             ) : isError ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center">
+                <td colSpan={7} className="px-4 py-8 text-center">
                   <p className="text-red-600 font-medium mb-2">
                     {error?.message === "agents_list_timeout"
                       ? "טעינת הנציגים נכשלה — בדוק חיבור ל-Supabase"
@@ -304,7 +330,7 @@ export default function AdminUsers() {
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                   אין נציגים — הוסף/י ראשון או המתן לטעינה
                 </td>
               </tr>
@@ -333,9 +359,21 @@ export default function AdminUsers() {
                   <td className="px-4 py-3 text-xs text-slate-600 max-w-[10rem] leading-snug">
                     {formatModulesSummary(user.modules)}
                   </td>
+                  <td className="px-4 py-3 text-xs text-slate-700 whitespace-nowrap">
+                    {formatCrmRoleLabel(user.crmRole)}
+                  </td>
                   <td className="px-4 py-3">{statusBadge(user)}</td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1 justify-end flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => openCrmRole(user)}
+                        className="p-2 rounded-lg hover:bg-sky-50 text-sky-700"
+                        title="תפקיד CRM"
+                        aria-label="תפקיד CRM"
+                      >
+                        <Shield className="w-4 h-4" />
+                      </button>
                       <button
                         type="button"
                         onClick={() => openModules(user)}
@@ -408,6 +446,9 @@ export default function AdminUsers() {
             <strong>חסימה</strong> — הנציג נשאר ברשימה; התחברות נחסמת
           </li>
           <li>
+            <strong>תפקיד CRM</strong> — ללא גישה / משתמש (חיפוש בסיסי) / נציג (דשבורד) / מנהל CRM (ניהול + דוחות)
+          </li>
+          <li>
             <strong>מודולים</strong> — בחר/י אילו מסכים יופיעו לנציג (למשל רק השתלטות מרחוק)
           </li>
           <li>
@@ -422,7 +463,7 @@ export default function AdminUsers() {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             onSubmit={handleSubmit}
-            className={`w-full bg-white rounded-3xl p-6 shadow-2xl ${dialog.mode === "modules" ? "max-w-lg" : "max-w-md"}`}
+            className={`w-full bg-white rounded-3xl p-6 shadow-2xl ${dialog.mode === "modules" || dialog.mode === "crmRole" ? "max-w-lg" : "max-w-md"}`}
             dir="rtl"
           >
             <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
@@ -435,10 +476,29 @@ export default function AdminUsers() {
               {dialog.mode === "edit" && "עריכת נציג"}
               {dialog.mode === "password" && `סיסמה — ${dialog.userName}`}
               {dialog.mode === "modules" && `הרשאות מודולים — ${dialog.userName}`}
+              {dialog.mode === "crmRole" && `תפקיד CRM — ${dialog.userName}`}
             </h2>
 
             {dialog.mode === "modules" ? (
               <AgentModulesPicker value={modulesForm} onChange={setModulesForm} />
+            ) : dialog.mode === "crmRole" ? (
+              <div className="space-y-3">
+                <label className="text-xs text-slate-500 mb-1 block">רמת גישה ל-CRM</label>
+                <select
+                  value={crmRoleForm}
+                  onChange={(e) => setCrmRoleForm(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm bg-white"
+                >
+                  {CRM_ROLE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  משתמש — חיפוש וצפייה בלקוחות. נציג — דשבורד פניות. מנהל CRM — ניהול CRM ודוחות (ללא גישה לשאר פאנל המנהל).
+                </p>
+              </div>
             ) : dialog.mode === "password" ? (
               <div className="space-y-3">
                 <div>
@@ -517,7 +577,8 @@ export default function AdminUsers() {
                   createMutation.isPending ||
                   updateMutation.isPending ||
                   passwordMutation.isPending ||
-                  modulesMutation.isPending
+                  modulesMutation.isPending ||
+                  crmRoleMutation.isPending
                 }
                 className="flex-1 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-white font-bold disabled:opacity-50"
               >

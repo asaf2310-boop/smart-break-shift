@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { BarChart3, BookOpen, CalendarClock, CalendarDays, Contact, GraduationCap, Home, MessageCircle, Monitor, ShieldCheck, Star } from "lucide-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useAgentModules } from "@/hooks/useAgentModules";
+import { useCrmRole } from "@/hooks/useCrmRole";
 import { customerChatEnabled, crmEnabled, demoModeEnabled, knowledgeEnabled } from "@/api/demoClient";
 import { brandVisualEnabled } from "@/lib/brandShell";
 
@@ -13,7 +14,9 @@ export default function AppNav() {
   const location = useLocation();
   const isAdmin = useIsAdmin();
   const { hasModule, isLoggedIn } = useAgentModules();
+  const { hasCrmAccess } = useCrmRole();
   const showTab = (moduleId) => !isLoggedIn || hasModule(moduleId);
+  const showCrmTab = crmEnabled && (!isLoggedIn || hasCrmAccess || showTab("crm"));
   const isBreaks = location.pathname === "/breaks";
   const isShifts = location.pathname === "/shifts";
   const isTraining = location.pathname === "/training";
@@ -107,7 +110,7 @@ export default function AppNav() {
               בסיס ידע
             </Link>
           )}
-          {crmEnabled && !demoModeEnabled && showTab("crm") && (
+          {showCrmTab && !demoModeEnabled && (
             <Link to="/crm" className={tabClass(isCrm)}>
               <Contact className="w-4 h-4" />
               CRM
@@ -115,7 +118,7 @@ export default function AppNav() {
           )}
           {demoModeEnabled && (
             <>
-              {showTab("crm") && (
+              {showCrmTab && (
                 <Link to="/crm" className={tabClass(isCrm)}>
                   <Contact className="w-4 h-4" />
                   CRM

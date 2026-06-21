@@ -33,6 +33,7 @@ import ChatRoute from './pages/ChatRoute';
 import CustomerChatGuestPage from './pages/CustomerChatGuestPage';
 import AgentCustomerChatPage from './pages/AgentCustomerChatPage';
 import CrmDashboard from './pages/CrmDashboard';
+import CrmNewReferral from './pages/CrmNewReferral';
 import CrmCustomerDetail from './pages/CrmCustomerDetail';
 import CrmLookupDeepLink from './pages/CrmLookupDeepLink';
 import KnowledgePage from './pages/KnowledgePage';
@@ -121,9 +122,10 @@ const AuthenticatedApp = () => {
         <Route path="/chat/guest" element={<CustomerChatGate><CustomerChatGuestPage /></CustomerChatGate>} />
         <Route path="/chat" element={<ChatRoute />} />
         <Route path="/customer-chat" element={<ModuleGate module="customer_chat"><CustomerChatGate><AgentCustomerChatPage /></CustomerChatGate></ModuleGate>} />
-        <Route path="/crm" element={<ModuleGate module="crm"><CrmGate><RouteErrorBoundary><CrmDashboard /></RouteErrorBoundary></CrmGate></ModuleGate>} />
-        <Route path="/crm/lookup" element={<ModuleGate module="crm"><CrmGate><RouteErrorBoundary><CrmLookupDeepLink /></RouteErrorBoundary></CrmGate></ModuleGate>} />
-        <Route path="/crm/:id" element={<ModuleGate module="crm"><CrmGate><RouteErrorBoundary><CrmCustomerDetail /></RouteErrorBoundary></CrmGate></ModuleGate>} />
+        <Route path="/crm" element={<CrmGate require="access"><RouteErrorBoundary><CrmDashboard /></RouteErrorBoundary></CrmGate>} />
+        <Route path="/crm/new" element={<CrmGate require="agent"><RouteErrorBoundary><CrmNewReferral /></RouteErrorBoundary></CrmGate>} />
+        <Route path="/crm/lookup" element={<CrmGate require="access"><RouteErrorBoundary><CrmLookupDeepLink /></RouteErrorBoundary></CrmGate>} />
+        <Route path="/crm/:id" element={<CrmGate require="access"><RouteErrorBoundary><CrmCustomerDetail /></RouteErrorBoundary></CrmGate>} />
         <Route path="/remote-support" element={<ModuleGate module="remote_support"><RemoteSupportPage /></ModuleGate>} />
         <Route path="/review-sms" element={<ModuleGate module="google_review"><AgentReviewSms /></ModuleGate>} />
         <Route
@@ -144,9 +146,9 @@ const AuthenticatedApp = () => {
         <Route path="/admin/training" element={<AdminGate><AdminTraining /></AdminGate>} />
         <Route path="/admin/recordings" element={<AdminGate><AdminRecordings /></AdminGate>} />
         <Route path="/admin/metrics" element={<AdminGate><AdminMetrics /></AdminGate>} />
-        <Route path="/admin/crm" element={<AdminGate><CrmGate><RouteErrorBoundary><AdminCrmDashboard /></RouteErrorBoundary></CrmGate></AdminGate>} />
-        <Route path="/admin/crm/departments" element={<AdminGate><CrmGate><AdminCrmDepartments /></CrmGate></AdminGate>} />
-        <Route path="/admin/crm/routing" element={<AdminGate><CrmGate><AdminCrmRouting /></CrmGate></AdminGate>} />
+        <Route path="/admin/crm" element={<CrmGate require="admin"><RouteErrorBoundary><AdminCrmDashboard /></RouteErrorBoundary></CrmGate>} />
+        <Route path="/admin/crm/departments" element={<CrmGate require="admin"><AdminCrmDepartments /></CrmGate>} />
+        <Route path="/admin/crm/routing" element={<CrmGate require="admin"><AdminCrmRouting /></CrmGate>} />
         <Route path="/admin/security-audit" element={<AdminGate><AdminSecurityAudit /></AdminGate>} />
         <Route path="/admin/sms-stats" element={<AdminGate><AdminSmsStats /></AdminGate>} />
         <Route path="/admin/review-sms" element={<AdminGate><AdminReviewSms /></AdminGate>} />

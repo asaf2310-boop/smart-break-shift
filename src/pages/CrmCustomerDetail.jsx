@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
+import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
-  ArrowRight,
   Building2,
   FolderOpen,
   Hash,
@@ -87,6 +86,8 @@ import { useTelephony } from "@/context/TelephonyContext";
 import { telephonyDemoAvailable } from "@/lib/telephonyStore";
 import RemoteSupportPanel from "@/components/remote/RemoteSupportPanel";
 import CustomerScreenRecordings from "@/components/crm/CustomerScreenRecordings";
+import CrmBackToDashboard from "@/components/crm/CrmBackToDashboard";
+import { recordRecentVisit } from "@/lib/crmRecents";
 
 const callTypeIcon = {
   incoming: Phone,
@@ -97,6 +98,7 @@ const callTypeIcon = {
 export default function CrmCustomerDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const agentName = getStoredAgentName();
   const [customer, setCustomer] = useState(null);
   const [calls, setCalls] = useState([]);
@@ -128,6 +130,18 @@ export default function CrmCustomerDetail() {
     return subscribeCrmStore(refresh);
   }, [refresh]);
 
+  useEffect(() => {
+    const customer = getCustomerById(id);
+    if (!customer) return;
+    const navState = location.state;
+    recordRecentVisit({
+      customerId: customer.id,
+      customerName: customer.name,
+      referralId: navState?.referralId || null,
+      referralTopic: navState?.referralTopic || null,
+    });
+  }, [id, location.key, location.state]);
+
   if (!agentName) {
     return <Navigate to="/" replace />;
   }
@@ -141,9 +155,7 @@ export default function CrmCustomerDetail() {
       <div className={m3PageClass("flex items-center justify-center p-6")} dir="rtl">
         <div className="text-center">
           <p className="text-slate-600 mb-4">לקוח לא נמצא</p>
-          <Link to="/crm" className="text-indigo-600 font-semibold text-sm">
-            חזרה לרשימה
-          </Link>
+          <CrmBackToDashboard className="text-indigo-600 font-semibold text-sm justify-center" />
         </div>
       </div>
     );
@@ -283,10 +295,7 @@ export default function CrmCustomerDetail() {
 
   return (
     <HypPageLayout variant="scheduling" withNav={false} contentClassName="max-w-3xl px-4 py-6 sm:py-10 pb-24">
-        <Link to="/crm" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-indigo-600 mb-4">
-          <ArrowRight className="w-4 h-4" />
-          כל הלקוחות
-        </Link>
+        <CrmBackToDashboard className="text-sm text-slate-500 hover:text-indigo-600" />
 
         <motion.div
           initial={{ opacity: 0, y: -8 }}

@@ -12,6 +12,7 @@ import {
 import { ensureAgentsSeeded } from "@/lib/agentSeed";
 import { PASSWORD_MIN_LENGTH } from "@/lib/agentAuth";
 import { DEFAULT_AGENT_MODULES, modulesFromPicker } from "@/constants/agentModules";
+import { formatCrmRoleLabel, modulesWithCrmRole, normalizeCrmRole } from "@/lib/crmRoles";
 import { REAL_AGENT_NAMES } from "@/constants/scheduling";
 import { normalizeAgentPhone } from "@/lib/agentPhone";
 import { apiAdminSetAgentPassword, apiProvisionAgentAuth, apiLogAdminAgentChange } from "@/lib/agentAuthClient";
@@ -48,6 +49,7 @@ function mapSupabaseRow(row) {
     needsPasswordSetup: row.needs_password_setup === true,
     authUserId: row.auth_user_id,
     modules: Array.isArray(row.modules) ? row.modules : [...DEFAULT_AGENT_MODULES],
+    crmRole: normalizeCrmRole(row.crm_role),
     phone: row.phone || "",
   };
 }
@@ -62,6 +64,7 @@ function mapDemoRow(u) {
     needsPasswordSetup: u.needsPasswordSetup === true,
     password: u.password || null,
     modules: Array.isArray(u.modules) ? u.modules : [...DEFAULT_AGENT_MODULES],
+    crmRole: normalizeCrmRole(u.crmRole),
     phone: u.phone || "",
   };
 }
@@ -228,6 +231,30 @@ export async function updateManagedAgentModules(id, modules) {
   auditAdminAgentChange(id, "modules", { modules: stored });
   return mapSupabaseRow(row);
 }
+
+export async function updateManagedAgentCrmRole(id, crmRole) {
+  const normalized = normalizeCrmRole(crmRole);
+
+  if (demoModeEnabled) {
+    const existing = listAllDemoAppUsers().find((u) => u.id === id);
+    const modules = modulesWithCrmRole(existing?.modules, normalized);
+    const u = updateDemoAppUser(id, { crmRole: normalized, modules });
+    notifyAgentUsersChanged();
+    return mapDemoRow(u);
+  }
+
+  const existing = await fetchAgentByIdFromSupabase(id);
+  const modules = modulesWithCrmRole(existing?.modules, normalized);
+  const row = await dataClient.entities.Agent.update(id, {
+    crm_role: normalized,
+    modules,
+  });
+  notifyAgentUsersChanged();
+  auditAdminAgentChange(id, "crm_role", { crmRole: normalized });
+  return mapSupabaseRow(row);
+}
+
+export { formatCrmRoleLabel };
 
 export async function deleteManagedAgent(id) {
   if (demoModeEnabled) {

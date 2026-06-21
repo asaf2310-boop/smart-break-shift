@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   ArrowLeftRight,
   ArrowRight,
+  BarChart3,
   Building2,
   CheckCircle2,
   Clock,
@@ -238,6 +239,13 @@ export default function AdminCrmDashboard() {
               <GitBranch className="w-4 h-4" />
               כללי ניתוב
             </Link>
+            <a
+              href="#crm-reports"
+              className="inline-flex items-center gap-1 text-sm text-on-surface-variant hover:text-primary"
+            >
+              <BarChart3 className="w-4 h-4" />
+              דוחות CRM
+            </a>
           </div>
           <div className="flex items-start gap-4">
             <div className={cn(hypHeaderIconClass("shadow-elevation-1"), !demoModeEnabled && "bg-primary")}>
@@ -255,7 +263,7 @@ export default function AdminCrmDashboard() {
           ) : null}
         </motion.div>
 
-        <section className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+        <section id="crm-reports" className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4 scroll-mt-24">
           <div className="m3-surface-container px-3 py-3 text-center">
             <p className="m3-label-medium">פניות פתוחות</p>
             <p className="text-2xl font-medium mt-0.5">{stats.total}</p>

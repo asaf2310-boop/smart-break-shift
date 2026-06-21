@@ -23,6 +23,7 @@ import {
   removeKey,
   writeJson,
 } from "@/lib/browserStoragePolicy";
+import { normalizeCrmRole } from "@/lib/crmRoles";
 
 export const AGENT_SESSION_KEY = "smart-break-agent-session-v1";
 export const INVALID_CREDENTIALS_MSG = "אימייל או סיסמה שגויים";
@@ -32,7 +33,7 @@ export const AGENT_AUTH_TIMEOUT_MSG =
   "החיבור לשרת ארך זמן רב מדי — בדוק חיבור אינטרנט ואת הגדרות Supabase ב-Vercel";
 
 const AGENT_PROFILE_COLUMNS =
-  "id,email,display_name,auth_user_id,active,blocked,needs_password_setup,deleted_at,phone,modules,is_admin";
+  "id,email,display_name,auth_user_id,active,blocked,needs_password_setup,deleted_at,phone,modules,is_admin,crm_role";
 
 function withAuthTimeout(promise, ms = 15000) {
   return Promise.race([
@@ -113,6 +114,7 @@ function mapSupabaseAgent(row) {
     active: row.active !== false && !row.deleted_at,
     blocked: row.blocked === true,
     isAdmin: row.is_admin === true,
+    crmRole: normalizeCrmRole(row.crm_role),
     modules: coerceStoredModules(row.modules),
   };
 }
@@ -129,6 +131,7 @@ function mapDemoAgent(user) {
     active: user.active !== false,
     blocked: user.blocked === true,
     isAdmin: user.isAdmin === true,
+    crmRole: normalizeCrmRole(user.crmRole),
     modules: coerceStoredModules(user.modules),
   };
 }
@@ -145,6 +148,7 @@ function sessionFromAgent(agent) {
     modules: coerceStoredModules(agent.modules),
     needsPasswordSetup: agent.needsPasswordSetup === true,
     isAdmin: agent.isAdmin === true,
+    crmRole: normalizeCrmRole(agent.crmRole),
     ...(agent.authUserId ? { authUserId: agent.authUserId } : {}),
   };
 }
@@ -339,7 +343,8 @@ export async function validateAndRefreshAgentSession() {
   const profileChanged =
     refreshed.displayName !== session.displayName ||
     refreshed.email !== session.email ||
-    refreshed.isAdmin !== session.isAdmin;
+    refreshed.isAdmin !== session.isAdmin ||
+    refreshed.crmRole !== session.crmRole;
 
   if (modulesChanged || profileChanged) {
     setAgentSession(refreshed);
