@@ -14,20 +14,7 @@ export default function BackendConfigBanner() {
   }
 
   if (backendMode === "supabase") {
-    return (
-      <div
-        className="demo-config-banner border-accent/30"
-        style={{
-          background:
-            "linear-gradient(90deg, hsl(189 89% 53% / 0.1) 0%, hsl(271 76% 53% / 0.08) 100%)",
-        }}
-        dir="rtl"
-        role="status"
-      >
-        <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-accent" />
-        מחובר ל-Supabase
-      </div>
-    );
+    return null;
   }
 
   return (
