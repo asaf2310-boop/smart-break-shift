@@ -27,10 +27,10 @@ const REQUIREMENT_MESSAGES = {
 };
 
 /** חוסם נתיבי CRM לפי crm_role (וב-build flag) */
-export default function CrmGate({ children, redirect = true, require = "access" }) {
+export default function CrmGate({ children, redirect = true, require = "access", deferHydration = false }) {
   const { isLoggedIn, refresh, session, bootstrapped } = useAgentSession();
   const [hydrating, setHydrating] = useState(
-    () => crmEnabled && isCrmCloudEnabled() && !isCrmStoreHydrated()
+    () => !deferHydration && crmEnabled && isCrmCloudEnabled() && !isCrmStoreHydrated()
   );
 
   useEffect(() => {
@@ -43,7 +43,7 @@ export default function CrmGate({ children, redirect = true, require = "access" 
       return undefined;
     }
     let cancelled = false;
-    setHydrating(true);
+    if (!deferHydration) setHydrating(true);
     hydrateCrmStore()
       .catch((err) => {
         console.warn("[CrmGate] hydrate failed", err);
@@ -54,7 +54,7 @@ export default function CrmGate({ children, redirect = true, require = "access" 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [deferHydration]);
 
   if (!crmEnabled) {
     if (redirect) {
@@ -79,7 +79,7 @@ export default function CrmGate({ children, redirect = true, require = "access" 
     );
   }
 
-  if (hydrating || !bootstrapped) {
+  if ((!deferHydration && hydrating) || !bootstrapped) {
     return (
       <div className={m3PageClass("flex items-center justify-center p-12")} dir="rtl">
         <Loader2 className="w-6 h-6 animate-spin text-primary" aria-label="טוען CRM" />

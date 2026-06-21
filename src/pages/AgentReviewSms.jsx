@@ -2,9 +2,12 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowRight, Loader2, MessageSquare, Star } from "lucide-react";
+import { demoModeEnabled } from "@/api/demoClient";
 import { useToast } from "@/components/ui/use-toast";
 import HypPageLayout from "@/components/hyp/HypPageLayout";
 import { hypHeaderIconClass } from "@/lib/hypPage";
+import { getAgentSession } from "@/lib/agentAuth";
+import { getCachedBearerToken } from "@/lib/agentAuthClient";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { formatAgentPhoneDisplay, normalizeAgentPhone } from "@/lib/agentPhone";
@@ -17,6 +20,11 @@ import {
   validateReviewSmsLength,
 } from "@/lib/reviewSms";
 
+function hasStoredAgentSession() {
+  const session = getAgentSession();
+  return Boolean(session?.email && session?.userId && session?.needsPasswordSetup !== true);
+}
+
 export default function AgentReviewSms() {
   const { toast } = useToast();
   const { isLoggedIn, bootstrapped, accessToken } = useAgentSession();
@@ -25,13 +33,18 @@ export default function AgentReviewSms() {
   const [sending, setSending] = useState(false);
   const [smsConfig, setSmsConfig] = useState(getInitialReviewSmsConfigState);
 
+  const likelyLoggedIn = isLoggedIn || (!bootstrapped && hasStoredAgentSession());
+
   useEffect(() => {
-    if (!bootstrapped || !isLoggedIn) return undefined;
+    if (bootstrapped && !isLoggedIn) return undefined;
+
+    const token = accessToken || getCachedBearerToken();
+    if (!demoModeEnabled && !token && !hasStoredAgentSession()) return undefined;
 
     let cancelled = false;
     (async () => {
       try {
-        const config = await fetchReviewSmsConfig({ accessToken });
+        const config = await fetchReviewSmsConfig({ accessToken: token });
         if (!cancelled) {
           setSmsConfig({ loading: false, refreshing: false, ...config });
         }
@@ -60,11 +73,18 @@ export default function AgentReviewSms() {
   const preview = useMemo(() => buildReviewSmsPreview(smsConfig.smsUrl), [smsConfig.smsUrl]);
   const lengthCheck = useMemo(() => validateReviewSmsLength(preview), [preview]);
   const previewTooLong = !lengthCheck.ok;
-  const configPending = smsConfig.loading || smsConfig.refreshing;
+  const configPending = smsConfig.refreshing || smsConfig.loading;
+  const hasSmsUrl = Boolean(smsConfig.smsUrl);
   const smsUrlMissing = !configPending && !smsConfig.ok;
-  const formDisabled = !bootstrapped || sending;
+  const waitingForUrl = configPending && !hasSmsUrl;
+  const formDisabled = sending;
   const sendDisabled =
-    !bootstrapped || !isLoggedIn || sending || !normalizedPhone || previewTooLong || configPending || smsUrlMissing;
+    sending ||
+    !likelyLoggedIn ||
+    !normalizedPhone ||
+    previewTooLong ||
+    waitingForUrl ||
+    smsUrlMissing;
 
   if (bootstrapped && !isLoggedIn) {
     return <Navigate to="/" replace />;
@@ -118,13 +138,6 @@ export default function AgentReviewSms() {
         </Link>
       </div>
 
-      {!bootstrapped && (
-        <p className="mb-4 text-xs text-slate-400 text-center inline-flex items-center gap-2 justify-center w-full" dir="rtl">
-          <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
-          בודק התחברות...
-        </p>
-      )}
-
       <motion.div
         initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -147,73 +160,64 @@ export default function AgentReviewSms() {
         </p>
       </motion.div>
 
-      <div
-        className={`mb-6 rounded-2xl border px-4 py-3 text-sm text-center leading-relaxed ${
-          smsUrlMissing
-            ? "border-amber-200 bg-amber-50 text-amber-900"
-            : "border-slate-200 bg-slate-50 text-slate-700"
-        }`}
-      >
-        {configPending ? (
-          <span className="inline-flex items-center gap-2 justify-center">
-            {smsConfig.refreshing && smsConfig.smsUrl ? (
-              <>
-                הקישור שיישלח ב-SMS:{" "}
-                <code className="text-xs font-mono" dir="ltr">
-                  {smsConfig.smsUrl}
-                </code>
-                <Loader2 className="w-3.5 h-3.5 animate-spin opacity-60" aria-label="מעדכן קישור" />
-              </>
-            ) : (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                טוען קישור SMS...
-              </>
-            )}
-          </span>
-        ) : smsUrlMissing ? (
-          <span>
-            {smsConfig.dbError === "app_settings_missing" && smsConfig.dbErrorMessage
-              ? smsConfig.dbErrorMessage
-              : smsConfig.message || "קישור דירוג לא מוגדר ל-SMS."}
-          </span>
-        ) : (
-          <>
-            הקישור שיישלח ב-SMS:{" "}
-            <code className="text-xs font-mono" dir="ltr">
-              {smsConfig.smsUrl}
-            </code>
-          </>
-        )}
-        {!configPending && smsUrlMissing && (
-          <p className="mt-2 text-xs opacity-80">
-            {isAdmin ? (
-              <>
-                הגדירו קישור קצר (מומלץ{" "}
-                <code className="text-[11px]" dir="ltr">
-                  g.page/r/…/review
-                </code>
-                ) ב{" "}
-                <Link to="/admin" className="underline font-medium hover:text-amber-950">
-                  דשבורד מנהל
-                </Link>{" "}
-                → קישור דירוג גוגל ל-SMS.
-                {smsConfig.dbError === "app_settings_missing" ? (
-                  <span className="block mt-1">
-                    לפני השמירה הראשונה: הריצו{" "}
-                    <code className="text-[11px]" dir="ltr">
-                      app_settings_review_url.sql
-                    </code>{" "}
-                    ב-Supabase.
-                  </span>
-                ) : null}
-              </>
-            ) : (
-              "פנה למנהל להגדרת קישור דירוג גוגל ל-SMS."
-            )}
-          </p>
-        )}
-      </div>
+      {(hasSmsUrl || smsUrlMissing) && (
+        <div
+          className={`mb-6 rounded-2xl border px-4 py-3 text-sm text-center leading-relaxed ${
+            smsUrlMissing
+              ? "border-amber-200 bg-amber-50 text-amber-900"
+              : "border-slate-200 bg-slate-50 text-slate-700"
+          }`}
+        >
+          {smsUrlMissing ? (
+            <span>
+              {smsConfig.dbError === "app_settings_missing" && smsConfig.dbErrorMessage
+                ? smsConfig.dbErrorMessage
+                : smsConfig.message || "קישור דירוג לא מוגדר ל-SMS."}
+            </span>
+          ) : (
+            <>
+              הקישור שיישלח ב-SMS:{" "}
+              <code className="text-xs font-mono" dir="ltr">
+                {smsConfig.smsUrl}
+              </code>
+              {configPending && (
+                <Loader2
+                  className="inline w-3.5 h-3.5 animate-spin opacity-60 ms-1.5 align-[-2px]"
+                  aria-label="מעדכן קישור"
+                />
+              )}
+            </>
+          )}
+          {smsUrlMissing && (
+            <p className="mt-2 text-xs opacity-80">
+              {isAdmin ? (
+                <>
+                  הגדירו קישור קצר (מומלץ{" "}
+                  <code className="text-[11px]" dir="ltr">
+                    g.page/r/…/review
+                  </code>
+                  ) ב{" "}
+                  <Link to="/admin" className="underline font-medium hover:text-amber-950">
+                    דשבורד מנהל
+                  </Link>{" "}
+                  → קישור דירוג גוגל ל-SMS.
+                  {smsConfig.dbError === "app_settings_missing" ? (
+                    <span className="block mt-1">
+                      לפני השמירה הראשונה: הריצו{" "}
+                      <code className="text-[11px]" dir="ltr">
+                        app_settings_review_url.sql
+                      </code>{" "}
+                      ב-Supabase.
+                    </span>
+                  ) : null}
+                </>
+              ) : (
+                "פנה למנהל להגדרת קישור דירוג גוגל ל-SMS."
+              )}
+            </p>
+          )}
+        </div>
+      )}
 
       <form onSubmit={handleSend} className="rounded-3xl border border-slate-200 bg-white shadow-sm p-6 space-y-5">
         <div>
@@ -244,6 +248,12 @@ export default function AgentReviewSms() {
           <p className="text-xs font-semibold text-slate-500 mb-1.5 flex items-center gap-1">
             <MessageSquare className="w-3.5 h-3.5" />
             תצוגה מקדימה
+            {configPending && (
+              <span className="inline-flex items-center gap-1 font-normal text-slate-400">
+                <Loader2 className="w-3 h-3 animate-spin" aria-hidden />
+                מעדכן קישור...
+              </span>
+            )}
           </p>
           <div
             className={`rounded-xl border px-3 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words ${
@@ -260,25 +270,28 @@ export default function AgentReviewSms() {
           </p>
         </div>
 
-        <button
-          type="submit"
-          disabled={sendDisabled}
-          className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 text-white font-semibold py-3 text-sm hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {sending ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              שולח...
-            </>
-          ) : configPending ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              ממתין להגדרות...
-            </>
-          ) : (
-            "שלח SMS"
+        <div>
+          <button
+            type="submit"
+            disabled={sendDisabled}
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 text-white font-semibold py-3 text-sm hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {sending ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                שולח...
+              </>
+            ) : (
+              "שלח SMS"
+            )}
+          </button>
+          {waitingForUrl && (
+            <p className="mt-2 text-xs text-slate-400 text-center">ממתין לטעינת קישור דירוג...</p>
           )}
-        </button>
+          {!waitingForUrl && smsUrlMissing && (
+            <p className="mt-2 text-xs text-amber-700 text-center">לא ניתן לשלוח ללא קישור דירוג מוגדר</p>
+          )}
+        </div>
       </form>
     </HypPageLayout>
   );

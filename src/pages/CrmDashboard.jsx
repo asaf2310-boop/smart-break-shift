@@ -22,7 +22,6 @@ import { demoModeEnabled } from "@/api/demoClient";
 import { isCrmCloudEnabled } from "@/api/crmCloudMode";
 import {
   claimDepartmentReferral,
-  countReferralsForAgentDashboardFilter,
   createCustomer,
   crmDemoAvailable,
   CRM_AGENT_DASHBOARD_FILTERS,
@@ -30,6 +29,8 @@ import {
   getReferralStatusLabel,
   getCustomerById,
   listReferralsForAgentDashboardFilter,
+  loadAgentDashboardCounts,
+  readCrmDashboardCountsCache,
   searchCustomersByContact,
   subscribeCrmStore,
 } from "@/lib/crmStore";
@@ -76,6 +77,12 @@ const DASHBOARD_CARDS = [
     accent: "text-emerald-800 bg-emerald-50 border-emerald-200/80",
   },
 ];
+
+function getInitialDashboardCounts(agentName) {
+  const cached = readCrmDashboardCountsCache(agentName);
+  if (cached) return cached;
+  return Object.fromEntries(DASHBOARD_CARDS.map(({ filter }) => [filter, 0]));
+}
 
 function ReferralCard({ referral, variant = "personal", onClaim = null, showClosedAt = false, onOpen = null }) {
   const topicClass =
@@ -155,8 +162,8 @@ function DashboardCard({ filter, count, icon: Icon, accent, onClick }) {
       <div className={cn("w-7 h-7 rounded-lg border flex items-center justify-center shrink-0", accent)}>
         <Icon className="w-3.5 h-3.5" />
       </div>
-      <p className="text-xl font-medium text-foreground leading-none tabular-nums">{count}</p>
-      <p className="m3-label-medium text-[0.65rem] leading-tight line-clamp-2">{meta.title}</p>
+      <p className="text-2xl font-semibold text-foreground leading-none tabular-nums">{count}</p>
+      <p className="text-xs font-bold leading-tight line-clamp-2 text-foreground">{meta.title}</p>
     </button>
   );
 }
@@ -165,7 +172,7 @@ export default function CrmDashboard() {
   const agentName = getStoredAgentName();
   const { hasCrmAgentDashboard, hasCrmAdminAccess } = useCrmRole();
   const [query, setQuery] = useState("");
-  const [dashboardCounts, setDashboardCounts] = useState({});
+  const [dashboardCounts, setDashboardCounts] = useState(() => getInitialDashboardCounts(agentName));
   const [filteredReferrals, setFilteredReferrals] = useState([]);
   const [addOpen, setAddOpen] = useState(false);
   const [addInitial, setAddInitial] = useState(null);
@@ -177,18 +184,24 @@ export default function CrmDashboard() {
   const filterMeta = activeFilter ? CRM_AGENT_DASHBOARD_FILTERS[activeFilter] : null;
   const isListView = Boolean(filterMeta);
 
-  const refresh = useCallback(() => {
-    const counts = {};
-    for (const { filter } of DASHBOARD_CARDS) {
-      counts[filter] = countReferralsForAgentDashboardFilter(filter, agentName);
-    }
-    setDashboardCounts(counts);
+  const refreshCounts = useCallback(() => {
+    void loadAgentDashboardCounts(agentName).then((counts) => {
+      setDashboardCounts(counts);
+    });
+  }, [agentName]);
+
+  const refreshList = useCallback(() => {
     if (activeFilter && CRM_AGENT_DASHBOARD_FILTERS[activeFilter]) {
       setFilteredReferrals(listReferralsForAgentDashboardFilter(activeFilter, agentName));
     } else {
       setFilteredReferrals([]);
     }
   }, [activeFilter, agentName]);
+
+  const refresh = useCallback(() => {
+    refreshCounts();
+    refreshList();
+  }, [refreshCounts, refreshList]);
 
   const handleClaimDepartmentReferral = useCallback(
     (referral) => {

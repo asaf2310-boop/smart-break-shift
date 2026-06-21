@@ -1,7 +1,10 @@
 import { demoModeEnabled } from "@/api/demoClient";
 import { cleanEnvValue } from "@/api/supabase";
-import { apiGetReviewSmsConfig, apiSendReviewSms } from "@/lib/agentAuthClient";
+import { apiGetReviewSmsConfig, apiSendReviewSms, getCachedBearerToken } from "@/lib/agentAuthClient";
 import { normalizeAgentPhone } from "@/lib/agentPhone";
+
+/** Shorter timeout for read-only config — fail fast, UI keeps defaults. */
+export const REVIEW_SMS_CONFIG_TIMEOUT_MS = 4000;
 
 /** Max SMS body length — must match server/review/reviewLink.js */
 export const REVIEW_SMS_MAX_LENGTH = 500;
@@ -100,15 +103,15 @@ export function clearReviewSmsConfigCache() {
   }
 }
 
-/** Initial UI state: cached config paints instantly; otherwise defaults while loading. */
+/** Initial UI state: cached config paints instantly; otherwise defaults while refreshing in background. */
 export function getInitialReviewSmsConfigState() {
   const cached = readReviewSmsConfigCache();
   if (cached) {
     return { loading: false, refreshing: true, ...cached };
   }
   return {
-    loading: true,
-    refreshing: false,
+    loading: false,
+    refreshing: true,
     ok: false,
     smsUrl: null,
     source: null,
@@ -120,8 +123,26 @@ export function getInitialReviewSmsConfigState() {
   };
 }
 
+let prefetchReviewSmsConfigPromise = null;
+
+/** Fire-and-forget config warm-up (e.g. nav hover before navigation). */
+export function prefetchReviewSmsConfig({ accessToken = null } = {}) {
+  const token = accessToken || getCachedBearerToken();
+  if (!demoModeEnabled && !token) return null;
+  if (prefetchReviewSmsConfigPromise) return prefetchReviewSmsConfigPromise;
+  prefetchReviewSmsConfigPromise = fetchReviewSmsConfig({ accessToken: token })
+    .catch(() => null)
+    .finally(() => {
+      prefetchReviewSmsConfigPromise = null;
+    });
+  return prefetchReviewSmsConfigPromise;
+}
+
 /** Fetch configured SMS review URL from server (or client env in demo). */
-export async function fetchReviewSmsConfig({ accessToken = null } = {}) {
+export async function fetchReviewSmsConfig({
+  accessToken = null,
+  timeoutMs = REVIEW_SMS_CONFIG_TIMEOUT_MS,
+} = {}) {
   try {
     if (demoModeEnabled) {
       const smsUrl = getClientPreviewSmsUrl();
@@ -140,7 +161,7 @@ export async function fetchReviewSmsConfig({ accessToken = null } = {}) {
       return config;
     }
 
-    const result = await apiGetReviewSmsConfig({ accessToken });
+    const result = await apiGetReviewSmsConfig({ accessToken, timeoutMs });
     const configLoaded = result.template != null || result.maxLength != null;
 
     if (!configLoaded) {

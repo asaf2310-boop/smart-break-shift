@@ -1262,6 +1262,89 @@ export function countReferralsForAgentDashboardFilter(filterKey, agentName) {
   }
 }
 
+export const CRM_AGENT_DASHBOARD_COUNT_FILTERS = [
+  "my-open",
+  "team-open",
+  "my-dept",
+  "handled-month",
+];
+
+const CRM_DASHBOARD_COUNTS_CACHE_PREFIX = "crm-dashboard-counts-v1:";
+const CRM_DASHBOARD_COUNTS_CACHE_TTL_MS = 2 * 60 * 1000;
+
+function emptyAgentDashboardCounts() {
+  return Object.fromEntries(CRM_AGENT_DASHBOARD_COUNT_FILTERS.map((filter) => [filter, 0]));
+}
+
+function crmDashboardCountsCacheKey(agentName) {
+  return `${CRM_DASHBOARD_COUNTS_CACHE_PREFIX}${String(agentName || "").trim()}`;
+}
+
+/** Cached dashboard counts for instant paint on revisit (~2 min TTL, keyed by agent). */
+export function readCrmDashboardCountsCache(agentName) {
+  if (typeof sessionStorage === "undefined") return null;
+  const name = String(agentName || "").trim();
+  if (!name) return null;
+  try {
+    const raw = sessionStorage.getItem(crmDashboardCountsCacheKey(name));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.cachedAt || Date.now() - parsed.cachedAt > CRM_DASHBOARD_COUNTS_CACHE_TTL_MS) {
+      sessionStorage.removeItem(crmDashboardCountsCacheKey(name));
+      return null;
+    }
+    const counts = parsed.counts || {};
+    return CRM_AGENT_DASHBOARD_COUNT_FILTERS.reduce((acc, filter) => {
+      acc[filter] = Number.isFinite(counts[filter]) ? counts[filter] : 0;
+      return acc;
+    }, {});
+  } catch {
+    return null;
+  }
+}
+
+export function writeCrmDashboardCountsCache(agentName, counts) {
+  if (typeof sessionStorage === "undefined" || !counts) return;
+  const name = String(agentName || "").trim();
+  if (!name) return;
+  try {
+    sessionStorage.setItem(
+      crmDashboardCountsCacheKey(name),
+      JSON.stringify({ cachedAt: Date.now(), counts })
+    );
+  } catch {
+    // Cache is only a speed boost; ignore browsers that block storage.
+  }
+}
+
+export function buildAgentDashboardCounts(agentName) {
+  const name = String(agentName || "").trim();
+  if (!name) return emptyAgentDashboardCounts();
+  return CRM_AGENT_DASHBOARD_COUNT_FILTERS.reduce((acc, filter) => {
+    acc[filter] = countReferralsForAgentDashboardFilter(filter, name);
+    return acc;
+  }, {});
+}
+
+/** Loads all 4 dashboard counts in parallel after store hydration (non-blocking for page mount). */
+export async function loadAgentDashboardCounts(agentName) {
+  const name = String(agentName || "").trim();
+  if (!name) return emptyAgentDashboardCounts();
+
+  if (isCrmCloudEnabled() && !isCrmStoreHydrated()) {
+    await hydrateCrmStore();
+  }
+
+  const entries = await Promise.all(
+    CRM_AGENT_DASHBOARD_COUNT_FILTERS.map((filter) =>
+      Promise.resolve().then(() => [filter, countReferralsForAgentDashboardFilter(filter, name)])
+    )
+  );
+  const counts = Object.fromEntries(entries);
+  writeCrmDashboardCountsCache(name, counts);
+  return counts;
+}
+
 function sortOpenReferralsForSupervisor(referrals) {
   return [...referrals].sort((a, b) => {
     const pa = REFERRAL_PRIORITY_WEIGHT[normalizeReferralPriority(a.priority)] ?? 2;

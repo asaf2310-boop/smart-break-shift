@@ -6,6 +6,8 @@ import { useAgentModules } from "@/hooks/useAgentModules";
 import { useCrmRole } from "@/hooks/useCrmRole";
 import { customerChatEnabled, crmEnabled, demoModeEnabled, knowledgeEnabled } from "@/api/demoClient";
 import { brandVisualEnabled } from "@/lib/brandShell";
+import { getCachedBearerToken } from "@/lib/agentAuthClient";
+import { prefetchReviewSmsConfig } from "@/lib/reviewSms";
 
 /** גובה שורת הניווט העליונה — משמש גם ל-FloatingChatWidget */
 export const APP_NAV_HEIGHT = "var(--app-nav-height)";
@@ -93,7 +95,12 @@ export default function AppNav() {
             </Link>
           )}
           {showTab("google_review") && (
-            <Link to="/review-sms" className={tabClass(isGoogleReview)}>
+            <Link
+              to="/review-sms"
+              className={tabClass(isGoogleReview)}
+              onMouseEnter={() => prefetchReviewSmsConfig({ accessToken: getCachedBearerToken() })}
+              onFocus={() => prefetchReviewSmsConfig({ accessToken: getCachedBearerToken() })}
+            >
               <Star className="w-4 h-4" />
               דירוג גוגל
             </Link>
