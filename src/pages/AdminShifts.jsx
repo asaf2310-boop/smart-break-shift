@@ -26,6 +26,7 @@ import ScheduleSmsLog from "@/components/admin/ScheduleSmsLog";
 import ConstraintsDeadlinePanel from "@/components/admin/ConstraintsDeadlinePanel";
 import HypPageLayout from "@/components/hyp/HypPageLayout";
 import { hypHeaderIconClass } from "@/lib/hypPage";
+import AdminSubNav from "@/components/admin/AdminSubNav";
 
 const SHIFTS = [
   { type: "morning", label: "משמרת בוקר", time: "08:00–16:00", icon: Sun, gradient: "from-amber-400 to-orange-500", bg: "bg-amber-50/50" },
@@ -48,11 +49,14 @@ export default function AdminShifts() {
   );
 
   return (
-    <HypPageLayout variant="scheduling" withNav={false} contentClassName="max-w-5xl px-4 py-8">
+    <HypPageLayout variant="scheduling" withNav={false} contentClassName="max-w-5xl px-4 py-8 overflow-x-hidden">
         <BackendConfigBanner />
+        <AdminSubNav />
         {/* Header */}
-        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between mb-8">
-          <Link to="/admin" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">← חזרה לניהול</Link>
+        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+          <Link to="/admin" className="text-sm text-slate-400 hover:text-slate-700 transition-colors inline-flex items-center gap-1 mb-4">
+            ← חזרה לניהול
+          </Link>
           <div className="text-center">
             <div className="flex items-center gap-3 justify-center mb-1">
               <div
@@ -62,10 +66,9 @@ export default function AdminShifts() {
               >
                 <ShieldCheck className="w-5 h-5 text-white" />
               </div>
-              <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">ניהול משמרות</h1>
+              <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800 tracking-tight">ניהול משמרות</h1>
             </div>
           </div>
-          <div className="w-24" />
         </motion.div>
 
         {/* Week Navigator */}
@@ -96,10 +99,10 @@ export default function AdminShifts() {
         )}
 
         {/* Tabs */}
-        <div className="flex justify-center gap-2 mb-6">
+        <div className="flex flex-col sm:flex-row justify-center gap-2 mb-6">
           <button
             onClick={() => setActiveTab("current")}
-            className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+            className={`w-full sm:w-auto px-4 sm:px-6 py-3 rounded-xl text-sm font-semibold transition-all ${
               activeTab === "current"
                 ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/30"
                 : "bg-white border border-slate-200 text-slate-600 hover:border-emerald-300"
@@ -112,7 +115,7 @@ export default function AdminShifts() {
           </button>
           <button
             onClick={() => setActiveTab("next")}
-            className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+            className={`w-full sm:w-auto px-4 sm:px-6 py-3 rounded-xl text-sm font-semibold transition-all ${
               activeTab === "next"
                 ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/30"
                 : "bg-white border border-slate-200 text-slate-600 hover:border-cyan-300"
@@ -228,7 +231,7 @@ function ConstraintsView({ weekStart, showDeadlinePanel = true }) {
     {/* Submission status panel */}
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
       className="rounded-3xl overflow-hidden border border-slate-200 bg-white shadow-lg shadow-slate-200/60 mb-4">
-      <div className="px-6 py-4 bg-gradient-to-l from-indigo-50 to-transparent border-b border-slate-100 flex items-center justify-between gap-3">
+      <div className="px-4 sm:px-6 py-4 bg-gradient-to-l from-indigo-50 to-transparent border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center shadow">
             <Check className="w-4 h-4 text-white" />
@@ -280,7 +283,7 @@ function ConstraintsView({ weekStart, showDeadlinePanel = true }) {
               <p className="text-xs text-slate-400">{shift.time} · אי-זמינות לפי משמרת</p>
             </div>
           </div>
-          <div className="p-4 grid grid-cols-5 gap-3">
+          <div className="p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             {weekDays.map((date, i) => {
               const dateStr = format(date, "yyyy-MM-dd");
               const isHolidayEve = HOLIDAY_EVE_DATES.includes(dateStr);

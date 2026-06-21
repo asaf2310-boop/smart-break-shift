@@ -16,6 +16,7 @@ import {
 import { refreshScheduleQueriesAfterPublish } from "@/lib/shiftScheduleQuery";
 import { useToast } from "@/components/ui/use-toast";
 import { demoModeEnabled } from "@/api/demoClient";
+import ScheduleGridScroll from "@/components/shifts/ScheduleGridScroll";
 
 function agentsAvailableForCell(cellAgents) {
   return AGENT_NAMES.filter((name) => !cellAgents.includes(name));
@@ -258,7 +259,7 @@ export default function PublishedScheduleEditor({ weekStart }) {
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-      className="rounded-3xl border border-slate-200 bg-white shadow-lg p-6" dir="rtl">
+      className="rounded-3xl border border-slate-200 bg-white shadow-lg p-4 sm:p-6" dir="rtl">
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow shadow-emerald-500/30">
@@ -276,7 +277,7 @@ export default function PublishedScheduleEditor({ weekStart }) {
         </div>
       </div>
 
-      <div ref={scheduleGridRef} className="rounded-2xl border border-slate-100 overflow-x-auto mb-4">
+      <ScheduleGridScroll gridRef={scheduleGridRef}>
         {/* Header */}
         <div className="grid grid-cols-6 bg-slate-50 border-b border-slate-100">
           <div className="py-2 px-3 text-xs font-semibold text-slate-400">משמרת</div>
@@ -316,7 +317,7 @@ export default function PublishedScheduleEditor({ weekStart }) {
             })}
           </div>
         ))}
-      </div>
+      </ScheduleGridScroll>
 
       <label className="flex items-center gap-2 mb-3 text-sm text-slate-600 cursor-pointer">
         <input

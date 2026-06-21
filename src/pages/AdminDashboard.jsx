@@ -16,7 +16,6 @@ import {
   LUNCH_BREAK_SLOTS,
 } from "@/constants/scheduling";
 import BackendConfigBanner from "@/components/BackendConfigBanner";
-import { customerChatEnabled, crmEnabled, demoModeEnabled, knowledgeEnabled } from "@/api/demoClient";
 import AdminLocalhostLinksPanel from "@/components/admin/AdminLocalhostLinksPanel";
 import {
   BreakRegistrationError,
@@ -29,6 +28,7 @@ import { listManagedAgents } from "@/lib/agentsApi";
 import { getLiveQueryOptions } from "@/lib/liveQuery";
 import HypPageLayout from "@/components/hyp/HypPageLayout";
 import { hypHeaderIconClass } from "@/lib/hypPage";
+import AdminSubNav from "@/components/admin/AdminSubNav";
 
 export default function AdminDashboard() {
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -252,42 +252,14 @@ export default function AdminDashboard() {
         <div className="mb-6">
           <ReviewSmsSettingsPanel />
         </div>
-        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between mb-8">
-          <Link to="/" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">ראשי</Link>
-          <Link to="/admin/users" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">נציגים</Link>
-          <Link to="/admin/shifts" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">משמרות</Link>
-          <Link to="/admin/training" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">הדרכה</Link>
-          <Link to="/admin/recordings" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">הקלטות</Link>
-          <Link to="/admin/metrics" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">מדדים</Link>
-          <Link to="/admin/security-audit" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">יומן ביקורת</Link>
-          <Link to="/admin/sms-stats" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">סטטיסטיקת SMS</Link>
-          <Link to="/review-sms" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">דירוג גוגל (SMS)</Link>
-          {(demoModeEnabled || knowledgeEnabled) && (
-            <Link to="/admin/knowledge" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">
-              ניהול ידע
+        <AdminSubNav />
+
+        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <Link to="/" className="text-sm text-slate-400 hover:text-slate-700 transition-colors shrink-0">
+              ← ראשי
             </Link>
-          )}
-          {crmEnabled && (
-            <>
-              <Link to="/crm" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">
-                CRM
-              </Link>
-              <Link to="/admin/crm" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">
-                דשבורד CRM
-              </Link>
-              <Link to="/admin/crm/departments" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">
-                מחלקות CRM
-              </Link>
-              <Link to="/admin/crm/routing" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">
-                ניתוב CRM
-              </Link>
-            </>
-          )}
-          {customerChatEnabled && (
-            <Link to="/admin/customer-chat" className="text-sm text-slate-400 hover:text-slate-700 transition-colors">
-              בוט צ'אט לקוחות
-            </Link>
-          )}
+          </div>
           <div className="text-center">
             <div className="flex items-center gap-3 justify-center mb-1">
               <div
@@ -302,7 +274,6 @@ export default function AdminDashboard() {
               </h1>
             </div>
           </div>
-          <div className="w-24" />
         </motion.div>
 
         {isFetching && !isLoading && (

@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { BarChart3, BookOpen, CalendarClock, CalendarDays, Contact, Film, GraduationCap, Home, LayoutDashboard, MessageCircle, Monitor, ShieldCheck, Star } from "lucide-react";
+import { BarChart3, BookOpen, CalendarClock, CalendarDays, Contact, GraduationCap, Home, MessageCircle, Monitor, ShieldCheck, Star } from "lucide-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useAgentModules } from "@/hooks/useAgentModules";
 import { customerChatEnabled, crmEnabled, demoModeEnabled, knowledgeEnabled } from "@/api/demoClient";
@@ -136,69 +136,15 @@ export default function AppNav() {
             </>
           )}
           {isAdmin && (
-            <>
-              <Link to="/admin" className={tabClass(location.pathname === "/admin")}>
-                <ShieldCheck className="w-4 h-4" />
-                מנהל
-              </Link>
-              <Link to="/admin/shifts" className={tabClass(location.pathname === "/admin/shifts")}>
-                <ShieldCheck className="w-4 h-4" />
-                משמרות מנהל
-              </Link>
-              <Link to="/admin/users" className={tabClass(location.pathname === "/admin/users")}>
-                <ShieldCheck className="w-4 h-4" />
-                נציגים
-              </Link>
-              <Link
-                to="/admin/recordings"
-                className={tabClass(location.pathname.startsWith("/admin/recordings"))}
-              >
-                <Film className="w-4 h-4" />
-                הקלטות
-              </Link>
-              <Link
-                to="/admin/metrics"
-                className={tabClass(location.pathname.startsWith("/admin/metrics"))}
-              >
-                <BarChart3 className="w-4 h-4" />
-                מדדים
-              </Link>
-              {(demoModeEnabled || knowledgeEnabled) && (
-                <Link to="/admin/knowledge" className={tabClass(location.pathname === "/admin/knowledge")}>
-                  <BookOpen className="w-4 h-4" />
-                  ניהול ידע
-                </Link>
+            <Link
+              to="/admin"
+              className={tabClass(
+                location.pathname === "/admin" || location.pathname.startsWith("/admin/")
               )}
-              {crmEnabled && (
-                <>
-                  <Link to="/crm" className={tabClass(isCrm)}>
-                    <Contact className="w-4 h-4" />
-                    CRM
-                  </Link>
-                  <Link
-                    to="/admin/crm"
-                    className={tabClass(location.pathname === "/admin/crm")}
-                  >
-                    <LayoutDashboard className="w-4 h-4" />
-                    דשבורד CRM
-                  </Link>
-                  <Link to="/admin/crm/departments" className={tabClass(location.pathname === "/admin/crm/departments")}>
-                    <ShieldCheck className="w-4 h-4" />
-                    מחלקות CRM
-                  </Link>
-                  <Link to="/admin/crm/routing" className={tabClass(location.pathname === "/admin/crm/routing")}>
-                    <ShieldCheck className="w-4 h-4" />
-                    ניתוב CRM
-                  </Link>
-                </>
-              )}
-              {customerChatEnabled && (
-                <Link to="/admin/customer-chat" className={tabClass(location.pathname === "/admin/customer-chat")}>
-                  <MessageCircle className="w-4 h-4" />
-                  בוט צ&apos;אט
-                </Link>
-              )}
-            </>
+            >
+              <ShieldCheck className="w-4 h-4" />
+              מנהל
+            </Link>
           )}
         </div>
         </div>

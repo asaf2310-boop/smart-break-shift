@@ -20,6 +20,7 @@ import {
 import { refreshScheduleQueriesAfterPublish } from "@/lib/shiftScheduleQuery";
 import { useToast } from "@/components/ui/use-toast";
 import { demoModeEnabled } from "@/api/demoClient";
+import ScheduleGridScroll from "@/components/shifts/ScheduleGridScroll";
 
 // Auto-schedule algorithm:
 // - כל הנציגים ברשימה — גם אם לא הגישו אילוצים (נחשבים זמינים לשתי המשמרות)
@@ -455,11 +456,11 @@ export default function AutoScheduleBuilder({ weekStart }) {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-3xl border border-slate-200 bg-white shadow-lg p-6"
+      className="rounded-3xl border border-slate-200 bg-white shadow-lg p-4 sm:p-6"
       dir="rtl"
     >
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
+        <div className="flex items-center gap-3 min-w-0">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center shadow shadow-cyan-500/30">
             <Zap className="w-5 h-5 text-white" />
           </div>
@@ -472,7 +473,7 @@ export default function AutoScheduleBuilder({ weekStart }) {
         </div>
         <button
           onClick={handleGenerate}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-sm font-bold shadow hover:shadow-md transition-all active:scale-95"
+          className="flex items-center justify-center gap-2 w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-sm font-bold shadow hover:shadow-md transition-all active:scale-95 shrink-0"
         >
           <RefreshCw className="w-4 h-4" />
           {assignments ? "צור מחדש" : "צור שיבוץ"}
@@ -488,7 +489,7 @@ export default function AutoScheduleBuilder({ weekStart }) {
       {assignments && (
         <>
           {/* Preview table */}
-          <div ref={scheduleGridRef} className="rounded-2xl border border-slate-100 overflow-x-auto mb-4">
+          <ScheduleGridScroll gridRef={scheduleGridRef}>
             {/* Header */}
             <div className="grid grid-cols-6 bg-slate-50 border-b border-slate-100">
               <div className="py-2 px-3 text-xs font-semibold text-slate-400">משמרת</div>
@@ -579,7 +580,7 @@ export default function AutoScheduleBuilder({ weekStart }) {
                 })}
               </div>
             ))}
-          </div>
+          </ScheduleGridScroll>
 
           <label className="flex items-center gap-2 mb-3 text-sm text-slate-600 cursor-pointer">
             <input
