@@ -20,6 +20,7 @@ import { getStoredAgentName } from "@/constants/scheduling";
 import {
   claimDepartmentReferral,
   createCustomer,
+  createReferral,
   crmDemoAvailable,
   CRM_AGENT_DASHBOARD_FILTERS,
   getReferralAssignmentLabel,
@@ -40,22 +41,21 @@ import {
   subscribeCrmRecents,
 } from "@/lib/crmRecents";
 import {
+  buildCrmAdminTab,
   buildDetailTab,
   buildListTab,
+  buildNewCustomerTab,
+  buildNewReferralTab,
   closeTab,
   CRM_HOME_TAB,
   openOrActivateTab,
 } from "@/lib/crmDashboardTabs";
 import CustomerForm from "@/components/crm/CustomerForm";
+import ManualReferralForm from "@/components/crm/ManualReferralForm";
 import CrmDashboardHeader from "@/components/crm/CrmDashboardHeader";
 import CrmDashboardTabBar from "@/components/crm/CrmDashboardTabBar";
 import CrmCustomerDetail from "@/pages/CrmCustomerDetail";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import AdminCrmDashboard from "@/pages/AdminCrmDashboard";
 import { useToast } from "@/components/ui/use-toast";
 import { getAgentSession } from "@/lib/agentAuth";
 import {
@@ -188,8 +188,6 @@ export default function CrmDashboard() {
   const [filteredReferrals, setFilteredReferrals] = useState([]);
   const [tabs, setTabs] = useState([CRM_HOME_TAB]);
   const [activeTabId, setActiveTabId] = useState(CRM_HOME_TAB.id);
-  const [addOpen, setAddOpen] = useState(false);
-  const [addInitial, setAddInitial] = useState(null);
   const [recentSearches, setRecentSearches] = useState([]);
   const [recentVisits, setRecentVisits] = useState([]);
   const { toast } = useToast();
@@ -202,6 +200,9 @@ export default function CrmDashboard() {
   const isHomeTab = activeTab.type === "home";
   const isListTab = activeTab.type === "list";
   const isDetailTab = activeTab.type === "detail";
+  const isNewCustomerTab = activeTab.type === "newCustomer";
+  const isNewReferralTab = activeTab.type === "newReferral";
+  const isCrmAdminTab = activeTab.type === "crmAdmin";
   const filterMeta = isListTab ? CRM_AGENT_DASHBOARD_FILTERS[activeTab.filter] : null;
 
   const refreshCounts = useCallback(() => {
@@ -287,8 +288,9 @@ export default function CrmDashboard() {
       next.delete("notfound");
     }
     if (addphone) {
-      setAddInitial({ phone: addphone });
-      setAddOpen(true);
+      const customerTab = buildNewCustomerTab({ phone: addphone });
+      setTabs((prev) => openOrActivateTab(prev, customerTab).tabs);
+      setActiveTabId(customerTab.id);
       next.delete("addphone");
     }
     setSearchParams(next, { replace: true });
@@ -315,6 +317,26 @@ export default function CrmDashboard() {
     setTabs((prev) => openOrActivateTab(prev, listTab).tabs);
     setActiveTabId(listTab.id);
   }, []);
+
+  const openActionTab = useCallback((tab) => {
+    setTabs((prev) => openOrActivateTab(prev, tab).tabs);
+    setActiveTabId(tab.id);
+  }, []);
+
+  const openNewCustomerTab = useCallback(
+    (initial = null) => {
+      openActionTab(buildNewCustomerTab(initial));
+    },
+    [openActionTab]
+  );
+
+  const openNewReferralTab = useCallback(() => {
+    openActionTab(buildNewReferralTab());
+  }, [openActionTab]);
+
+  const openCrmAdminTab = useCallback(() => {
+    openActionTab(buildCrmAdminTab());
+  }, [openActionTab]);
 
   const openDetailTab = useCallback(
     ({ customerId, referralId = null, referralTopic = null, customerName = null }) => {
@@ -378,6 +400,71 @@ export default function CrmDashboard() {
     [handleCloseTab]
   );
 
+  const handleAddCustomer = useCallback(
+    (data) => {
+      const created = createCustomer(data);
+      toast({ title: "לקוח נוסף", description: created.name });
+      refresh();
+      handleCloseTab("action:new-customer");
+    },
+    [handleCloseTab, refresh, toast]
+  );
+
+  const handleNewReferralSubmit = useCallback(
+    (data) => {
+      try {
+        const customer =
+          data.existingCustomer ||
+          createCustomer({
+            name: data.name,
+            phone: data.phone,
+          });
+
+        const created = createReferral({
+          customer_id: customer.id,
+          referral_topic: data.referral_topic,
+          description: data.description,
+          agent_name: data.agent_name,
+          priority: data.priority,
+          status: data.status,
+          explicit_assignment: data.explicit_assignment,
+          assigned_to_type: data.assigned_to_type,
+          assigned_agent_name: data.assigned_agent_name,
+          assigned_department_id: data.assigned_department_id,
+        });
+
+        recordRecentVisit({
+          customerId: customer.id,
+          customerName: customer.name,
+          referralId: created.id,
+          referralTopic: created.referral_topic,
+        });
+        refreshRecents();
+
+        toast({
+          title: "פניה נפתחה",
+          description: `הפניה שויכה ל${getReferralAssignmentLabel(created)}`,
+        });
+
+        handleCloseTab("action:new-referral");
+        openDetailTab({
+          customerId: customer.id,
+          referralId: created.id,
+          referralTopic: created.referral_topic,
+          customerName: customer.name,
+        });
+        refresh();
+      } catch (err) {
+        toast({
+          title: "שגיאה",
+          description: err.message || "לא ניתן לפתוח פניה",
+          variant: "destructive",
+        });
+      }
+    },
+    [handleCloseTab, openDetailTab, refresh, refreshRecents, toast]
+  );
+
   const resolvedRecentVisits = useMemo(
     () =>
       recentVisits.map((visit) => {
@@ -413,14 +500,6 @@ export default function CrmDashboard() {
     );
   }
 
-  const handleAddCustomer = (data) => {
-    const created = createCustomer(data);
-    setAddOpen(false);
-    setAddInitial(null);
-    toast({ title: "לקוח נוסף", description: created.name });
-    refresh();
-  };
-
   const hasQuery = query.trim().length > 0;
   const listVariant =
     isListTab && (activeTab.filter === "team-open" || activeTab.filter === "my-dept")
@@ -433,15 +512,27 @@ export default function CrmDashboard() {
     ? filterMeta?.title
     : isDetailTab
       ? activeTab.label
-      : hasCrmAgentDashboard
-        ? "דשבורד נציג"
-        : "חיפוש לקוחות";
+      : isNewCustomerTab
+        ? "לקוח חדש"
+        : isNewReferralTab
+          ? "פתיחת פניה ידנית"
+          : isCrmAdminTab
+            ? "ניהול CRM"
+            : hasCrmAgentDashboard
+              ? "דשבורד נציג"
+              : "חיפוש לקוחות";
 
   const headerSubtitle = isListTab
     ? filterMeta?.description
     : isDetailTab
       ? "כרטיס לקוח / פניה"
-      : `שלום, ${agentName}`;
+      : isNewCustomerTab
+        ? "הוספת לקוח חדש למערכת"
+        : isNewReferralTab
+          ? `שלום, ${agentName} — חפש לקוח לפי טלפון או צור חדש`
+          : isCrmAdminTab
+            ? "סקירת פניות פתוחות, תורים ו-SLA"
+            : `שלום, ${agentName}`;
 
   return (
     <div className={cn(m3PageClass("pb-24 body-container min-h-screen"), "relative")} dir="rtl">
@@ -482,10 +573,14 @@ export default function CrmDashboard() {
                 {filterMeta.title} ({filteredReferrals.length})
               </h2>
               {hasCrmAgentDashboard && (
-                <Link to="/crm/new" className="btn-action-pill btn-blue-action">
+                <button
+                  type="button"
+                  onClick={openNewReferralTab}
+                  className="btn-action-pill btn-blue-action"
+                >
                   <FolderOpen className="w-4 h-4" />
                   <span>פתיחת פניה ידנית</span>
-                </Link>
+                </button>
               )}
             </div>
             {filteredReferrals.length === 0 ? (
@@ -505,28 +600,55 @@ export default function CrmDashboard() {
               </div>
             )}
           </section>
+        ) : isNewCustomerTab ? (
+          <section className="m3-card p-5 sm:p-6">
+            <CustomerForm
+              initial={activeTab.initial}
+              onSubmit={handleAddCustomer}
+              onCancel={() => handleCloseTab(activeTab.id)}
+              submitLabel="הוספה"
+            />
+          </section>
+        ) : isNewReferralTab ? (
+          <section className="m3-card p-5 sm:p-6">
+            <ManualReferralForm
+              agentName={agentName}
+              onSubmit={handleNewReferralSubmit}
+              onCancel={() => handleCloseTab(activeTab.id)}
+            />
+          </section>
+        ) : isCrmAdminTab ? (
+          <AdminCrmDashboard embedded />
         ) : (
           <>
             <div className="dashboard-actions-row">
               <button
                 type="button"
-                onClick={() => setAddOpen(true)}
+                onClick={() => openNewCustomerTab()}
                 className="btn-action-pill btn-green-action"
               >
                 <Plus className="w-4 h-4" />
                 <span>לקוח חדש</span>
               </button>
               {hasCrmAgentDashboard && (
-                <Link to="/crm/new" className="btn-action-pill btn-blue-action">
+                <button
+                  type="button"
+                  onClick={openNewReferralTab}
+                  className="btn-action-pill btn-blue-action"
+                >
                   <FolderOpen className="w-4 h-4" />
                   <span>פתיחת פניה ידנית</span>
-                </Link>
+                </button>
               )}
               {hasCrmAdminAccess && (
-                <Link to="/admin/crm" className="btn-action-pill btn-outline-action">
+                <button
+                  type="button"
+                  onClick={openCrmAdminTab}
+                  className="btn-action-pill btn-outline-action"
+                >
                   <LayoutDashboard className="w-4 h-4" />
                   <span>ניהול CRM</span>
-                </Link>
+                </button>
               )}
             </div>
 
@@ -682,29 +804,6 @@ export default function CrmDashboard() {
         )}
         </div>
       </div>
-
-      <Dialog
-        open={addOpen}
-        onOpenChange={(open) => {
-          setAddOpen(open);
-          if (!open) setAddInitial(null);
-        }}
-      >
-        <DialogContent className="sm:max-w-md rounded-2xl shadow-elevation-3" dir="rtl">
-          <DialogHeader>
-            <DialogTitle>לקוח חדש</DialogTitle>
-          </DialogHeader>
-          <CustomerForm
-            initial={addInitial}
-            onSubmit={handleAddCustomer}
-            onCancel={() => {
-              setAddOpen(false);
-              setAddInitial(null);
-            }}
-            submitLabel="הוספה"
-          />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

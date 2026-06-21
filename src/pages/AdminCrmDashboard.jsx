@@ -81,7 +81,7 @@ function formatDt(iso) {
   }
 }
 
-export default function AdminCrmDashboard() {
+export default function AdminCrmDashboard({ embedded = false }) {
   const { toast } = useToast();
   const [openReferrals, setOpenReferrals] = useState(() => listAllOpenReferrals());
   const [departments, setDepartments] = useState(() => listCrmDepartments());
@@ -212,56 +212,60 @@ export default function AdminCrmDashboard() {
   };
 
   return (
-    <div className={m3PageClass("pb-24")} dir="rtl">
-      <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] right-[-5%] w-[480px] h-[480px] bg-primary/8 rounded-full blur-3xl" />
-        <div className="absolute bottom-[-10%] left-[-5%] w-[400px] h-[400px] bg-primary-container/35 rounded-full blur-3xl" />
-      </div>
+    <div className={embedded ? "crm-embedded-admin" : m3PageClass("pb-24")} dir="rtl">
+      {!embedded && (
+        <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+          <div className="absolute top-[-10%] right-[-5%] w-[480px] h-[480px] bg-primary/8 rounded-full blur-3xl" />
+          <div className="absolute bottom-[-10%] left-[-5%] w-[400px] h-[400px] bg-primary-container/35 rounded-full blur-3xl" />
+        </div>
+      )}
 
-      <div className="relative z-10 max-w-6xl mx-auto px-4 py-6 sm:py-10">
-        <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <Link to="/admin" className="inline-flex items-center gap-1 m3-label-medium hover:text-primary">
-              <ArrowRight className="w-4 h-4" />
-              דשבורד מנהל
-            </Link>
-            <Link
-              to="/admin/crm/departments"
-              className="inline-flex items-center gap-1 text-sm text-on-surface-variant hover:text-primary"
-            >
-              <Building2 className="w-4 h-4" />
-              ניהול מחלקות
-            </Link>
-            <Link
-              to="/admin/crm/routing"
-              className="inline-flex items-center gap-1 text-sm text-on-surface-variant hover:text-primary"
-            >
-              <GitBranch className="w-4 h-4" />
-              כללי ניתוב
-            </Link>
-            <a
-              href="#crm-reports"
-              className="inline-flex items-center gap-1 text-sm text-on-surface-variant hover:text-primary"
-            >
-              <BarChart3 className="w-4 h-4" />
-              דוחות CRM
-            </a>
-          </div>
-          <div className="flex items-start gap-4">
-            <div className={cn(hypHeaderIconClass("shadow-elevation-1"), !demoModeEnabled && "bg-primary")}>
-              <LayoutDashboard className={cn("w-6 h-6", demoModeEnabled ? "text-white" : "text-primary-foreground")} />
+      <div className={embedded ? "" : "relative z-10 max-w-6xl mx-auto px-4 py-6 sm:py-10"}>
+        {!embedded && (
+          <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <Link to="/admin" className="inline-flex items-center gap-1 m3-label-medium hover:text-primary">
+                <ArrowRight className="w-4 h-4" />
+                דשבורד מנהל
+              </Link>
+              <Link
+                to="/admin/crm/departments"
+                className="inline-flex items-center gap-1 text-sm text-on-surface-variant hover:text-primary"
+              >
+                <Building2 className="w-4 h-4" />
+                ניהול מחלקות
+              </Link>
+              <Link
+                to="/admin/crm/routing"
+                className="inline-flex items-center gap-1 text-sm text-on-surface-variant hover:text-primary"
+              >
+                <GitBranch className="w-4 h-4" />
+                כללי ניתוב
+              </Link>
+              <a
+                href="#crm-reports"
+                className="inline-flex items-center gap-1 text-sm text-on-surface-variant hover:text-primary"
+              >
+                <BarChart3 className="w-4 h-4" />
+                דוחות CRM
+              </a>
             </div>
-            <div>
-              <h1 className="m3-headline-small font-medium">דשבורד מפקח CRM</h1>
-              <p className="m3-label-medium mt-1">סקירת פניות פתוחות, תורים ו-SLA</p>
+            <div className="flex items-start gap-4">
+              <div className={cn(hypHeaderIconClass("shadow-elevation-1"), !demoModeEnabled && "bg-primary")}>
+                <LayoutDashboard className={cn("w-6 h-6", demoModeEnabled ? "text-white" : "text-primary-foreground")} />
+              </div>
+              <div>
+                <h1 className="m3-headline-small font-medium">דשבורד מפקח CRM</h1>
+                <p className="m3-label-medium mt-1">סקירת פניות פתוחות, תורים ו-SLA</p>
+              </div>
             </div>
-          </div>
-          {isCrmCloudEnabled() ? (
-            <span className="m3-badge mt-3">ענן · Supabase</span>
-          ) : demoModeEnabled ? (
-            <span className="m3-badge mt-3">דמו · localStorage</span>
-          ) : null}
-        </motion.div>
+            {isCrmCloudEnabled() ? (
+              <span className="m3-badge mt-3">ענן · Supabase</span>
+            ) : demoModeEnabled ? (
+              <span className="m3-badge mt-3">דמו · localStorage</span>
+            ) : null}
+          </motion.div>
+        )}
 
         <section id="crm-reports" className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4 scroll-mt-24">
           <div className="m3-surface-container px-3 py-3 text-center">

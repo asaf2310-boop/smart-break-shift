@@ -42,10 +42,40 @@ export function buildDetailTab({ customerId, referralId = null, referralTopic = 
   };
 }
 
+export function buildNewCustomerTab(initial = null) {
+  return {
+    id: "action:new-customer",
+    type: "newCustomer",
+    label: "לקוח חדש",
+    initial,
+    closable: true,
+  };
+}
+
+export function buildNewReferralTab() {
+  return {
+    id: "action:new-referral",
+    type: "newReferral",
+    label: "פתיחת פניה ידנית",
+    closable: true,
+  };
+}
+
+export function buildCrmAdminTab() {
+  return {
+    id: "action:crm-admin",
+    type: "crmAdmin",
+    label: "ניהול CRM",
+    closable: true,
+  };
+}
+
 export function openOrActivateTab(tabs, tab) {
-  const existing = tabs.find((t) => t.id === tab.id);
-  if (existing) {
-    return { tabs, activeTabId: tab.id };
+  const index = tabs.findIndex((t) => t.id === tab.id);
+  if (index !== -1) {
+    const updated = [...tabs];
+    updated[index] = { ...updated[index], ...tab };
+    return { tabs: updated, activeTabId: tab.id };
   }
   return { tabs: [...tabs, tab], activeTabId: tab.id };
 }
