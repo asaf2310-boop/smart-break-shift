@@ -26,12 +26,17 @@ import {
 } from "@/components/ui/select";
 import {
   createEmptyFlowStep,
+  DEFAULT_INVALID_INPUT_MESSAGE,
   FLOW_CONDITION_VARIABLES,
+  FLOW_INPUT_MODES,
+  FLOW_INVALID_HANDLERS,
   FLOW_STEP_TYPES,
   FLOW_TRIGGER_TYPES,
+  FLOW_VALIDATION_TYPES,
   getCustomerChatBotFlow,
   getFlowStepById,
   makeFlowStepId,
+  removeFlowStep,
   resetCustomerChatBotFlow,
   saveCustomerChatBotFlow,
   subscribeCustomerChatBotFlow,
@@ -48,7 +53,11 @@ const STEP_ICONS = {
 function stepSummary(step) {
   if (!step) return "";
   if (step.type === "message") return step.body || "—";
-  if (step.type === "choice") return step.prompt || `${step.options?.length || 0} אפשרויות`;
+  if (step.type === "choice") {
+    const modeLabel = FLOW_INPUT_MODES[step.inputMode]?.label || step.inputMode;
+    if (step.inputMode === "buttons") return step.prompt || `${step.options?.length || 0} אפשרויות`;
+    return step.prompt || modeLabel;
+  }
   if (step.type === "condition") {
     const varLabel = FLOW_CONDITION_VARIABLES[step.variable]?.label || step.variable;
     return varLabel;
@@ -138,7 +147,7 @@ function StepEditor({ step, steps, onChange }) {
       {step.type === "choice" && (
         <>
           <div className="space-y-1.5">
-            <Label className="text-xs text-slate-600">שאלה / הנחיה לפני הכפתורים</Label>
+            <Label className="text-xs text-slate-600">שאלה / הנחיה לפני הקלט</Label>
             <Textarea
               value={step.prompt || ""}
               onChange={(e) => patch({ prompt: e.target.value })}
@@ -147,71 +156,204 @@ function StepEditor({ step, steps, onChange }) {
               dir="rtl"
             />
           </div>
-          <div className="space-y-2">
-            <Label className="text-xs text-slate-600">כפתורי תשובה מהירה</Label>
-            {(step.options || []).map((opt, index) => (
-              <div key={opt.id} className="flex flex-col sm:flex-row gap-2 items-start rounded-xl border border-slate-200 bg-white p-3">
-                <Input
-                  value={opt.label}
-                  onChange={(e) => {
-                    const options = [...(step.options || [])];
-                    options[index] = { ...opt, label: e.target.value };
-                    patch({ options });
-                  }}
-                  placeholder={`כפתור ${index + 1}`}
-                  className="flex-1 text-right"
-                  dir="rtl"
-                />
-                <div className="w-full sm:w-48">
-                  <StepNextSelect
-                    label="ממשיך ל"
-                    value={opt.nextStepId}
-                    steps={steps}
-                    currentStepId={step.id}
-                    onChange={(nextStepId) => {
-                      const options = [...(step.options || [])];
-                      options[index] = { ...opt, nextStepId };
-                      patch({ options });
-                    }}
-                  />
-                </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs text-slate-600">סוג קלט</Label>
+            <Select
+              value={step.inputMode || "buttons"}
+              onValueChange={(inputMode) => patch({ inputMode })}
+            >
+              <SelectTrigger className="text-right" dir="rtl">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent dir="rtl">
+                {Object.values(FLOW_INPUT_MODES).map((m) => (
+                  <SelectItem key={m.key} value={m.key}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-slate-500">
+              {FLOW_INPUT_MODES[step.inputMode || "buttons"]?.description}
+            </p>
+          </div>
+
+          {(step.inputMode || "buttons") === "buttons" && (
+            <>
+              <div className="space-y-2">
+                <Label className="text-xs text-slate-600">כפתורי תשובה מהירה</Label>
+                {(step.options || []).map((opt, index) => (
+                  <div
+                    key={opt.id}
+                    className="flex flex-col sm:flex-row gap-2 items-start rounded-xl border border-slate-200 bg-white p-3"
+                  >
+                    <Input
+                      value={opt.label}
+                      onChange={(e) => {
+                        const options = [...(step.options || [])];
+                        options[index] = { ...opt, label: e.target.value };
+                        patch({ options });
+                      }}
+                      placeholder={`כפתור ${index + 1}`}
+                      className="flex-1 text-right"
+                      dir="rtl"
+                    />
+                    <div className="w-full sm:w-48">
+                      <StepNextSelect
+                        label="ממשיך ל"
+                        value={opt.nextStepId}
+                        steps={steps}
+                        currentStepId={step.id}
+                        onChange={(nextStepId) => {
+                          const options = [...(step.options || [])];
+                          options[index] = { ...opt, nextStepId };
+                          patch({ options });
+                        }}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="shrink-0 text-slate-400 hover:text-red-600"
+                      onClick={() =>
+                        patch({ options: (step.options || []).filter((o) => o.id !== opt.id) })
+                      }
+                      aria-label="מחק אפשרות"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
                 <Button
                   type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="shrink-0 text-slate-400 hover:text-red-600"
-                  onClick={() => patch({ options: (step.options || []).filter((o) => o.id !== opt.id) })}
-                  aria-label="מחק אפשרות"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1"
+                  onClick={() =>
+                    patch({
+                      options: [
+                        ...(step.options || []),
+                        { id: makeFlowStepId("opt"), label: "", nextStepId: null },
+                      ],
+                    })
+                  }
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Plus className="w-4 h-4" />
+                  הוסף כפתור
                 </Button>
               </div>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-1"
-              onClick={() =>
-                patch({
-                  options: [
-                    ...(step.options || []),
-                    { id: makeFlowStepId("opt"), label: "", nextStepId: null },
-                  ],
-                })
-              }
-            >
-              <Plus className="w-4 h-4" />
-              הוסף כפתור
-            </Button>
-          </div>
-          <StepNextSelect
-            label="ברירת מחדל (אם לא נבחר כפתור)"
-            value={step.fallbackNextStepId}
-            steps={steps}
-            currentStepId={step.id}
-            onChange={(fallbackNextStepId) => patch({ fallbackNextStepId })}
-          />
+              <StepNextSelect
+                label="ברירת מחדל (אם לא נבחר כפתור)"
+                value={step.fallbackNextStepId}
+                steps={steps}
+                currentStepId={step.id}
+                onChange={(fallbackNextStepId) => patch({ fallbackNextStepId })}
+              />
+            </>
+          )}
+
+          {(step.inputMode === "text" || step.inputMode === "freeText") && (
+            <>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-slate-600">כלל אימות</Label>
+                <Select
+                  value={step.validationType || "none"}
+                  onValueChange={(validationType) => patch({ validationType })}
+                >
+                  <SelectTrigger className="text-right" dir="rtl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent dir="rtl">
+                    {Object.values(FLOW_VALIDATION_TYPES).map((v) => (
+                      <SelectItem key={v.key} value={v.key}>
+                        {v.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {FLOW_VALIDATION_TYPES[step.validationType]?.needsValue && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-slate-600">ערך לאימות</Label>
+                  <Input
+                    value={step.validationValue || ""}
+                    onChange={(e) => patch({ validationValue: e.target.value })}
+                    placeholder={FLOW_VALIDATION_TYPES[step.validationType]?.valuePlaceholder}
+                    className="text-right"
+                    dir="rtl"
+                  />
+                </div>
+              )}
+
+              <StepNextSelect
+                label="לאחר קלט תקין — ממשיך ל"
+                value={step.nextStepId}
+                steps={steps}
+                currentStepId={step.id}
+                onChange={(nextStepId) => patch({ nextStepId })}
+              />
+
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                <Label htmlFor={`allow-image-${step.id}`} className="text-xs text-slate-600 cursor-pointer">
+                  אפשר צירוף תמונה
+                </Label>
+                <Switch
+                  id={`allow-image-${step.id}`}
+                  checked={Boolean(step.allowImageAttachment)}
+                  onCheckedChange={(allowImageAttachment) => patch({ allowImageAttachment })}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs text-slate-600">בקלט לא תקין</Label>
+                <Select
+                  value={step.onInvalid || "retry"}
+                  onValueChange={(onInvalid) => patch({ onInvalid })}
+                >
+                  <SelectTrigger className="text-right" dir="rtl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent dir="rtl">
+                    {Object.values(FLOW_INVALID_HANDLERS).map((h) => (
+                      <SelectItem key={h.key} value={h.key}>
+                        {h.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {step.onInvalid === "retry" && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-slate-600">מספר ניסיונות מקסימלי</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={10}
+                    value={step.maxRetries ?? 3}
+                    onChange={(e) => patch({ maxRetries: Number(e.target.value) })}
+                    className="text-right w-24"
+                    dir="rtl"
+                  />
+                  <p className="text-[11px] text-slate-500">לאחר חריגה — חוזרים לשלב הקודם</p>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <Label className="text-xs text-slate-600">הודעת שגיאה ללקוח</Label>
+                <Input
+                  value={step.invalidMessage || DEFAULT_INVALID_INPUT_MESSAGE}
+                  onChange={(e) => patch({ invalidMessage: e.target.value })}
+                  placeholder={DEFAULT_INVALID_INPUT_MESSAGE}
+                  className="text-right"
+                  dir="rtl"
+                />
+              </div>
+            </>
+          )}
         </>
       )}
 
@@ -332,35 +474,23 @@ export default function CustomerChatBotFlowAdmin() {
   };
 
   const removeStep = (stepId) => {
-    if (!window.confirm("למחוק את השלב? קישורים לשלב זה יוסרו.")) return;
+    if (draft.steps.length <= 1) {
+      window.alert("לא ניתן למחוק את השלב האחרון בתהליך.");
+      return;
+    }
+    const isEntry = stepId === draft.entryStepId;
+    const message = isEntry
+      ? "למחוק את שלב הכניסה? נקודת הכניסה תועבר לשלב התחלה אחר או לשלב הראשון ברשימה. קישורים לשלב זה יוסרו."
+      : "למחוק את השלב? קישורים לשלב זה יוסרו משאר השלבים.";
+    if (!window.confirm(message)) return;
     setSaved(false);
     setDraft((prev) => {
-      const steps = prev.steps.filter((s) => s.id !== stepId);
-      const scrub = (id) => (id === stepId ? null : id);
-      const cleaned = steps.map((s) => {
-        if (s.type === "start" || s.type === "message" || s.type === "transfer") {
-          return { ...s, nextStepId: scrub(s.nextStepId) };
-        }
-        if (s.type === "choice") {
-          return {
-            ...s,
-            fallbackNextStepId: scrub(s.fallbackNextStepId),
-            options: (s.options || []).map((o) => ({ ...o, nextStepId: scrub(o.nextStepId) })),
-          };
-        }
-        if (s.type === "condition") {
-          return {
-            ...s,
-            nextStepIdWhenTrue: scrub(s.nextStepIdWhenTrue),
-            nextStepIdWhenFalse: scrub(s.nextStepIdWhenFalse),
-          };
-        }
-        return s;
-      });
-      const entryStepId = prev.entryStepId === stepId ? cleaned[0]?.id || null : prev.entryStepId;
-      return { ...prev, steps: cleaned, entryStepId };
+      const next = removeFlowStep(prev, stepId);
+      if (selectedStepId === stepId) {
+        setSelectedStepId(next.entryStepId || next.steps[0]?.id || null);
+      }
+      return next;
     });
-    setSelectedStepId((id) => (id === stepId ? null : id));
   };
 
   const moveStep = (index, direction) => {
@@ -387,6 +517,10 @@ export default function CustomerChatBotFlowAdmin() {
             options: (s.options || [])
               .map((o) => ({ ...o, label: String(o.label || "").trim() }))
               .filter((o) => o.label),
+            validationValue: String(s.validationValue || "").trim(),
+            invalidMessage:
+              String(s.invalidMessage || DEFAULT_INVALID_INPUT_MESSAGE).trim() ||
+              DEFAULT_INVALID_INPUT_MESSAGE,
           };
         }
         return s;
@@ -550,6 +684,21 @@ export default function CustomerChatBotFlowAdmin() {
                         >
                           <ArrowDown className="w-3.5 h-3.5" />
                         </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-slate-400 hover:text-red-600 disabled:opacity-40"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeStep(step.id);
+                          }}
+                          disabled={draft.steps.length <= 1}
+                          aria-label="מחק שלב"
+                          title="מחק שלב"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
                       </div>
                     </div>
                   </button>
@@ -582,7 +731,8 @@ export default function CustomerChatBotFlowAdmin() {
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="text-red-600 hover:text-red-700 gap-1"
+                className="text-red-600 hover:text-red-700 gap-1 disabled:opacity-40"
+                disabled={draft.steps.length <= 1}
                 onClick={() => removeStep(selectedStep.id)}
               >
                 <Trash2 className="w-4 h-4" />

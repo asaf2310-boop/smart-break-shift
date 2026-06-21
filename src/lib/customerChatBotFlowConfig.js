@@ -44,6 +44,70 @@ export const FLOW_TRIGGER_TYPES = {
   },
 };
 
+export const FLOW_INPUT_MODES = {
+  buttons: {
+    key: "buttons",
+    label: "כפתורים (אפשרויות מוגדרות)",
+    description: "תשובות מהירה בכפתורים",
+  },
+  text: {
+    key: "text",
+    label: "הקלדה עם אימות",
+    description: "שדה טקסט עם כללי אימות (אימייל, טלפון וכו')",
+  },
+  freeText: {
+    key: "freeText",
+    label: "טקסט חופשי",
+    description: "טקסט חופשי עם כללי אימות אופציונליים",
+  },
+};
+
+export const FLOW_VALIDATION_TYPES = {
+  none: { key: "none", label: "ללא אימות", needsValue: false },
+  email: { key: "email", label: "פורמט אימייל", needsValue: false },
+  phone: { key: "phone", label: "פורמט טלפון", needsValue: false },
+  number: {
+    key: "number",
+    label: "מספר ספציפי",
+    needsValue: true,
+    valuePlaceholder: "למשל: 12345",
+  },
+  exactText: {
+    key: "exactText",
+    label: "טקסט מדויק",
+    needsValue: true,
+    valuePlaceholder: "הטקסט הנדרש במדויק",
+  },
+  containsText: {
+    key: "containsText",
+    label: "טקסט מכיל",
+    needsValue: true,
+    valuePlaceholder: "מקטע שחייב להופיע בטקסט",
+  },
+};
+
+export const FLOW_INVALID_HANDLERS = {
+  retry: { key: "retry", label: "נסה שוב באותו שלב" },
+  goBack: { key: "goBack", label: "חזור לשלב הקודם" },
+};
+
+export const DEFAULT_INVALID_INPUT_MESSAGE = "הקלט שהזנת אינו תקין. נסה/י שוב.";
+
+export const FLOW_CAPTURE_FIELDS = {
+  merchant_ref: {
+    key: "merchant_ref",
+    label: "מסוף / ח.פ",
+  },
+  guest_email: {
+    key: "guest_email",
+    label: "אימייל",
+  },
+  guest_phone: {
+    key: "guest_phone",
+    label: "טלפון",
+  },
+};
+
 export const FLOW_CONDITION_VARIABLES = {
   merchant_ref_set: {
     key: "merchant_ref_set",
@@ -136,6 +200,113 @@ function normalizeChoiceOption(raw) {
   };
 }
 
+function normalizeInputMode(raw) {
+  const mode = raw?.inputMode || "buttons";
+  return FLOW_INPUT_MODES[mode] ? mode : "buttons";
+}
+
+function normalizeValidationType(raw) {
+  const type = raw?.validationType || "none";
+  return FLOW_VALIDATION_TYPES[type] ? type : "none";
+}
+
+function normalizeOnInvalid(raw) {
+  const handler = raw?.onInvalid || "retry";
+  return FLOW_INVALID_HANDLERS[handler] ? handler : "retry";
+}
+
+function normalizeChoiceStep(raw) {
+  const inputMode = normalizeInputMode(raw);
+  const maxRetriesRaw = Number(raw?.maxRetries);
+  return {
+    id: raw.id,
+    type: "choice",
+    label: raw.label,
+    prompt: String(raw.prompt || "").trim(),
+    inputMode,
+    options: (raw.options || []).map(normalizeChoiceOption).filter(Boolean),
+    fallbackNextStepId: raw.fallbackNextStepId || null,
+    nextStepId: raw.nextStepId || null,
+    validationType: normalizeValidationType(raw),
+    validationValue: String(raw.validationValue || "").trim(),
+    captureField: FLOW_CAPTURE_FIELDS[raw.captureField] ? raw.captureField : null,
+    allowImageAttachment: Boolean(raw.allowImageAttachment),
+    onInvalid: normalizeOnInvalid(raw),
+    maxRetries: Number.isFinite(maxRetriesRaw) && maxRetriesRaw >= 0 ? maxRetriesRaw : 3,
+    invalidMessage: String(raw.invalidMessage || DEFAULT_INVALID_INPUT_MESSAGE).trim(),
+  };
+}
+
+function scrubStepReference(step, deletedStepId) {
+  const scrub = (id) => (id === deletedStepId ? null : id);
+  if (step.type === "start" || step.type === "message" || step.type === "transfer") {
+    return { ...step, nextStepId: scrub(step.nextStepId) };
+  }
+  if (step.type === "choice") {
+    return {
+      ...step,
+      fallbackNextStepId: scrub(step.fallbackNextStepId),
+      nextStepId: scrub(step.nextStepId),
+      options: (step.options || []).map((o) => ({ ...o, nextStepId: scrub(o.nextStepId) })),
+    };
+  }
+  if (step.type === "condition") {
+    return {
+      ...step,
+      nextStepIdWhenTrue: scrub(step.nextStepIdWhenTrue),
+      nextStepIdWhenFalse: scrub(step.nextStepIdWhenFalse),
+    };
+  }
+  return step;
+}
+
+function scrubInvalidStepReferences(steps) {
+  const validIds = new Set(steps.map((s) => s.id));
+  const keep = (id) => (id && validIds.has(id) ? id : null);
+  return steps.map((step) => {
+    if (step.type === "start" || step.type === "message" || step.type === "transfer") {
+      return { ...step, nextStepId: keep(step.nextStepId) };
+    }
+    if (step.type === "choice") {
+      return {
+        ...step,
+        fallbackNextStepId: keep(step.fallbackNextStepId),
+        nextStepId: keep(step.nextStepId),
+        options: (step.options || []).map((o) => ({ ...o, nextStepId: keep(o.nextStepId) })),
+      };
+    }
+    if (step.type === "condition") {
+      return {
+        ...step,
+        nextStepIdWhenTrue: keep(step.nextStepIdWhenTrue),
+        nextStepIdWhenFalse: keep(step.nextStepIdWhenFalse),
+      };
+    }
+    return step;
+  });
+}
+
+function resolveEntryStepId(steps, preferredId) {
+  if (preferredId && steps.some((s) => s.id === preferredId)) return preferredId;
+  return steps.find((s) => s.type === "start")?.id || steps[0]?.id || null;
+}
+
+/** @param {ReturnType<typeof getCustomerChatBotFlow>} flow */
+export function removeFlowStep(flow, stepId) {
+  if (!flow?.steps?.length || flow.steps.length <= 1) return flow;
+  if (!flow.steps.some((s) => s.id === stepId)) return flow;
+
+  const steps = flow.steps
+    .filter((s) => s.id !== stepId)
+    .map((s) => scrubStepReference(s, stepId));
+  const entryStepId =
+    flow.entryStepId === stepId
+      ? resolveEntryStepId(steps, null)
+      : resolveEntryStepId(steps, flow.entryStepId);
+
+  return { ...flow, steps, entryStepId };
+}
+
 function normalizeStep(raw) {
   if (!raw || typeof raw !== "object" || !raw.id || !raw.type) return null;
   const base = {
@@ -154,12 +325,7 @@ function normalizeStep(raw) {
         nextStepId: raw.nextStepId || null,
       };
     case "choice":
-      return {
-        ...base,
-        prompt: String(raw.prompt || "").trim(),
-        options: (raw.options || []).map(normalizeChoiceOption).filter(Boolean),
-        fallbackNextStepId: raw.fallbackNextStepId || null,
-      };
+      return normalizeChoiceStep({ ...base, ...raw });
     case "condition":
       return {
         ...base,
@@ -183,9 +349,8 @@ function normalizeStep(raw) {
 
 function normalizeFlow(raw) {
   if (!raw || raw.version !== 1) return { ...DEFAULT_BOT_FLOW, ...makeDefaultSteps() };
-  const steps = (raw.steps || []).map(normalizeStep).filter(Boolean);
-  const entryStepId =
-    steps.some((s) => s.id === raw.entryStepId) ? raw.entryStepId : steps[0]?.id || null;
+  const steps = scrubInvalidStepReferences((raw.steps || []).map(normalizeStep).filter(Boolean));
+  const entryStepId = resolveEntryStepId(steps, raw.entryStepId);
   return {
     version: 1,
     enabled: Boolean(raw.enabled),
@@ -274,8 +439,16 @@ export function createEmptyFlowStep(type) {
         type,
         label: "בחירה",
         prompt: "",
+        inputMode: "buttons",
         options: [{ id: makeFlowStepId("opt"), label: "אפשרות 1", nextStepId: null }],
         fallbackNextStepId: null,
+        nextStepId: null,
+        validationType: "none",
+        validationValue: "",
+        allowImageAttachment: false,
+        onInvalid: "retry",
+        maxRetries: 3,
+        invalidMessage: DEFAULT_INVALID_INPUT_MESSAGE,
       };
     case "condition":
       return {
