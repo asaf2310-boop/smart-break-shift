@@ -18,7 +18,7 @@ import {
 
 export default function AgentReviewSms() {
   const { toast } = useToast();
-  const { isLoggedIn } = useAgentSession();
+  const { isLoggedIn, bootstrapped } = useAgentSession();
   const isAdmin = useIsAdmin();
   const [phone, setPhone] = useState("");
   const [sending, setSending] = useState(false);
@@ -33,23 +33,49 @@ export default function AgentReviewSms() {
   });
 
   useEffect(() => {
+    if (!bootstrapped || !isLoggedIn) return undefined;
+
     let cancelled = false;
     (async () => {
-      const config = await fetchReviewSmsConfig();
-      if (!cancelled) {
-        setSmsConfig({ loading: false, ...config });
+      try {
+        const config = await fetchReviewSmsConfig();
+        if (!cancelled) {
+          setSmsConfig({ loading: false, ...config });
+        }
+      } catch {
+        if (!cancelled) {
+          setSmsConfig({
+            loading: false,
+            ok: false,
+            smsUrl: null,
+            source: null,
+            message: "לא הצלחנו לטעון את הגדרות הקישור",
+            dbError: "request_failed",
+            dbErrorMessage: null,
+          });
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [bootstrapped, isLoggedIn]);
 
   const normalizedPhone = useMemo(() => normalizeAgentPhone(phone), [phone]);
   const preview = useMemo(() => buildReviewSmsPreview(smsConfig.smsUrl), [smsConfig.smsUrl]);
   const lengthCheck = useMemo(() => validateReviewSmsLength(preview), [preview]);
   const previewTooLong = !lengthCheck.ok;
   const smsUrlMissing = !smsConfig.loading && !smsConfig.ok;
+
+  if (!bootstrapped) {
+    return (
+      <HypPageLayout variant="scheduling" withNav={false} contentClassName="max-w-xl px-4 py-8">
+        <div className="min-h-[40vh] flex items-center justify-center" dir="rtl">
+          <Loader2 className="w-6 h-6 animate-spin text-indigo-600" aria-label="בודק התחברות" />
+        </div>
+      </HypPageLayout>
+    );
+  }
 
   if (!isLoggedIn) {
     return <Navigate to="/" replace />;

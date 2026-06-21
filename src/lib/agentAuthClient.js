@@ -1,10 +1,30 @@
 import { supabase } from "@/api/supabase";
 
 const AGENT_AUTH_API = "/api/agent-auth";
+const AGENT_API_TIMEOUT_MS = 15000;
+
+function withAgentApiTimeout(promise, ms = AGENT_API_TIMEOUT_MS) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("agent_api_timeout")), ms);
+    }),
+  ]);
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = AGENT_API_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 async function getBearerToken() {
   if (!supabase) return null;
-  const { data } = await supabase.auth.getSession();
+  const { data } = await withAgentApiTimeout(supabase.auth.getSession());
   return data?.session?.access_token || null;
 }
 
@@ -18,20 +38,53 @@ export async function getAgentBearerHeaders(extra = {}) {
   return headers;
 }
 
-async function postAgentAuth(body, { requireBearer = false, accessToken = null } = {}) {
+function mapAgentApiTransportError(err) {
+  if (err?.name === "AbortError" || String(err?.message || err) === "agent_api_timeout") {
+    return {
+      ok: false,
+      error: "timeout",
+      message: "החיבור לשרת ארך זמן רב מדי — נסו שוב בעוד רגע",
+    };
+  }
+  return {
+    ok: false,
+    error: "request_failed",
+    message: "לא הצלחנו להתחבר לשרת",
+  };
+}
+
+async function postAgentAuth(
+  body,
+  { requireBearer = false, accessToken = null, timeoutMs = AGENT_API_TIMEOUT_MS } = {}
+) {
   const headers = { "Content-Type": "application/json" };
-  const token = accessToken || (await getBearerToken());
+  let token = accessToken;
+  try {
+    token = accessToken || (await withAgentApiTimeout(getBearerToken(), timeoutMs));
+  } catch (err) {
+    return mapAgentApiTransportError(err);
+  }
+
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   } else if (requireBearer) {
     return { ok: false, error: "unauthorized", message: "נדרשת התחברות" };
   }
 
-  const response = await fetch(AGENT_AUTH_API, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
+  let response;
+  try {
+    response = await fetchWithTimeout(
+      AGENT_AUTH_API,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      },
+      timeoutMs
+    );
+  } catch (err) {
+    return mapAgentApiTransportError(err);
+  }
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -39,6 +92,8 @@ async function postAgentAuth(body, { requireBearer = false, accessToken = null }
       ok: false,
       error: data.error || "request_failed",
       message: data.message || "הבקשה נכשלה",
+      template: data.template ?? null,
+      maxLength: data.maxLength ?? null,
     };
   }
   return { ok: true, ...data };

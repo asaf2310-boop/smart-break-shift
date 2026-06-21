@@ -30,47 +30,62 @@ export function validateReviewSmsLength(message) {
   };
 }
 
+function reviewSmsConfigFallback({ error = "request_failed", message = "לא הצלחנו לטעון את הגדרות הקישור" } = {}) {
+  return {
+    ok: false,
+    smsUrl: null,
+    source: null,
+    dbError: null,
+    dbErrorMessage: null,
+    error,
+    message,
+    template: DEFAULT_REVIEW_SMS_TEMPLATE,
+    maxLength: REVIEW_SMS_MAX_LENGTH,
+  };
+}
+
 /** Fetch configured SMS review URL from server (or client env in demo). */
 export async function fetchReviewSmsConfig() {
-  if (demoModeEnabled) {
-    const smsUrl = getClientPreviewSmsUrl();
+  try {
+    if (demoModeEnabled) {
+      const smsUrl = getClientPreviewSmsUrl();
+      return {
+        ok: Boolean(smsUrl),
+        smsUrl,
+        source: smsUrl ? "env_sms" : null,
+        error: smsUrl ? null : "review_sms_url_not_configured",
+        message: smsUrl
+          ? null
+          : "הגדירו קישור בדשבורד מנהל (או VITE_GOOGLE_REVIEW_SMS_URL בדמו מקומי).",
+        template: DEFAULT_REVIEW_SMS_TEMPLATE,
+        maxLength: REVIEW_SMS_MAX_LENGTH,
+      };
+    }
+
+    const result = await apiGetReviewSmsConfig();
+    const configLoaded = result.template != null || result.maxLength != null;
+
+    if (!configLoaded) {
+      return reviewSmsConfigFallback({
+        error: result.error || "request_failed",
+        message: result.message || "לא הצלחנו לטעון את הגדרות הקישור",
+      });
+    }
+
     return {
-      ok: Boolean(smsUrl),
-      smsUrl,
-      error: smsUrl ? null : "review_sms_url_not_configured",
-      message: smsUrl
-        ? null
-        : "הגדירו קישור בדשבורד מנהל (או VITE_GOOGLE_REVIEW_SMS_URL בדמו מקומי).",
-      template: DEFAULT_REVIEW_SMS_TEMPLATE,
-      maxLength: REVIEW_SMS_MAX_LENGTH,
+      ok: Boolean(result.smsUrl),
+      smsUrl: result.smsUrl || null,
+      source: result.source || null,
+      dbError: result.dbError || null,
+      dbErrorMessage: result.dbErrorMessage || null,
+      error: result.error || null,
+      message: result.message || null,
+      template: result.template || DEFAULT_REVIEW_SMS_TEMPLATE,
+      maxLength: result.maxLength || REVIEW_SMS_MAX_LENGTH,
     };
+  } catch {
+    return reviewSmsConfigFallback();
   }
-
-  const result = await apiGetReviewSmsConfig();
-  const configLoaded = result.template != null || result.maxLength != null;
-
-  if (!configLoaded) {
-    return {
-      ok: false,
-      smsUrl: null,
-      error: result.error || "request_failed",
-      message: result.message || "לא הצלחנו לטעון את הגדרות הקישור",
-      template: DEFAULT_REVIEW_SMS_TEMPLATE,
-      maxLength: REVIEW_SMS_MAX_LENGTH,
-    };
-  }
-
-  return {
-    ok: Boolean(result.smsUrl),
-    smsUrl: result.smsUrl || null,
-    source: result.source || null,
-    dbError: result.dbError || null,
-    dbErrorMessage: result.dbErrorMessage || null,
-    error: result.error || null,
-    message: result.message || null,
-    template: result.template || DEFAULT_REVIEW_SMS_TEMPLATE,
-    maxLength: result.maxLength || REVIEW_SMS_MAX_LENGTH,
-  };
 }
 
 /** שליחת SMS ללקוח עם קישור לדירוג בגוגל */

@@ -41,6 +41,12 @@ export default function ReviewSmsSettingsPanel() {
       }
       const configLoaded = result.template != null || result.maxLength != null;
       if (!configLoaded) {
+        setSettings((prev) => ({
+          ...prev,
+          ok: false,
+          message: result.message || "לא הצלחנו לטעון את הגדרות הקישור",
+          dbError: result.error || "request_failed",
+        }));
         toast({ title: "שגיאה", description: result.message || "לא הצלחנו לטעון את הגדרות הקישור", variant: "destructive" });
         return;
       }
