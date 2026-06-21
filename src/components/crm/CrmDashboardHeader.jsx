@@ -9,9 +9,17 @@ export default function CrmDashboardHeader({
   className,
 }) {
   const showSupabaseBadge = isCrmCloudEnabled();
+  const showFloatingBadge = showSupabaseBadge || demoModeEnabled;
 
   return (
-    <header className={cn("crm-dashboard-header relative mb-6", className)} dir="rtl">
+    <header
+      className={cn(
+        "crm-dashboard-header relative mb-6",
+        showFloatingBadge ? "mt-5" : "mt-1",
+        className
+      )}
+      dir="rtl"
+    >
       <div className="relative flex flex-col items-center justify-between gap-4 rounded-[32px] border border-white/40 bg-white/60 p-5 shadow-xl shadow-slate-100/20 backdrop-blur-xl md:flex-row">
         {showSupabaseBadge ? (
           <div

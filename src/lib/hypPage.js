@@ -36,7 +36,7 @@ export function schedulingPageRootClass(className) {
 
       ? "hyp-page hyp-scheduling-root min-h-screen font-heebo"
 
-      : "min-h-screen m3-page pt-app-nav font-heebo",
+      : "min-h-screen m3-page font-heebo",
 
     className
 

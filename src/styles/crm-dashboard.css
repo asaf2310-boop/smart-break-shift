@@ -75,10 +75,6 @@
   backdrop-filter: blur(8px);
 }
 
-.crm-dashboard-header {
-  margin-top: 0.25rem;
-}
-
 .demo-tag {
   display: inline-flex;
   align-items: center;

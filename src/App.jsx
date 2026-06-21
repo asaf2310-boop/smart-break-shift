@@ -67,6 +67,7 @@ import { brandVisualEnabled } from '@/lib/brandShell';
 import { applyHypDemoDocumentClasses, hypDemoAppShellClass } from '@/lib/hypPage';
 import { useEffect } from 'react';
 import { useAgentSession } from '@/hooks/useAgentSession';
+import { cn } from '@/lib/utils';
 
 /** בודק בכל טעינה/מיקוד שהסשן תקף — מנתק מי שלא הגדיר סיסמה */
 function AgentSessionGuard() {
@@ -78,6 +79,26 @@ function TopAppNav() {
   const { pathname } = useLocation();
   if (!hasTopAppNav(pathname)) return null;
   return <AppNav />;
+}
+
+/** Offset for fixed AppNav — single place for all routed pages. */
+function AppMain({ children }) {
+  const { pathname } = useLocation();
+  const showTopNav = hasTopAppNav(pathname);
+
+  useEffect(() => {
+    if (showTopNav) {
+      document.documentElement.setAttribute('data-top-nav', '');
+    } else {
+      document.documentElement.removeAttribute('data-top-nav');
+    }
+  }, [showTopNav]);
+
+  return (
+    <main className={cn(showTopNav && 'pt-app-nav')}>
+      {children}
+    </main>
+  );
 }
 
 const AuthenticatedApp = () => {
@@ -112,7 +133,8 @@ const AuthenticatedApp = () => {
   return (
     <div className={hypDemoAppShellClass()}>
       <TopAppNav />
-      <Routes>
+      <AppMain>
+        <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/breaks" element={<ModuleGate module="breaks"><BreakScheduler /></ModuleGate>} />
         <Route path="/shifts" element={<ModuleGate module="shifts"><RouteErrorBoundary><ShiftScheduler /></RouteErrorBoundary></ModuleGate>} />
@@ -162,7 +184,8 @@ const AuthenticatedApp = () => {
         />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="*" element={<PageNotFound />} />
-      </Routes>
+        </Routes>
+      </AppMain>
       <FloatingChatWidget />
       <FloatingKnowledgeWidget />
       <SoftphoneWidget />

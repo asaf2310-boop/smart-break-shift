@@ -26,13 +26,7 @@ export default function HypPageLayout({
     return (
       <div className={schedulingPageRootClass(className)} dir="rtl">
         {!brandVisualEnabled && <SchedulingAmbient />}
-        <div
-          className={cn(
-            "relative z-10 mx-auto w-full",
-            withNav && "pt-app-nav",
-            contentClassName
-          )}
-        >
+        <div className={cn("relative z-10 mx-auto w-full", contentClassName)}>
           {children}
         </div>
       </div>
@@ -40,7 +34,7 @@ export default function HypPageLayout({
   }
 
   return (
-    <div className={m3PageClass(cn(withNav && "pt-app-nav", className))} dir="rtl">
+    <div className={m3PageClass(className)} dir="rtl">
       {children}
     </div>
   );

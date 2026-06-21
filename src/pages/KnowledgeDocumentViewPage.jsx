@@ -76,7 +76,7 @@ export default function KnowledgeDocumentViewPage() {
   const hasText = useMemo(() => Boolean(String(doc?.content || "").trim()), [doc]);
 
   return (
-    <div className={m3PageClass("pt-app-nav min-h-screen")} dir="rtl">
+    <div className={m3PageClass("min-h-screen")} dir="rtl">
       <div className="max-w-3xl mx-auto px-4 py-6 sm:py-10">
         <div className="flex items-center justify-between gap-3 mb-6">
           <div className="flex items-center gap-3 min-w-0">

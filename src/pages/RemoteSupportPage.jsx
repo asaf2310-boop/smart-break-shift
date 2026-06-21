@@ -106,7 +106,7 @@ export default function RemoteSupportPage() {
   };
 
   return (
-    <div className={m3PageClass("pt-app-nav")} dir="rtl">
+    <div className={m3PageClass()} dir="rtl">
       <div className="max-w-2xl mx-auto px-4 py-6 sm:py-10">
         <motion.div
           initial={{ opacity: 0, y: -12 }}

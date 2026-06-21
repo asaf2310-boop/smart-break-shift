@@ -138,14 +138,6 @@ function FloatingChatWidgetChrome() {
       : 600;
 
   useEffect(() => {
-    if (hasTopNav) {
-      document.documentElement.setAttribute("data-top-nav", "");
-    } else {
-      document.documentElement.removeAttribute("data-top-nav");
-    }
-  }, [hasTopNav]);
-
-  useEffect(() => {
     setPanelHeight((h) => clampChatPanelHeight(h, window.innerHeight, heightOptions));
   }, [heightOptions]);
 
