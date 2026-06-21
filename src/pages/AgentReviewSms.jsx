@@ -11,6 +11,7 @@ import { formatAgentPhoneDisplay, normalizeAgentPhone } from "@/lib/agentPhone";
 import {
   buildReviewSmsPreview,
   fetchReviewSmsConfig,
+  getInitialReviewSmsConfigState,
   REVIEW_SMS_MAX_LENGTH,
   sendReviewSms,
   validateReviewSmsLength,
@@ -18,19 +19,11 @@ import {
 
 export default function AgentReviewSms() {
   const { toast } = useToast();
-  const { isLoggedIn, bootstrapped } = useAgentSession();
+  const { isLoggedIn, bootstrapped, accessToken } = useAgentSession();
   const isAdmin = useIsAdmin();
   const [phone, setPhone] = useState("");
   const [sending, setSending] = useState(false);
-  const [smsConfig, setSmsConfig] = useState({
-    loading: true,
-    ok: false,
-    smsUrl: null,
-    source: null,
-    message: null,
-    dbError: null,
-    dbErrorMessage: null,
-  });
+  const [smsConfig, setSmsConfig] = useState(getInitialReviewSmsConfigState);
 
   useEffect(() => {
     if (!bootstrapped || !isLoggedIn) return undefined;
@@ -38,46 +31,42 @@ export default function AgentReviewSms() {
     let cancelled = false;
     (async () => {
       try {
-        const config = await fetchReviewSmsConfig();
+        const config = await fetchReviewSmsConfig({ accessToken });
         if (!cancelled) {
-          setSmsConfig({ loading: false, ...config });
+          setSmsConfig({ loading: false, refreshing: false, ...config });
         }
       } catch {
         if (!cancelled) {
-          setSmsConfig({
+          setSmsConfig((prev) => ({
+            ...prev,
             loading: false,
+            refreshing: false,
             ok: false,
             smsUrl: null,
             source: null,
             message: "לא הצלחנו לטעון את הגדרות הקישור",
             dbError: "request_failed",
             dbErrorMessage: null,
-          });
+          }));
         }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [bootstrapped, isLoggedIn]);
+  }, [bootstrapped, isLoggedIn, accessToken]);
 
   const normalizedPhone = useMemo(() => normalizeAgentPhone(phone), [phone]);
   const preview = useMemo(() => buildReviewSmsPreview(smsConfig.smsUrl), [smsConfig.smsUrl]);
   const lengthCheck = useMemo(() => validateReviewSmsLength(preview), [preview]);
   const previewTooLong = !lengthCheck.ok;
-  const smsUrlMissing = !smsConfig.loading && !smsConfig.ok;
+  const configPending = smsConfig.loading || smsConfig.refreshing;
+  const smsUrlMissing = !configPending && !smsConfig.ok;
+  const formDisabled = !bootstrapped || sending;
+  const sendDisabled =
+    !bootstrapped || !isLoggedIn || sending || !normalizedPhone || previewTooLong || configPending || smsUrlMissing;
 
-  if (!bootstrapped) {
-    return (
-      <HypPageLayout variant="scheduling" withNav={false} contentClassName="max-w-xl px-4 py-8">
-        <div className="min-h-[40vh] flex items-center justify-center" dir="rtl">
-          <Loader2 className="w-6 h-6 animate-spin text-indigo-600" aria-label="בודק התחברות" />
-        </div>
-      </HypPageLayout>
-    );
-  }
-
-  if (!isLoggedIn) {
+  if (bootstrapped && !isLoggedIn) {
     return <Navigate to="/" replace />;
   }
 
@@ -129,6 +118,13 @@ export default function AgentReviewSms() {
         </Link>
       </div>
 
+      {!bootstrapped && (
+        <p className="mb-4 text-xs text-slate-400 text-center inline-flex items-center gap-2 justify-center w-full" dir="rtl">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
+          בודק התחברות...
+        </p>
+      )}
+
       <motion.div
         initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -158,10 +154,22 @@ export default function AgentReviewSms() {
             : "border-slate-200 bg-slate-50 text-slate-700"
         }`}
       >
-        {smsConfig.loading ? (
+        {configPending ? (
           <span className="inline-flex items-center gap-2 justify-center">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            טוען קישור SMS...
+            {smsConfig.refreshing && smsConfig.smsUrl ? (
+              <>
+                הקישור שיישלח ב-SMS:{" "}
+                <code className="text-xs font-mono" dir="ltr">
+                  {smsConfig.smsUrl}
+                </code>
+                <Loader2 className="w-3.5 h-3.5 animate-spin opacity-60" aria-label="מעדכן קישור" />
+              </>
+            ) : (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                טוען קישור SMS...
+              </>
+            )}
           </span>
         ) : smsUrlMissing ? (
           <span>
@@ -177,7 +185,7 @@ export default function AgentReviewSms() {
             </code>
           </>
         )}
-        {!smsConfig.loading && smsUrlMissing && (
+        {!configPending && smsUrlMissing && (
           <p className="mt-2 text-xs opacity-80">
             {isAdmin ? (
               <>
@@ -218,11 +226,11 @@ export default function AgentReviewSms() {
             inputMode="tel"
             autoComplete="tel"
             dir="ltr"
-            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 disabled:opacity-60"
             placeholder="05XXXXXXXX"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            disabled={sending}
+            disabled={formDisabled}
           />
           {phone && !normalizedPhone && (
             <p className="mt-1.5 text-xs text-red-500">מספר לא תקין — השתמשו בפורמט ישראלי</p>
@@ -254,13 +262,18 @@ export default function AgentReviewSms() {
 
         <button
           type="submit"
-          disabled={sending || !normalizedPhone || previewTooLong || smsConfig.loading || smsUrlMissing}
+          disabled={sendDisabled}
           className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 text-white font-semibold py-3 text-sm hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {sending ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
               שולח...
+            </>
+          ) : configPending ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              ממתין להגדרות...
             </>
           ) : (
             "שלח SMS"

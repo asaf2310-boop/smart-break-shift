@@ -1,17 +1,40 @@
 import { useCallback, useEffect, useState } from "react";
 import { demoModeEnabled } from "@/api/demoClient";
+import { supabase } from "@/api/supabase";
 import {
   restoreSupabaseAgentSession,
   validateAndRefreshAgentSession,
 } from "@/lib/agentAuth";
+import { primeBearerToken, getCachedBearerToken } from "@/lib/agentAuthClient";
+
+async function resolveAccessToken() {
+  const cached = getCachedBearerToken();
+  if (cached) return cached;
+  if (demoModeEnabled || !supabase) return null;
+  try {
+    const { data } = await supabase.auth.getSession();
+    const token = data?.session?.access_token || null;
+    if (token) primeBearerToken(token);
+    return token;
+  } catch {
+    return null;
+  }
+}
 
 export function useAgentSession() {
   const [session, setSession] = useState(null);
+  const [accessToken, setAccessToken] = useState(null);
   const [bootstrapped, setBootstrapped] = useState(false);
 
   const refresh = useCallback(async () => {
     const valid = await validateAndRefreshAgentSession();
     setSession(valid);
+    if (valid) {
+      const token = getCachedBearerToken() || (await resolveAccessToken());
+      setAccessToken(token);
+    } else {
+      setAccessToken(null);
+    }
     return valid;
   }, []);
 
@@ -24,10 +47,18 @@ export function useAgentSession() {
         if (cancelled) return;
         if (restored) {
           setSession(restored);
+          const token = getCachedBearerToken() || (await resolveAccessToken());
+          if (!cancelled && token) setAccessToken(token);
           return;
         }
         const valid = await validateAndRefreshAgentSession();
-        if (!cancelled) setSession(valid);
+        if (!cancelled) {
+          setSession(valid);
+          if (valid) {
+            const token = getCachedBearerToken() || (await resolveAccessToken());
+            if (token) setAccessToken(token);
+          }
+        }
       } finally {
         if (!cancelled) setBootstrapped(true);
       }
@@ -61,6 +92,7 @@ export function useAgentSession() {
 
   return {
     session,
+    accessToken,
     displayName: hasValidSession ? session.displayName : "",
     isLoggedIn: hasValidSession,
     bootstrapped,

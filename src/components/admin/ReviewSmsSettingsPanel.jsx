@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { Loader2, Save, Star } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { apiGetReviewSmsConfig, apiUpdateReviewSmsSettings } from "@/lib/agentAuthClient";
+import { useAgentSession } from "@/hooks/useAgentSession";
+import { clearReviewSmsConfigCache, readReviewSmsConfigCache } from "@/lib/reviewSms";
 
 function formatSourceLabel(source) {
   if (source === "db") return "נשמר במערכת";
@@ -10,31 +12,74 @@ function formatSourceLabel(source) {
   return null;
 }
 
+function settingsFromApiResult(result) {
+  return {
+    smsUrl: result.smsUrl || null,
+    dbUrl: result.dbUrl || null,
+    dbUrlMasked: result.dbUrlMasked || null,
+    dbTargetUrl: result.dbTargetUrl || null,
+    dbTargetUrlMasked: result.dbTargetUrlMasked || null,
+    source: result.source || null,
+    ok: Boolean(result.smsUrl),
+    message: result.message || null,
+    dbError: result.dbError || null,
+    dbErrorMessage: result.dbErrorMessage || null,
+    shortened: false,
+    shortenProvider: null,
+  };
+}
+
+function getInitialAdminSettingsState() {
+  const cached = readReviewSmsConfigCache();
+  if (cached?.smsUrl) {
+    return {
+      loading: false,
+      refreshing: true,
+      settings: {
+        ...settingsFromApiResult(cached),
+        dbUrl: cached.smsUrl,
+        dbUrlMasked: cached.smsUrl,
+      },
+      urlInput: cached.smsUrl,
+    };
+  }
+  return {
+    loading: true,
+    refreshing: false,
+    settings: {
+      smsUrl: null,
+      dbUrl: null,
+      dbUrlMasked: null,
+      dbTargetUrl: null,
+      dbTargetUrlMasked: null,
+      source: null,
+      ok: false,
+      message: null,
+      dbError: null,
+      dbErrorMessage: null,
+      shortened: false,
+      shortenProvider: null,
+    },
+    urlInput: "",
+  };
+}
+
 /** הגדרת קישור דירוג גוגל ל-SMS — ניהול מנהל */
 export default function ReviewSmsSettingsPanel() {
   const { toast } = useToast();
-  const [loading, setLoading] = useState(true);
+  const { accessToken, bootstrapped, isLoggedIn } = useAgentSession();
+  const [initial] = useState(getInitialAdminSettingsState);
+  const [loading, setLoading] = useState(initial.loading);
+  const [refreshing, setRefreshing] = useState(initial.refreshing);
   const [saving, setSaving] = useState(false);
-  const [urlInput, setUrlInput] = useState("");
-  const [settings, setSettings] = useState({
-    smsUrl: null,
-    dbUrl: null,
-    dbUrlMasked: null,
-    dbTargetUrl: null,
-    dbTargetUrlMasked: null,
-    source: null,
-    ok: false,
-    message: null,
-    dbError: null,
-    dbErrorMessage: null,
-    shortened: false,
-    shortenProvider: null,
-  });
+  const [urlInput, setUrlInput] = useState(initial.urlInput);
+  const [settings, setSettings] = useState(initial.settings);
 
   const loadSettings = async () => {
-    setLoading(true);
+    if (!loading) setRefreshing(true);
+    else setLoading(true);
     try {
-      const result = await apiGetReviewSmsConfig();
+      const result = await apiGetReviewSmsConfig({ accessToken });
       if (result.error === "unauthorized") {
         setSettings((prev) => ({ ...prev, message: result.message }));
         return;
@@ -50,31 +95,22 @@ export default function ReviewSmsSettingsPanel() {
         toast({ title: "שגיאה", description: result.message || "לא הצלחנו לטעון את הגדרות הקישור", variant: "destructive" });
         return;
       }
-      setSettings({
-        smsUrl: result.smsUrl || null,
-        dbUrl: result.dbUrl || null,
-        dbUrlMasked: result.dbUrlMasked || null,
-        dbTargetUrl: result.dbTargetUrl || null,
-        dbTargetUrlMasked: result.dbTargetUrlMasked || null,
-        source: result.source || null,
-        ok: Boolean(result.smsUrl),
-        message: result.message || null,
-        dbError: result.dbError || null,
-        dbErrorMessage: result.dbErrorMessage || null,
-        shortened: false,
-        shortenProvider: null,
-      });
+      const next = settingsFromApiResult(result);
+      setSettings(next);
       setUrlInput(result.dbTargetUrl || result.dbUrl || "");
     } catch {
       toast({ title: "שגיאה", description: "לא הצלחנו לטעון את הגדרות הקישור", variant: "destructive" });
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
   useEffect(() => {
+    if (!bootstrapped || !isLoggedIn) return undefined;
     void loadSettings();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once when auth is ready
+  }, [bootstrapped, isLoggedIn, accessToken]);
 
   const handleSave = async (event) => {
     event.preventDefault();
@@ -89,6 +125,7 @@ export default function ReviewSmsSettingsPanel() {
         });
         return;
       }
+      clearReviewSmsConfigCache();
       setSettings({
         smsUrl: result.smsUrl || null,
         dbUrl: result.dbUrl || null,
@@ -115,6 +152,7 @@ export default function ReviewSmsSettingsPanel() {
   const sourceLabel = formatSourceLabel(settings.source);
   const hasDistinctTarget =
     settings.dbTargetUrl && settings.dbUrl && settings.dbTargetUrl !== settings.dbUrl;
+  const statusPending = loading || refreshing;
 
   return (
     <section className="rounded-3xl border border-slate-200 bg-white shadow-sm p-6" dir="rtl">
@@ -131,10 +169,10 @@ export default function ReviewSmsSettingsPanel() {
             </code>{" "}
             — לא דומיין האפליקציה ולא /go/review.
           </p>
-          {loading ? (
+          {statusPending ? (
             <p className="mt-3 text-sm text-slate-400 inline-flex items-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin" />
-              טוען...
+              {refreshing && settings.dbUrlMasked ? "מעדכן..." : "טוען..."}
             </p>
           ) : (
             <div className="mt-3 space-y-1 text-sm">
@@ -197,7 +235,7 @@ export default function ReviewSmsSettingsPanel() {
             placeholder="https://g.page/r/…/review או קישור גוגל ארוך"
             value={urlInput}
             onChange={(e) => setUrlInput(e.target.value)}
-            disabled={loading || saving}
+            disabled={saving}
           />
           <p className="mt-1.5 text-xs text-slate-400 leading-relaxed">
             חייב להיות https. קישורים ארוכים מ-120 תווים יקוצרו אוטומטית (is.gd / TinyURL) לפני שליחה ב-SMS.
@@ -205,7 +243,7 @@ export default function ReviewSmsSettingsPanel() {
         </div>
         <button
           type="submit"
-          disabled={loading || saving || !urlInput.trim()}
+          disabled={statusPending || saving || !urlInput.trim()}
           className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 text-white font-semibold px-4 py-2.5 text-sm hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}

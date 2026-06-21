@@ -15,6 +15,7 @@ import {
   apiCompleteAgentPasswordSetup,
   apiRequestFirstLogin,
   apiSyncAgentAuth,
+  primeBearerToken,
 } from "@/lib/agentAuthClient";
 import {
   clearSensitiveClientStorage,
@@ -157,6 +158,9 @@ async function getSupabaseAuthUserId() {
   if (!supabase || demoModeEnabled) return null;
   try {
     const { data: { session: authSession } } = await withAuthTimeout(supabase.auth.getSession());
+    if (authSession?.access_token) {
+      primeBearerToken(authSession.access_token);
+    }
     return authSession?.user?.id || null;
   } catch {
     return null;
@@ -670,6 +674,9 @@ export async function restoreSupabaseAgentSession() {
 
   const existing = getAgentSession();
   const { data: { session: authSession } } = await supabase.auth.getSession();
+  if (authSession?.access_token) {
+    primeBearerToken(authSession.access_token);
+  }
   if (!authSession?.user) {
     if (existing) clearAgentSession();
     return null;

@@ -1,7 +1,11 @@
 import { supabase } from "@/api/supabase";
 
 const AGENT_AUTH_API = "/api/agent-auth";
-const AGENT_API_TIMEOUT_MS = 15000;
+const AGENT_API_TIMEOUT_MS = 6000;
+const BEARER_TOKEN_CACHE_MS = 60 * 1000;
+
+let cachedBearerToken = null;
+let cachedBearerTokenAt = 0;
 
 function withAgentApiTimeout(promise, ms = AGENT_API_TIMEOUT_MS) {
   return Promise.race([
@@ -22,10 +26,37 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = AGENT_API_TIMEOUT
   }
 }
 
-async function getBearerToken() {
+/** Skip redundant getSession when bootstrap already resolved the JWT. */
+export function primeBearerToken(token) {
+  if (!token) return;
+  cachedBearerToken = token;
+  cachedBearerTokenAt = Date.now();
+}
+
+export function clearBearerTokenCache() {
+  cachedBearerToken = null;
+  cachedBearerTokenAt = 0;
+}
+
+export function getCachedBearerToken() {
+  if (cachedBearerToken && Date.now() - cachedBearerTokenAt < BEARER_TOKEN_CACHE_MS) {
+    return cachedBearerToken;
+  }
+  return null;
+}
+
+async function getBearerToken(accessToken = null) {
+  if (accessToken) return accessToken;
+  if (cachedBearerToken && Date.now() - cachedBearerTokenAt < BEARER_TOKEN_CACHE_MS) {
+    return cachedBearerToken;
+  }
   if (!supabase) return null;
   const { data } = await withAgentApiTimeout(supabase.auth.getSession());
-  return data?.session?.access_token || null;
+  const token = data?.session?.access_token || null;
+  if (token) {
+    primeBearerToken(token);
+  }
+  return token;
 }
 
 /** Build fetch headers with optional Bearer token for protected API routes. */
@@ -60,7 +91,7 @@ async function postAgentAuth(
   const headers = { "Content-Type": "application/json" };
   let token = accessToken;
   try {
-    token = accessToken || (await withAgentApiTimeout(getBearerToken(), timeoutMs));
+    token = await withAgentApiTimeout(getBearerToken(accessToken), timeoutMs);
   } catch (err) {
     return mapAgentApiTransportError(err);
   }
@@ -185,8 +216,11 @@ export async function apiSendReviewSms({ phone }) {
   );
 }
 
-export async function apiGetReviewSmsConfig() {
-  return postAgentAuth({ action: "get_review_sms_settings" }, { requireBearer: true });
+export async function apiGetReviewSmsConfig({ accessToken = null, timeoutMs = AGENT_API_TIMEOUT_MS } = {}) {
+  return postAgentAuth(
+    { action: "get_review_sms_settings" },
+    { requireBearer: true, accessToken, timeoutMs }
+  );
 }
 
 export async function apiUpdateReviewSmsSettings({ googleReviewSmsUrl }) {
