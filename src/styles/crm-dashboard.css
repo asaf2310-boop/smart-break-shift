@@ -84,11 +84,44 @@
 }
 
 .dashboard-title {
+  font-family: "Heebo", var(--font-heebo, "Rubik", sans-serif);
   font-size: clamp(1.75rem, 4vw, 2.5rem);
-  color: var(--color-primary);
-  font-weight: 800;
   margin: 0 0 0.5rem;
-  line-height: 1.2;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35em 0.45em;
+}
+
+.dashboard-title-brand {
+  font-weight: 700;
+  color: var(--color-primary);
+  letter-spacing: 0.06em;
+}
+
+.dashboard-title-sep {
+  font-weight: 300;
+  color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+
+.dashboard-title-sub {
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  background: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    color-mix(in srgb, var(--color-primary) 72%, #475569) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.dashboard-title-plain {
+  font-weight: 600;
+  color: var(--color-primary);
 }
 
 .user-info {
@@ -100,17 +133,6 @@
 .user-info strong {
   color: var(--color-primary);
   font-weight: 700;
-}
-
-.supabase-tag {
-  display: inline-block;
-  margin-top: 0.75rem;
-  background-color: var(--color-accent-sky);
-  color: var(--color-primary);
-  border-radius: var(--crm-radius-pill);
-  padding: 0.25rem 1rem;
-  font-weight: 600;
-  font-size: 0.75rem;
 }
 
 .demo-tag {

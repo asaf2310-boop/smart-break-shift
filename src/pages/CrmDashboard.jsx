@@ -19,7 +19,6 @@ import {
 } from "lucide-react";
 import { getStoredAgentName } from "@/constants/scheduling";
 import { demoModeEnabled } from "@/api/demoClient";
-import { isCrmCloudEnabled } from "@/api/crmCloudMode";
 import {
   claimDepartmentReferral,
   createCustomer,
@@ -75,6 +74,24 @@ function getInitialDashboardCounts(agentName) {
   const cached = readCrmDashboardCountsCache(agentName);
   if (cached) return cached;
   return Object.fromEntries(DASHBOARD_CARDS.map(({ filter }) => [filter, 0]));
+}
+
+const CRM_TITLE_SPLIT = /^CRM\s*[—–-]\s*(.+)$/u;
+
+function DashboardTitle({ title }) {
+  const match = CRM_TITLE_SPLIT.exec(title);
+  if (match) {
+    return (
+      <h1 className="dashboard-title">
+        <span className="dashboard-title-brand">CRM</span>
+        <span className="dashboard-title-sep" aria-hidden="true">
+          —
+        </span>
+        <span className="dashboard-title-sub">{match[1]}</span>
+      </h1>
+    );
+  }
+  return <h1 className="dashboard-title dashboard-title-plain">{title}</h1>;
 }
 
 function ReferralCard({ referral, variant = "personal", onClaim = null, showClosedAt = false, onOpen = null }) {
@@ -457,11 +474,9 @@ export default function CrmDashboard() {
           </header>
 
           <div className="dashboard-title-panel">
-            <h1 className="dashboard-title">{headerTitle}</h1>
+            <DashboardTitle title={headerTitle} />
             <p className="user-info">{headerDescription}</p>
-            {isCrmCloudEnabled() ? (
-              <span className="supabase-tag">ענן · Supabase</span>
-            ) : demoModeEnabled ? (
+            {demoModeEnabled ? (
               <span className="demo-tag">דמו · localStorage</span>
             ) : null}
           </div>
