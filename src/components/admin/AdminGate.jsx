@@ -1,15 +1,23 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { ShieldAlert } from "lucide-react";
+import { Loader2, ShieldAlert } from "lucide-react";
 import { demoModeEnabled } from "@/api/demoClient";
 import AgentLogin from "@/components/auth/AgentLogin";
 import { LoginShell } from "@/components/auth/LoginShell";
 import { useAgentSession } from "@/hooks/useAgentSession";
-import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { m3PageClass } from "@/lib/hypPage";
 
 export default function AdminGate({ children }) {
-  const { isLoggedIn, refresh, session } = useAgentSession();
-  const isAdmin = useIsAdmin();
+  const { isLoggedIn, refresh, session, bootstrapped } = useAgentSession();
+  const isAdmin = Boolean(isLoggedIn && session?.isAdmin === true);
+
+  if (!bootstrapped) {
+    return (
+      <div className={m3PageClass("flex items-center justify-center p-12")} dir="rtl">
+        <Loader2 className="w-6 h-6 animate-spin text-primary" aria-label="בודק הרשאות מנהל" />
+      </div>
+    );
+  }
 
   if (!isLoggedIn) {
     return (

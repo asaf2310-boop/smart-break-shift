@@ -43,14 +43,8 @@ export function useAgentSession() {
 
     const bootstrap = async () => {
       try {
-        const restored = await restoreSupabaseAgentSession();
+        await restoreSupabaseAgentSession();
         if (cancelled) return;
-        if (restored) {
-          setSession(restored);
-          const token = getCachedBearerToken() || (await resolveAccessToken());
-          if (!cancelled && token) setAccessToken(token);
-          return;
-        }
         const valid = await validateAndRefreshAgentSession();
         if (!cancelled) {
           setSession(valid);
