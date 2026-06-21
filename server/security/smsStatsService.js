@@ -4,6 +4,7 @@ const SMS_ACTIONS = ["send_review_sms", "send_schedule_sms"];
 const DEFAULT_DAYS = 30;
 const MAX_DAYS = 365;
 const PAGE_SIZE = 1000;
+const ISRAEL_TZ = "Asia/Jerusalem";
 
 function startOfDayIso(date) {
   const d = new Date(date);
@@ -55,6 +56,37 @@ function parseDateRange({ fromDate, toDate, days } = {}) {
   };
 }
 
+function toIsraelDateStr(isoTimestamp) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: ISRAEL_TZ }).format(new Date(isoTimestamp));
+}
+
+function enumerateDateRange(fromDateStr, toDateStr) {
+  const [fy, fm, fd] = fromDateStr.split("-").map(Number);
+  const [ty, tm, td] = toDateStr.split("-").map(Number);
+  const cur = new Date(fy, fm - 1, fd);
+  const end = new Date(ty, tm - 1, td);
+  const dates = [];
+  while (cur <= end) {
+    dates.push(
+      `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`
+    );
+    cur.setDate(cur.getDate() + 1);
+  }
+  return dates;
+}
+
+function ensureDailyRow(map, date) {
+  if (!map.has(date)) {
+    map.set(date, {
+      date,
+      total: 0,
+      send_review_sms: 0,
+      send_schedule_sms: 0,
+    });
+  }
+  return map.get(date);
+}
+
 function agentKey(agentId, agentName) {
   if (agentId) return `id:${agentId}`;
   const name = String(agentName || "").trim();
@@ -100,7 +132,7 @@ async function fetchSmsAuditRows(supabase, fromIso, toIso) {
   while (true) {
     const { data, error } = await supabase
       .from("security_audit_log")
-      .select("actor_agent_id, action, metadata, agents(display_name)")
+      .select("created_at, actor_agent_id, action, metadata, agents(display_name)")
       .in("action", SMS_ACTIONS)
       .gte("created_at", fromIso)
       .lte("created_at", toIso)
@@ -138,6 +170,7 @@ export async function getSmsStatsByAgent({ fromDate, toDate, days } = {}) {
   }
 
   const byAgent = new Map();
+  const byDay = new Map();
 
   for (const row of auditRows) {
     const action = String(row.action || "").trim();
@@ -154,7 +187,22 @@ export async function getSmsStatsByAgent({ fromDate, toDate, days } = {}) {
     const stats = ensureAgentRow(byAgent, key, target);
     stats[action] += 1;
     stats.total += 1;
+
+    const dayKey = toIsraelDateStr(row.created_at);
+    const dayStats = ensureDailyRow(byDay, dayKey);
+    dayStats[action] += 1;
+    dayStats.total += 1;
   }
+
+  const daily = enumerateDateRange(range.fromDate, range.toDate).map(
+    (date) =>
+      byDay.get(date) || {
+        date,
+        total: 0,
+        send_review_sms: 0,
+        send_schedule_sms: 0,
+      }
+  );
 
   const agents = [...byAgent.values()].sort((a, b) => {
     const diff = Number(b.total) - Number(a.total);
@@ -183,6 +231,7 @@ export async function getSmsStatsByAgent({ fromDate, toDate, days } = {}) {
     },
     agents,
     totals,
+    daily,
     rowCount: auditRows.length,
   };
 }
