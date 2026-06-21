@@ -3,12 +3,14 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowRight, MessageCircle } from "lucide-react";
 import CustomerChatBotAdmin from "@/components/admin/CustomerChatBotAdmin";
+import CustomerChatBotFlowAdmin from "@/components/admin/CustomerChatBotFlowAdmin";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import HypPageLayout from "@/components/hyp/HypPageLayout";
 import { hypHeaderIconClass } from "@/lib/hypPage";
 
 export default function AdminCustomerChat() {
   return (
-    <HypPageLayout variant="scheduling" withNav={false} contentClassName="max-w-3xl px-4 py-8">
+    <HypPageLayout variant="scheduling" withNav={false} contentClassName="max-w-4xl px-4 py-8">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <div
@@ -35,7 +37,18 @@ export default function AdminCustomerChat() {
       </div>
 
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-        <CustomerChatBotAdmin />
+        <Tabs defaultValue="messages" dir="rtl" className="space-y-4">
+          <TabsList className="w-full sm:w-auto">
+            <TabsTrigger value="messages">הודעות</TabsTrigger>
+            <TabsTrigger value="flow">בניית Flow</TabsTrigger>
+          </TabsList>
+          <TabsContent value="messages">
+            <CustomerChatBotAdmin />
+          </TabsContent>
+          <TabsContent value="flow">
+            <CustomerChatBotFlowAdmin />
+          </TabsContent>
+        </Tabs>
       </motion.div>
     </HypPageLayout>
   );

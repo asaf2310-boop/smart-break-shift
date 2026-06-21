@@ -8,6 +8,7 @@ import { m3PageClass } from "@/lib/hypPage";
 import CustomerChatTypingIndicator from "@/components/customer-chat/CustomerChatTypingIndicator";
 import { useGuestBotConversation } from "@/hooks/useGuestBotConversation";
 import { getCustomerChatBotConfig } from "@/lib/customerChatBotConfig";
+import { handleGuestFlowChoice, isFlowBotComplete } from "@/lib/customerChatBotFlowRuntime";
 import { isIntroBotFlowComplete } from "@/lib/customerChatBotFlow";
 import {
   buildGuestChatUrl,
@@ -40,7 +41,7 @@ export default function CustomerChatGuestPage() {
   const [draft, setDraft] = useState("");
   const [starting, setStarting] = useState(false);
   const bottomRef = useRef(null);
-  const { isBotTyping } = useGuestBotConversation(session);
+  const { isBotTyping, pendingChoices, flowEnabled } = useGuestBotConversation(session);
 
   const refresh = useCallback(() => {
     if (!token) return;
@@ -83,6 +84,12 @@ export default function CustomerChatGuestPage() {
     } finally {
       setStarting(false);
     }
+  };
+
+  const handleFlowChoice = (optionId) => {
+    if (!session?.id || isBotTyping) return;
+    handleGuestFlowChoice(session.id, optionId, { onTypingChange: () => {} });
+    refresh();
   };
 
   const handleSend = (e) => {
@@ -147,18 +154,22 @@ export default function CustomerChatGuestPage() {
 
   const canSend = session.status !== "closed";
   const statusLabel = getSessionStatusLabel(session.status);
-  const introComplete = isIntroBotFlowComplete(session.id);
+  const introComplete = flowEnabled ? isFlowBotComplete(session.id) : isIntroBotFlowComplete(session.id);
+  const botBusy = isBotTyping || (flowEnabled && !introComplete && !pendingChoices);
   const needsMerchantRef =
+    !flowEnabled &&
     introComplete &&
     !session.merchant_ref &&
     getCustomerChatBotConfig().beforeAgent.length > 0;
-  const inputPlaceholder = !introComplete || isBotTyping
+  const inputPlaceholder = botBusy
     ? "ממתין להודעה מהבוט…"
-    : needsMerchantRef
-      ? "הזינו מספר מסוף או ח.פ…"
-      : session.status === "waiting"
-        ? "כתבו הודעה בזמן ההמתנה…"
-        : "הודעה לנציג…";
+    : pendingChoices
+      ? "בחרו אפשרות או כתבו הודעה…"
+      : needsMerchantRef
+        ? "הזינו מספר מסוף או ח.פ…"
+        : session.status === "waiting"
+          ? "כתבו הודעה בזמן ההמתנה…"
+          : "הודעה לנציג…";
 
   return (
     <div className={shellClass} dir="rtl">
@@ -235,6 +246,23 @@ export default function CustomerChatGuestPage() {
               </div>
             );
           })}
+          {pendingChoices?.options?.length > 0 && (
+            <div className="flex flex-wrap gap-2 justify-end">
+              {pendingChoices.options.map((opt) => (
+                <Button
+                  key={opt.id}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full"
+                  disabled={isBotTyping}
+                  onClick={() => handleFlowChoice(opt.id)}
+                >
+                  {opt.label}
+                </Button>
+              ))}
+            </div>
+          )}
           {isBotTyping && <CustomerChatTypingIndicator />}
           <div ref={bottomRef} />
         </div>
@@ -250,12 +278,12 @@ export default function CustomerChatGuestPage() {
                 placeholder={inputPlaceholder}
                 className="flex-1 text-right"
                 autoComplete="off"
-                disabled={isBotTyping}
+                disabled={botBusy && !pendingChoices}
               />
               <Button
                 type="submit"
                 size="icon"
-                disabled={!draft.trim() || isBotTyping}
+                disabled={!draft.trim() || (botBusy && !pendingChoices)}
                 aria-label="שליחה"
               >
                 <Send className="w-4 h-4" />
