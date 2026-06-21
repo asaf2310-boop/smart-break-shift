@@ -26,7 +26,14 @@ import {
   listWaitingSessions,
   sendAgentMessage,
   subscribeCustomerChatStore,
+  tryAutoAssignAllWaiting,
+  tryLinkSessionToCrmCustomer,
 } from "@/lib/customerChatStore";
+import AgentCrmSidebar from "@/components/customer-chat/AgentCrmSidebar";
+import {
+  isAutoAssignMode,
+  subscribeCustomerChatAssignmentConfig,
+} from "@/lib/customerChatAssignmentConfig";
 
 function formatTime(iso) {
   try {
@@ -48,6 +55,9 @@ function SessionListItem({ session, active, onSelect, action }) {
         <p className="text-xs text-on-surface-variant">
           {getSessionStatusLabel(session.status)}
           {session.merchant_ref ? ` · מסוף/ח.פ: ${session.merchant_ref}` : ""}
+          {session.guest_phone ? ` · ${session.guest_phone}` : ""}
+          {session.guest_email ? ` · ${session.guest_email}` : ""}
+          {session.crm_customer_id ? " · מזוהה ב-CRM" : ""}
           {session.assigned_agent ? ` · ${session.assigned_agent}` : ""}
         </p>
       </button>
@@ -66,12 +76,17 @@ export default function AgentCustomerChatPage() {
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
   const [agentStatus, setAgentStatusState] = useState(CHAT_STATUS.available.key);
+  const [autoAssign, setAutoAssign] = useState(() => isAutoAssignMode());
   const bottomRef = useRef(null);
 
   const refresh = useCallback(async () => {
+    if (isAutoAssignMode()) {
+      await tryAutoAssignAllWaiting();
+    }
     setWaiting(listWaitingSessions());
     setActiveMine(listActiveSessions({ agentName }));
     setAvailableAgents(await listAvailableAgents());
+    setAutoAssign(isAutoAssignMode());
     const chatEntities = getChatEntities();
     if (chatEntities && agentName) {
       const rows = await chatEntities.ChatPresence.filter({ agent_name: agentName });
@@ -86,9 +101,16 @@ export default function AgentCustomerChatPage() {
 
   useEffect(() => {
     refresh();
-    return subscribeCustomerChatStore(() => {
+    const unsubStore = subscribeCustomerChatStore(() => {
       refresh();
     });
+    const unsubConfig = subscribeCustomerChatAssignmentConfig(() => {
+      refresh();
+    });
+    return () => {
+      unsubStore();
+      unsubConfig();
+    };
   }, [refresh]);
 
   useEffect(() => {
@@ -124,6 +146,11 @@ export default function AgentCustomerChatPage() {
     refresh();
     toast({ title: "סטטוס: זמין לצ'אט" });
   };
+
+  useEffect(() => {
+    if (!selectedId) return;
+    tryLinkSessionToCrmCustomer(selectedId);
+  }, [selectedId, messages.length]);
 
   const handleAccept = async (sessionId) => {
     if (!agentName) return;
@@ -170,7 +197,7 @@ export default function AgentCustomerChatPage() {
   }
 
   return (
-    <HypPageLayout contentClassName="max-w-6xl mx-auto px-4 pb-8">
+    <HypPageLayout contentClassName="max-w-7xl mx-auto px-4 pb-8">
       <header className="flex flex-wrap items-center gap-3 mb-6">
         <Link to="/" className="m3-icon-button rounded-full" aria-label="חזרה">
           <ArrowRight className="w-5 h-5" />
@@ -200,6 +227,11 @@ export default function AgentCustomerChatPage() {
             ? availableAgents.map((a) => a.agent_name).join(" · ")
             : "אין — עברו ל«זמין»"}
         </span>
+        {autoAssign && (
+          <span className="text-xs font-medium text-sky-700 bg-sky-50 border border-sky-200 rounded-full px-2.5 py-0.5">
+            הקצאה אוטומטית
+          </span>
+        )}
         <span className="text-on-surface-variant mr-auto text-xs" dir="ltr">
           {guestLink}
         </span>
@@ -221,53 +253,8 @@ export default function AgentCustomerChatPage() {
         </Button>
       </div>
 
-      <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-4">
-        <div className="space-y-4">
-          <section>
-            <h2 className="m3-title-small mb-2">ממתינים ({waiting.length})</h2>
-            <div className="space-y-2">
-              {waiting.length === 0 ? (
-                <p className="text-sm text-on-surface-variant m3-card px-3 py-4 text-center">
-                  אין לקוחות בתור
-                </p>
-              ) : (
-                waiting.map((session) => (
-                  <SessionListItem
-                    key={session.id}
-                    session={session}
-                    active={selectedId === session.id}
-                    onSelect={setSelectedId}
-                    action={
-                      <Button type="button" size="sm" onClick={() => handleAccept(session.id)}>
-                        קבל
-                      </Button>
-                    }
-                  />
-                ))
-              )}
-            </div>
-          </section>
-
-          <section>
-            <h2 className="m3-title-small mb-2">השיחות שלי ({activeMine.length})</h2>
-            <div className="space-y-2">
-              {activeMine.length === 0 ? (
-                <p className="text-sm text-on-surface-variant m3-card px-3 py-4 text-center">
-                  אין שיחות פעילות
-                </p>
-              ) : (
-                activeMine.map((session) => (
-                  <SessionListItem
-                    key={session.id}
-                    session={session}
-                    active={selectedId === session.id}
-                    onSelect={setSelectedId}
-                  />
-                ))
-              )}
-            </div>
-          </section>
-        </div>
+      <div className="grid lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.2fr)_minmax(0,0.9fr)] gap-4">
+        <AgentCrmSidebar session={selectedSession} agentName={agentName} messages={messages} />
 
         <div className="m3-card flex flex-col min-h-[24rem] lg:min-h-[32rem]">
           {!selectedSession ? (
@@ -282,6 +269,7 @@ export default function AgentCustomerChatPage() {
                   <p className="text-xs text-on-surface-variant">
                     {getSessionStatusLabel(selectedSession.status)}
                     {selectedSession.merchant_ref ? ` · מסוף/ח.פ: ${selectedSession.merchant_ref}` : ""}
+                    {selectedSession.crm_customer_id ? " · מזוהה ב-CRM" : ""}
                   </p>
                 </div>
                 {selectedSession.status === "active" && selectedSession.assigned_agent === agentName && (
@@ -343,15 +331,70 @@ export default function AgentCustomerChatPage() {
                     <Send className="w-4 h-4" />
                   </Button>
                 </form>
-              ) : selectedSession.status === "waiting" ? (
+              ) : selectedSession.status === "waiting" && !autoAssign ? (
                 <div className="p-3 border-t border-outline/15">
                   <Button type="button" className="w-full" onClick={() => handleAccept(selectedSession.id)}>
                     קבל שיחה
                   </Button>
                 </div>
+              ) : selectedSession.status === "waiting" && autoAssign ? (
+                <div className="p-3 border-t border-outline/15 text-center text-sm text-on-surface-variant">
+                  השיחה תוקצה אוטומטית לנציג זמין
+                </div>
               ) : null}
             </>
           )}
+        </div>
+
+        <div className="space-y-4">
+          <section>
+            <h2 className="m3-title-small mb-2">
+              {autoAssign ? "ממתינים להקצאה" : "ממתינים"} ({waiting.length})
+            </h2>
+            <div className="space-y-2">
+              {waiting.length === 0 ? (
+                <p className="text-sm text-on-surface-variant m3-card px-3 py-4 text-center">
+                  {autoAssign ? "אין שיחות ממתינות — הקצאה אוטומטית פעילה" : "אין לקוחות בתור"}
+                </p>
+              ) : (
+                waiting.map((session) => (
+                  <SessionListItem
+                    key={session.id}
+                    session={session}
+                    active={selectedId === session.id}
+                    onSelect={setSelectedId}
+                    action={
+                      autoAssign ? null : (
+                        <Button type="button" size="sm" onClick={() => handleAccept(session.id)}>
+                          קבל
+                        </Button>
+                      )
+                    }
+                  />
+                ))
+              )}
+            </div>
+          </section>
+
+          <section>
+            <h2 className="m3-title-small mb-2">השיחות שלי ({activeMine.length})</h2>
+            <div className="space-y-2">
+              {activeMine.length === 0 ? (
+                <p className="text-sm text-on-surface-variant m3-card px-3 py-4 text-center">
+                  אין שיחות פעילות
+                </p>
+              ) : (
+                activeMine.map((session) => (
+                  <SessionListItem
+                    key={session.id}
+                    session={session}
+                    active={selectedId === session.id}
+                    onSelect={setSelectedId}
+                  />
+                ))
+              )}
+            </div>
+          </section>
         </div>
       </div>
     </HypPageLayout>

@@ -799,6 +799,58 @@ export function getCustomerByPhone(phone) {
   );
 }
 
+export function normalizeTaxIdForLookup(taxId) {
+  return String(taxId || "").replace(/\D/g, "");
+}
+
+/** חיפוש לקוח לפי אימייל — null אם לא נמצא */
+export function getCustomerByEmail(email) {
+  if (!crmEnabled) return null;
+  const needle = String(email || "").trim().toLowerCase();
+  if (!needle || !needle.includes("@")) return null;
+  const { customers } = readStore();
+  return (
+    customers.find((c) => String(c.email || "").trim().toLowerCase() === needle) || null
+  );
+}
+
+/** חיפוש לקוח לפי ח.פ / מספר עוסק — null אם לא נמצא */
+export function getCustomerByTaxId(taxId) {
+  if (!crmEnabled) return null;
+  const needle = normalizeTaxIdForLookup(taxId);
+  if (!needle || needle.length < 7) return null;
+  const { customers } = readStore();
+  return (
+    customers.find((c) => {
+      const hay = normalizeTaxIdForLookup(c.tax_id);
+      return hay && hay === needle;
+    }) || null
+  );
+}
+
+/**
+ * זיהוי לקוח CRM לפי ערך יחיד — אימייל, טלפון או ח.פ.
+ * @returns {import('./crmStore').Customer|null}
+ */
+export function findCustomerByContactValue(value) {
+  if (!crmEnabled) return null;
+  const text = String(value || "").trim();
+  if (!text) return null;
+
+  if (text.includes("@")) {
+    const byEmail = getCustomerByEmail(text);
+    if (byEmail) return byEmail;
+  }
+
+  const byPhone = getCustomerByPhone(text);
+  if (byPhone) return byPhone;
+
+  const byTax = getCustomerByTaxId(text);
+  if (byTax) return byTax;
+
+  return null;
+}
+
 export function createCustomer({ name, phone, email, company, tax_id, address, notes }) {
   const store = readStore();
   const now = new Date().toISOString();

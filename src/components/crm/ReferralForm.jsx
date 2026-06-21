@@ -21,10 +21,10 @@ const SAVE_OPTIONS = [
   { status: "closed", label: REFERRAL_STATUSES.closed.label },
 ];
 
-export default function ReferralForm({ agentName, onSubmit }) {
+export default function ReferralForm({ agentName, onSubmit, initialDescription = "" }) {
   const [form, setForm] = useState({
     referral_topic: "",
-    description: "",
+    description: initialDescription,
     priority: "normal",
   });
   const [saveAs, setSaveAs] = useState("open");
@@ -41,6 +41,12 @@ export default function ReferralForm({ agentName, onSubmit }) {
       setAssignment((prev) => ({ ...prev, assigned_agent_name: agentName }));
     }
   }, [agentName, assignment.assigned_to_type, assignment.assigned_agent_name]);
+
+  useEffect(() => {
+    if (initialDescription) {
+      setForm((prev) => ({ ...prev, description: initialDescription }));
+    }
+  }, [initialDescription]);
 
   const selectedLabel = SAVE_OPTIONS.find((o) => o.status === saveAs)?.label || SAVE_OPTIONS[0].label;
 

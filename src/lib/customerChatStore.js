@@ -1,6 +1,8 @@
 import { customerChatEnabled } from "@/api/customerChatMode";
 import { getChatEntities } from "@/api/localChatStore";
 import { CHAT_STATUS } from "@/lib/agentChatPresence";
+import { isAutoAssignMode } from "@/lib/customerChatAssignmentConfig";
+import { findCustomerByContactValue } from "@/lib/crmStore";
 
 export const CUSTOMER_CHAT_STORAGE_KEY = "smart-break-shift-customer-chat-v1";
 export const CUSTOMER_CHAT_CHANGE_EVENT = "customer-chat-changed";
@@ -134,16 +136,19 @@ export function listBotMessages(sessionId) {
   return listMessages(sessionId).filter((m) => m.sender_type === "bot");
 }
 
-function appendMessage(store, { sessionId, senderType, senderName, body }) {
+function appendMessage(store, { sessionId, senderType, senderName, body, imageUrl }) {
+  const text = String(body || "").trim();
+  const image_url = imageUrl ? String(imageUrl) : null;
+  if (!text && !image_url) return null;
   const message = {
     id: makeId("cm"),
     session_id: sessionId,
     sender_type: senderType,
     sender_name: senderName || null,
-    body: String(body || "").trim(),
+    body: text,
+    image_url,
     created_at: new Date().toISOString(),
   };
-  if (!message.body) return null;
   store.messages.push(message);
   return message;
 }
@@ -169,6 +174,9 @@ export function createGuestSession({ guestName } = {}) {
     token: makeToken(),
     guest_name: name,
     merchant_ref: null,
+    guest_email: null,
+    guest_phone: null,
+    crm_customer_id: null,
     status: SESSION_STATUS.waiting,
     assigned_agent: null,
     created_at: now,
@@ -213,10 +221,25 @@ export function appendGuestJoinedSystemMessage(sessionId) {
   if (!message) return null;
   touchSession(store, sessionId);
   writeStore(store);
+  tryAutoAssignSession(sessionId).catch(() => {});
   return message;
 }
 
-export function sendGuestMessage(token, body) {
+export function getLastGuestMessageWithMeta(sessionId) {
+  const messages = listMessages(sessionId);
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].sender_type === "guest") {
+      return {
+        id: messages[i].id,
+        body: messages[i].body,
+        image_url: messages[i].image_url || null,
+      };
+    }
+  }
+  return null;
+}
+
+export function sendGuestMessage(token, body, { imageUrl } = {}) {
   const store = readStore();
   const session = store.sessions.find((s) => s.token === token);
   if (!session || session.status === SESSION_STATUS.closed) return null;
@@ -225,6 +248,7 @@ export function sendGuestMessage(token, body) {
     senderType: "guest",
     senderName: session.guest_name,
     body,
+    imageUrl,
   });
   if (!message) return null;
   const patch = {};
@@ -233,7 +257,89 @@ export function sendGuestMessage(token, body) {
   }
   touchSession(store, session.id, patch);
   writeStore(store);
+  tryLinkSessionToCrmCustomer(session.id);
   return message;
+}
+
+export function updateSessionFields(sessionId, patch = {}) {
+  const store = readStore();
+  const session = touchSession(store, sessionId, patch);
+  if (!session) return null;
+  writeStore(store);
+  return session;
+}
+
+function inferCaptureFieldFromStep(step) {
+  const type = step?.validationType || "none";
+  if (type === "email") return "guest_email";
+  if (type === "phone") return "guest_phone";
+  return null;
+}
+
+/** שמירת ערכים מה-flow (אימייל, טלפון, מסוף/ח.פ) על השיחה */
+export function applyFlowInputCapture(sessionId, step, text) {
+  const value = String(text || "").trim();
+  if (!value) return null;
+
+  const captureField = step?.captureField || inferCaptureFieldFromStep(step);
+  if (!captureField) return null;
+
+  const patch = {};
+  if (captureField === "merchant_ref") patch.merchant_ref = value;
+  else if (captureField === "guest_email") patch.guest_email = value;
+  else if (captureField === "guest_phone") patch.guest_phone = value;
+  else return null;
+
+  return updateSessionFields(sessionId, patch);
+}
+
+export function tryLinkSessionToCrmCustomer(sessionId) {
+  const session = getSessionById(sessionId);
+  if (!session || session.crm_customer_id) return session?.crm_customer_id || null;
+
+  const candidates = [
+    session.guest_email,
+    session.guest_phone,
+    session.merchant_ref,
+  ].filter(Boolean);
+
+  for (const value of candidates) {
+    const customer = findCustomerByContactValue(value);
+    if (customer) {
+      updateSessionFields(sessionId, { crm_customer_id: customer.id });
+      return customer.id;
+    }
+  }
+
+  return null;
+}
+
+export function formatChatTranscript(messages) {
+  const labelFor = (msg) => {
+    if (msg.sender_type === "guest") return msg.sender_name || "לקוח";
+    if (msg.sender_type === "agent") return msg.sender_name || "נציג";
+    if (msg.sender_type === "bot") return "בוט";
+    return msg.sender_type;
+  };
+
+  return (messages || [])
+    .filter((m) => m.sender_type !== "system")
+    .map((m) => {
+      let time = "";
+      try {
+        time = new Date(m.created_at).toLocaleString("he-IL", {
+          day: "2-digit",
+          month: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      } catch {
+        // ignore
+      }
+      const body = m.body || (m.image_url ? "[תמונה]" : "");
+      return `[${time}] ${labelFor(m)}: ${body}`;
+    })
+    .join("\n");
 }
 
 export function sendAgentMessage(sessionId, agentName, body) {
@@ -269,6 +375,7 @@ export async function acceptSession(sessionId, agentName) {
     body: `${agentName} מטפל/ת בפנייה`,
   });
   writeStore(store);
+  tryLinkSessionToCrmCustomer(sessionId);
   return getSessionById(sessionId);
 }
 
@@ -276,6 +383,23 @@ export async function autoAssignWaitingSession(sessionId) {
   const agentName = await pickNextAvailableAgent();
   if (!agentName) return null;
   return acceptSession(sessionId, agentName);
+}
+
+export async function tryAutoAssignSession(sessionId) {
+  if (!isAutoAssignMode()) return null;
+  const session = getSessionById(sessionId);
+  if (!session || session.status !== SESSION_STATUS.waiting || session.assigned_agent) return null;
+  return autoAssignWaitingSession(sessionId);
+}
+
+export async function tryAutoAssignAllWaiting() {
+  if (!isAutoAssignMode()) return [];
+  const assigned = [];
+  for (const session of listWaitingSessions()) {
+    const result = await tryAutoAssignSession(session.id);
+    if (result) assigned.push(result);
+  }
+  return assigned;
 }
 
 export function closeSession(sessionId, { closedBy } = {}) {

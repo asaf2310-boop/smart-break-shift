@@ -2,6 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowRight, MessageCircle } from "lucide-react";
+import CustomerChatAssignmentAdmin from "@/components/admin/CustomerChatAssignmentAdmin";
 import CustomerChatBotAdmin from "@/components/admin/CustomerChatBotAdmin";
 import CustomerChatBotFlowAdmin from "@/components/admin/CustomerChatBotFlowAdmin";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -41,12 +42,16 @@ export default function AdminCustomerChat() {
           <TabsList className="w-full sm:w-auto">
             <TabsTrigger value="messages">הודעות</TabsTrigger>
             <TabsTrigger value="flow">בניית Flow</TabsTrigger>
+            <TabsTrigger value="settings">הגדרות</TabsTrigger>
           </TabsList>
           <TabsContent value="messages">
             <CustomerChatBotAdmin />
           </TabsContent>
           <TabsContent value="flow">
             <CustomerChatBotFlowAdmin />
+          </TabsContent>
+          <TabsContent value="settings">
+            <CustomerChatAssignmentAdmin />
           </TabsContent>
         </Tabs>
       </motion.div>
