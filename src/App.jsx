@@ -56,6 +56,7 @@ import AdminCrmRouting from './pages/AdminCrmRouting';
 import AdminCrmDashboard from './pages/AdminCrmDashboard';
 import AdminSecurityAudit from './pages/AdminSecurityAudit';
 import AdminSmsStats from './pages/AdminSmsStats';
+import AdminReviewSms from './pages/AdminReviewSms';
 import AgentReviewSms from './pages/AgentReviewSms';
 import AgentMetricsPage from './pages/AgentMetricsPage';
 import AgentMetricsRankingPage from './pages/AgentMetricsRankingPage';
@@ -148,6 +149,7 @@ const AuthenticatedApp = () => {
         <Route path="/admin/crm/routing" element={<AdminGate><CrmGate><AdminCrmRouting /></CrmGate></AdminGate>} />
         <Route path="/admin/security-audit" element={<AdminGate><AdminSecurityAudit /></AdminGate>} />
         <Route path="/admin/sms-stats" element={<AdminGate><AdminSmsStats /></AdminGate>} />
+        <Route path="/admin/review-sms" element={<AdminGate><AdminReviewSms /></AdminGate>} />
         <Route
           path="/admin/recordings/play"
           element={

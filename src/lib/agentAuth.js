@@ -159,10 +159,13 @@ async function getSupabaseAuthUserId() {
   }
 }
 
-/** DB link may lag after login; trust session when Supabase Auth session matches. */
+/** DB link may lag after login; always require an active Supabase Auth session. */
 function resolveEffectiveAuthUserId(session, agent, supabaseAuthUserId) {
-  if (agent?.authUserId) return agent.authUserId;
-  if (!session?.authUserId || !supabaseAuthUserId) return null;
+  if (!supabaseAuthUserId) return null;
+  if (agent?.authUserId) {
+    return agent.authUserId === supabaseAuthUserId ? agent.authUserId : null;
+  }
+  if (!session?.authUserId) return null;
   return session.authUserId === supabaseAuthUserId ? session.authUserId : null;
 }
 
@@ -285,9 +288,20 @@ export async function validateAndRefreshAgentSession() {
     resolveAgentForSession(session),
     demoModeEnabled ? Promise.resolve(null) : getSupabaseAuthUserId(),
   ]);
+
+  if (!demoModeEnabled && !supabaseAuthUserId) {
+    await agentLogout();
+    return null;
+  }
+
   if (!agent) {
-    // Transient backend/read timeout should not force-logout an already authenticated user.
-    return session;
+    // Transient backend/read timeout — keep session only with a matching Supabase JWT.
+    if (demoModeEnabled) return session;
+    if (supabaseAuthUserId && session.authUserId === supabaseAuthUserId) {
+      return session;
+    }
+    await agentLogout();
+    return null;
   }
   if (!canAgentAuthenticate(agent)) {
     await agentLogout();

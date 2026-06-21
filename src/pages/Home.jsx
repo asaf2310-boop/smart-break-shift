@@ -1,5 +1,5 @@
 import React from "react";
-import { BarChart3, BookOpen, CalendarClock, CalendarDays, Contact, GraduationCap, MessageCircle, Monitor, Star } from "lucide-react";
+import { BarChart3, BookOpen, CalendarClock, CalendarDays, Contact, GraduationCap, Loader2, MessageCircle, Monitor, Star } from "lucide-react";
 import { getAgentNamesList } from "@/constants/scheduling";
 import AgentLogin from "@/components/auth/AgentLogin";
 import HypHomeShell from "@/components/hyp/HypHomeShell";
@@ -111,7 +111,7 @@ const homeCards = demoModeEnabled
 const showAdminDemoHint = import.meta.env.DEV || demoModeEnabled;
 
 function HomeContent() {
-  const { displayName, isLoggedIn, refresh } = useAgentSession();
+  const { displayName, isLoggedIn, bootstrapped, refresh } = useAgentSession();
   const { rawModules } = useAgentModules();
   const visibleCards = filterItemsByModules(homeCards, rawModules);
   const agentCount = getAgentNamesList().length;
@@ -125,6 +125,14 @@ function HomeContent() {
     await agentLogout();
     refresh();
   };
+
+  if (!bootstrapped) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center" dir="rtl">
+        <Loader2 className="w-6 h-6 animate-spin text-primary" aria-label="בודק התחברות" />
+      </div>
+    );
+  }
 
   if (!isLoggedIn) {
     return <AgentLogin onSuccess={handleLoginSuccess} />;

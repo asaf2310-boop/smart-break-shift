@@ -12,7 +12,7 @@ function buildAdminNavLinks() {
     { path: "/admin/metrics", label: "מדדים", matchPrefix: "/admin/metrics" },
     { path: "/admin/security-audit", label: "יומן ביקורת" },
     { path: "/admin/sms-stats", label: "סטטיסטיקת SMS" },
-    { path: "/review-sms", label: "דירוג גוגל" },
+    { path: "/admin/review-sms", label: "דירוג גוגל" },
   ];
 
   if (demoModeEnabled || knowledgeEnabled) {

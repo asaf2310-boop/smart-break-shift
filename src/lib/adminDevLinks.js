@@ -8,7 +8,7 @@ const ADMIN_DEV_ROUTES_CORE = [
   { path: "/admin/metrics", label: "מדדים" },
   { path: "/admin/security-audit", label: "יומן ביקורת אבטחה" },
   { path: "/admin/sms-stats", label: "סטטיסטיקת SMS לפי נציג" },
-  { path: "/review-sms", label: "דירוג גוגל (SMS)" },
+  { path: "/admin/review-sms", label: "דירוג גוגל (הגדרות)" },
 ];
 
 const ADMIN_DEV_ROUTES_KNOWLEDGE = [{ path: "/admin/knowledge", label: "ניהול ידע" }];

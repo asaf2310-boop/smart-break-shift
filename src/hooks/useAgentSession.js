@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { demoModeEnabled } from "@/api/demoClient";
 import {
-  getAgentSession,
   restoreSupabaseAgentSession,
   validateAndRefreshAgentSession,
 } from "@/lib/agentAuth";
 
 export function useAgentSession() {
-  const [session, setSession] = useState(() => getAgentSession());
-  // Unblock login/home immediately; validate session in the background.
-  const [bootstrapped] = useState(true);
+  const [session, setSession] = useState(null);
+  const [bootstrapped, setBootstrapped] = useState(false);
 
   const refresh = useCallback(async () => {
     const valid = await validateAndRefreshAgentSession();
@@ -21,14 +19,18 @@ export function useAgentSession() {
     let cancelled = false;
 
     const bootstrap = async () => {
-      const restored = await restoreSupabaseAgentSession();
-      if (cancelled) return;
-      if (restored) {
-        setSession(restored);
-        return;
+      try {
+        const restored = await restoreSupabaseAgentSession();
+        if (cancelled) return;
+        if (restored) {
+          setSession(restored);
+          return;
+        }
+        const valid = await validateAndRefreshAgentSession();
+        if (!cancelled) setSession(valid);
+      } finally {
+        if (!cancelled) setBootstrapped(true);
       }
-      const valid = await validateAndRefreshAgentSession();
-      if (!cancelled) setSession(valid);
     };
 
     void bootstrap();
@@ -50,7 +52,8 @@ export function useAgentSession() {
   }, [refresh]);
 
   const hasValidSession = Boolean(
-    session?.email &&
+    bootstrapped &&
+      session?.email &&
       session?.userId &&
       session?.needsPasswordSetup !== true &&
       (demoModeEnabled || session?.authUserId)

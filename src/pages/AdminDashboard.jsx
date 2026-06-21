@@ -9,7 +9,6 @@ import DateSelector from "../components/breaks/DateSelector";
 import { Link } from "react-router-dom";
 import BreakSettingsPanel from "../components/admin/BreakSettingsPanel";
 import ChatBrandingPanel from "../components/admin/ChatBrandingPanel";
-import ReviewSmsSettingsPanel from "../components/admin/ReviewSmsSettingsPanel";
 import {
   BREAK_REGISTRATION_OVERRIDE_MESSAGE,
   SHORT_BREAK_SLOTS,
@@ -248,9 +247,6 @@ export default function AdminDashboard() {
         </div>
         <div className="mb-6">
           <ChatBrandingPanel />
-        </div>
-        <div className="mb-6">
-          <ReviewSmsSettingsPanel />
         </div>
         <AdminSubNav />
 
