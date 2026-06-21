@@ -28,6 +28,8 @@ import { normalizeCrmRole } from "@/lib/crmRoles";
 
 export const AGENT_SESSION_KEY = "smart-break-agent-session-v1";
 export const INVALID_CREDENTIALS_MSG = "אימייל או סיסמה שגויים";
+export const INVALID_TEMP_PASSWORD_MSG =
+  "הסיסמה הזמנית שגויה או שפג תוקפה. ודא/י שהזנת את כל הספרות מ-SMS (12 ספרות), או בקש/י SMS חדש.";
 export const PASSWORD_MIN_LENGTH = 12;
 export const PASSWORD_MIN_LENGTH_MSG = "הסיסמה חייבת להכיל לפחות 12 תווים";
 export const AGENT_AUTH_TIMEOUT_MSG =
@@ -448,36 +450,56 @@ export function agentHasPendingPasswordReset(agent) {
   return Boolean(agent?.needsPasswordSetup);
 }
 
+function invalidTempPasswordError() {
+  return { ok: false, error: "invalid_temp_password", message: INVALID_TEMP_PASSWORD_MSG };
+}
+
 export async function agentVerifyTemporaryPassword(email, password) {
-  const agent = await resolveAgentByEmail(email);
-  if (!canAgentAuthenticate(agent) || !agentHasPendingPasswordReset(agent)) {
-    return credentialsError();
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  const agent = await resolveAgentByEmail(normalizedEmail);
+  if (!canAgentAuthenticate(agent)) {
+    return invalidTempPasswordError();
   }
 
   if (demoModeEnabled) {
-    const user = findDemoUserByEmailAny(email);
+    const user = findDemoUserByEmailAny(normalizedEmail);
     if (!verifyDemoUserPassword(user, password)) {
-      return credentialsError();
+      return invalidTempPasswordError();
     }
     return { ok: true };
   }
 
-  if (!supabase) return credentialsError();
+  if (!supabase) return invalidTempPasswordError();
 
   try {
     const { error } = await withAuthTimeout(
       supabase.auth.signInWithPassword({
-        email: String(email).trim().toLowerCase(),
+        email: normalizedEmail,
         password: String(password),
       })
     );
     if (error) {
-      if (isInvalidCredentialsError(error)) return credentialsError();
+      if (isInvalidCredentialsError(error)) return invalidTempPasswordError();
       return { ok: false, message: mapPasswordAuthError(error.message) };
     }
+
+    const refreshedAgent = await resolveSupabaseAgentByEmail(normalizedEmail);
+    if (!refreshedAgent || !canAgentAuthenticate(refreshedAgent)) {
+      await supabase.auth.signOut();
+      return invalidTempPasswordError();
+    }
+
+    if (!refreshedAgent.needsPasswordSetup) {
+      await supabase.auth.signOut();
+      return {
+        ok: false,
+        message: "החשבון כבר הופעל. התחבר/י עם הסיסמה שבחרת.",
+      };
+    }
+
     return { ok: true };
   } catch (err) {
-    return mapAuthTimeoutError(err) || credentialsError();
+    return mapAuthTimeoutError(err) || invalidTempPasswordError();
   }
 }
 

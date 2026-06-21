@@ -12,6 +12,7 @@ import {
   canAgentAuthenticate,
   AGENT_AUTH_TIMEOUT_MSG,
   INVALID_CREDENTIALS_MSG,
+  INVALID_TEMP_PASSWORD_MSG,
   PASSWORD_MIN_LENGTH,
   PASSWORD_MIN_LENGTH_MSG,
   passwordMinLengthInputProps,
@@ -162,7 +163,12 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
     try {
       const result = await agentVerifyTemporaryPassword(email, password);
       if (!result.ok) {
-        setError(result.message || INVALID_CREDENTIALS_MSG);
+        setError(
+          result.message ||
+            (result.error === "invalid_temp_password"
+              ? INVALID_TEMP_PASSWORD_MSG
+              : INVALID_CREDENTIALS_MSG)
+        );
         return;
       }
       setMode(MODES.SETUP);
@@ -268,7 +274,8 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
     return (
       <form onSubmit={handleTempVerify} className="font-heebo space-y-1">
         <p className="text-sm text-muted-foreground text-center leading-relaxed mb-2">
-          הזן/י את הקוד שנשלח ב-SMS (6 ספרות). לאחר מכן תגדיר/י סיסמה אישית.
+          הזן/י את הסיסמה הזמנית שנשלחה ב-SMS ({PASSWORD_MIN_LENGTH} ספרות). לאחר מכן תגדיר/י
+          סיסמה אישית.
         </p>
         <Field icon={Mail} label="אימייל">
           <Input
@@ -279,7 +286,7 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
             dir="ltr"
           />
         </Field>
-        <Field icon={Lock} label="קוד מ-SMS">
+        <Field icon={Lock} label="סיסמה זמנית מ-SMS">
           <Input
             type="password"
             value={password}
@@ -288,7 +295,9 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
             required
             autoFocus
             inputMode="numeric"
-            autoComplete="one-time-code"
+            autoComplete="current-password"
+            minLength={PASSWORD_MIN_LENGTH}
+            maxLength={PASSWORD_MIN_LENGTH}
           />
         </Field>
         {error && <p className={`text-sm text-center ${errorClass}`}>{error}</p>}
@@ -319,7 +328,7 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
     return (
       <form onSubmit={handleForgot} className="font-heebo">
         <p className="text-sm text-muted-foreground text-center leading-relaxed mb-3">
-          נשלח קוד זמני ב-SMS. לאחר האימות תגדיר/י סיסמה חדשה.
+          נשלחה סיסמה זמנית ב-SMS ({PASSWORD_MIN_LENGTH} ספרות). לאחר האימות תגדיר/י סיסמה חדשה.
         </p>
         <Field icon={Mail} label="אימייל">
           <Input
@@ -335,7 +344,7 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
         {error && <p className={`text-sm text-center ${errorClass}`}>{error}</p>}
         {info && <p className={`text-sm text-center ${infoClass}`}>{info}</p>}
         <button type="submit" disabled={loading} className={submitClass}>
-          {loading ? "שולח..." : "שלח קוד ב-SMS"}
+          {loading ? "שולח..." : "שלח סיסמה זמנית ב-SMS"}
         </button>
         <button
           type="button"
@@ -352,8 +361,8 @@ function EmailPasswordLogin({ onSuccess, variant = "demo" }) {
     return (
       <form onSubmit={handleFirstLogin} className="font-heebo">
         <p className="text-sm text-muted-foreground text-center leading-relaxed mb-3">
-          כניסה ראשונה — הזן/י את האימייל שרשם המנהל. נשלח SMS עם קוד אימות, ואז תבחר/י סיסמה
-          אישית.
+          כניסה ראשונה — הזן/י את האימייל שרשם המנהל. נשלח SMS עם סיסמה זמנית ({PASSWORD_MIN_LENGTH}{" "}
+          ספרות), ואז תבחר/י סיסמה אישית.
         </p>
         <Field icon={Mail} label="אימייל">
           <Input

@@ -150,13 +150,13 @@ function DashboardCard({ filter, count, icon: Icon, accent, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="m3-card aspect-square flex flex-col items-center justify-center gap-2 p-4 text-center hover:border-primary/40 hover:shadow-elevation-2 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+      className="m3-card flex min-w-[5.25rem] flex-1 basis-0 flex-col items-center justify-center gap-1 p-2 text-center hover:border-primary/40 hover:shadow-elevation-2 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:min-w-0"
     >
-      <div className={cn("w-11 h-11 rounded-2xl border flex items-center justify-center", accent)}>
-        <Icon className="w-5 h-5" />
+      <div className={cn("w-7 h-7 rounded-lg border flex items-center justify-center shrink-0", accent)}>
+        <Icon className="w-3.5 h-3.5" />
       </div>
-      <p className="text-3xl font-medium text-foreground leading-none">{count}</p>
-      <p className="m3-label-large text-sm leading-snug">{meta.title}</p>
+      <p className="text-xl font-medium text-foreground leading-none tabular-nums">{count}</p>
+      <p className="m3-label-medium text-[0.65rem] leading-tight line-clamp-2">{meta.title}</p>
     </button>
   );
 }
@@ -520,7 +520,7 @@ export default function CrmDashboard() {
                   <LayoutDashboard className="w-4 h-4 text-primary" />
                   סיכום פניות
                 </h2>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="flex gap-2 overflow-x-auto pb-0.5 sm:grid sm:grid-cols-4 sm:overflow-visible">
                   {DASHBOARD_CARDS.map(({ filter, icon, accent }) => (
                     <DashboardCard
                       key={filter}

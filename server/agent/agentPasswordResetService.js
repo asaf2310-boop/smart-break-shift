@@ -64,7 +64,10 @@ export async function requestPasswordResetByEmail(email) {
 
   const cooldown = checkResetCooldown(normalized);
   if (!cooldown.allowed) {
-    return { ok: true, message: GENERIC_RESET_OK_MSG };
+    return {
+      ok: true,
+      message: `SMS כבר נשלח לאחרונה. השתמש/י בסיסמה מהודעה הקודמת, או נסה/י שוב בעוד ${cooldown.waitSec} שניות.`,
+    };
   }
 
   const phone = normalizeIsraeliPhone(agent.phone);
@@ -149,18 +152,6 @@ export async function requestFirstLoginByEmail(email) {
   }
 
   await markAgentNeedsPasswordSetup(agent.id);
-
-  const agentForProvision = { ...agent, authUserId: authState.authUserId };
-
-  if (!authState.exists) {
-    try {
-      const temp = generateTemporaryPassword();
-      await provisionAuthUserForAgent(agentForProvision, temp);
-    } catch (err) {
-      console.warn("[agentPasswordResetService] first login provision failed", err);
-      return { ok: false, message: "לא הצלחנו להכין חשבון. פנה/י למנהל." };
-    }
-  }
 
   const result = await requestPasswordResetByEmail(normalized);
   if (result.ok) {
