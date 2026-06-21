@@ -95,8 +95,15 @@ const callTypeIcon = {
   chat: MessageSquare,
 };
 
-export default function CrmCustomerDetail() {
-  const { id } = useParams();
+export default function CrmCustomerDetail({
+  customerId: customerIdProp,
+  referralId: referralIdProp,
+  referralTopic: referralTopicProp,
+  embedded = false,
+  onDeleted,
+} = {}) {
+  const { id: routeId } = useParams();
+  const customerId = customerIdProp ?? routeId;
   const navigate = useNavigate();
   const location = useLocation();
   const agentName = getStoredAgentName();
@@ -117,13 +124,13 @@ export default function CrmCustomerDetail() {
   const { dialNumber } = useTelephony();
 
   const refresh = useCallback(() => {
-    setCustomer(getCustomerById(id));
-    setCalls(listCallLogsForCustomer(id));
-    setEmails(listEmailLogsForCustomer(id));
-    setReferrals(listReferralsForCustomer(id));
-    setContacts(listContactsForCustomer(id));
-    setProducts(listProductsForCustomer(id));
-  }, [id]);
+    setCustomer(getCustomerById(customerId));
+    setCalls(listCallLogsForCustomer(customerId));
+    setEmails(listEmailLogsForCustomer(customerId));
+    setReferrals(listReferralsForCustomer(customerId));
+    setContacts(listContactsForCustomer(customerId));
+    setProducts(listProductsForCustomer(customerId));
+  }, [customerId]);
 
   useEffect(() => {
     refresh();
@@ -131,16 +138,16 @@ export default function CrmCustomerDetail() {
   }, [refresh]);
 
   useEffect(() => {
-    const customer = getCustomerById(id);
-    if (!customer) return;
+    const visitCustomer = getCustomerById(customerId);
+    if (!visitCustomer) return;
     const navState = location.state;
     recordRecentVisit({
-      customerId: customer.id,
-      customerName: customer.name,
-      referralId: navState?.referralId || null,
-      referralTopic: navState?.referralTopic || null,
+      customerId: visitCustomer.id,
+      customerName: visitCustomer.name,
+      referralId: referralIdProp ?? navState?.referralId ?? null,
+      referralTopic: referralTopicProp ?? navState?.referralTopic ?? null,
     });
-  }, [id, location.key, location.state]);
+  }, [customerId, location.key, location.state, referralIdProp, referralTopicProp]);
 
   if (!agentName) {
     return <Navigate to="/" replace />;
@@ -155,7 +162,9 @@ export default function CrmCustomerDetail() {
       <div className={m3PageClass("flex items-center justify-center p-6")} dir="rtl">
         <div className="text-center">
           <p className="text-slate-600 mb-4">לקוח לא נמצא</p>
-          <CrmBackToDashboard className="text-indigo-600 font-semibold text-sm justify-center" />
+          {!embedded && (
+            <CrmBackToDashboard className="text-indigo-600 font-semibold text-sm justify-center" />
+          )}
         </div>
       </div>
     );
@@ -171,7 +180,11 @@ export default function CrmCustomerDetail() {
   const handleDelete = () => {
     deleteCustomer(customer.id);
     toast({ title: "נמחק", description: "הלקוח והתיעודים שלו הוסרו" });
-    navigate("/crm", { replace: true });
+    if (embedded && typeof onDeleted === "function") {
+      onDeleted();
+    } else {
+      navigate("/crm", { replace: true });
+    }
   };
 
   const handleAddCall = (data) => {
@@ -293,9 +306,11 @@ export default function CrmCustomerDetail() {
     refresh();
   };
 
-  return (
-    <HypPageLayout variant="scheduling" withNav={false} contentClassName="max-w-3xl px-4 py-6 sm:py-10 pb-24">
-        <CrmBackToDashboard className="text-sm text-slate-500 hover:text-indigo-600" />
+  const pageBody = (
+    <>
+        {!embedded && (
+          <CrmBackToDashboard className="text-sm text-slate-500 hover:text-indigo-600" />
+        )}
 
         <motion.div
           initial={{ opacity: 0, y: -8 }}
@@ -853,6 +868,16 @@ export default function CrmCustomerDetail() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </>
+  );
+
+  if (embedded) {
+    return <div className="crm-embedded-detail">{pageBody}</div>;
+  }
+
+  return (
+    <HypPageLayout variant="scheduling" withNav={false} contentClassName="max-w-3xl px-4 py-6 sm:py-10 pb-24">
+      {pageBody}
     </HypPageLayout>
   );
 }

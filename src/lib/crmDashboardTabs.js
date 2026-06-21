@@ -1,0 +1,62 @@
+import { CRM_AGENT_DASHBOARD_FILTERS } from "@/lib/crmStore";
+
+export const CRM_HOME_TAB = {
+  id: "home",
+  type: "home",
+  label: "דשבורד",
+  closable: false,
+};
+
+export function listTabId(filter) {
+  return `list:${filter}`;
+}
+
+export function detailTabId(customerId, referralId) {
+  return referralId ? `detail:${customerId}:${referralId}` : `detail:${customerId}`;
+}
+
+export function buildListTab(filter) {
+  const meta = CRM_AGENT_DASHBOARD_FILTERS[filter];
+  if (!meta) return null;
+  return {
+    id: listTabId(filter),
+    type: "list",
+    filter,
+    label: meta.title,
+    closable: true,
+  };
+}
+
+export function buildDetailTab({ customerId, referralId = null, referralTopic = null, customerName = null }) {
+  const label = referralTopic
+    ? `${customerName || "לקוח"} · ${referralTopic}`
+    : customerName || "לקוח";
+  return {
+    id: detailTabId(customerId, referralId),
+    type: "detail",
+    customerId,
+    referralId,
+    referralTopic,
+    label,
+    closable: true,
+  };
+}
+
+export function openOrActivateTab(tabs, tab) {
+  const existing = tabs.find((t) => t.id === tab.id);
+  if (existing) {
+    return { tabs, activeTabId: tab.id };
+  }
+  return { tabs: [...tabs, tab], activeTabId: tab.id };
+}
+
+export function closeTab(tabs, tabId) {
+  const index = tabs.findIndex((t) => t.id === tabId);
+  if (index === -1) return { tabs, activeTabId: tabs[0]?.id ?? CRM_HOME_TAB.id };
+  const tab = tabs[index];
+  if (!tab.closable) return { tabs, activeTabId: tabId };
+
+  const nextTabs = tabs.filter((t) => t.id !== tabId);
+  const fallback = nextTabs[Math.min(index, nextTabs.length - 1)] ?? CRM_HOME_TAB;
+  return { tabs: nextTabs.length ? nextTabs : [CRM_HOME_TAB], activeTabId: fallback.id };
+}
