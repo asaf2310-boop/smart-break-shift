@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
-import { motion } from "framer-motion";
 import {
   ArrowRight,
   Building2,
@@ -58,9 +57,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
+import { getAgentSession } from "@/lib/agentAuth";
+import {
+  effectiveCrmRole,
+  hasCrmAdminAccess as crmRoleHasAdminAccess,
+  hasCrmAgentDashboard as crmRoleHasAgentDashboard,
+} from "@/lib/crmRoles";
 import { m3PageClass } from "@/lib/hypPage";
 import { cn } from "@/lib/utils";
-import { useCrmRole } from "@/hooks/useCrmRole";
 import "@/styles/crm-dashboard.css";
 
 const DASHBOARD_CARDS = [
@@ -170,9 +174,33 @@ function DashboardCard({ filter, count, icon: Icon, iconVariant, onClick }) {
   );
 }
 
+function useCrmDashboardAccess() {
+  const [session, setSession] = useState(() => getAgentSession());
+
+  useEffect(() => {
+    const sync = () => setSession(getAgentSession());
+    window.addEventListener("agent-session-changed", sync);
+    return () => window.removeEventListener("agent-session-changed", sync);
+  }, []);
+
+  const role = useMemo(
+    () =>
+      effectiveCrmRole({
+        crmRole: session?.crmRole,
+        isAdmin: session?.isAdmin,
+      }),
+    [session?.crmRole, session?.isAdmin]
+  );
+  const hasIdentity = Boolean(session?.email || session?.userId);
+  return {
+    hasCrmAgentDashboard: hasIdentity && crmRoleHasAgentDashboard(role),
+    hasCrmAdminAccess: hasIdentity && crmRoleHasAdminAccess(role),
+  };
+}
+
 export default function CrmDashboard() {
   const agentName = getStoredAgentName();
-  const { hasCrmAgentDashboard, hasCrmAdminAccess } = useCrmRole();
+  const { hasCrmAgentDashboard, hasCrmAdminAccess } = useCrmDashboardAccess();
   const [query, setQuery] = useState("");
   const [dashboardCounts, setDashboardCounts] = useState(() => getInitialDashboardCounts(agentName));
   const [filteredReferrals, setFilteredReferrals] = useState([]);
@@ -440,38 +468,13 @@ export default function CrmDashboard() {
   return (
     <div className={cn(m3PageClass("pb-24 body-container min-h-screen"), "relative")} dir="rtl">
       <div className="relative z-10 max-w-3xl mx-auto px-4 py-6 sm:py-8">
-        <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }}>
+        <div>
           {isHomeTab && (
             <Link to="/" className="crm-nav-link">
               <ArrowRight className="w-4 h-4" />
               ראשי
             </Link>
           )}
-
-          <header className="dashboard-header">
-            <div className="header-action-panel">
-              <button
-                type="button"
-                onClick={() => setAddOpen(true)}
-                className="btn-action-pill btn-green-action"
-              >
-                <Plus className="w-4 h-4" />
-                <span>לקוח חדש</span>
-              </button>
-              {hasCrmAgentDashboard && (
-                <Link to="/crm/new" className="btn-action-pill btn-blue-action">
-                  <FolderOpen className="w-4 h-4" />
-                  <span>פתיחת פניה ידנית</span>
-                </Link>
-              )}
-              {hasCrmAdminAccess && (
-                <Link to="/admin/crm" className="btn-action-pill btn-outline-action">
-                  <LayoutDashboard className="w-4 h-4" />
-                  <span>ניהול CRM</span>
-                </Link>
-              )}
-            </div>
-          </header>
 
           <div className="dashboard-title-panel">
             <DashboardTitle title={headerTitle} />
@@ -528,6 +531,29 @@ export default function CrmDashboard() {
           </section>
         ) : (
           <>
+            <div className="dashboard-actions-row">
+              <button
+                type="button"
+                onClick={() => setAddOpen(true)}
+                className="btn-action-pill btn-green-action"
+              >
+                <Plus className="w-4 h-4" />
+                <span>לקוח חדש</span>
+              </button>
+              {hasCrmAgentDashboard && (
+                <Link to="/crm/new" className="btn-action-pill btn-blue-action">
+                  <FolderOpen className="w-4 h-4" />
+                  <span>פתיחת פניה ידנית</span>
+                </Link>
+              )}
+              {hasCrmAdminAccess && (
+                <Link to="/admin/crm" className="btn-action-pill btn-outline-action">
+                  <LayoutDashboard className="w-4 h-4" />
+                  <span>ניהול CRM</span>
+                </Link>
+              )}
+            </div>
+
             <section className="mb-6">
               <h2 className="crm-section-title">
                 <Search className="w-4 h-4" />
@@ -678,7 +704,7 @@ export default function CrmDashboard() {
             )}
           </>
         )}
-        </motion.div>
+        </div>
       </div>
 
       <Dialog
