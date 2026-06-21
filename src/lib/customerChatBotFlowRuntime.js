@@ -4,11 +4,15 @@ import {
   isCustomerChatBotFlowEnabled,
 } from "@/lib/customerChatBotFlowConfig";
 import { deliverBotMessages, sleep, typingDelayMs } from "@/lib/customerChatBotFlow";
+import { validateFlowInput } from "@/lib/customerChatBotFlowValidation";
 import {
   appendBotMessage,
   appendGuestJoinedSystemMessage,
+  applyFlowInputCapture,
+  getLastGuestMessageWithMeta,
   getSessionById,
   listMessages,
+  tryLinkSessionToCrmCustomer,
 } from "@/lib/customerChatStore";
 
 export const CUSTOMER_CHAT_BOT_FLOW_STATE_KEY = "smart-break-shift-customer-chat-bot-flow-state-v1";
@@ -18,8 +22,13 @@ const FLOW_PHASE = {
   running: "running",
   waiting_input: "waiting_input",
   waiting_choice: "waiting_choice",
+  waiting_text_input: "waiting_text_input",
   complete: "complete",
 };
+
+function isTextInputMode(step) {
+  return step?.inputMode === "text" || step?.inputMode === "freeText";
+}
 
 function readStateStore() {
   try {
@@ -50,6 +59,10 @@ function setSessionState(sessionId, patch) {
     currentStepId: null,
     phase: FLOW_PHASE.idle,
     pendingChoiceStepId: null,
+    pendingTextInputStepId: null,
+    retryCount: 0,
+    stepHistory: [],
+    lastProcessedGuestMessageId: null,
     executedStepIds: [],
   };
   store.sessions[sessionId] = { ...prev, ...patch };
@@ -63,6 +76,13 @@ function getLastGuestMessage(sessionId) {
     if (messages[i].sender_type === "guest") return messages[i].body;
   }
   return "";
+}
+
+function pushStepHistory(state, stepId) {
+  if (!stepId) return state.stepHistory || [];
+  const history = state.stepHistory || [];
+  if (history[history.length - 1] === stepId) return history;
+  return [...history, stepId];
 }
 
 function evaluateCondition(step, sessionId) {
@@ -90,6 +110,13 @@ function markExecuted(sessionId, stepId, state) {
   return { ...state, executedStepIds: executed };
 }
 
+function unmarkExecuted(state, stepId) {
+  return {
+    ...state,
+    executedStepIds: (state.executedStepIds || []).filter((id) => id !== stepId),
+  };
+}
+
 async function deliverSingleMessage(sessionId, body, { onTypingChange, signal }) {
   onTypingChange?.(true);
   await sleep(typingDelayMs(body));
@@ -100,6 +127,66 @@ async function deliverSingleMessage(sessionId, body, { onTypingChange, signal })
   onTypingChange?.(false);
   appendBotMessage(sessionId, body);
   return true;
+}
+
+async function goBackOneStep(sessionId, currentStepId, state, { onTypingChange, signal } = {}) {
+  const history = [...(state.stepHistory || [])];
+  let prevStepId = history.pop();
+
+  while (prevStepId === currentStepId && history.length) {
+    prevStepId = history.pop();
+  }
+
+  if (!prevStepId) {
+    setSessionState(sessionId, {
+      phase: FLOW_PHASE.complete,
+      currentStepId: null,
+      pendingTextInputStepId: null,
+      pendingChoiceStepId: null,
+      retryCount: 0,
+    });
+    return;
+  }
+
+  let nextState = setSessionState(sessionId, {
+    stepHistory: history,
+    currentStepId: prevStepId,
+    phase: FLOW_PHASE.running,
+    pendingTextInputStepId: null,
+    pendingChoiceStepId: null,
+    retryCount: 0,
+    lastProcessedGuestMessageId: null,
+  });
+  nextState = setSessionState(sessionId, unmarkExecuted(nextState, prevStepId));
+  nextState = setSessionState(sessionId, unmarkExecuted(nextState, currentStepId));
+
+  await runGuestBotFlow(sessionId, { onTypingChange, signal });
+}
+
+async function handleInvalidInput(sessionId, step, state, { onTypingChange, signal } = {}) {
+  const invalidMsg = String(step.invalidMessage || "הקלט שהזנת אינו תקין. נסה/י שוב.").trim();
+  const retryCount = (state.retryCount || 0) + 1;
+  const maxRetries = Number.isFinite(step.maxRetries) ? step.maxRetries : 3;
+  const shouldGoBack =
+    step.onInvalid === "goBack" || (step.onInvalid === "retry" && retryCount > maxRetries);
+
+  if (invalidMsg) {
+    const ok = await deliverSingleMessage(sessionId, invalidMsg, { onTypingChange, signal });
+    if (!ok) return;
+  }
+
+  if (shouldGoBack) {
+    await goBackOneStep(sessionId, step.id, { ...state, retryCount }, { onTypingChange, signal });
+    return;
+  }
+
+  setSessionState(sessionId, {
+    retryCount,
+    phase: FLOW_PHASE.waiting_text_input,
+    pendingTextInputStepId: step.id,
+    currentStepId: step.id,
+    lastProcessedGuestMessageId: null,
+  });
 }
 
 export function isFlowBotComplete(sessionId) {
@@ -115,7 +202,7 @@ export function getPendingFlowChoices(sessionId) {
 
   const flow = getCustomerChatBotFlow();
   const step = getFlowStepById(flow, state.pendingChoiceStepId);
-  if (!step || step.type !== "choice") return null;
+  if (!step || step.type !== "choice" || isTextInputMode(step)) return null;
 
   return {
     stepId: step.id,
@@ -124,16 +211,90 @@ export function getPendingFlowChoices(sessionId) {
   };
 }
 
+export function getPendingFlowTextInput(sessionId) {
+  if (!isCustomerChatBotFlowEnabled()) return null;
+  const state = getSessionState(sessionId);
+  if (state?.phase !== FLOW_PHASE.waiting_text_input || !state.pendingTextInputStepId) return null;
+
+  const flow = getCustomerChatBotFlow();
+  const step = getFlowStepById(flow, state.pendingTextInputStepId);
+  if (!step || step.type !== "choice" || !isTextInputMode(step)) return null;
+
+  return {
+    stepId: step.id,
+    prompt: step.prompt,
+    inputMode: step.inputMode,
+    validationType: step.validationType,
+    allowImageAttachment: Boolean(step.allowImageAttachment),
+    retryCount: state.retryCount || 0,
+    maxRetries: step.maxRetries ?? 3,
+  };
+}
+
 export function isFlowWaitingForGuestInput(sessionId) {
   if (!isCustomerChatBotFlowEnabled()) return false;
   const state = getSessionState(sessionId);
-  return state?.phase === FLOW_PHASE.waiting_input;
+  return (
+    state?.phase === FLOW_PHASE.waiting_input || state?.phase === FLOW_PHASE.waiting_text_input
+  );
+}
+
+async function processTextInputStep(sessionId, step, state, guestMeta, { onTypingChange, signal } = {}) {
+  const text = String(guestMeta?.body || "").trim();
+  const hasImage = Boolean(guestMeta?.image_url);
+  const needsText = (step.validationType || "none") !== "none" || !step.allowImageAttachment;
+
+  if (needsText && !text) {
+    await handleInvalidInput(sessionId, step, state, { onTypingChange, signal });
+    return;
+  }
+
+  if (text && !validateFlowInput(text, step)) {
+    await handleInvalidInput(sessionId, step, { ...state, retryCount: state.retryCount || 0 }, {
+      onTypingChange,
+      signal,
+    });
+    return;
+  }
+
+  if (!text && !hasImage) {
+    await handleInvalidInput(sessionId, step, state, { onTypingChange, signal });
+    return;
+  }
+
+  if (text) {
+    applyFlowInputCapture(sessionId, step, text);
+    tryLinkSessionToCrmCustomer(sessionId);
+  }
+
+  const nextStepId = step.nextStepId || step.fallbackNextStepId;
+  setSessionState(sessionId, {
+    phase: FLOW_PHASE.running,
+    pendingTextInputStepId: null,
+    currentStepId: nextStepId,
+    retryCount: 0,
+    lastProcessedGuestMessageId: guestMeta?.id || null,
+  });
+
+  await runGuestBotFlow(sessionId, { onTypingChange, signal });
 }
 
 export async function handleGuestFlowInput(sessionId, { onTypingChange, signal } = {}) {
   if (!isCustomerChatBotFlowEnabled()) return;
   const state = getSessionState(sessionId);
   if (!state) return;
+
+  if (state.phase === FLOW_PHASE.waiting_text_input) {
+    const flow = getCustomerChatBotFlow();
+    const step = getFlowStepById(flow, state.pendingTextInputStepId);
+    if (!step || step.type !== "choice") return;
+
+    const guestMeta = getLastGuestMessageWithMeta(sessionId);
+    if (!guestMeta?.id || guestMeta.id === state.lastProcessedGuestMessageId) return;
+
+    await processTextInputStep(sessionId, step, state, guestMeta, { onTypingChange, signal });
+    return;
+  }
 
   if (state.phase === FLOW_PHASE.waiting_choice) {
     const flow = getCustomerChatBotFlow();
@@ -153,6 +314,7 @@ export async function handleGuestFlowInput(sessionId, { onTypingChange, signal }
         phase: FLOW_PHASE.running,
         pendingChoiceStepId: null,
         currentStepId: step.fallbackNextStepId,
+        stepHistory: pushStepHistory(state, step.id),
       });
       await runGuestBotFlow(sessionId, { onTypingChange, signal });
     }
@@ -182,6 +344,8 @@ export async function handleGuestFlowChoice(sessionId, optionId, { onTypingChang
     phase: FLOW_PHASE.running,
     pendingChoiceStepId: null,
     currentStepId: nextStepId,
+    stepHistory: pushStepHistory(state, step.id),
+    retryCount: 0,
   });
 
   if (option?.label) {
@@ -209,6 +373,10 @@ export async function runGuestBotFlow(sessionId, { onTypingChange, signal } = {}
       currentStepId: flow.entryStepId,
       phase: FLOW_PHASE.running,
       pendingChoiceStepId: null,
+      pendingTextInputStepId: null,
+      retryCount: 0,
+      stepHistory: [],
+      lastProcessedGuestMessageId: null,
       executedStepIds: [],
     });
   }
@@ -235,6 +403,7 @@ export async function runGuestBotFlow(sessionId, { onTypingChange, signal } = {}
           ...markExecuted(sessionId, step.id, state),
           currentStepId: step.nextStepId,
           phase: FLOW_PHASE.running,
+          stepHistory: pushStepHistory(state, step.id),
         });
         stepId = step.nextStepId;
         break;
@@ -253,6 +422,7 @@ export async function runGuestBotFlow(sessionId, { onTypingChange, signal } = {}
         state = setSessionState(sessionId, {
           currentStepId: step.nextStepId,
           phase: FLOW_PHASE.running,
+          stepHistory: pushStepHistory(state, step.id),
         });
         stepId = step.nextStepId;
         break;
@@ -265,10 +435,23 @@ export async function runGuestBotFlow(sessionId, { onTypingChange, signal } = {}
           if (!ok) return;
           state = setSessionState(sessionId, markExecuted(sessionId, step.id, state));
         }
+
+        if (isTextInputMode(step)) {
+          setSessionState(sessionId, {
+            phase: FLOW_PHASE.waiting_text_input,
+            pendingTextInputStepId: step.id,
+            currentStepId: step.id,
+            retryCount: 0,
+            stepHistory: pushStepHistory(state, step.id),
+          });
+          return;
+        }
+
         setSessionState(sessionId, {
           phase: FLOW_PHASE.waiting_choice,
           pendingChoiceStepId: step.id,
           currentStepId: step.id,
+          stepHistory: pushStepHistory(state, step.id),
         });
         return;
       }
@@ -294,6 +477,7 @@ export async function runGuestBotFlow(sessionId, { onTypingChange, signal } = {}
           ...markExecuted(sessionId, step.id, state),
           currentStepId: branchId,
           phase: FLOW_PHASE.running,
+          stepHistory: pushStepHistory(state, step.id),
         });
         stepId = branchId;
         break;

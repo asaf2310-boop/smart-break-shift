@@ -9,6 +9,7 @@ import {
 } from "@/lib/customerChatBotFlow";
 import {
   getPendingFlowChoices,
+  getPendingFlowTextInput,
   handleGuestFlowInput,
   isFlowBotComplete,
   isFlowWaitingForGuestInput,
@@ -37,6 +38,7 @@ export function useGuestBotConversation(session) {
   const afterMerchantComplete = sessionId ? isAfterMerchantBotFlowComplete(sessionId) : true;
 
   const pendingChoices = sessionId && flowEnabled ? getPendingFlowChoices(sessionId) : null;
+  const pendingTextInput = sessionId && flowEnabled ? getPendingFlowTextInput(sessionId) : null;
   const waitingForInput = sessionId && flowEnabled ? isFlowWaitingForGuestInput(sessionId) : false;
 
   useEffect(() => subscribeCustomerChatStore(() => setStoreTick((n) => n + 1)), []);
@@ -98,7 +100,7 @@ export function useGuestBotConversation(session) {
     }
     lastGuestCountRef.current = guestCount;
 
-    if (!waitingForInput && !pendingChoices) return undefined;
+    if (!waitingForInput && !pendingChoices && !pendingTextInput) return undefined;
     if (flowRunningRef.current) return undefined;
 
     const controller = new AbortController();
@@ -125,6 +127,7 @@ export function useGuestBotConversation(session) {
     storeTick,
     waitingForInput,
     pendingChoices,
+    pendingTextInput,
     stopTyping,
   ]);
 
@@ -161,5 +164,5 @@ export function useGuestBotConversation(session) {
     stopTyping,
   ]);
 
-  return { isBotTyping, pendingChoices, flowEnabled };
+  return { isBotTyping, pendingChoices, pendingTextInput, flowEnabled };
 }

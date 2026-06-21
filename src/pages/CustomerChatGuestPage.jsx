@@ -1,13 +1,15 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { MessageCircle, Send } from "lucide-react";
+import { ImagePlus, MessageCircle, Send } from "lucide-react";
 import { customerChatEnabled, demoModeEnabled } from "@/api/demoClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { m3PageClass } from "@/lib/hypPage";
 import CustomerChatTypingIndicator from "@/components/customer-chat/CustomerChatTypingIndicator";
 import { useGuestBotConversation } from "@/hooks/useGuestBotConversation";
 import { getCustomerChatBotConfig } from "@/lib/customerChatBotConfig";
+import { inputPlaceholderForStep } from "@/lib/customerChatBotFlowValidation";
 import { handleGuestFlowChoice, isFlowBotComplete } from "@/lib/customerChatBotFlowRuntime";
 import { isIntroBotFlowComplete } from "@/lib/customerChatBotFlow";
 import {
@@ -39,9 +41,11 @@ export default function CustomerChatGuestPage() {
   const [messages, setMessages] = useState(() => (session ? listMessages(session.id) : []));
   const [guestName, setGuestName] = useState("");
   const [draft, setDraft] = useState("");
+  const [pendingImage, setPendingImage] = useState(null);
   const [starting, setStarting] = useState(false);
   const bottomRef = useRef(null);
-  const { isBotTyping, pendingChoices, flowEnabled } = useGuestBotConversation(session);
+  const imageInputRef = useRef(null);
+  const { isBotTyping, pendingChoices, pendingTextInput, flowEnabled } = useGuestBotConversation(session);
 
   const refresh = useCallback(() => {
     if (!token) return;
@@ -94,10 +98,26 @@ export default function CustomerChatGuestPage() {
 
   const handleSend = (e) => {
     e.preventDefault();
-    if (!token || !draft.trim()) return;
-    sendGuestMessage(token, draft);
+    if (!token || (!draft.trim() && !pendingImage)) return;
+    sendGuestMessage(token, draft, { imageUrl: pendingImage });
     setDraft("");
+    setPendingImage(null);
     refresh();
+  };
+
+  const handleImagePick = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !file.type.startsWith("image/")) return;
+    if (file.size > 2 * 1024 * 1024) {
+      window.alert("גודל התמונה המקסימלי הוא 2MB");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") setPendingImage(reader.result);
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleClose = () => {
@@ -155,7 +175,8 @@ export default function CustomerChatGuestPage() {
   const canSend = session.status !== "closed";
   const statusLabel = getSessionStatusLabel(session.status);
   const introComplete = flowEnabled ? isFlowBotComplete(session.id) : isIntroBotFlowComplete(session.id);
-  const botBusy = isBotTyping || (flowEnabled && !introComplete && !pendingChoices);
+  const awaitingFlowInput = Boolean(pendingChoices || pendingTextInput);
+  const botBusy = isBotTyping || (flowEnabled && !introComplete && !awaitingFlowInput);
   const needsMerchantRef =
     !flowEnabled &&
     introComplete &&
@@ -163,13 +184,18 @@ export default function CustomerChatGuestPage() {
     getCustomerChatBotConfig().beforeAgent.length > 0;
   const inputPlaceholder = botBusy
     ? "ממתין להודעה מהבוט…"
-    : pendingChoices
-      ? "בחרו אפשרות או כתבו הודעה…"
-      : needsMerchantRef
-        ? "הזינו מספר מסוף או ח.פ…"
-        : session.status === "waiting"
-          ? "כתבו הודעה בזמן ההמתנה…"
-          : "הודעה לנציג…";
+    : pendingTextInput
+      ? inputPlaceholderForStep(pendingTextInput)
+      : pendingChoices
+        ? "בחרו אפשרות או כתבו הודעה…"
+        : needsMerchantRef
+          ? "הזינו מספר מסוף או ח.פ…"
+          : session.status === "waiting"
+            ? "כתבו הודעה בזמן ההמתנה…"
+            : "הודעה לנציג…";
+  const canAttachImage = Boolean(pendingTextInput?.allowImageAttachment);
+  const useTextarea = pendingTextInput?.inputMode === "freeText";
+  const canSubmit = draft.trim() || pendingImage;
 
   return (
     <div className={shellClass} dir="rtl">
@@ -218,6 +244,13 @@ export default function CustomerChatGuestPage() {
                   <div className="customer-chat-bubble customer-chat-bubble--staff max-w-[85%] rounded-2xl rounded-bl-md px-3 py-2 text-sm">
                     <span className="customer-chat-bubble__badge">בוט</span>
                     <p className="whitespace-pre-wrap break-words">{msg.body}</p>
+                    {msg.image_url && (
+                      <img
+                        src={msg.image_url}
+                        alt="תמונה מצורפת"
+                        className="mt-2 max-w-full rounded-lg max-h-48 object-contain"
+                      />
+                    )}
                     <p className="customer-chat-bubble__time">{formatTime(msg.created_at)}</p>
                   </div>
                 </div>
@@ -239,6 +272,13 @@ export default function CustomerChatGuestPage() {
                     <p className="text-[10px] opacity-80 mb-0.5">{msg.sender_name}</p>
                   )}
                   <p className="whitespace-pre-wrap break-words">{msg.body}</p>
+                  {msg.image_url && (
+                    <img
+                      src={msg.image_url}
+                      alt="תמונה מצורפת"
+                      className="mt-2 max-w-full rounded-lg max-h-48 object-contain"
+                    />
+                  )}
                   <p className="customer-chat-bubble__time">
                     {formatTime(msg.created_at)}
                   </p>
@@ -271,23 +311,66 @@ export default function CustomerChatGuestPage() {
       <footer className="border-t border-outline/15 bg-surface p-4">
         <div className="max-w-lg mx-auto space-y-2">
           {canSend ? (
-            <form onSubmit={handleSend} className="flex gap-2">
-              <Input
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                placeholder={inputPlaceholder}
-                className="flex-1 text-right"
-                autoComplete="off"
-                disabled={botBusy && !pendingChoices}
-              />
-              <Button
-                type="submit"
-                size="icon"
-                disabled={!draft.trim() || (botBusy && !pendingChoices)}
-                aria-label="שליחה"
-              >
-                <Send className="w-4 h-4" />
-              </Button>
+            <form onSubmit={handleSend} className="space-y-2">
+              {pendingImage && (
+                <div className="flex items-center gap-2 rounded-xl border border-outline/20 bg-surface-container-low p-2">
+                  <img src={pendingImage} alt="תצוגה מקדימה" className="h-14 w-14 rounded-lg object-cover" />
+                  <span className="text-xs text-on-surface-variant flex-1">תמונה מצורפת</span>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setPendingImage(null)}>
+                    הסר
+                  </Button>
+                </div>
+              )}
+              <div className="flex gap-2">
+                {useTextarea ? (
+                  <Textarea
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    placeholder={inputPlaceholder}
+                    className="flex-1 text-right min-h-[72px]"
+                    autoComplete="off"
+                    disabled={botBusy && !awaitingFlowInput}
+                  />
+                ) : (
+                  <Input
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    placeholder={inputPlaceholder}
+                    className="flex-1 text-right"
+                    autoComplete="off"
+                    disabled={botBusy && !awaitingFlowInput}
+                  />
+                )}
+                {canAttachImage && (
+                  <>
+                    <input
+                      ref={imageInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleImagePick}
+                    />
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      disabled={botBusy && !awaitingFlowInput}
+                      onClick={() => imageInputRef.current?.click()}
+                      aria-label="צרף תמונה"
+                    >
+                      <ImagePlus className="w-4 h-4" />
+                    </Button>
+                  </>
+                )}
+                <Button
+                  type="submit"
+                  size="icon"
+                  disabled={!canSubmit || (botBusy && !awaitingFlowInput)}
+                  aria-label="שליחה"
+                >
+                  <Send className="w-4 h-4" />
+                </Button>
+              </div>
             </form>
           ) : (
             <div className="text-center space-y-3">
