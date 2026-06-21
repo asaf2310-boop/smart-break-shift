@@ -7,7 +7,8 @@ module.exports = {
   		fontFamily: {
   			noto: ['var(--font-noto)'],
   			sans: ['var(--font-sans)'],
-  			heebo: ['var(--font-heebo)']
+  			heebo: ['var(--font-heebo)'],
+  			caveat: ['Caveat', 'Segoe Script', 'cursive']
   		},
   		backgroundImage: {
   			'brand-gradient': 'var(--brand-gradient)',

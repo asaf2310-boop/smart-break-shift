@@ -33,7 +33,7 @@ export default function AppNav() {
   const useBrandNav = brandVisualEnabled;
 
   const tabClass = (active) =>
-    `flex flex-1 sm:flex-none items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 text-xs sm:text-sm whitespace-nowrap transition-all duration-200 ${
+    `inline-flex shrink-0 items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-2 text-xs sm:text-sm whitespace-nowrap transition-all duration-200 ${
       active
         ? useBrandNav
           ? "hyp-nav-tab-active"
@@ -54,11 +54,11 @@ export default function AppNav() {
       aria-label="ניווט ראשי"
     >
       <div className="pointer-events-auto w-full max-w-5xl mx-auto">
-        <div className="min-w-0 overflow-x-auto pt-1">
+        <div className="min-w-0 overflow-x-hidden pt-1">
         <div
           className={`${
             useBrandNav ? "hyp-nav-bar" : "m3-nav-bar"
-          } flex w-max min-w-full sm:min-w-0 p-1.5 gap-1 justify-center`}
+          } flex flex-wrap w-full p-1.5 gap-0.5 sm:gap-1 justify-center`}
         >
           <Link to="/" className={tabClass(location.pathname === "/")}>
             <Home className="w-4 h-4" />

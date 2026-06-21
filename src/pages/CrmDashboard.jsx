@@ -17,7 +17,6 @@ import {
   UsersRound,
 } from "lucide-react";
 import { getStoredAgentName } from "@/constants/scheduling";
-import { demoModeEnabled } from "@/api/demoClient";
 import {
   claimDepartmentReferral,
   createCustomer,
@@ -48,6 +47,7 @@ import {
   openOrActivateTab,
 } from "@/lib/crmDashboardTabs";
 import CustomerForm from "@/components/crm/CustomerForm";
+import CrmDashboardHeader from "@/components/crm/CrmDashboardHeader";
 import CrmDashboardTabBar from "@/components/crm/CrmDashboardTabBar";
 import CrmCustomerDetail from "@/pages/CrmCustomerDetail";
 import {
@@ -78,24 +78,6 @@ function getInitialDashboardCounts(agentName) {
   const cached = readCrmDashboardCountsCache(agentName);
   if (cached) return cached;
   return Object.fromEntries(DASHBOARD_CARDS.map(({ filter }) => [filter, 0]));
-}
-
-const CRM_TITLE_SPLIT = /^CRM\s*[—–-]\s*(.+)$/u;
-
-function DashboardTitle({ title }) {
-  const match = CRM_TITLE_SPLIT.exec(title);
-  if (match) {
-    return (
-      <h1 className="dashboard-title">
-        <span className="dashboard-title-brand">CRM</span>
-        <span className="dashboard-title-sep" aria-hidden="true">
-          —
-        </span>
-        <span className="dashboard-title-sub">{match[1]}</span>
-      </h1>
-    );
-  }
-  return <h1 className="dashboard-title dashboard-title-plain">{title}</h1>;
 }
 
 function ReferralCard({ referral, variant = "personal", onClaim = null, showClosedAt = false, onOpen = null }) {
@@ -447,23 +429,19 @@ export default function CrmDashboard() {
   const showClaimInList = isListTab && activeTab.filter === "team-open";
   const showClosedAt = isListTab && activeTab.filter === "handled-month";
 
-  const headerTitle = isListTab
+  const headerMainTitle = isListTab
     ? filterMeta?.title
     : isDetailTab
       ? activeTab.label
       : hasCrmAgentDashboard
-        ? "CRM — דשבורד נציג"
-        : "CRM — חיפוש לקוחות";
+        ? "דשבורד נציג"
+        : "חיפוש לקוחות";
 
-  const headerDescription = isListTab ? (
-    filterMeta?.description
-  ) : isDetailTab ? (
-    "כרטיס לקוח / פניה"
-  ) : (
-    <>
-      שלום, <strong>{agentName}</strong>
-    </>
-  );
+  const headerSubtitle = isListTab
+    ? filterMeta?.description
+    : isDetailTab
+      ? "כרטיס לקוח / פניה"
+      : `שלום, ${agentName}`;
 
   return (
     <div className={cn(m3PageClass("pb-24 body-container min-h-screen"), "relative")} dir="rtl">
@@ -476,13 +454,11 @@ export default function CrmDashboard() {
             </Link>
           )}
 
-          <div className="dashboard-title-panel">
-            <DashboardTitle title={headerTitle} />
-            <p className="user-info">{headerDescription}</p>
-            {demoModeEnabled ? (
-              <span className="demo-tag">דמו · localStorage</span>
-            ) : null}
-          </div>
+          <CrmDashboardHeader
+            mainTitle={headerMainTitle}
+            subtitle={headerSubtitle}
+            handwritten={isHomeTab}
+          />
 
           <CrmDashboardTabBar
             tabs={tabs}
