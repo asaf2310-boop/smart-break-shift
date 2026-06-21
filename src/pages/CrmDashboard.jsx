@@ -461,27 +461,6 @@ export default function CrmDashboard() {
           </section>
         ) : (
           <>
-            {hasCrmAgentDashboard && (
-              <section className="mb-6">
-                <h2 className="m3-label-large mb-3 flex items-center gap-2">
-                  <LayoutDashboard className="w-4 h-4 text-primary" />
-                  סיכום פניות
-                </h2>
-                <div className="grid grid-cols-2 gap-3">
-                  {DASHBOARD_CARDS.map(({ filter, icon, accent }) => (
-                    <DashboardCard
-                      key={filter}
-                      filter={filter}
-                      count={dashboardCounts[filter] ?? 0}
-                      icon={icon}
-                      accent={accent}
-                      onClick={() => openFilter(filter)}
-                    />
-                  ))}
-                </div>
-              </section>
-            )}
-
             <section className="mb-6">
               <h2 className="m3-label-large mb-3 flex items-center gap-2">
                 <Search className="w-4 h-4 text-on-surface-variant" />
@@ -534,6 +513,27 @@ export default function CrmDashboard() {
                 </div>
               ) : null}
             </section>
+
+            {hasCrmAgentDashboard && (
+              <section className="mb-6">
+                <h2 className="m3-label-large mb-3 flex items-center gap-2">
+                  <LayoutDashboard className="w-4 h-4 text-primary" />
+                  סיכום פניות
+                </h2>
+                <div className="grid grid-cols-2 gap-3">
+                  {DASHBOARD_CARDS.map(({ filter, icon, accent }) => (
+                    <DashboardCard
+                      key={filter}
+                      filter={filter}
+                      count={dashboardCounts[filter] ?? 0}
+                      icon={icon}
+                      accent={accent}
+                      onClick={() => openFilter(filter)}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
 
             {!hasQuery && (
               <>
