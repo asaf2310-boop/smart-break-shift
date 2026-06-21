@@ -6,7 +6,6 @@ import { useToast } from "@/components/ui/use-toast";
 import { motion } from "framer-motion";
 import { ShieldCheck, Plus, X, Settings } from "lucide-react";
 import DateSelector from "../components/breaks/DateSelector";
-import { Link } from "react-router-dom";
 import BreakSettingsPanel from "../components/admin/BreakSettingsPanel";
 import ChatBrandingPanel from "../components/admin/ChatBrandingPanel";
 import {
@@ -251,11 +250,6 @@ export default function AdminDashboard() {
         <AdminSubNav />
 
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <Link to="/" className="text-sm text-slate-400 hover:text-slate-700 transition-colors shrink-0">
-              ← ראשי
-            </Link>
-          </div>
           <div className="text-center">
             <div className="flex items-center gap-3 justify-center mb-1">
               <div

@@ -4,6 +4,7 @@ import { Loader2, ShieldAlert } from "lucide-react";
 import { demoModeEnabled } from "@/api/demoClient";
 import AgentLogin from "@/components/auth/AgentLogin";
 import { LoginShell } from "@/components/auth/LoginShell";
+import AdminTopBar from "@/components/admin/AdminTopBar";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { m3PageClass } from "@/lib/hypPage";
 
@@ -30,7 +31,14 @@ export default function AdminGate({ children }) {
   }
 
   if (isAdmin) {
-    return children;
+    return (
+      <>
+        <div className="relative z-20 mx-auto w-full max-w-5xl px-4 pt-4" dir="rtl">
+          <AdminTopBar />
+        </div>
+        {children}
+      </>
+    );
   }
 
   return (
