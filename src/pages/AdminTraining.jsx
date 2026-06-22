@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 import { hypHeaderIconClass, m3PageClass } from "@/lib/hypPage";
 import { demoModeEnabled } from "@/api/demoClient";
 import { supabaseConfigured } from "@/api/supabase";
-import { resolveTrainingSchedule } from "@/lib/trainingSchedule";
+import { alignTrainingDateSelection, resolveTrainingSchedule } from "@/lib/trainingSchedule";
 import {
   deleteTrainingSession,
   hydrateTrainingData,
@@ -66,15 +66,34 @@ export default function AdminTraining() {
   const [filterPresentationsToDay, setFilterPresentationsToDay] = useState(true);
   const [courseStartDraft, setCourseStartDraft] = useState(initial.courseStartDraft);
 
-  const refreshSchedule = useCallback(() => {
-    const next = resolveTrainingSchedule();
-    setSchedule(next);
-    setCourseStartDraft(next.courseStartDate);
-  }, []);
+  const applyResolvedSchedule = useCallback(
+    (next, overrides = {}) => {
+      const currentSelectedKey = overrides.selectedDateKey ?? dateKey(selectedDate);
+      const nextSelectedKey =
+        currentSelectedKey && next.days.some((day) => day.date === currentSelectedKey)
+          ? currentSelectedKey
+          : alignTrainingDateSelection(currentSelectedKey, schedule.courseStartDate, next.courseStartDate, next.days);
+      const resolvedSelectedDate = overrides.selectedDate ?? parseISO(`${nextSelectedKey}T12:00:00`);
+
+      setSelectedDate(resolvedSelectedDate);
+      setVisibleMonth(overrides.visibleMonth ?? startOfMonth(resolvedSelectedDate));
+      setSchedule(next);
+      setCourseStartDraft(next.courseStartDate);
+    },
+    [schedule.courseStartDate, selectedDate]
+  );
+
+  const refreshSchedule = useCallback(
+    (overrides) => {
+      const next = resolveTrainingSchedule();
+      applyResolvedSchedule(next, overrides);
+    },
+    [applyResolvedSchedule]
+  );
 
   React.useEffect(() => {
-    hydrateTrainingData().then(refreshSchedule);
-    return subscribeTrainingScheduleStore(refreshSchedule);
+    hydrateTrainingData().then(() => refreshSchedule());
+    return subscribeTrainingScheduleStore(() => refreshSchedule());
   }, [refreshSchedule]);
 
   const sessionsByDate = useMemo(() => {
@@ -92,6 +111,20 @@ export default function AdminTraining() {
   const selectedKey = dateKey(selectedDate);
   const selectedDaySessions = sessionsByDate[selectedKey] || [];
   const selectedDayMeta = schedule.days.find((d) => d.date === selectedKey);
+
+  React.useEffect(() => {
+    if (selectedDayMeta) return;
+    const nextSelectedKey = alignTrainingDateSelection(
+      selectedKey,
+      schedule.courseStartDate,
+      schedule.courseStartDate,
+      schedule.days
+    );
+    if (!nextSelectedKey || nextSelectedKey === selectedKey) return;
+    const nextSelectedDate = parseISO(`${nextSelectedKey}T12:00:00`);
+    setSelectedDate(nextSelectedDate);
+    setVisibleMonth(startOfMonth(nextSelectedDate));
+  }, [schedule.courseStartDate, schedule.days, selectedDayMeta, selectedKey]);
 
   const teachableSessions = useMemo(
     () => schedule.sessions.filter((s) => !s.isBreak),
@@ -212,11 +245,21 @@ export default function AdminTraining() {
 
   const handleSaveCourseStart = () => {
     if (!courseStartDraft) return;
+    const previousStart = schedule.courseStartDate;
     updateTrainingCourseConfig({ courseStartDate: courseStartDraft });
-    refreshSchedule();
-    const newStart = parseISO(`${courseStartDraft}T12:00:00`);
-    setSelectedDate(newStart);
-    setVisibleMonth(startOfMonth(newStart));
+    const next = resolveTrainingSchedule();
+    const nextSelectedKey = alignTrainingDateSelection(
+      selectedKey,
+      previousStart,
+      next.courseStartDate,
+      next.days
+    );
+    const nextSelectedDate = parseISO(`${nextSelectedKey}T12:00:00`);
+    applyResolvedSchedule(next, {
+      selectedDate: nextSelectedDate,
+      selectedDateKey: nextSelectedKey,
+      visibleMonth: startOfMonth(nextSelectedDate),
+    });
     toast({
       title: "תאריך התחלת הקורס עודכן",
       description: "תאריכי ימי הקורס והמפגשים הותאמו לתאריך החדש",

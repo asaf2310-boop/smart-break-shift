@@ -12,6 +12,31 @@ function parseDateOnly(isoDate) {
   return parseISO(`${isoDate}T12:00:00`);
 }
 
+export function shiftTrainingDateKey(dateStr, deltaDays) {
+  if (!dateStr) return null;
+  return format(addDays(parseDateOnly(dateStr), deltaDays), "yyyy-MM-dd");
+}
+
+export function alignTrainingDateSelection(dateStr, previousCourseStartDate, nextCourseStartDate, days = []) {
+  const availableDates = new Set(days.map((day) => day.date));
+  if (dateStr && availableDates.has(dateStr)) {
+    return dateStr;
+  }
+
+  if (dateStr && previousCourseStartDate && nextCourseStartDate) {
+    const deltaDays = differenceInCalendarDays(
+      parseDateOnly(nextCourseStartDate),
+      parseDateOnly(previousCourseStartDate)
+    );
+    const shiftedDate = shiftTrainingDateKey(dateStr, deltaDays);
+    if (shiftedDate && availableDates.has(shiftedDate)) {
+      return shiftedDate;
+    }
+  }
+
+  return days[0]?.date ?? nextCourseStartDate ?? null;
+}
+
 /** Shift template day offsets to actual dates for the current course (before localStorage overrides). */
 export function resolveTrainingScheduleBase(config = courseConfig, template = courseTemplate) {
   const templateStart = parseDateOnly(config.templateStartDate);

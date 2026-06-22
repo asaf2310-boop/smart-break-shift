@@ -12,6 +12,7 @@ import {
 import TrainingDayTimeline from "@/components/training/TrainingDayTimeline";
 
 import {
+  alignTrainingDateSelection,
   groupTrainingDaysIntoWeeks,
   resolveTrainingSchedule,
 } from "@/lib/trainingSchedule";
@@ -160,6 +161,7 @@ export default function TrainingPage() {
   const [selectedDayKey, setSelectedDayKey] = useState(null);
   const [loading, setLoading] = useState(true);
   const weeksSignatureRef = useRef("");
+  const previousCourseStartRef = useRef(schedule.courseStartDate);
 
   const sessionIds = useMemo(
     () => schedule.sessions.filter((s) => !s.isBreak).map((s) => s.id),
@@ -223,10 +225,25 @@ export default function TrainingPage() {
   );
 
   useEffect(() => {
-    if (selectedDayKey && !selectedDay) {
-      setSelectedDayKey(null);
+    if (!selectedDayKey) {
+      previousCourseStartRef.current = schedule.courseStartDate;
+      return;
     }
-  }, [selectedDayKey, selectedDay]);
+
+    if (selectedDay) {
+      previousCourseStartRef.current = schedule.courseStartDate;
+      return;
+    }
+
+    const nextSelectedKey = alignTrainingDateSelection(
+      selectedDayKey,
+      previousCourseStartRef.current,
+      schedule.courseStartDate,
+      schedule.days
+    );
+    setSelectedDayKey(nextSelectedKey === selectedDayKey ? null : nextSelectedKey);
+    previousCourseStartRef.current = schedule.courseStartDate;
+  }, [schedule.courseStartDate, schedule.days, selectedDay, selectedDayKey]);
 
   const handleOpenSession = useCallback(
     async (session) => {
