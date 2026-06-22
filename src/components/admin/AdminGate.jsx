@@ -9,10 +9,10 @@ import { useAgentSession } from "@/hooks/useAgentSession";
 import { m3PageClass } from "@/lib/hypPage";
 
 export default function AdminGate({ children }) {
-  const { isLoggedIn, refresh, session, bootstrapped } = useAgentSession();
+  const { isLoggedIn, refresh, session, bootstrapped, validated } = useAgentSession();
   const isAdmin = Boolean(isLoggedIn && session?.isAdmin === true);
 
-  if (!bootstrapped) {
+  if (!bootstrapped || !validated) {
     return (
       <div className={m3PageClass("flex items-center justify-center p-12")} dir="rtl">
         <Loader2 className="w-6 h-6 animate-spin text-primary" aria-label="בודק הרשאות מנהל" />

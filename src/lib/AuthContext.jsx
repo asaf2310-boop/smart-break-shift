@@ -6,10 +6,10 @@ const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
-  const [isLoadingPublicSettings, setIsLoadingPublicSettings] = useState(true);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(false);
+  const [isLoadingPublicSettings, setIsLoadingPublicSettings] = useState(false);
   const [authError, setAuthError] = useState(null);
-  const [authChecked, setAuthChecked] = useState(false);
+  const [authChecked, setAuthChecked] = useState(true);
   const [appPublicSettings] = useState(null);
 
   const finish = ({ demoAdmin = false, error = null } = {}) => {
@@ -22,10 +22,6 @@ export const AuthProvider = ({ children }) => {
   };
 
   const checkAppState = async () => {
-    setIsLoadingPublicSettings(true);
-    setIsLoadingAuth(true);
-    setAuthError(null);
-
     if (demoModeEnabled) {
       finish({ demoAdmin: true });
       return;

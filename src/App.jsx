@@ -66,14 +66,8 @@ import { hasTopAppNav } from '@/lib/appNavPaths';
 import { brandVisualEnabled } from '@/lib/brandShell';
 import { applyHypDemoDocumentClasses, hypDemoAppShellClass } from '@/lib/hypPage';
 import { useEffect } from 'react';
-import { useAgentSession } from '@/hooks/useAgentSession';
+import { AgentSessionProvider } from '@/hooks/useAgentSession';
 import { cn } from '@/lib/utils';
-
-/** בודק בכל טעינה/מיקוד שהסשן תקף — מנתק מי שלא הגדיר סיסמה */
-function AgentSessionGuard() {
-  useAgentSession();
-  return null;
-}
 
 function TopAppNav() {
   const { pathname } = useLocation();
@@ -200,8 +194,8 @@ function App() {
       <QueryClientProvider client={queryClientInstance}>
         <LiveDataSync />
         <Router>
-          <AgentSessionGuard />
-          <FloatingWidgetsLayerProvider>
+          <AgentSessionProvider>
+            <FloatingWidgetsLayerProvider>
             <ChatPanelProvider>
               <TelephonyProvider>
                 <ChatUnreadProvider>
@@ -212,6 +206,7 @@ function App() {
               </TelephonyProvider>
             </ChatPanelProvider>
           </FloatingWidgetsLayerProvider>
+          </AgentSessionProvider>
         </Router>
         <Toaster />
       </QueryClientProvider>

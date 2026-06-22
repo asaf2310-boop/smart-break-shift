@@ -27,13 +27,13 @@ function hasStoredAgentSession() {
 
 export default function AgentReviewSms() {
   const { toast } = useToast();
-  const { isLoggedIn, bootstrapped, accessToken } = useAgentSession();
+  const { isLoggedIn, isLikelyLoggedIn, bootstrapped, accessToken } = useAgentSession();
   const isAdmin = useIsAdmin();
   const [phone, setPhone] = useState("");
   const [sending, setSending] = useState(false);
   const [smsConfig, setSmsConfig] = useState(getInitialReviewSmsConfigState);
 
-  const likelyLoggedIn = isLoggedIn || (!bootstrapped && hasStoredAgentSession());
+  const likelyLoggedIn = isLikelyLoggedIn || (!bootstrapped && hasStoredAgentSession());
 
   useEffect(() => {
     if (bootstrapped && !isLoggedIn) return undefined;

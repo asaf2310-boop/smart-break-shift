@@ -28,7 +28,7 @@ const REQUIREMENT_MESSAGES = {
 
 /** חוסם נתיבי CRM לפי crm_role (וב-build flag) */
 export default function CrmGate({ children, redirect = true, require = "access", deferHydration = false }) {
-  const { isLoggedIn, refresh, session, bootstrapped } = useAgentSession();
+  const { isLoggedIn, refresh, session, bootstrapped, validated } = useAgentSession();
   const [hydrating, setHydrating] = useState(
     () => !deferHydration && crmEnabled && isCrmCloudEnabled() && !isCrmStoreHydrated()
   );
@@ -79,7 +79,7 @@ export default function CrmGate({ children, redirect = true, require = "access",
     );
   }
 
-  if ((!deferHydration && hydrating) || !bootstrapped) {
+  if ((!deferHydration && hydrating) || !bootstrapped || !validated) {
     return (
       <div className={m3PageClass("flex items-center justify-center p-12")} dir="rtl">
         <Loader2 className="w-6 h-6 animate-spin text-primary" aria-label="טוען CRM" />
