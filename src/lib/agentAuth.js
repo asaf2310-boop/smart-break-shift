@@ -38,6 +38,21 @@ export const AGENT_AUTH_TIMEOUT_MSG =
 const AGENT_PROFILE_COLUMNS =
   "id,email,display_name,auth_user_id,active,blocked,needs_password_setup,deleted_at,phone,modules,is_admin,crm_role";
 
+/** Anon SELECT grant (security_phase0a/1) — pre-login queries must not request is_admin/crm_role */
+const AGENT_ANON_LOGIN_COLUMNS =
+  "id,email,display_name,auth_user_id,active,blocked,needs_password_setup,deleted_at,phone,modules";
+
+const SESSION_VALIDATION_CACHE_MS = 45 * 1000;
+let sessionValidationPromise = null;
+let sessionValidationStartedAt = 0;
+let agentBootstrapPromise = null;
+
+export function invalidateAgentSessionValidationCache() {
+  sessionValidationPromise = null;
+  sessionValidationStartedAt = 0;
+  agentBootstrapPromise = null;
+}
+
 function withAuthTimeout(promise, ms = 15000) {
   return Promise.race([
     promise,
@@ -283,7 +298,7 @@ async function refreshSupabaseSessionIfNeeded() {
   }
 }
 
-export async function validateAndRefreshAgentSession() {
+async function validateAndRefreshAgentSessionImpl() {
   await refreshSupabaseSessionIfNeeded();
 
   const session = getAgentSession();
@@ -360,17 +375,57 @@ export async function validateAndRefreshAgentSession() {
   return session;
 }
 
+/** Deduplicates validation within a short TTL (focus, multiple hook mounts). */
+export async function validateAndRefreshAgentSession({ force = false } = {}) {
+  const now = Date.now();
+  if (
+    !force &&
+    sessionValidationPromise &&
+    now - sessionValidationStartedAt < SESSION_VALIDATION_CACHE_MS
+  ) {
+    return sessionValidationPromise;
+  }
+
+  sessionValidationStartedAt = now;
+  sessionValidationPromise = validateAndRefreshAgentSessionImpl().catch((err) => {
+    sessionValidationPromise = null;
+    sessionValidationStartedAt = 0;
+    throw err;
+  });
+  return sessionValidationPromise;
+}
+
+/** Single restore + validate pass for app bootstrap (deduped across callers). */
+export async function bootstrapAgentSession({ force = false } = {}) {
+  if (!force && agentBootstrapPromise) {
+    return agentBootstrapPromise;
+  }
+
+  agentBootstrapPromise = (async () => {
+    try {
+      await restoreSupabaseAgentSession();
+      return await validateAndRefreshAgentSession({ force: true });
+    } finally {
+      agentBootstrapPromise = null;
+    }
+  })();
+
+  return agentBootstrapPromise;
+}
+
 export function getAgentSession() {
   if (typeof window === "undefined") return null;
   return readJson(getAgentSessionStorage(), AGENT_SESSION_KEY);
 }
 
 export function setAgentSession(session) {
+  invalidateAgentSessionValidationCache();
   writeJson(getAgentSessionStorage(), AGENT_SESSION_KEY, session);
   window.dispatchEvent(new CustomEvent("agent-session-changed"));
 }
 
 export function clearAgentSession() {
+  invalidateAgentSessionValidationCache();
   removeKey(getAgentSessionStorage(), AGENT_SESSION_KEY);
   if (typeof window !== "undefined") {
     window.localStorage.removeItem("agent_name");
@@ -386,10 +441,11 @@ async function resolveSupabaseAgentByEmail(email) {
   if (!normalized || !supabase) return null;
 
   try {
+    const columns = await agentProfileSelectColumns();
     const { data, error } = await withAuthTimeout(
       supabase
         .from("agents")
-        .select(AGENT_PROFILE_COLUMNS)
+        .select(columns)
         .ilike("email", normalized)
         .limit(1)
         .maybeSingle()
@@ -454,8 +510,30 @@ function invalidTempPasswordError() {
   return { ok: false, error: "invalid_temp_password", message: INVALID_TEMP_PASSWORD_MSG };
 }
 
+/** 12-digit SMS codes — strip spaces/dashes so paste from SMS still matches Auth password */
+function normalizeTemporaryPasswordInput(password) {
+  return String(password || "").replace(/\D/g, "");
+}
+
+async function agentProfileSelectColumns() {
+  if (!supabase || demoModeEnabled) return AGENT_PROFILE_COLUMNS;
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    return session?.user ? AGENT_PROFILE_COLUMNS : AGENT_ANON_LOGIN_COLUMNS;
+  } catch {
+    return AGENT_ANON_LOGIN_COLUMNS;
+  }
+}
+
 export async function agentVerifyTemporaryPassword(email, password) {
   const normalizedEmail = String(email || "").trim().toLowerCase();
+  const tempPassword = normalizeTemporaryPasswordInput(password);
+  if (tempPassword.length < PASSWORD_MIN_LENGTH) {
+    return invalidTempPasswordError();
+  }
+
   const agent = await resolveAgentByEmail(normalizedEmail);
   if (!canAgentAuthenticate(agent)) {
     return invalidTempPasswordError();
@@ -463,7 +541,7 @@ export async function agentVerifyTemporaryPassword(email, password) {
 
   if (demoModeEnabled) {
     const user = findDemoUserByEmailAny(normalizedEmail);
-    if (!verifyDemoUserPassword(user, password)) {
+    if (!verifyDemoUserPassword(user, tempPassword)) {
       return invalidTempPasswordError();
     }
     return { ok: true };
@@ -475,7 +553,7 @@ export async function agentVerifyTemporaryPassword(email, password) {
     const { error } = await withAuthTimeout(
       supabase.auth.signInWithPassword({
         email: normalizedEmail,
-        password: String(password),
+        password: tempPassword,
       })
     );
     if (error) {
@@ -725,9 +803,6 @@ export async function restoreSupabaseAgentSession() {
   }
 
   if (existing?.authUserId === authSession.user.id) {
-    void validateAndRefreshAgentSession().catch((err) => {
-      console.warn("[agentAuth] background session validation failed", err);
-    });
     return existing;
   }
 
