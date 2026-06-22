@@ -214,7 +214,13 @@ export default function AdminTraining() {
     if (!courseStartDraft) return;
     updateTrainingCourseConfig({ courseStartDate: courseStartDraft });
     refreshSchedule();
-    toast({ title: "תאריך התחלת הקורס עודכן" });
+    const newStart = parseISO(`${courseStartDraft}T12:00:00`);
+    setSelectedDate(newStart);
+    setVisibleMonth(startOfMonth(newStart));
+    toast({
+      title: "תאריך התחלת הקורס עודכן",
+      description: "תאריכי ימי הקורס והמפגשים הותאמו לתאריך החדש",
+    });
   };
 
   const handleFile = async (sessionId, file) => {

@@ -1,3 +1,4 @@
+import { addDays, differenceInCalendarDays, format, parseISO } from "date-fns";
 import courseConfig from "@/data/trainingCourseConfig.json";
 import { demoModeEnabled } from "@/api/demoClient";
 import { dataClient } from "@/api/client";
@@ -273,8 +274,47 @@ export function deleteTrainingSession(sessionId) {
   writeRaw(store);
 }
 
+function shiftIsoDate(isoDate, deltaDays) {
+  const date = parseISO(`${isoDate}T12:00:00`);
+  return format(addDays(date, deltaDays), "yyyy-MM-dd");
+}
+
+/** When course start moves, shift patched/custom session dates by the same delta. */
+function shiftSessionDatesForCourseStartChange(store, deltaDays) {
+  if (!deltaDays) return;
+
+  for (const [sessionId, patch] of Object.entries(store.sessionPatches)) {
+    if (!patch?.date) continue;
+    store.sessionPatches[sessionId] = {
+      ...patch,
+      date: shiftIsoDate(patch.date, deltaDays),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  store.addedSessions = store.addedSessions.map((session) => ({
+    ...session,
+    date: shiftIsoDate(session.date, deltaDays),
+    updatedAt: new Date().toISOString(),
+  }));
+}
+
 export function updateTrainingCourseConfig(patch) {
   const store = readRaw();
+  const currentConfig = { ...courseConfig, ...store.configOverrides };
+
+  let courseStartDelta = 0;
+  if (patch.courseStartDate !== undefined) {
+    const newStart = String(patch.courseStartDate ?? "").trim();
+    const oldStart = currentConfig.courseStartDate;
+    if (newStart && oldStart && newStart !== oldStart) {
+      courseStartDelta = differenceInCalendarDays(
+        parseISO(`${newStart}T12:00:00`),
+        parseISO(`${oldStart}T12:00:00`)
+      );
+    }
+  }
+
   const allowed = ["title", "description", "courseStartDate", "templateStartDate"];
   const next = { ...store.configOverrides };
   for (const key of allowed) {
@@ -285,6 +325,11 @@ export function updateTrainingCourseConfig(patch) {
     }
   }
   store.configOverrides = next;
+
+  if (courseStartDelta !== 0) {
+    shiftSessionDatesForCourseStartChange(store, courseStartDelta);
+  }
+
   writeRaw(store);
 }
 
