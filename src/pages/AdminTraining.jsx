@@ -66,33 +66,63 @@ export default function AdminTraining() {
   const [filterPresentationsToDay, setFilterPresentationsToDay] = useState(true);
   const [courseStartDraft, setCourseStartDraft] = useState(initial.courseStartDraft);
 
-  const applyResolvedSchedule = useCallback(
-    (next, overrides = {}) => {
-      const currentSelectedKey = overrides.selectedDateKey ?? dateKey(selectedDate);
-      const nextSelectedKey =
-        currentSelectedKey && next.days.some((day) => day.date === currentSelectedKey)
-          ? currentSelectedKey
-          : alignTrainingDateSelection(currentSelectedKey, schedule.courseStartDate, next.courseStartDate, next.days);
-      const resolvedSelectedDate = overrides.selectedDate ?? parseISO(`${nextSelectedKey}T12:00:00`);
+  const selectedKey = dateKey(selectedDate);
+  const previousCourseStartRef = useRef(initial.schedule.courseStartDate);
+  const selectedKeyRef = useRef(dateKey(initial.selectedDate));
 
+  selectedKeyRef.current = selectedKey;
+
+  const applyResolvedSchedule = useCallback((next, overrides = {}) => {
+    const previousCourseStartDate = overrides.previousCourseStartDate ?? previousCourseStartRef.current;
+    const currentSelectedKey = overrides.selectedDateKey ?? selectedKeyRef.current;
+    const courseStartChanged = previousCourseStartDate !== next.courseStartDate;
+
+    const nextSelectedKey =
+      !courseStartChanged && currentSelectedKey && next.days.some((day) => day.date === currentSelectedKey)
+        ? currentSelectedKey
+        : alignTrainingDateSelection(
+            currentSelectedKey,
+            previousCourseStartDate,
+            next.courseStartDate,
+            next.days
+          );
+
+    const fallbackKey = courseStartChanged
+      ? (next.days.find((day) => day.date === next.courseStartDate)?.date ??
+        next.days[0]?.date ??
+        next.courseStartDate)
+      : (next.days[0]?.date ?? next.courseStartDate);
+    const resolvedKey = nextSelectedKey || fallbackKey;
+    if (!resolvedKey) return;
+
+    const resolvedSelectedDate = overrides.selectedDate ?? parseISO(`${resolvedKey}T12:00:00`);
+    if (Number.isNaN(resolvedSelectedDate.getTime())) return;
+
+    const nextVisibleMonth =
+      overrides.visibleMonth ??
+      (courseStartChanged ? startOfMonth(parseISO(`${next.courseStartDate}T12:00:00`)) : null);
+
+    if (resolvedKey !== currentSelectedKey) {
       setSelectedDate(resolvedSelectedDate);
-      setVisibleMonth(overrides.visibleMonth ?? startOfMonth(resolvedSelectedDate));
-      setSchedule(next);
-      setCourseStartDraft(next.courseStartDate);
-    },
-    [schedule.courseStartDate, selectedDate]
-  );
+      setVisibleMonth(nextVisibleMonth ?? startOfMonth(resolvedSelectedDate));
+    } else if (nextVisibleMonth) {
+      setVisibleMonth(nextVisibleMonth);
+    }
 
-  const refreshSchedule = useCallback(
-    (overrides) => {
-      const next = resolveTrainingSchedule();
-      applyResolvedSchedule(next, overrides);
-    },
-    [applyResolvedSchedule]
-  );
+    setSchedule(next);
+    setCourseStartDraft(next.courseStartDate);
+    previousCourseStartRef.current = next.courseStartDate;
+  }, []);
+
+  const refreshSchedule = useCallback((overrides) => {
+    applyResolvedSchedule(resolveTrainingSchedule(), overrides);
+  }, [applyResolvedSchedule]);
 
   React.useEffect(() => {
-    hydrateTrainingData().then(() => refreshSchedule());
+    let mounted = true;
+    hydrateTrainingData().then(() => {
+      if (mounted) refreshSchedule();
+    });
     return subscribeTrainingScheduleStore(() => refreshSchedule());
   }, [refreshSchedule]);
 
@@ -108,23 +138,8 @@ export default function AdminTraining() {
     return map;
   }, [schedule.sessions]);
 
-  const selectedKey = dateKey(selectedDate);
   const selectedDaySessions = sessionsByDate[selectedKey] || [];
   const selectedDayMeta = schedule.days.find((d) => d.date === selectedKey);
-
-  React.useEffect(() => {
-    if (selectedDayMeta) return;
-    const nextSelectedKey = alignTrainingDateSelection(
-      selectedKey,
-      schedule.courseStartDate,
-      schedule.courseStartDate,
-      schedule.days
-    );
-    if (!nextSelectedKey || nextSelectedKey === selectedKey) return;
-    const nextSelectedDate = parseISO(`${nextSelectedKey}T12:00:00`);
-    setSelectedDate(nextSelectedDate);
-    setVisibleMonth(startOfMonth(nextSelectedDate));
-  }, [schedule.courseStartDate, schedule.days, selectedDayMeta, selectedKey]);
 
   const teachableSessions = useMemo(
     () => schedule.sessions.filter((s) => !s.isBreak),
@@ -245,21 +260,9 @@ export default function AdminTraining() {
 
   const handleSaveCourseStart = () => {
     if (!courseStartDraft) return;
-    const previousStart = schedule.courseStartDate;
+    const previousCourseStartDate = schedule.courseStartDate;
     updateTrainingCourseConfig({ courseStartDate: courseStartDraft });
-    const next = resolveTrainingSchedule();
-    const nextSelectedKey = alignTrainingDateSelection(
-      selectedKey,
-      previousStart,
-      next.courseStartDate,
-      next.days
-    );
-    const nextSelectedDate = parseISO(`${nextSelectedKey}T12:00:00`);
-    applyResolvedSchedule(next, {
-      selectedDate: nextSelectedDate,
-      selectedDateKey: nextSelectedKey,
-      visibleMonth: startOfMonth(nextSelectedDate),
-    });
+    refreshSchedule({ previousCourseStartDate });
     toast({
       title: "תאריך התחלת הקורס עודכן",
       description: "תאריכי ימי הקורס והמפגשים הותאמו לתאריך החדש",
