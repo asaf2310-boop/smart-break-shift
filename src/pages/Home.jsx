@@ -8,6 +8,7 @@ import { customerChatEnabled, crmEnabled, demoModeEnabled, knowledgeEnabled } fr
 import { connectAgentAsAvailable } from "@/lib/agentChatPresence";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { useAgentModules } from "@/hooks/useAgentModules";
+import { useTrainingCourseVisible } from "@/hooks/useTrainingCourseVisible";
 import { filterItemsByModules } from "@/constants/agentModules";
 import { agentLogout } from "@/lib/agentAuth";
 
@@ -113,7 +114,11 @@ const showAdminDemoHint = import.meta.env.DEV || demoModeEnabled;
 function HomeContent() {
   const { displayName, isLikelyLoggedIn, bootstrapped, refresh } = useAgentSession();
   const { rawModules } = useAgentModules();
-  const visibleCards = filterItemsByModules(homeCards, rawModules);
+  const { visible: trainingCourseVisible, ready: trainingCourseReady } = useTrainingCourseVisible();
+  const visibleCards = filterItemsByModules(homeCards, rawModules).filter((card) => {
+    if (card.module !== "training") return true;
+    return trainingCourseReady && trainingCourseVisible;
+  });
   const agentCount = getAgentNamesList().length;
 
   const handleLoginSuccess = (session) => {

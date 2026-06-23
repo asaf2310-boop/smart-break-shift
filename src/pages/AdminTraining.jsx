@@ -23,8 +23,10 @@ import { demoModeEnabled } from "@/api/demoClient";
 import { supabaseConfigured } from "@/api/supabase";
 import { alignTrainingDateSelection, resolveTrainingSchedule } from "@/lib/trainingSchedule";
 import {
+  deleteTrainingCourse,
   deleteTrainingSession,
   hydrateTrainingData,
+  isTrainingCourseArchived,
   resetTrainingScheduleStore,
   subscribeTrainingScheduleStore,
   updateTrainingCourseConfig,
@@ -40,6 +42,16 @@ import {
 } from "@/lib/trainingPresentations";
 import TrainingScheduleCalendar from "@/components/training/TrainingScheduleCalendar";
 import TrainingSessionDialog from "@/components/training/TrainingSessionDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 function dateKey(d) {
   return format(d, "yyyy-MM-dd");
@@ -65,6 +77,8 @@ export default function AdminTraining() {
   const [sessionDialog, setSessionDialog] = useState(null);
   const [filterPresentationsToDay, setFilterPresentationsToDay] = useState(true);
   const [courseStartDraft, setCourseStartDraft] = useState(initial.courseStartDraft);
+  const [deleteCourseOpen, setDeleteCourseOpen] = useState(false);
+  const [courseArchived, setCourseArchived] = useState(() => isTrainingCourseArchived());
 
   const selectedKey = dateKey(selectedDate);
   const previousCourseStartRef = useRef(initial.schedule.courseStartDate);
@@ -119,6 +133,7 @@ export default function AdminTraining() {
 
     setSchedule(next);
     setCourseStartDraft(next.courseStartDate);
+    setCourseArchived(isTrainingCourseArchived());
     previousCourseStartRef.current = next.courseStartDate;
   }, []);
 
@@ -269,6 +284,20 @@ export default function AdminTraining() {
     toast({ title: "לוח הזמנים אופס" });
   };
 
+  const handleDeleteCourse = () => {
+    try {
+      deleteTrainingCourse();
+      refreshSchedule();
+      setDeleteCourseOpen(false);
+      toast({
+        title: "הקורס הוסר",
+        description: "הנציגים לא יראו את ההדרכה. להפעלת קורס חדש — הגדירו תאריך התחלה ושמרו.",
+      });
+    } catch {
+      toast({ title: "שגיאה", description: "לא ניתן למחוק את הקורס", variant: "destructive" });
+    }
+  };
+
   const handleSaveCourseStart = () => {
     if (!courseStartDraft) return;
     const previousCourseStartDate = schedule.courseStartDate;
@@ -380,6 +409,11 @@ export default function AdminTraining() {
           animate={{ opacity: 1, y: 0 }}
           className="m3-card p-4 mb-6 text-sm text-on-surface-variant space-y-2 border border-primary/15"
         >
+          {courseArchived ? (
+            <p className="font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 m-0">
+              הקורס מוסתר מנציגים. להפעלה מחדש — הגדירו תאריך התחלת קורס חדש ולחצו «שמירת תאריך קורס».
+            </p>
+          ) : null}
           <p className="font-medium text-on-surface">איך זה עובד</p>
           <ul className="list-disc list-inside space-y-1 m-0">
             <li>בלוח השנה: לחצו על יום לצפייה ועריכה במפגשים של אותו יום.</li>
@@ -416,6 +450,14 @@ export default function AdminTraining() {
           >
             <RotateCcw className="w-4 h-4" />
             איפוס לוח
+          </button>
+          <button
+            type="button"
+            onClick={() => setDeleteCourseOpen(true)}
+            className="m3-btn-outlined text-xs py-2 gap-1 text-destructive border-destructive/30"
+          >
+            <Trash2 className="w-4 h-4" />
+            מחיקת קורס
           </button>
         </div>
 
@@ -665,6 +707,27 @@ export default function AdminTraining() {
         onClose={() => setSessionDialog(null)}
         onSave={handleSaveSession}
       />
+
+      <AlertDialog open={deleteCourseOpen} onOpenChange={setDeleteCourseOpen}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>מחיקת קורס?</AlertDialogTitle>
+            <AlertDialogDescription className="text-start leading-relaxed">
+              פעולה זו תסתיר את לוח ההדרכה מכל הנציגים ותנקה התאמות ללוח (מפגשים מותאמים, תאריכים שונו וכו׳).
+              ניתן להפעיל קורס חדש על ידי הגדרת תאריך התחלה ושמירה.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row-reverse gap-2 sm:justify-start">
+            <AlertDialogAction
+              onClick={handleDeleteCourse}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              מחיקת קורס
+            </AlertDialogAction>
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

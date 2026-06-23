@@ -21,6 +21,7 @@ function makeSessionId() {
 function emptyStore() {
   return {
     version: 1,
+    courseArchived: false,
     configOverrides: {},
     sessionPatches: {},
     addedSessions: [],
@@ -32,6 +33,7 @@ function normalizeStore(parsed) {
   if (!parsed || parsed.version !== 1) return emptyStore();
   return {
     version: 1,
+    courseArchived: Boolean(parsed.courseArchived),
     configOverrides: parsed.configOverrides || {},
     sessionPatches: parsed.sessionPatches || {},
     addedSessions: Array.isArray(parsed.addedSessions) ? parsed.addedSessions : [],
@@ -96,6 +98,7 @@ async function persistScheduleToCloud(store) {
 function storeHasOverrides(store) {
   const s = normalizeStore(store);
   return (
+    s.courseArchived ||
     Object.keys(s.configOverrides).length > 0 ||
     Object.keys(s.sessionPatches).length > 0 ||
     s.addedSessions.length > 0 ||
@@ -106,6 +109,7 @@ function storeHasOverrides(store) {
 function schedulePayloadSignature(store) {
   const s = normalizeStore(store);
   return JSON.stringify({
+    courseArchived: s.courseArchived,
     configOverrides: s.configOverrides,
     sessionPatches: s.sessionPatches,
     addedSessions: s.addedSessions,
@@ -406,10 +410,29 @@ export function updateTrainingCourseConfig(patch) {
   store.configOverrides = next;
 
   if (patch.courseStartDate !== undefined) {
+    const newStart = String(patch.courseStartDate ?? "").trim();
+    if (newStart) {
+      store.courseArchived = false;
+    }
     clearTemplateSessionDateOverrides(store);
     shiftCustomSessionDatesForCourseStartChange(store, courseStartDelta);
   }
 
+  writeRaw(store);
+}
+
+export function isTrainingCourseArchived() {
+  return Boolean(readRaw().courseArchived);
+}
+
+/** מסתיר את הקורס מנציגים ומנקה התאמות — קורס חדש מתחיל בתאריך התחלה חדש. */
+export function deleteTrainingCourse() {
+  const store = readRaw();
+  store.courseArchived = true;
+  store.configOverrides = {};
+  store.sessionPatches = {};
+  store.addedSessions = [];
+  store.deletedSessionIds = [];
   writeRaw(store);
 }
 

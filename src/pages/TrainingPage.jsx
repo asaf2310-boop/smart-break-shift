@@ -20,6 +20,7 @@ import {
   hydrateTrainingData,
   subscribeTrainingScheduleStore,
 } from "@/lib/trainingScheduleStore";
+import { useTrainingCourseVisible } from "@/hooks/useTrainingCourseVisible";
 import {
   getExternalLink,
   listPresentationAvailability,
@@ -157,6 +158,7 @@ function FullScheduleGrid({ weeks, daySummaries, onSelectDay }) {
 }
 
 export default function TrainingPage() {
+  const { visible: courseVisible, ready: courseVisibilityReady } = useTrainingCourseVisible();
   const [schedule, setSchedule] = useState(() => resolveTrainingSchedule());
   const [selectedDayKey, setSelectedDayKey] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -173,6 +175,8 @@ export default function TrainingPage() {
   const refreshSchedule = useCallback(() => {
     setSchedule(resolveTrainingSchedule());
   }, []);
+
+  const showCourse = courseVisibilityReady && courseVisible;
 
   useEffect(() => {
     let cancelled = false;
@@ -301,10 +305,26 @@ export default function TrainingPage() {
           {weeks.length > 1 && ` · ${weeks.length} שבועות`}
         </motion.p>
 
-        {loading ? (
+        {loading || !courseVisibilityReady ? (
           <div className="flex justify-center py-16">
             <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
           </div>
+        ) : !showCourse ? (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="m3-card p-8 text-center border border-outline-variant/30"
+          >
+            <GraduationCap className="w-12 h-12 text-on-surface-variant/50 mx-auto mb-4" aria-hidden />
+            <h2 className="m3-title-large text-lg font-semibold mb-2">אין קורס פעיל כרגע</h2>
+            <p className="m3-label-medium text-on-surface-variant mb-6">
+              לוח ההדרכה אינו זמין — הקורס הסתיים או הוסר על ידי המנהל.
+            </p>
+            <Link to="/" className="m3-btn-primary text-sm py-2 inline-flex">
+              <ArrowRight className="w-4 h-4" />
+              חזרה לדף הבית
+            </Link>
+          </motion.div>
         ) : (
         <AnimatePresence mode="wait">
           {selectedDay ? (

@@ -4,6 +4,7 @@ import courseTemplate from "@/data/trainingCourseTemplate.json";
 import {
   applyScheduleCustomizations,
   getEffectiveCourseConfig,
+  isTrainingCourseArchived,
 } from "@/lib/trainingScheduleStore";
 
 const HEBREW_WEEKDAY = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
@@ -170,6 +171,31 @@ export function groupTrainingDaysIntoWeeks(days) {
         rangeLabel: formatTrainingWeekRangeLabel(sorted),
       };
     });
+}
+
+/** Last calendar day of the course (from resolved sessions/days). */
+export function getTrainingCourseEndDate(schedule) {
+  if (!schedule) return null;
+  const lastDay = schedule.days?.[schedule.days.length - 1];
+  if (lastDay?.date) return lastDay.date;
+  if (schedule.sessions?.length) {
+    return [...schedule.sessions].sort((a, b) => a.date.localeCompare(b.date)).at(-1)?.date ?? null;
+  }
+  return schedule.courseStartDate ?? null;
+}
+
+/** True when the course's last day is strictly before today (yyyy-MM-dd). */
+export function isTrainingCourseEnded(schedule, referenceDate = new Date()) {
+  const endDate = getTrainingCourseEndDate(schedule);
+  if (!endDate) return false;
+  const todayStr = format(referenceDate, "yyyy-MM-dd");
+  return endDate < todayStr;
+}
+
+/** Whether agents should see training (not archived and course end date is today or later). */
+export function isTrainingCourseVisibleForAgents(schedule, referenceDate = new Date()) {
+  if (isTrainingCourseArchived()) return false;
+  return !isTrainingCourseEnded(schedule, referenceDate);
 }
 
 /** First course week, or the week that contains today when within the course date span. */

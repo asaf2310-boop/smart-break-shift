@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { BarChart3, BookOpen, CalendarClock, CalendarDays, Contact, GraduationCap, Home, MessageCircle, Monitor, ShieldCheck, Star } from "lucide-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useAgentModules } from "@/hooks/useAgentModules";
+import { useTrainingCourseVisible } from "@/hooks/useTrainingCourseVisible";
 import { useCrmRole } from "@/hooks/useCrmRole";
 import { customerChatEnabled, crmEnabled, demoModeEnabled, knowledgeEnabled } from "@/api/demoClient";
 import { brandVisualEnabled } from "@/lib/brandShell";
@@ -16,8 +17,10 @@ export default function AppNav() {
   const location = useLocation();
   const isAdmin = useIsAdmin();
   const { hasModule, isLoggedIn } = useAgentModules();
+  const { visible: trainingCourseVisible, ready: trainingCourseReady } = useTrainingCourseVisible();
   const { hasCrmAccess } = useCrmRole();
   const showTab = (moduleId) => !isLoggedIn || hasModule(moduleId);
+  const showTrainingTab = showTab("training") && trainingCourseReady && trainingCourseVisible;
   const showCrmTab = crmEnabled && (!isLoggedIn || hasCrmAccess || showTab("crm"));
   const isBreaks = location.pathname === "/breaks";
   const isShifts = location.pathname === "/shifts";
@@ -76,7 +79,7 @@ export default function AppNav() {
               משמרות
             </Link>
           )}
-          {showTab("training") && (
+          {showTrainingTab && (
             <Link to="/training" className={tabClass(isTraining)}>
               <GraduationCap className="w-4 h-4" />
               הדרכה
