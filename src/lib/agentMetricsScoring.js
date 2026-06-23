@@ -38,6 +38,9 @@ const CALLS_PER_HOUR_HEADERS = new Set([
   "שיחות/שעה",
   "שיחה/שעה",
   "calls per hour",
+  "avg call per hour",
+  "call per hour",
+  "calls/hour",
   "cph",
   "avg calls per hour",
 ]);
@@ -131,6 +134,7 @@ function isPhoneCallsPerHourHeader(columnName) {
   if (isWhatsappHeader(columnName)) return false;
   if (CALLS_PER_HOUR_HEADERS.has(norm)) return true;
   if (norm.includes("calls") && norm.includes("hour")) return true;
+  if (norm.includes("call") && norm.includes("hour") && !norm.includes("handle")) return true;
   if (!norm.includes("שעה")) return false;
   if (norm.includes("משך")) return false;
   if (norm.includes("שיחות") && !norm.includes("whatsapp") && !norm.includes("ווטסאפ")) return true;
@@ -138,25 +142,57 @@ function isPhoneCallsPerHourHeader(columnName) {
   return false;
 }
 
+/** עמודות ספציפיות יותר (למשל «ממוצע שיחה בשעה») עדיפות על «שיחות לשעה» ריקה */
+function phoneCallsPerHourColumnPriority(columnName) {
+  const norm = normalizeHeader(columnName);
+  let score = 0;
+  if (CALLS_PER_HOUR_HEADERS.has(norm)) score += 30;
+  if (norm.includes("ממוצע")) score += 15;
+  if (norm.includes("שיחה") || norm.includes("שיחות")) score += 5;
+  score += norm.length / 100;
+  return score;
+}
+
+function isWhatsappPerHourHeader(columnName) {
+  const norm = normalizeHeader(columnName);
+  if (WHATSAPP_PER_HOUR_HEADERS.has(norm)) return true;
+  if (isWhatsappHeader(columnName) && norm.includes("שעה")) return true;
+  if (norm.includes("whatsapp") && norm.includes("hour")) return true;
+  return false;
+}
+
+function whatsappPerHourColumnPriority(columnName) {
+  const norm = normalizeHeader(columnName);
+  let score = 0;
+  if (WHATSAPP_PER_HOUR_HEADERS.has(norm)) score += 30;
+  if (norm.includes("ממוצע")) score += 15;
+  if (isWhatsappHeader(columnName)) score += 5;
+  score += norm.length / 100;
+  return score;
+}
+
+function sortPhoneCallsPerHourColumns(columns = []) {
+  return columns
+    .filter(isPhoneCallsPerHourHeader)
+    .sort((a, b) => phoneCallsPerHourColumnPriority(b) - phoneCallsPerHourColumnPriority(a));
+}
+
+function sortWhatsappPerHourColumns(columns = []) {
+  return columns
+    .filter(isWhatsappPerHourHeader)
+    .sort((a, b) => whatsappPerHourColumnPriority(b) - whatsappPerHourColumnPriority(a));
+}
+
 function resolvePointSettings(pointSettings) {
   return { ...DEFAULT_METRICS_POINT_SETTINGS, ...(pointSettings || {}) };
 }
 
 export function findCallsPerHourColumn(columns = []) {
-  for (const col of columns) {
-    if (isPhoneCallsPerHourHeader(col)) return col;
-  }
-  return null;
+  return sortPhoneCallsPerHourColumns(columns)[0] ?? null;
 }
 
 export function findWhatsappPerHourColumn(columns = []) {
-  for (const col of columns) {
-    const norm = normalizeHeader(col);
-    if (WHATSAPP_PER_HOUR_HEADERS.has(norm)) return col;
-    if (isWhatsappHeader(col) && norm.includes("שעה")) return col;
-    if (norm.includes("whatsapp") && norm.includes("hour")) return col;
-  }
-  return null;
+  return sortWhatsappPerHourColumns(columns)[0] ?? null;
 }
 
 export function findIncomingCallsColumn(columns = []) {
@@ -278,11 +314,16 @@ export function computeEmailPoints(row, columns, pointSettings, { includeTickets
 /** ניקוד שיחות לשעה לנציג טלפוני */
 export function computePhoneCallPointsPerHour(row, columns, pointSettings) {
   const settings = resolvePointSettings(pointSettings);
-  const callsCol = findCallsPerHourColumn(columns);
-  const callsPerHour = metricNumber(row, callsCol);
-  if (callsPerHour !== null) {
-    return callsPerHour * settings.phoneCall;
+  const candidateCols = sortPhoneCallsPerHourColumns(columns);
+
+  for (const col of candidateCols) {
+    const callsPerHour = metricNumber(row, col);
+    if (callsPerHour !== null) {
+      return callsPerHour * settings.phoneCall;
+    }
   }
+
+  if (candidateCols.length) return null;
 
   const incoming = metricNumber(row, findIncomingCallsColumn(columns));
   const outgoing = metricNumber(row, findOutgoingCallsColumn(columns));
@@ -296,10 +337,13 @@ export function computePhoneCallPointsPerHour(row, columns, pointSettings) {
 /** ניקוד WhatsApp לשעה */
 export function computeWhatsappPointsPerHour(row, columns, pointSettings) {
   const settings = resolvePointSettings(pointSettings);
-  const waCol = findWhatsappPerHourColumn(columns);
-  const perHour = metricNumber(row, waCol);
-  if (perHour === null) return null;
-  return perHour * settings.whatsappCall;
+  for (const col of sortWhatsappPerHourColumns(columns)) {
+    const perHour = metricNumber(row, col);
+    if (perHour !== null) {
+      return perHour * settings.whatsappCall;
+    }
+  }
+  return null;
 }
 
 function pickBestValue(values, higherIsBetter) {
@@ -653,4 +697,76 @@ export function formatCompositeScore(score) {
   const n = Number(score);
   const display = n <= 1 && n > 0 ? n * 100 : n;
   return `${Math.round(display)}`;
+}
+
+/**
+ * פירוט חישוב לדיבוג — מחזיר ניקוד גולמי, מנורמל ומשוקלל לכל נציג.
+ * @param {object} params — אותם שדות כמו rankUnifiedMetricRows
+ */
+export function debugUnifiedRankingBreakdown({
+  phoneRows = [],
+  phoneColumns = [],
+  whatsappRows = [],
+  whatsappColumns = [],
+  pointSettings,
+} = {}) {
+  const settings = resolvePointSettings(pointSettings);
+  const phoneAgents = phoneRows.filter((r) => !isTeamAverageLabel(r.agent_name || r.agentName));
+  const waAgents = whatsappRows.filter((r) => !isTeamAverageLabel(r.agent_name || r.agentName));
+  const phoneMetricCols = phoneColumns.slice(1);
+  const waMetricCols = whatsappColumns.slice(1);
+
+  const entries = [
+    ...phoneAgents.map((row) => ({
+      row,
+      channel: METRICS_CHANNEL.phone,
+      metricColumns: phoneMetricCols,
+      callsCol: findCallsPerHourColumn(phoneMetricCols),
+    })),
+    ...waAgents.map((row) => ({
+      row,
+      channel: METRICS_CHANNEL.whatsapp,
+      metricColumns: waMetricCols,
+      callsCol: findWhatsappPerHourColumn(waMetricCols),
+    })),
+  ];
+
+  const ranked = rankUnifiedMetricRows({
+    phoneRows: phoneAgents,
+    phoneColumns,
+    whatsappRows: waAgents,
+    whatsappColumns,
+    pointSettings: settings,
+  });
+
+  return ranked.map((scored) => {
+    const entry = entries.find(
+      (e) => (e.row.agent_name || e.row.agentName) === scored.agent_name
+    );
+    const components = buildScoreComponents(
+      entry?.metricColumns ?? [],
+      scored._channel,
+      settings
+    ).filter((c) => c.getRaw);
+
+    const parts = components.map((comp) => {
+      const raw = comp.getRaw(entry.row);
+      return {
+        key: comp.key,
+        weight: comp.weight,
+        raw,
+        callsColumn: comp.key === "callsPerHour" || comp.key === "whatsappPerHour" ? entry?.callsCol : undefined,
+      };
+    });
+
+    return {
+      agent: scored.agent_name,
+      channel: scored._channel,
+      rank: scored._rank,
+      compositeScore: scored._compositeScore,
+      callsColumn: entry?.callsCol ?? null,
+      components: parts,
+      pointSettings: settings,
+    };
+  });
 }
