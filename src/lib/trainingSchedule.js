@@ -19,8 +19,32 @@ export function shiftTrainingDateKey(dateStr, deltaDays) {
   return format(shifted, "yyyy-MM-dd");
 }
 
-export function alignTrainingDateSelection(dateStr, previousCourseStartDate, nextCourseStartDate, days = []) {
+export function alignTrainingDateSelection(
+  dateStr,
+  previousCourseStartDate,
+  nextCourseStartDate,
+  days = [],
+  { courseStartChanged = false } = {}
+) {
   const availableDates = new Set(days.map((day) => day.date));
+
+  if (courseStartChanged && nextCourseStartDate) {
+    if (availableDates.has(nextCourseStartDate)) {
+      return nextCourseStartDate;
+    }
+    if (dateStr && previousCourseStartDate) {
+      const deltaDays = differenceInCalendarDays(
+        parseDateOnly(nextCourseStartDate),
+        parseDateOnly(previousCourseStartDate)
+      );
+      if (Number.isFinite(deltaDays)) {
+        const shiftedDate = shiftTrainingDateKey(dateStr, deltaDays);
+        if (shiftedDate) return shiftedDate;
+      }
+    }
+    return nextCourseStartDate;
+  }
+
   if (dateStr && availableDates.has(dateStr)) {
     return dateStr;
   }

@@ -235,11 +235,13 @@ export default function TrainingPage() {
       return;
     }
 
+    const courseStartChanged = previousCourseStartRef.current !== schedule.courseStartDate;
     const nextSelectedKey = alignTrainingDateSelection(
       selectedDayKey,
       previousCourseStartRef.current,
       schedule.courseStartDate,
-      schedule.days
+      schedule.days,
+      { courseStartChanged }
     );
     setSelectedDayKey(nextSelectedKey === selectedDayKey ? null : nextSelectedKey);
     previousCourseStartRef.current = schedule.courseStartDate;

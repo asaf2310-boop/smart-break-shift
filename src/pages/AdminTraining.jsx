@@ -69,6 +69,7 @@ export default function AdminTraining() {
   const selectedKey = dateKey(selectedDate);
   const previousCourseStartRef = useRef(initial.schedule.courseStartDate);
   const selectedKeyRef = useRef(dateKey(initial.selectedDate));
+  const suppressStoreRefreshRef = useRef(0);
 
   selectedKeyRef.current = selectedKey;
 
@@ -77,8 +78,15 @@ export default function AdminTraining() {
     const currentSelectedKey = overrides.selectedDateKey ?? selectedKeyRef.current;
     const courseStartChanged = previousCourseStartDate !== next.courseStartDate;
 
-    const nextSelectedKey =
-      !courseStartChanged && currentSelectedKey && next.days.some((day) => day.date === currentSelectedKey)
+    const nextSelectedKey = courseStartChanged
+      ? alignTrainingDateSelection(
+          currentSelectedKey,
+          previousCourseStartDate,
+          next.courseStartDate,
+          next.days,
+          { courseStartChanged: true }
+        )
+      : currentSelectedKey && next.days.some((day) => day.date === currentSelectedKey)
         ? currentSelectedKey
         : alignTrainingDateSelection(
             currentSelectedKey,
@@ -102,7 +110,7 @@ export default function AdminTraining() {
       overrides.visibleMonth ??
       (courseStartChanged ? startOfMonth(parseISO(`${next.courseStartDate}T12:00:00`)) : null);
 
-    if (resolvedKey !== currentSelectedKey) {
+    if (courseStartChanged || resolvedKey !== currentSelectedKey) {
       setSelectedDate(resolvedSelectedDate);
       setVisibleMonth(nextVisibleMonth ?? startOfMonth(resolvedSelectedDate));
     } else if (nextVisibleMonth) {
@@ -123,7 +131,10 @@ export default function AdminTraining() {
     hydrateTrainingData().then(() => {
       if (mounted) refreshSchedule();
     });
-    return subscribeTrainingScheduleStore(() => refreshSchedule());
+    return subscribeTrainingScheduleStore(() => {
+      if (suppressStoreRefreshRef.current > 0) return;
+      refreshSchedule();
+    });
   }, [refreshSchedule]);
 
   const sessionsByDate = useMemo(() => {
@@ -261,8 +272,13 @@ export default function AdminTraining() {
   const handleSaveCourseStart = () => {
     if (!courseStartDraft) return;
     const previousCourseStartDate = schedule.courseStartDate;
-    updateTrainingCourseConfig({ courseStartDate: courseStartDraft });
-    refreshSchedule({ previousCourseStartDate });
+    suppressStoreRefreshRef.current += 1;
+    try {
+      updateTrainingCourseConfig({ courseStartDate: courseStartDraft });
+      refreshSchedule({ previousCourseStartDate });
+    } finally {
+      suppressStoreRefreshRef.current -= 1;
+    }
     toast({
       title: "תאריך התחלת הקורס עודכן",
       description: "תאריכי ימי הקורס והמפגשים הותאמו לתאריך החדש",

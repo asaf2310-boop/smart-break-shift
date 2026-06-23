@@ -73,15 +73,21 @@ async function persistScheduleToCloud(store) {
     return;
   }
 
+  const normalizedPayload = normalizeStore(store);
+  const existing = await dataClient.entities.TrainingScheduleSettings.filter({ id: CLOUD_ROW_ID });
+  const existingRow = existing?.[0];
+  if (existingRow?.payload && schedulePayloadsEqual(normalizedPayload, existingRow.payload)) {
+    return;
+  }
+
   const payload = {
     id: CLOUD_ROW_ID,
-    payload: normalizeStore(store),
+    payload: normalizedPayload,
     updated_at: new Date().toISOString(),
   };
 
-  const existing = await dataClient.entities.TrainingScheduleSettings.filter({ id: CLOUD_ROW_ID });
-  if (existing?.length) {
-    await dataClient.entities.TrainingScheduleSettings.update(existing[0].id, payload);
+  if (existingRow) {
+    await dataClient.entities.TrainingScheduleSettings.update(existingRow.id, payload);
   } else {
     await dataClient.entities.TrainingScheduleSettings.create(payload);
   }
@@ -95,6 +101,21 @@ function storeHasOverrides(store) {
     s.addedSessions.length > 0 ||
     s.deletedSessionIds.length > 0
   );
+}
+
+function schedulePayloadSignature(store) {
+  const s = normalizeStore(store);
+  return JSON.stringify({
+    configOverrides: s.configOverrides,
+    sessionPatches: s.sessionPatches,
+    addedSessions: s.addedSessions,
+    deletedSessionIds: [...s.deletedSessionIds].sort(),
+  });
+}
+
+function schedulePayloadsEqual(a, b) {
+  if (!a || !b) return false;
+  return schedulePayloadSignature(a) === schedulePayloadSignature(b);
 }
 
 async function loadScheduleFromCloud() {
@@ -117,13 +138,19 @@ async function loadScheduleFromCloud() {
       const cloudUpdated = Date.parse(row.updated_at || cloudStore.updatedAt || 0);
       if (localUpdated >= cloudUpdated) {
         memoryStore = local;
-        await persistScheduleToCloud(local);
+        if (!schedulePayloadsEqual(local, cloudStore)) {
+          await persistScheduleToCloud(local);
+        }
         return memoryStore;
       }
-      memoryStore = cloudStore;
-      if (typeof window !== "undefined") {
-        localStorage.setItem(TRAINING_SCHEDULE_STORAGE_KEY, JSON.stringify(memoryStore));
+      if (!schedulePayloadsEqual(local, cloudStore)) {
+        memoryStore = cloudStore;
+        if (typeof window !== "undefined") {
+          localStorage.setItem(TRAINING_SCHEDULE_STORAGE_KEY, JSON.stringify(memoryStore));
+        }
+        return memoryStore;
       }
+      memoryStore = local;
       return memoryStore;
     }
 
@@ -305,11 +332,12 @@ function shiftIsoDate(isoDate, deltaDays) {
   return format(shifted, "yyyy-MM-dd");
 }
 
-/** Template sessions get dates from resolveTrainingScheduleBase — drop stale date overrides. */
 function clearTemplateSessionDateOverrides(store) {
   for (const sessionId of TEMPLATE_SESSION_IDS) {
     const patch = store.sessionPatches[sessionId];
-    if (!patch || patch.date == null) continue;
+    if (!patch) continue;
+    const hasDate = patch.date != null && String(patch.date).trim() !== "";
+    if (!hasDate) continue;
 
     const { date: _date, ...rest } = patch;
     const meaningfulKeys = Object.keys(rest).filter((key) => key !== "updatedAt");
@@ -324,12 +352,15 @@ function clearTemplateSessionDateOverrides(store) {
   }
 }
 
-/** When course start moves, shift patched/custom session dates by the same delta. */
-function shiftSessionDatesForCourseStartChange(store, deltaDays) {
+/**
+ * Template session dates are rebuilt from courseStartDate + dayOffset.
+ * Only shift custom (non-template) session dates when the course start moves.
+ */
+function shiftCustomSessionDatesForCourseStartChange(store, deltaDays) {
   if (!deltaDays) return;
 
   for (const [sessionId, patch] of Object.entries(store.sessionPatches)) {
-    if (!patch?.date) continue;
+    if (TEMPLATE_SESSION_IDS.has(sessionId) || !patch?.date) continue;
     store.sessionPatches[sessionId] = {
       ...patch,
       date: shiftIsoDate(patch.date, deltaDays),
@@ -376,9 +407,7 @@ export function updateTrainingCourseConfig(patch) {
 
   if (patch.courseStartDate !== undefined) {
     clearTemplateSessionDateOverrides(store);
-    if (courseStartDelta !== 0) {
-      shiftSessionDatesForCourseStartChange(store, courseStartDelta);
-    }
+    shiftCustomSessionDatesForCourseStartChange(store, courseStartDelta);
   }
 
   writeRaw(store);
