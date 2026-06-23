@@ -244,7 +244,8 @@ export function detectMetricsChannel(columns = []) {
   const hasPhoneCalls = metricColumns.some((col) => {
     const norm = normalizeHeader(col);
     if (norm.includes("ווטסאפ") || norm.includes("whatsapp")) return false;
-    return norm.includes("שיחות") && norm.includes("שעה");
+    if (!norm.includes("שעה") || norm.includes("משך")) return false;
+    return norm.includes("שיחות") || norm.includes("שיחה");
   });
   if (hasWhatsapp && !hasPhoneCalls) return "whatsapp";
   return "phone";

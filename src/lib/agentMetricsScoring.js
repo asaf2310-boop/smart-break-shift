@@ -31,8 +31,12 @@ const CALLS_PER_HOUR_HEADERS = new Set([
   "שיחות ממוצע לשעה",
   "ממוצע שיחות לשעה",
   "ממוצע שיחות בשעה",
+  "ממוצע שיחה לשעה",
+  "ממוצע שיחה בשעה",
   "שיחות לשעה",
+  "שיחה לשעה",
   "שיחות/שעה",
+  "שיחה/שעה",
   "calls per hour",
   "cph",
   "avg calls per hour",
@@ -122,17 +126,25 @@ function isWhatsappHeader(columnName) {
   return norm.includes("ווטסאפ") || norm.includes("whatsapp") || norm.includes("wa ");
 }
 
+function isPhoneCallsPerHourHeader(columnName) {
+  const norm = normalizeHeader(columnName);
+  if (isWhatsappHeader(columnName)) return false;
+  if (CALLS_PER_HOUR_HEADERS.has(norm)) return true;
+  if (norm.includes("calls") && norm.includes("hour")) return true;
+  if (!norm.includes("שעה")) return false;
+  if (norm.includes("משך")) return false;
+  if (norm.includes("שיחות") && !norm.includes("whatsapp") && !norm.includes("ווטסאפ")) return true;
+  if (norm.includes("שיחה") && !norm.includes("משך")) return true;
+  return false;
+}
+
 function resolvePointSettings(pointSettings) {
   return { ...DEFAULT_METRICS_POINT_SETTINGS, ...(pointSettings || {}) };
 }
 
 export function findCallsPerHourColumn(columns = []) {
   for (const col of columns) {
-    if (isWhatsappHeader(col)) continue;
-    const norm = normalizeHeader(col);
-    if (CALLS_PER_HOUR_HEADERS.has(norm)) return col;
-    if (norm.includes("שיחות") && norm.includes("שעה") && !norm.includes("whatsapp")) return col;
-    if (norm.includes("calls") && norm.includes("hour")) return col;
+    if (isPhoneCallsPerHourHeader(col)) return col;
   }
   return null;
 }
