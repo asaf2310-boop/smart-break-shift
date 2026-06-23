@@ -1,5 +1,6 @@
 import { addDays, differenceInCalendarDays, format, parseISO } from "date-fns";
 import courseConfig from "@/data/trainingCourseConfig.json";
+import courseTemplate from "@/data/trainingCourseTemplate.json";
 import { demoModeEnabled } from "@/api/demoClient";
 import { dataClient } from "@/api/client";
 import { isSupabaseBackend } from "@/api/dataClient";
@@ -8,6 +9,7 @@ export const TRAINING_SCHEDULE_STORAGE_KEY = "smart-break-shift-training-schedul
 export const TRAINING_SCHEDULE_CHANGE_EVENT = "training-schedule-changed";
 
 const CLOUD_ROW_ID = "default";
+const TEMPLATE_SESSION_IDS = new Set(courseTemplate.sessions.map((session) => session.id));
 
 let memoryStore = null;
 let hydratePromise = null;
@@ -56,6 +58,7 @@ function readRaw() {
 
 function writeRaw(store) {
   memoryStore = normalizeStore(store);
+  memoryStore.updatedAt = new Date().toISOString();
   if (typeof window !== "undefined") {
     localStorage.setItem(TRAINING_SCHEDULE_STORAGE_KEY, JSON.stringify(memoryStore));
     window.dispatchEvent(new CustomEvent(TRAINING_SCHEDULE_CHANGE_EVENT));
@@ -105,15 +108,34 @@ async function loadScheduleFromCloud() {
   try {
     const rows = await dataClient.entities.TrainingScheduleSettings.filter({ id: CLOUD_ROW_ID });
     const row = rows?.[0];
-    if (row?.payload && storeHasOverrides(row.payload)) {
-      memoryStore = normalizeStore(row.payload);
+    const cloudStore = row?.payload ? normalizeStore(row.payload) : null;
+    const localHas = storeHasOverrides(local);
+    const cloudHas = cloudStore && storeHasOverrides(cloudStore);
+
+    if (localHas && cloudHas) {
+      const localUpdated = Date.parse(local.updatedAt || 0);
+      const cloudUpdated = Date.parse(row.updated_at || cloudStore.updatedAt || 0);
+      if (localUpdated >= cloudUpdated) {
+        memoryStore = local;
+        await persistScheduleToCloud(local);
+        return memoryStore;
+      }
+      memoryStore = cloudStore;
       if (typeof window !== "undefined") {
         localStorage.setItem(TRAINING_SCHEDULE_STORAGE_KEY, JSON.stringify(memoryStore));
       }
       return memoryStore;
     }
 
-    if (storeHasOverrides(local)) {
+    if (cloudHas) {
+      memoryStore = cloudStore;
+      if (typeof window !== "undefined") {
+        localStorage.setItem(TRAINING_SCHEDULE_STORAGE_KEY, JSON.stringify(memoryStore));
+      }
+      return memoryStore;
+    }
+
+    if (localHas) {
       memoryStore = local;
       await persistScheduleToCloud(local);
       return memoryStore;
@@ -275,8 +297,31 @@ export function deleteTrainingSession(sessionId) {
 }
 
 function shiftIsoDate(isoDate, deltaDays) {
+  if (!isoDate || !Number.isFinite(deltaDays)) return isoDate;
   const date = parseISO(`${isoDate}T12:00:00`);
-  return format(addDays(date, deltaDays), "yyyy-MM-dd");
+  if (Number.isNaN(date.getTime())) return isoDate;
+  const shifted = addDays(date, deltaDays);
+  if (Number.isNaN(shifted.getTime())) return isoDate;
+  return format(shifted, "yyyy-MM-dd");
+}
+
+/** Template sessions get dates from resolveTrainingScheduleBase — drop stale date overrides. */
+function clearTemplateSessionDateOverrides(store) {
+  for (const sessionId of TEMPLATE_SESSION_IDS) {
+    const patch = store.sessionPatches[sessionId];
+    if (!patch || patch.date == null) continue;
+
+    const { date: _date, ...rest } = patch;
+    const meaningfulKeys = Object.keys(rest).filter((key) => key !== "updatedAt");
+    if (meaningfulKeys.length === 0) {
+      delete store.sessionPatches[sessionId];
+    } else {
+      store.sessionPatches[sessionId] = {
+        ...rest,
+        updatedAt: new Date().toISOString(),
+      };
+    }
+  }
 }
 
 /** When course start moves, shift patched/custom session dates by the same delta. */
@@ -292,11 +337,14 @@ function shiftSessionDatesForCourseStartChange(store, deltaDays) {
     };
   }
 
-  store.addedSessions = store.addedSessions.map((session) => ({
-    ...session,
-    date: shiftIsoDate(session.date, deltaDays),
-    updatedAt: new Date().toISOString(),
-  }));
+  store.addedSessions = store.addedSessions.map((session) => {
+    if (!session?.date) return session;
+    return {
+      ...session,
+      date: shiftIsoDate(session.date, deltaDays),
+      updatedAt: new Date().toISOString(),
+    };
+  });
 }
 
 export function updateTrainingCourseConfig(patch) {
@@ -326,8 +374,11 @@ export function updateTrainingCourseConfig(patch) {
   }
   store.configOverrides = next;
 
-  if (courseStartDelta !== 0) {
-    shiftSessionDatesForCourseStartChange(store, courseStartDelta);
+  if (patch.courseStartDate !== undefined) {
+    clearTemplateSessionDateOverrides(store);
+    if (courseStartDelta !== 0) {
+      shiftSessionDatesForCourseStartChange(store, courseStartDelta);
+    }
   }
 
   writeRaw(store);

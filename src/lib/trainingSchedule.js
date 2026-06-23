@@ -13,8 +13,10 @@ function parseDateOnly(isoDate) {
 }
 
 export function shiftTrainingDateKey(dateStr, deltaDays) {
-  if (!dateStr) return null;
-  return format(addDays(parseDateOnly(dateStr), deltaDays), "yyyy-MM-dd");
+  if (!dateStr || !Number.isFinite(deltaDays)) return null;
+  const shifted = addDays(parseDateOnly(dateStr), deltaDays);
+  if (Number.isNaN(shifted.getTime())) return null;
+  return format(shifted, "yyyy-MM-dd");
 }
 
 export function alignTrainingDateSelection(dateStr, previousCourseStartDate, nextCourseStartDate, days = []) {
@@ -28,6 +30,9 @@ export function alignTrainingDateSelection(dateStr, previousCourseStartDate, nex
       parseDateOnly(nextCourseStartDate),
       parseDateOnly(previousCourseStartDate)
     );
+    if (!Number.isFinite(deltaDays)) {
+      return days[0]?.date ?? nextCourseStartDate ?? null;
+    }
     const shiftedDate = shiftTrainingDateKey(dateStr, deltaDays);
     if (shiftedDate && availableDates.has(shiftedDate)) {
       return shiftedDate;
