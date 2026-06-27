@@ -25,6 +25,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { demoModeEnabled } from "@/api/demoClient";
 import ScheduleGridScroll from "@/components/shifts/ScheduleGridScroll";
 import { listManagedAgents } from "@/lib/agentsApi";
+import { getLiveQueryOptions } from "@/lib/liveQuery";
 
 function AgentCell({
   agents,
@@ -162,6 +163,7 @@ export default function PublishedScheduleEditor({ weekStart }) {
   const { data: managedAgents = [] } = useQuery({
     queryKey: ["managed-agents"],
     queryFn: listManagedAgents,
+    ...getLiveQueryOptions(),
   });
 
   const blockedAgentNames = useMemo(

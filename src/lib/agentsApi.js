@@ -153,6 +153,7 @@ export async function createManagedAgent({ email, name, phone }) {
     name: displayName,
   });
 
+  notifyAgentUsersChanged();
   return mapSupabaseRow(row);
 }
 
