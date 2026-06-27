@@ -292,6 +292,38 @@ export const SCHEDULE_DUPLICATE_DAY_MESSAGE =
 export const AUTO_EVENING_SHIFT_RULE_MESSAGE =
   "משמרת 09:00–17:00: כל הנציגים הפעילים שלא חסמו את המשמרת ואין להם חופש מאושר — משובצים אוטומטית";
 
+function normalizeScheduleDate(dateStr) {
+  return String(dateStr || "").slice(0, 10);
+}
+
+/** true when agent has approved vacation on `dateStr` (VacationRequest). */
+export function isAgentOnApprovedVacation(agentName, dateStr, vacationRequests = []) {
+  const canonical = resolveToCanonicalAgentName(agentName);
+  const normalizedDate = normalizeScheduleDate(dateStr);
+  return vacationRequests.some(
+    (v) =>
+      resolveToCanonicalAgentName(v.agent_name) === canonical &&
+      normalizeScheduleDate(v.date) === normalizedDate &&
+      v.status === "approved"
+  );
+}
+
+/** true when agent marked vacation (ShiftUnavailability) for any shift that day. */
+export function isAgentOnVacationUnavailability(
+  agentName,
+  dateStr,
+  unavailabilities = []
+) {
+  const canonical = resolveToCanonicalAgentName(agentName);
+  const normalizedDate = normalizeScheduleDate(dateStr);
+  return unavailabilities.some(
+    (u) =>
+      resolveToCanonicalAgentName(u.agent_name) === canonical &&
+      normalizeScheduleDate(u.date) === normalizedDate &&
+      u.reason === "vacation"
+  );
+}
+
 /** true when agent has approved vacation or unavailability for `shiftType` on `dateStr`. */
 export function isAgentShiftUnavailable(
   agentName,
@@ -301,12 +333,15 @@ export function isAgentShiftUnavailable(
   vacationRequests = []
 ) {
   if (isAgentOnApprovedVacation(agentName, dateStr, vacationRequests)) return true;
+  if (isAgentOnVacationUnavailability(agentName, dateStr, unavailabilities)) return true;
   const canonical = resolveToCanonicalAgentName(agentName);
+  const normalizedDate = normalizeScheduleDate(dateStr);
   return unavailabilities.some(
     (u) =>
       resolveToCanonicalAgentName(u.agent_name) === canonical &&
-      u.date === dateStr &&
-      u.shift_type === shiftType
+      normalizeScheduleDate(u.date) === normalizedDate &&
+      u.shift_type === shiftType &&
+      u.reason !== "vacation"
   );
 }
 
@@ -316,11 +351,13 @@ export function getEligibleEveningShiftAgents(
   agentPool = AGENT_NAMES,
   blockedAgentNames = new Set(),
   unavailabilities = [],
-  vacationRequests = []
+  vacationRequests = [],
+  assignedAgentNames = new Set()
 ) {
   return agentPool.filter((name) => {
     const canonical = resolveToCanonicalAgentName(name);
     if (blockedAgentNames.has(canonical)) return false;
+    if (assignedAgentNames.has(canonical)) return false;
     return !isAgentShiftUnavailable(
       canonical,
       dateStr,
@@ -337,12 +374,15 @@ export function getEligibleMorningShiftAgents(
   agentPool = AGENT_NAMES,
   blockedAgentNames = new Set(),
   unavailabilities = [],
-  vacationRequests = []
+  vacationRequests = [],
+  assignedAgentNames = new Set()
 ) {
   return agentPool.filter((name) => {
     const canonical = resolveToCanonicalAgentName(name);
     if (blockedAgentNames.has(canonical)) return false;
+    if (assignedAgentNames.has(canonical)) return false;
     if (isAgentOnApprovedVacation(canonical, dateStr, vacationRequests)) return false;
+    if (isAgentOnVacationUnavailability(canonical, dateStr, unavailabilities)) return false;
     return (
       isAgentShiftUnavailable(
         canonical,
@@ -368,15 +408,20 @@ export function getEligibleHolidayEveShiftAgents(
   agentPool = AGENT_NAMES,
   blockedAgentNames = new Set(),
   unavailabilities = [],
-  vacationRequests = []
+  vacationRequests = [],
+  assignedAgentNames = new Set()
 ) {
+  const normalizedDate = normalizeScheduleDate(dateStr);
   return agentPool.filter((name) => {
     const canonical = resolveToCanonicalAgentName(name);
     if (blockedAgentNames.has(canonical)) return false;
+    if (assignedAgentNames.has(canonical)) return false;
     if (isAgentOnApprovedVacation(canonical, dateStr, vacationRequests)) return false;
+    if (isAgentOnVacationUnavailability(canonical, dateStr, unavailabilities)) return false;
     return !unavailabilities.some(
       (u) =>
-        resolveToCanonicalAgentName(u.agent_name) === canonical && u.date === dateStr
+        resolveToCanonicalAgentName(u.agent_name) === canonical &&
+        normalizeScheduleDate(u.date) === normalizedDate
     );
   });
 }
@@ -397,20 +442,24 @@ export function getBlockedAgentNames(managedAgents = []) {
   );
 }
 
-/** Agents eligible for scheduling / constraints lists (excludes blocked). */
-export function getActiveSchedulingAgentNames(managedAgents = [], agentPool = AGENT_NAMES) {
-  const blocked = getBlockedAgentNames(managedAgents);
-  return agentPool.filter((name) => !blocked.has(resolveToCanonicalAgentName(name)));
+/** Scheduling pool from managed agents; falls back to static list when DB is empty. */
+export function getSchedulingAgentPool(managedAgents = [], fallbackPool = AGENT_NAMES) {
+  const fromManaged = managedAgents
+    .filter((a) => a.active !== false && a.blocked !== true)
+    .map((a) => String(a.name || "").trim())
+    .filter(Boolean);
+
+  if (fromManaged.length > 0) {
+    return [...new Set(fromManaged)].sort((a, b) => a.localeCompare(b, "he"));
+  }
+  return [...fallbackPool];
 }
 
-export function isAgentOnApprovedVacation(agentName, dateStr, vacationRequests = []) {
-  const canonical = resolveToCanonicalAgentName(agentName);
-  return vacationRequests.some(
-    (v) =>
-      resolveToCanonicalAgentName(v.agent_name) === canonical &&
-      v.date === dateStr &&
-      v.status === "approved"
-  );
+/** Agents eligible for scheduling / constraints lists (excludes blocked). */
+export function getActiveSchedulingAgentNames(managedAgents = [], agentPool) {
+  const pool = agentPool ?? getSchedulingAgentPool(managedAgents);
+  const blocked = getBlockedAgentNames(managedAgents);
+  return pool.filter((name) => !blocked.has(resolveToCanonicalAgentName(name)));
 }
 
 /** Agents already assigned on `dateStr` in other cells (optional excludeCellKey). */

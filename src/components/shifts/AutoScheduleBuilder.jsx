@@ -18,6 +18,7 @@ import {
   getEligibleEveningShiftAgents,
   getEligibleMorningShiftAgents,
   getEligibleHolidayEveShiftAgents,
+  resolveToCanonicalAgentName,
 } from "@/constants/scheduling";
 import {
   resendScheduleSmsNotifications,
@@ -29,12 +30,19 @@ import { useToast } from "@/components/ui/use-toast";
 import { demoModeEnabled } from "@/api/demoClient";
 import ScheduleGridScroll from "@/components/shifts/ScheduleGridScroll";
 import { listManagedAgents } from "@/lib/agentsApi";
+import { getLiveQueryOptions } from "@/lib/liveQuery";
 
 // Auto-schedule algorithm:
 // - ערב 09:00–17:00: כל הנציגים הפעילים שלא חסמו את המשמרת ואין חופש מאושר (גם אם לא הגישו אילוצים)
 // - בוקר 08:00–16:00: רק מי שחסם ערב אך זמין לבוקר
 // - נציג חסום / חופש מאושר — לא משובץ
 // - נציג אחד לכל היותר במשמרת אחת ביום
+function trackAssignedAgents(assignedToday, agentNames) {
+  for (const name of agentNames) {
+    assignedToday.add(resolveToCanonicalAgentName(name));
+  }
+}
+
 function buildAutoSchedule(
   weekDays,
   unavailabilities,
@@ -47,31 +55,40 @@ function buildAutoSchedule(
   for (const date of weekDays) {
     const dateStr = format(date, "yyyy-MM-dd");
     const isHolidayEve = HOLIDAY_EVE_DATES.includes(dateStr);
+    const assignedToday = new Set();
 
     if (isHolidayEve) {
-      schedule[`${dateStr}|holiday_eve`] = getEligibleHolidayEveShiftAgents(
+      const holidayAgents = getEligibleHolidayEveShiftAgents(
         dateStr,
         agentPool,
         blockedAgentNames,
         unavailabilities,
-        vacationRequests
+        vacationRequests,
+        assignedToday
       );
+      schedule[`${dateStr}|holiday_eve`] = holidayAgents;
+      trackAssignedAgents(assignedToday, holidayAgents);
       continue;
     }
 
-    schedule[`${dateStr}|evening`] = getEligibleEveningShiftAgents(
+    const eveningAgents = getEligibleEveningShiftAgents(
       dateStr,
       agentPool,
       blockedAgentNames,
       unavailabilities,
-      vacationRequests
+      vacationRequests,
+      assignedToday
     );
+    schedule[`${dateStr}|evening`] = eveningAgents;
+    trackAssignedAgents(assignedToday, eveningAgents);
+
     schedule[`${dateStr}|morning`] = getEligibleMorningShiftAgents(
       dateStr,
       agentPool,
       blockedAgentNames,
       unavailabilities,
-      vacationRequests
+      vacationRequests,
+      assignedToday
     );
   }
 
@@ -337,12 +354,20 @@ export default function AutoScheduleBuilder({ weekStart }) {
 
   const { data: vacationRequests = [] } = useQuery({
     queryKey: ["vacation-requests-builder", dateFrom, dateTo],
-    queryFn: () => dataClient.entities.VacationRequest.filter({ status: "approved" }),
+    queryFn: async () => {
+      const results = await Promise.all(
+        weekDays.map((d) =>
+          dataClient.entities.VacationRequest.filter({ date: format(d, "yyyy-MM-dd") })
+        )
+      );
+      return results.flat().filter((v) => v.status === "approved");
+    },
   });
 
   const { data: managedAgents = [] } = useQuery({
     queryKey: ["managed-agents"],
     queryFn: listManagedAgents,
+    ...getLiveQueryOptions(),
   });
 
   const blockedAgentNames = useMemo(
