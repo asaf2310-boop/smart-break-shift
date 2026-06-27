@@ -6,7 +6,14 @@ import { motion } from "framer-motion";
 import { Pencil, Sun, Moon, X, Plus, Check, RefreshCw, MessageSquare } from "lucide-react";
 
 const DAYS = ["ראשון", "שני", "שלישי", "רביעי", "חמישי"];
-import { AGENT_NAMES } from "@/constants/scheduling";
+import {
+  getBlockedAgentNames,
+  getActiveSchedulingAgentNames,
+  getAgentsAvailableForScheduleAdd,
+  validateScheduleAssignment,
+  findSameDayDuplicateAssignments,
+  SCHEDULE_DUPLICATE_DAY_MESSAGE,
+} from "@/constants/scheduling";
 import {
   recordsFromShiftRegistrations,
   resendScheduleSmsNotifications,
@@ -17,13 +24,11 @@ import { refreshScheduleQueriesAfterPublish } from "@/lib/shiftScheduleQuery";
 import { useToast } from "@/components/ui/use-toast";
 import { demoModeEnabled } from "@/api/demoClient";
 import ScheduleGridScroll from "@/components/shifts/ScheduleGridScroll";
-
-function agentsAvailableForCell(cellAgents) {
-  return AGENT_NAMES.filter((name) => !cellAgents.includes(name));
-}
+import { listManagedAgents } from "@/lib/agentsApi";
 
 function AgentCell({
   agents,
+  availableToAdd,
   onRemove,
   onAdd,
   selectedAgent = null,
@@ -39,7 +44,6 @@ function AgentCell({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const availableToAdd = agentsAvailableForCell(agents);
   const pillHighlightClass =
     "ring-2 ring-amber-400 border-amber-400 bg-amber-100 shadow-sm text-amber-900";
 
@@ -150,6 +154,25 @@ export default function PublishedScheduleEditor({ weekStart }) {
     },
   });
 
+  const { data: vacationRequests = [] } = useQuery({
+    queryKey: ["vacation-requests-editor", dateFrom, dateTo],
+    queryFn: () => dataClient.entities.VacationRequest.filter({ status: "approved" }),
+  });
+
+  const { data: managedAgents = [] } = useQuery({
+    queryKey: ["managed-agents"],
+    queryFn: listManagedAgents,
+  });
+
+  const blockedAgentNames = useMemo(
+    () => getBlockedAgentNames(managedAgents),
+    [managedAgents]
+  );
+  const schedulingAgentPool = useMemo(
+    () => getActiveSchedulingAgentNames(managedAgents),
+    [managedAgents]
+  );
+
   const isPublished = publishedRegs.length > 0;
 
   // Initialize local state from DB when data loads
@@ -179,12 +202,33 @@ export default function PublishedScheduleEditor({ weekStart }) {
 
   const handleAdd = (dateStr, shiftType, agent) => {
     const key = `${dateStr}|${shiftType}`;
+    const error = validateScheduleAssignment({
+      agentName: agent,
+      dateStr,
+      cellKey: key,
+      assignmentsMap: localRegs || {},
+      vacationRequests,
+      blockedAgentNames,
+    });
+    if (error) {
+      toast({ title: "לא ניתן להוסיף", description: error, variant: "destructive" });
+      return;
+    }
     setLocalRegs(prev => ({ ...prev, [key]: [...(prev[key] || []), agent] }));
     setSaved(false);
   };
 
   const handleSave = async () => {
     if (!localRegs) return;
+    const duplicate = findSameDayDuplicateAssignments(localRegs);
+    if (duplicate) {
+      toast({
+        title: "שגיאה בשיבוץ",
+        description: `${duplicate.agentName}: ${SCHEDULE_DUPLICATE_DAY_MESSAGE}`,
+        variant: "destructive",
+      });
+      return;
+    }
     setSaving(true);
 
     const records = Object.entries(localRegs).flatMap(([key, agents]) => {
@@ -302,11 +346,22 @@ export default function PublishedScheduleEditor({ weekStart }) {
             {weekDays.map(date => {
               const dateStr = format(date, "yyyy-MM-dd");
               const agents = getAgents(dateStr, shift.type);
+              const cellKey = `${dateStr}|${shift.type}`;
+              const availableToAdd = getAgentsAvailableForScheduleAdd({
+                dateStr,
+                cellKey,
+                cellAgents: agents,
+                assignmentsMap: localRegs || {},
+                vacationRequests,
+                blockedAgentNames,
+                agentPool: schedulingAgentPool,
+              });
               const cellHighlighted = selectedAgent && agents.includes(selectedAgent);
               return (
                 <AgentCell
                   key={dateStr}
                   agents={agents}
+                  availableToAdd={availableToAdd}
                   selectedAgent={selectedAgent}
                   onAgentClick={handleAgentClick}
                   cellHighlighted={cellHighlighted}

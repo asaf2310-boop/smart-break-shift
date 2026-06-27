@@ -7,10 +7,17 @@ import { Zap, Sun, Moon, Check, X, RefreshCw, Plus, MessageSquare } from "lucide
 
 const DAYS = ["ראשון", "שני", "שלישי", "רביעי", "חמישי"];
 import {
-  AGENT_NAMES,
   HOLIDAY_EVE_DATES,
-  MAX_MORNING_AUTO_ASSIGNMENTS_PER_WEEK,
-  resolveToCanonicalAgentName,
+  getBlockedAgentNames,
+  getActiveSchedulingAgentNames,
+  getAgentsAvailableForScheduleAdd,
+  validateScheduleAssignment,
+  findSameDayDuplicateAssignments,
+  SCHEDULE_DUPLICATE_DAY_MESSAGE,
+  AUTO_EVENING_SHIFT_RULE_MESSAGE,
+  getEligibleEveningShiftAgents,
+  getEligibleMorningShiftAgents,
+  getEligibleHolidayEveShiftAgents,
 } from "@/constants/scheduling";
 import {
   resendScheduleSmsNotifications,
@@ -21,125 +28,51 @@ import { refreshScheduleQueriesAfterPublish } from "@/lib/shiftScheduleQuery";
 import { useToast } from "@/components/ui/use-toast";
 import { demoModeEnabled } from "@/api/demoClient";
 import ScheduleGridScroll from "@/components/shifts/ScheduleGridScroll";
+import { listManagedAgents } from "@/lib/agentsApi";
 
 // Auto-schedule algorithm:
-// - כל הנציגים ברשימה — גם אם לא הגישו אילוצים (נחשבים זמינים לשתי המשמרות)
-// - לא זמין = סימון "לא זמין" / חופש מאושר לאותה משמרת (רק מי שהגיש)
-// - עדיפות לערב 09:00–17:00; בוקר 08:00–16:00 רק אם סימנו לא זמין בערב או לכיסוי מינימלי
-// - לכל היותר MAX_MORNING_AUTO_ASSIGNMENTS_PER_WEEK משמרות בוקר לנציג בשבוע
+// - ערב 09:00–17:00: כל הנציגים הפעילים שלא חסמו את המשמרת ואין חופש מאושר (גם אם לא הגישו אילוצים)
+// - בוקר 08:00–16:00: רק מי שחסם ערב אך זמין לבוקר
+// - נציג חסום / חופש מאושר — לא משובץ
 // - נציג אחד לכל היותר במשמרת אחת ביום
-function buildAutoSchedule(weekDays, unavailabilities, vacationRequests) {
+function buildAutoSchedule(
+  weekDays,
+  unavailabilities,
+  vacationRequests,
+  blockedAgentNames = new Set(),
+  agentPool = []
+) {
   const schedule = {};
-  const agentMorningCount = Object.fromEntries(AGENT_NAMES.map(n => [n, 0]));
-  const agentEveningCount = Object.fromEntries(AGENT_NAMES.map(n => [n, 0]));
-
-  const schedulingPool = [...AGENT_NAMES];
-
-  const isShiftUnavailable = (agentName, dateStr, shiftType) => {
-    const onVacation = vacationRequests.some(
-      (v) =>
-        resolveToCanonicalAgentName(v.agent_name) === agentName &&
-        v.date === dateStr &&
-        v.status === "approved"
-    );
-    if (onVacation) return true;
-    return unavailabilities.some(
-      (u) =>
-        resolveToCanonicalAgentName(u.agent_name) === agentName &&
-        u.date === dateStr &&
-        u.shift_type === shiftType
-    );
-  };
-
-  const canAssignMorning = (name) =>
-    agentMorningCount[name] < MAX_MORNING_AUTO_ASSIGNMENTS_PER_WEEK;
 
   for (const date of weekDays) {
     const dateStr = format(date, "yyyy-MM-dd");
     const isHolidayEve = HOLIDAY_EVE_DATES.includes(dateStr);
 
     if (isHolidayEve) {
-      const isUnavailableHoliday = (agentName) => {
-        const onVacation = vacationRequests.some(
-          (v) =>
-            resolveToCanonicalAgentName(v.agent_name) === agentName &&
-            v.date === dateStr &&
-            v.status === "approved"
-        );
-        if (onVacation) return true;
-        return unavailabilities.some(
-          (u) =>
-            resolveToCanonicalAgentName(u.agent_name) === agentName &&
-            u.date === dateStr
-        );
-      };
-      const available = schedulingPool.filter((n) => !isUnavailableHoliday(n));
-      schedule[`${dateStr}|holiday_eve`] = available;
+      schedule[`${dateStr}|holiday_eve`] = getEligibleHolidayEveShiftAgents(
+        dateStr,
+        agentPool,
+        blockedAgentNames,
+        unavailabilities,
+        vacationRequests
+      );
       continue;
     }
 
-    const availMorning = schedulingPool.filter((n) => !isShiftUnavailable(n, dateStr, "morning"));
-    const availEvening = schedulingPool.filter((n) => !isShiftUnavailable(n, dateStr, "evening"));
-
-    const onlyMorning = schedulingPool.filter(
-      (n) => availMorning.includes(n) && !availEvening.includes(n)
+    schedule[`${dateStr}|evening`] = getEligibleEveningShiftAgents(
+      dateStr,
+      agentPool,
+      blockedAgentNames,
+      unavailabilities,
+      vacationRequests
     );
-    const onlyEvening = schedulingPool.filter(
-      (n) => !availMorning.includes(n) && availEvening.includes(n)
+    schedule[`${dateStr}|morning`] = getEligibleMorningShiftAgents(
+      dateStr,
+      agentPool,
+      blockedAgentNames,
+      unavailabilities,
+      vacationRequests
     );
-    const bothAvail = schedulingPool.filter(
-      (n) => availMorning.includes(n) && availEvening.includes(n)
-    );
-
-    const morningAgents = [...onlyMorning];
-    const eveningAgents = [...onlyEvening];
-
-    const bothSortedForEvening = [...bothAvail].sort((a, b) => {
-      const biasA = agentMorningCount[a] - agentEveningCount[a];
-      const biasB = agentMorningCount[b] - agentEveningCount[b];
-      return biasB - biasA;
-    });
-    eveningAgents.push(...bothSortedForEvening);
-
-    const morningEligibleCount =
-      onlyMorning.length + bothAvail.filter(canAssignMorning).length;
-    const morningTarget =
-      morningEligibleCount > 0 ? Math.max(onlyMorning.length, 1) : 0;
-    let morningStillNeeded = Math.max(0, morningTarget - morningAgents.length);
-
-    if (morningStillNeeded > 0) {
-      const sortForMorning = (a, b) => {
-        const morningDiff = agentMorningCount[a] - agentMorningCount[b];
-        if (morningDiff !== 0) return morningDiff;
-        return agentEveningCount[b] - agentEveningCount[a];
-      };
-      let candidatesForMorning = bothSortedForEvening
-        .filter((name) => eveningAgents.includes(name) && canAssignMorning(name))
-        .sort(sortForMorning);
-      if (!candidatesForMorning.length) {
-        candidatesForMorning = bothSortedForEvening
-          .filter((name) => eveningAgents.includes(name))
-          .sort(sortForMorning);
-      }
-
-      for (const name of candidatesForMorning) {
-        if (morningStillNeeded <= 0) break;
-        const idx = eveningAgents.indexOf(name);
-        if (idx === -1) continue;
-        eveningAgents.splice(idx, 1);
-        morningAgents.push(name);
-        morningStillNeeded--;
-      }
-    }
-
-    schedule[`${dateStr}|morning`] = morningAgents;
-    schedule[`${dateStr}|evening`] = eveningAgents;
-    morningAgents.forEach((n) => {
-      agentMorningCount[n]++;
-    });
-    eveningAgents.forEach((n) => {
-      agentEveningCount[n]++;
-    });
   }
 
   return schedule;
@@ -212,9 +145,32 @@ function NotePopover({ note, onSave, color = "indigo" }) {
   );
 }
 
-/** Agents not already listed in this shift cell (same cell only — not day-wide). */
-function agentsAvailableForCell(cellAgents) {
-  return AGENT_NAMES.filter((name) => !cellAgents.includes(name));
+function tryAddAgentToCell({
+  agent,
+  cellKey,
+  dateStr,
+  assignments,
+  vacationRequests,
+  blockedAgentNames,
+  setAssignments,
+  toast,
+}) {
+  const error = validateScheduleAssignment({
+    agentName: agent,
+    dateStr,
+    cellKey,
+    assignmentsMap: assignments,
+    vacationRequests,
+    blockedAgentNames,
+  });
+  if (error) {
+    toast({ title: "לא ניתן להוסיף", description: error, variant: "destructive" });
+    return;
+  }
+  setAssignments((prev) => ({
+    ...prev,
+    [cellKey]: [...(prev[cellKey] || []), agent],
+  }));
 }
 
 function ShiftCell({
@@ -384,15 +340,43 @@ export default function AutoScheduleBuilder({ weekStart }) {
     queryFn: () => dataClient.entities.VacationRequest.filter({ status: "approved" }),
   });
 
+  const { data: managedAgents = [] } = useQuery({
+    queryKey: ["managed-agents"],
+    queryFn: listManagedAgents,
+  });
+
+  const blockedAgentNames = useMemo(
+    () => getBlockedAgentNames(managedAgents),
+    [managedAgents]
+  );
+  const schedulingAgentPool = useMemo(
+    () => getActiveSchedulingAgentNames(managedAgents),
+    [managedAgents]
+  );
 
   const handleGenerate = () => {
-    const result = buildAutoSchedule(weekDays, unavailabilities, vacationRequests);
+    const result = buildAutoSchedule(
+      weekDays,
+      unavailabilities,
+      vacationRequests,
+      blockedAgentNames,
+      schedulingAgentPool
+    );
     setAssignments(result);
     setSaved(false);
   };
 
   const handleSave = async () => {
     if (!assignments) return;
+    const duplicate = findSameDayDuplicateAssignments(assignments);
+    if (duplicate) {
+      toast({
+        title: "שגיאה בשיבוץ",
+        description: `${duplicate.agentName}: ${SCHEDULE_DUPLICATE_DAY_MESSAGE}`,
+        variant: "destructive",
+      });
+      return;
+    }
     setSaving(true);
 
     // assignments values are arrays of agent names
@@ -465,9 +449,9 @@ export default function AutoScheduleBuilder({ weekStart }) {
             <Zap className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h3 className="font-bold text-slate-800">שיבוץ אוטומטי</h3>
+            <h3 className="font-bold text-slate-800">שיבוץ אוטומטי 9–17</h3>
             <p className="text-xs text-slate-400">
-              שבוע {format(weekDays[0], "dd/MM")} – {format(weekDays[4], "dd/MM/yyyy")} · כל הנציגים נכללים; אילוצים רק למי שהגיש
+              שבוע {format(weekDays[0], "dd/MM")} – {format(weekDays[4], "dd/MM/yyyy")} · {AUTO_EVENING_SHIFT_RULE_MESSAGE}
             </p>
           </div>
         </div>
@@ -476,13 +460,13 @@ export default function AutoScheduleBuilder({ weekStart }) {
           className="flex items-center justify-center gap-2 w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-sm font-bold shadow hover:shadow-md transition-all active:scale-95 shrink-0"
         >
           <RefreshCw className="w-4 h-4" />
-          {assignments ? "צור מחדש" : "צור שיבוץ"}
+          {assignments ? "צור מחדש" : "שיבוץ אוטומטי 9–17"}
         </button>
       </div>
 
       {!assignments && (
         <div className="text-center py-10 text-slate-400 text-sm">
-          לחץ "צור שיבוץ" ליצירת שיבוץ אוטומטי לפי האילוצים שנשלחו
+          לחץ «שיבוץ אוטומטי 9–17» ליצירת טיוטת שיבוץ לפי האילוצים והחופשים — ניתן לערוך לפני פרסום
         </div>
       )}
 
@@ -519,7 +503,15 @@ export default function AutoScheduleBuilder({ weekStart }) {
                   if (isHolidayEve && shift.type === "morning") {
                     const cellKey = `${dateStr}|holiday_eve`;
                     const agents = assignments[cellKey] || [];
-                    const availableToAdd = agentsAvailableForCell(agents);
+                    const availableToAdd = getAgentsAvailableForScheduleAdd({
+                      dateStr,
+                      cellKey,
+                      cellAgents: agents,
+                      assignmentsMap: assignments,
+                      vacationRequests,
+                      blockedAgentNames,
+                      agentPool: schedulingAgentPool,
+                    });
                     const cellHighlighted = selectedAgent && agents.includes(selectedAgent);
                     return (
                       <div key={dateStr} className="py-2 px-1 flex flex-col gap-1 bg-purple-50/50 row-span-2 self-stretch">
@@ -538,10 +530,16 @@ export default function AutoScheduleBuilder({ weekStart }) {
                             ...prev,
                             [cellKey]: prev[cellKey].filter(a => a !== agent)
                           }))}
-                          onAdd={(agent) => setAssignments(prev => ({
-                            ...prev,
-                            [cellKey]: [...(prev[cellKey] || []), agent]
-                          }))}
+                          onAdd={(agent) => tryAddAgentToCell({
+                            agent,
+                            cellKey,
+                            dateStr,
+                            assignments,
+                            vacationRequests,
+                            blockedAgentNames,
+                            setAssignments,
+                            toast,
+                          })}
                           onNoteChange={handleNoteChange}
                         />
                       </div>
@@ -553,7 +551,15 @@ export default function AutoScheduleBuilder({ weekStart }) {
 
                   const cellKey = `${dateStr}|${shift.type}`;
                   const agents = assignments[cellKey] || [];
-                  const availableToAdd = agentsAvailableForCell(agents);
+                  const availableToAdd = getAgentsAvailableForScheduleAdd({
+                    dateStr,
+                    cellKey,
+                    cellAgents: agents,
+                    assignmentsMap: assignments,
+                    vacationRequests,
+                    blockedAgentNames,
+                    agentPool: schedulingAgentPool,
+                  });
                   const cellHighlighted = selectedAgent && agents.includes(selectedAgent);
                   return (
                     <div key={dateStr} className="py-2 px-1 self-stretch">
@@ -569,10 +575,16 @@ export default function AutoScheduleBuilder({ weekStart }) {
                         ...prev,
                         [cellKey]: prev[cellKey].filter(a => a !== agent)
                       }))}
-                      onAdd={(agent) => setAssignments(prev => ({
-                        ...prev,
-                        [cellKey]: [...(prev[cellKey] || []), agent]
-                      }))}
+                      onAdd={(agent) => tryAddAgentToCell({
+                        agent,
+                        cellKey,
+                        dateStr,
+                        assignments,
+                        vacationRequests,
+                        blockedAgentNames,
+                        setAssignments,
+                        toast,
+                      })}
                       onNoteChange={handleNoteChange}
                     />
                     </div>

@@ -2,11 +2,10 @@ import React, { useState, useMemo } from "react";
 import { format, addDays, subDays } from "date-fns";
 import { motion } from "framer-motion";
 import { ShieldCheck, ChevronRight, ChevronLeft, Check, Palmtree, X, Sun, Moon, MessageSquare } from "lucide-react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { dataClient } from "@/api/client";
 import { Link } from "react-router-dom";
 import {
-  AGENT_NAMES,
   HOLIDAY_EVE_DATES,
   WEEKDAY_LABELS,
   getWeekDays,
@@ -16,6 +15,7 @@ import {
   parseDateStrLocal,
   formatDateStr,
   resolveToCanonicalAgentName,
+  getActiveSchedulingAgentNames,
 } from "@/constants/scheduling";
 import AutoScheduleBuilder from "../components/shifts/AutoScheduleBuilder";
 import PublishedScheduleEditor from "../components/shifts/PublishedScheduleEditor";
@@ -27,6 +27,7 @@ import ConstraintsDeadlinePanel from "@/components/admin/ConstraintsDeadlinePane
 import HypPageLayout from "@/components/hyp/HypPageLayout";
 import { hypHeaderIconClass } from "@/lib/hypPage";
 import AdminSubNav from "@/components/admin/AdminSubNav";
+import { listManagedAgents } from "@/lib/agentsApi";
 
 const SHIFTS = [
   { type: "morning", label: "משמרת בוקר", time: "08:00–16:00", icon: Sun, gradient: "from-amber-400 to-orange-500", bg: "bg-amber-50/50" },
@@ -169,6 +170,18 @@ function ConstraintsView({ weekStart, showDeadlinePanel = true }) {
   const dateTo = format(weekDays[4], "yyyy-MM-dd");
   const nextWeekStart = dateFrom;
 
+  const { data: managedAgents = [] } = useQuery({
+    queryKey: ["managed-agents"],
+    queryFn: listManagedAgents,
+    ...getLiveQueryOptions(),
+  });
+
+  const activeAgentNames = useMemo(
+    () => getActiveSchedulingAgentNames(managedAgents),
+    [managedAgents]
+  );
+  const activeAgentSet = useMemo(() => new Set(activeAgentNames), [activeAgentNames]);
+
   const { data: allUnavailabilities = [], isLoading: loadingU } = useQuery({
     queryKey: ["all-unavailabilities-week", dateFrom, dateTo],
     queryFn: async () => {
@@ -204,7 +217,7 @@ function ConstraintsView({ weekStart, showDeadlinePanel = true }) {
 
   const toCanonical = (name) => {
     const c = resolveToCanonicalAgentName(name);
-    return AGENT_NAMES.includes(c) ? c : null;
+    return activeAgentSet.has(c) ? c : null;
   };
 
   // Agent "submitted" if they confirmed OR if they have any unavailability record for next week
@@ -222,7 +235,7 @@ function ConstraintsView({ weekStart, showDeadlinePanel = true }) {
   const allAvailableAgents = new Set(
     [...confirmedByForm].filter(name => !submittedByUnavail.has(name) && !submittedByVacation.has(name))
   );
-  const submittedCount = AGENT_NAMES.filter(a => confirmedAgents.has(a)).length;
+  const submittedCount = activeAgentNames.filter(a => confirmedAgents.has(a)).length;
 
   return (
     <>
@@ -242,11 +255,11 @@ function ConstraintsView({ weekStart, showDeadlinePanel = true }) {
           </div>
         </div>
         <div className="text-sm font-bold text-slate-700">
-          {submittedCount}/{AGENT_NAMES.length} הגישו
+          {submittedCount}/{activeAgentNames.length} הגישו
         </div>
       </div>
       <div className="p-4 flex flex-wrap gap-2">
-        {AGENT_NAMES.map(agent => {
+        {activeAgentNames.map(agent => {
           const confirmed = confirmedAgents.has(agent);
           const allAvailable = allAvailableAgents.has(agent);
           return (
@@ -288,10 +301,17 @@ function ConstraintsView({ weekStart, showDeadlinePanel = true }) {
               const dateStr = format(date, "yyyy-MM-dd");
               const isHolidayEve = HOLIDAY_EVE_DATES.includes(dateStr);
               const unavailAgents = allUnavailabilities.filter(u =>
-                u.date === dateStr && (isHolidayEve || u.shift_type === shift.type)
+                u.date === dateStr && (isHolidayEve || u.shift_type === shift.type) &&
+                activeAgentSet.has(resolveToCanonicalAgentName(u.agent_name))
               );
-              const approvedVacAgents = vacationRequests.filter(v => v.date === dateStr && v.status === "approved");
-              const vacAgents = vacationRequests.filter(v => v.date === dateStr);
+              const approvedVacAgents = vacationRequests.filter(v =>
+                v.date === dateStr && v.status === "approved" &&
+                activeAgentSet.has(resolveToCanonicalAgentName(v.agent_name))
+              );
+              const vacAgents = vacationRequests.filter(v =>
+                v.date === dateStr &&
+                activeAgentSet.has(resolveToCanonicalAgentName(v.agent_name))
+              );
 
               // Build list: unavailable agents + approved vacation agents, deduped by name
               const seenNames = new Set();
@@ -311,7 +331,7 @@ function ConstraintsView({ weekStart, showDeadlinePanel = true }) {
 
               // Agents who are available for this specific day+shift (confirmed but not in unavail/vacation for this day)
               const unavailNames = new Set(items.map(i => i.name));
-              const availableAgents = AGENT_NAMES.filter(name =>
+              const availableAgents = activeAgentNames.filter(name =>
                 confirmedAgents.has(name) && !unavailNames.has(name)
               );
 

@@ -285,3 +285,211 @@ export function canMarkMorningUnavailable(records, dateFrom, dateTo, dateStr) {
     MAX_MORNING_UNAVAILABLE_DAYS_PER_WEEK
   );
 }
+
+export const SCHEDULE_DUPLICATE_DAY_MESSAGE =
+  "הנציג כבר משובץ באותו יום — לא ניתן לשבץ פעמיים";
+
+export const AUTO_EVENING_SHIFT_RULE_MESSAGE =
+  "משמרת 09:00–17:00: כל הנציגים הפעילים שלא חסמו את המשמרת ואין להם חופש מאושר — משובצים אוטומטית";
+
+/** true when agent has approved vacation or unavailability for `shiftType` on `dateStr`. */
+export function isAgentShiftUnavailable(
+  agentName,
+  dateStr,
+  shiftType,
+  unavailabilities = [],
+  vacationRequests = []
+) {
+  if (isAgentOnApprovedVacation(agentName, dateStr, vacationRequests)) return true;
+  const canonical = resolveToCanonicalAgentName(agentName);
+  return unavailabilities.some(
+    (u) =>
+      resolveToCanonicalAgentName(u.agent_name) === canonical &&
+      u.date === dateStr &&
+      u.shift_type === shiftType
+  );
+}
+
+/** Agents eligible for evening (09:00–17:00) on a given day. */
+export function getEligibleEveningShiftAgents(
+  dateStr,
+  agentPool = AGENT_NAMES,
+  blockedAgentNames = new Set(),
+  unavailabilities = [],
+  vacationRequests = []
+) {
+  return agentPool.filter((name) => {
+    const canonical = resolveToCanonicalAgentName(name);
+    if (blockedAgentNames.has(canonical)) return false;
+    return !isAgentShiftUnavailable(
+      canonical,
+      dateStr,
+      "evening",
+      unavailabilities,
+      vacationRequests
+    );
+  });
+}
+
+/** Morning (08:00–16:00): blocked evening but still available for morning. */
+export function getEligibleMorningShiftAgents(
+  dateStr,
+  agentPool = AGENT_NAMES,
+  blockedAgentNames = new Set(),
+  unavailabilities = [],
+  vacationRequests = []
+) {
+  return agentPool.filter((name) => {
+    const canonical = resolveToCanonicalAgentName(name);
+    if (blockedAgentNames.has(canonical)) return false;
+    if (isAgentOnApprovedVacation(canonical, dateStr, vacationRequests)) return false;
+    return (
+      isAgentShiftUnavailable(
+        canonical,
+        dateStr,
+        "evening",
+        unavailabilities,
+        vacationRequests
+      ) &&
+      !isAgentShiftUnavailable(
+        canonical,
+        dateStr,
+        "morning",
+        unavailabilities,
+        vacationRequests
+      )
+    );
+  });
+}
+
+/** Agents eligible for holiday-eve shift: no vacation and no unavailability that day. */
+export function getEligibleHolidayEveShiftAgents(
+  dateStr,
+  agentPool = AGENT_NAMES,
+  blockedAgentNames = new Set(),
+  unavailabilities = [],
+  vacationRequests = []
+) {
+  return agentPool.filter((name) => {
+    const canonical = resolveToCanonicalAgentName(name);
+    if (blockedAgentNames.has(canonical)) return false;
+    if (isAgentOnApprovedVacation(canonical, dateStr, vacationRequests)) return false;
+    return !unavailabilities.some(
+      (u) =>
+        resolveToCanonicalAgentName(u.agent_name) === canonical && u.date === dateStr
+    );
+  });
+}
+
+export const SCHEDULE_VACATION_DAY_MESSAGE =
+  "לנציג יש חופש מאושר ביום זה — לא ניתן לשבץ";
+
+export const SCHEDULE_BLOCKED_AGENT_MESSAGE =
+  "נציג חסום — לא ניתן לשבץ";
+
+/** @param {{ name: string, blocked?: boolean }[]} managedAgents */
+export function getBlockedAgentNames(managedAgents = []) {
+  return new Set(
+    managedAgents
+      .filter((a) => a.blocked === true)
+      .map((a) => resolveToCanonicalAgentName(a.name))
+      .filter(Boolean)
+  );
+}
+
+/** Agents eligible for scheduling / constraints lists (excludes blocked). */
+export function getActiveSchedulingAgentNames(managedAgents = [], agentPool = AGENT_NAMES) {
+  const blocked = getBlockedAgentNames(managedAgents);
+  return agentPool.filter((name) => !blocked.has(resolveToCanonicalAgentName(name)));
+}
+
+export function isAgentOnApprovedVacation(agentName, dateStr, vacationRequests = []) {
+  const canonical = resolveToCanonicalAgentName(agentName);
+  return vacationRequests.some(
+    (v) =>
+      resolveToCanonicalAgentName(v.agent_name) === canonical &&
+      v.date === dateStr &&
+      v.status === "approved"
+  );
+}
+
+/** Agents already assigned on `dateStr` in other cells (optional excludeCellKey). */
+export function getAgentsAssignedOnDate(assignmentsMap, dateStr, excludeCellKey = null) {
+  const assigned = new Set();
+  for (const [key, agents] of Object.entries(assignmentsMap || {})) {
+    if (!key.startsWith(`${dateStr}|`)) continue;
+    if (excludeCellKey && key === excludeCellKey) continue;
+    for (const agent of agents || []) {
+      assigned.add(resolveToCanonicalAgentName(agent));
+    }
+  }
+  return assigned;
+}
+
+/**
+ * Agents available to add to a schedule cell (manual assignment picker).
+ * Excludes blocked, same-cell, same-day elsewhere, and approved vacation.
+ */
+export function getAgentsAvailableForScheduleAdd({
+  dateStr,
+  cellKey,
+  cellAgents = [],
+  assignmentsMap = {},
+  vacationRequests = [],
+  blockedAgentNames = new Set(),
+  agentPool = AGENT_NAMES,
+}) {
+  const assignedElsewhereOnDay = getAgentsAssignedOnDate(assignmentsMap, dateStr, cellKey);
+  return agentPool.filter((name) => {
+    const canonical = resolveToCanonicalAgentName(name);
+    if (blockedAgentNames.has(canonical)) return false;
+    if (cellAgents.some((a) => resolveToCanonicalAgentName(a) === canonical)) return false;
+    if (assignedElsewhereOnDay.has(canonical)) return false;
+    if (isAgentOnApprovedVacation(canonical, dateStr, vacationRequests)) return false;
+    return true;
+  });
+}
+
+/** @returns {string|null} Hebrew error message when assignment is invalid */
+export function validateScheduleAssignment({
+  agentName,
+  dateStr,
+  cellKey,
+  assignmentsMap = {},
+  vacationRequests = [],
+  blockedAgentNames = new Set(),
+}) {
+  const canonical = resolveToCanonicalAgentName(agentName);
+  if (blockedAgentNames.has(canonical)) return SCHEDULE_BLOCKED_AGENT_MESSAGE;
+  if (isAgentOnApprovedVacation(canonical, dateStr, vacationRequests)) {
+    return SCHEDULE_VACATION_DAY_MESSAGE;
+  }
+  const assignedElsewhere = getAgentsAssignedOnDate(assignmentsMap, dateStr, cellKey);
+  if (assignedElsewhere.has(canonical)) return SCHEDULE_DUPLICATE_DAY_MESSAGE;
+  const cellAgents = assignmentsMap[cellKey] || [];
+  if (cellAgents.some((a) => resolveToCanonicalAgentName(a) === canonical)) {
+    return SCHEDULE_DUPLICATE_DAY_MESSAGE;
+  }
+  return null;
+}
+
+/** @returns {{ agentName: string, dateStr: string }|null} */
+export function findSameDayDuplicateAssignments(assignmentsMap = {}) {
+  const dates = new Set(
+    Object.keys(assignmentsMap).map((key) => key.split("|")[0]).filter(Boolean)
+  );
+  for (const dateStr of dates) {
+    const seen = new Map();
+    for (const [key, agents] of Object.entries(assignmentsMap)) {
+      if (!key.startsWith(`${dateStr}|`)) continue;
+      for (const agent of agents || []) {
+        const canonical = resolveToCanonicalAgentName(agent);
+        if (seen.has(canonical)) {
+          return { agentName: canonical, dateStr };
+        }
+        seen.set(canonical, key);
+      }
+    }
+  }
+  return null;
+}
