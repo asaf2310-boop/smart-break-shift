@@ -782,6 +782,13 @@ export async function restoreSupabaseAgentSession() {
     return null;
   }
 
+  // Require an existing app session before restoring from Supabase JWT.
+  // Prevents silent auto-login on the login form (e.g. leftover JWT after tab close
+  // or during first-login temp-password / setup flows).
+  if (!existing?.email || !existing?.userId) {
+    return null;
+  }
+
   const email = authSession.user.email;
   const agent = await lookupAgentByEmail(email);
   if (!agent) {

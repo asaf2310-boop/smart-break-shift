@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef, useState } from "react";
 import { BarChart3, BookOpen, CalendarClock, CalendarDays, Contact, GraduationCap, Loader2, MessageCircle, Monitor, Star } from "lucide-react";
 import { getAgentNamesList } from "@/constants/scheduling";
 import AgentLogin from "@/components/auth/AgentLogin";
@@ -10,7 +10,14 @@ import { useAgentSession } from "@/hooks/useAgentSession";
 import { useAgentModules } from "@/hooks/useAgentModules";
 import { useTrainingCourseVisible } from "@/hooks/useTrainingCourseVisible";
 import { filterItemsByModules } from "@/constants/agentModules";
-import { agentLogout } from "@/lib/agentAuth";
+import { agentLogout, getAgentSession } from "@/lib/agentAuth";
+
+function hadRestorableSessionOnLoad() {
+  const session = getAgentSession();
+  return Boolean(
+    session?.email && session?.userId && session?.needsPasswordSetup !== true
+  );
+}
 
 const productionCards = [
   {
@@ -112,6 +119,8 @@ const homeCards = demoModeEnabled
 const showAdminDemoHint = import.meta.env.DEV || demoModeEnabled;
 
 function HomeContent() {
+  const allowOptimisticEnter = useRef(hadRestorableSessionOnLoad());
+  const [loginCompleted, setLoginCompleted] = useState(false);
   const { displayName, isLikelyLoggedIn, bootstrapped, refresh } = useAgentSession();
   const { rawModules } = useAgentModules();
   const { visible: trainingCourseVisible, ready: trainingCourseReady } = useTrainingCourseVisible();
@@ -122,6 +131,7 @@ function HomeContent() {
   const agentCount = getAgentNamesList().length;
 
   const handleLoginSuccess = (session) => {
+    setLoginCompleted(true);
     connectAgentAsAvailable(session.displayName).catch(() => {});
     refresh();
   };
@@ -139,7 +149,10 @@ function HomeContent() {
     );
   }
 
-  if (!isLikelyLoggedIn) {
+  const canEnterApp =
+    isLikelyLoggedIn && (allowOptimisticEnter.current || loginCompleted);
+
+  if (!canEnterApp) {
     return <AgentLogin onSuccess={handleLoginSuccess} />;
   }
 
