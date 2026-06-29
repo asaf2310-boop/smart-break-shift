@@ -1,16 +1,37 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ChevronLeft, CreditCard, Info, X, ZoomIn } from "lucide-react";
+import { ChevronLeft, CreditCard, FileDown, Info, PlayCircle, X, ZoomIn } from "lucide-react";
 import FieldCard from "@/components/wealthy-guide/FieldCard";
 import {
+  MANUAL_CHARGE_INTRO,
   MANUAL_CHARGE_SCREENSHOT_URL,
+  MANUAL_CHARGE_TRAINING_VIDEO_URL,
   manualChargeFields,
   wealthyGuidePath,
 } from "@/lib/wealthyGuideConfig";
+import { exportManualChargeGuidePdf } from "@/lib/wealthyGuidePdfExport";
 
 export default function ManualChargeGuide() {
   const [showFullImage, setShowFullImage] = useState(false);
+  const [showVideo, setShowVideo] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
+
+  const handleExportPdf = async () => {
+    if (exportingPdf) return;
+    setExportingPdf(true);
+    try {
+      await exportManualChargeGuidePdf({
+        title: "חיוב ידני — מדריך תשלומים",
+        intro: MANUAL_CHARGE_INTRO,
+        fields: manualChargeFields,
+      });
+    } catch (err) {
+      console.error("PDF export failed:", err);
+    } finally {
+      setExportingPdf(false);
+    }
+  };
 
   return (
     <div className="pb-12">
@@ -22,13 +43,34 @@ export default function ManualChargeGuide() {
           <ChevronLeft className="w-3.5 h-3.5" />
           <span className="text-primary font-medium">חיוב ידני</span>
         </div>
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center">
-            <CreditCard className="w-6 h-6 text-primary" />
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center">
+              <CreditCard className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-on-surface">חיוב ידני</h1>
+              <p className="text-on-surface-variant text-sm mt-0.5">ביצוע פעולות → חיוב ידני</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-on-surface">חיוב ידני</h1>
-            <p className="text-on-surface-variant text-sm mt-0.5">ביצוע פעולות → חיוב ידני</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExportPdf}
+              disabled={exportingPdf}
+              className="m3-btn-outlined text-sm py-2 flex items-center gap-2 disabled:opacity-60"
+            >
+              <FileDown className="w-4 h-4" />
+              {exportingPdf ? "מייצא..." : "ייצוא ל-PDF"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowVideo(true)}
+              className="m3-btn-filled text-sm py-2 flex items-center gap-2"
+            >
+              <PlayCircle className="w-4 h-4" />
+              סרטון הדרכה
+            </button>
           </div>
         </div>
       </motion.div>
@@ -38,10 +80,7 @@ export default function ManualChargeGuide() {
           <Info className="w-5 h-5 text-primary shrink-0 mt-0.5" />
           <div>
             <h3 className="text-sm font-bold text-on-surface mb-1">מה זה חיוב ידני?</h3>
-            <p className="text-sm text-on-surface-variant leading-relaxed">
-              חיוב ידני מאפשר לחייב לקוח באמצעות הזנת פרטי כרטיס אשראי ישירות במערכת. שימוש נפוץ: כאשר
-              הלקוח מוסר את פרטי האשראי בטלפון, או כשנדרש חיוב מיידי שאינו דרך לינק תשלום.
-            </p>
+            <p className="text-sm text-on-surface-variant leading-relaxed">{MANUAL_CHARGE_INTRO}</p>
           </div>
         </div>
       </div>
@@ -69,6 +108,34 @@ export default function ManualChargeGuide() {
           </div>
         </button>
       </div>
+
+      {showVideo && (
+        <div
+          className="fixed inset-0 bg-black/80 z-[80] flex items-center justify-center p-4"
+          onClick={() => setShowVideo(false)}
+          role="dialog"
+          aria-modal
+          aria-label="סרטון הדרכה לחיוב ידני"
+        >
+          <button
+            type="button"
+            onClick={() => setShowVideo(false)}
+            className="absolute top-4 left-4 p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors"
+            aria-label="סגור"
+          >
+            <X className="w-6 h-6 text-white" />
+          </button>
+          <video
+            src={MANUAL_CHARGE_TRAINING_VIDEO_URL}
+            controls
+            autoPlay
+            className="max-w-full max-h-[85vh] rounded-lg bg-black"
+            onClick={(e) => e.stopPropagation()}
+          >
+            הדפדפן שלך אינו תומך בהצגת וידאו.
+          </video>
+        </div>
+      )}
 
       {showFullImage && (
         <div

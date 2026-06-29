@@ -5,6 +5,11 @@ export const WEALTHY_GUIDE_BASE = "/knowledge/wealthy-guide";
 export const MANUAL_CHARGE_SCREENSHOT_URL =
   "https://media.base44.com/images/public/user_68f8bdce12cc454da9888320/74f0ee929_image.png";
 
+export const MANUAL_CHARGE_TRAINING_VIDEO_URL = "/training/wealthy-guide/manual-charge.mp4";
+
+export const MANUAL_CHARGE_INTRO =
+  "חיוב ידני מאפשר לחייב לקוח באמצעות הזנת פרטי כרטיס אשראי ישירות במערכת. שימוש נפוץ: כאשר הלקוח מוסר את פרטי האשראי בטלפון, או כשנדרש חיוב מיידי שאינו דרך לינק תשלום.";
+
 export const wealthyGuideFeatures = [
   {
     title: "חיוב ידני",
