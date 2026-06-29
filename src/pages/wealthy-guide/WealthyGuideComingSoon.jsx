@@ -14,8 +14,8 @@ export default function WealthyGuideComingSoon() {
       </div>
       <h1 className="text-xl font-bold text-on-surface mb-2">בקרוב</h1>
       <p className="text-sm text-on-surface-variant max-w-md leading-relaxed mb-6">
-        עמוד ההדרכה עבור &quot;{decodeURIComponent(segment)}&quot; עדיין בפיתוח. כרגע זמין רק מדריך
-        חיוב ידני.
+        עמוד ההדרכה עבור &quot;{decodeURIComponent(segment)}&quot; עדיין בפיתוח. כרגע זמינים מדריכי
+        חיוב ידני ולינק לתשלום.
       </p>
       <div className="flex flex-wrap gap-3 justify-center">
         <Link to={wealthyGuidePath("manual-charge")} className="m3-btn-filled text-sm py-2">

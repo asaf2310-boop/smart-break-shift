@@ -12,7 +12,25 @@ function escapeHtml(text) {
     .replace(/"/g, "&quot;");
 }
 
-function buildGuideHtml({ title, intro, fields, screenshotUrl }) {
+function buildWorkflowHtml(workflowSteps) {
+  if (!workflowSteps?.length) return "";
+  const steps = workflowSteps
+    .map(
+      (step, index) => `
+        <div style="margin-bottom:12px;padding:12px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;">
+          <strong style="font-size:13px;color:#111827 !important;-webkit-text-fill-color:#111827;">שלב ${index + 1}: ${escapeHtml(step.title)}</strong>
+          <p style="margin:4px 0 0;font-size:12px;color:#4b5563 !important;-webkit-text-fill-color:#4b5563;">${escapeHtml(step.description)}</p>
+        </div>
+      `,
+    )
+    .join("");
+  return `
+    <h2 style="margin:0 0 12px;font-size:16px;color:#111827 !important;-webkit-text-fill-color:#111827;">תהליך העבודה</h2>
+    <div style="margin:0 0 24px;">${steps}</div>
+  `;
+}
+
+function buildGuideHtml({ title, intro, fields, screenshotUrl, workflowSteps, tableFields }) {
   const fieldBlocks = fields
     .map((field, index) => {
       const badge = field.required
@@ -49,12 +67,43 @@ function buildGuideHtml({ title, intro, fields, screenshotUrl }) {
   `
     : "";
 
+  const workflowBlock = buildWorkflowHtml(workflowSteps);
+
+  const tableBlock = tableFields?.length
+    ? `
+    <h2 style="margin:0 0 16px;font-size:16px;color:#111827 !important;-webkit-text-fill-color:#111827;">טבלת בקשות שנשלחו (${tableFields.length} עמודות ופעולות)</h2>
+    ${tableFields
+      .map((field, index) => {
+        const badge = field.required
+          ? '<span style="color:#dc2626 !important;font-size:11px;-webkit-text-fill-color:#dc2626;">שדה חובה</span>'
+          : '<span style="color:#6b7280 !important;font-size:11px;-webkit-text-fill-color:#6b7280;">אופציונלי</span>';
+        const tip = field.tip
+          ? `<p style="margin:8px 0 0;padding:8px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:12px;color:#92400e !important;-webkit-text-fill-color:#92400e;">טיפ: ${escapeHtml(field.tip)}</p>`
+          : "";
+        return `
+        <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #e5e7eb;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;background:#eef2ff;color:#4f46e5 !important;-webkit-text-fill-color:#4f46e5;border-radius:6px;font-size:12px;font-weight:700;">${index + 1}</span>
+            <strong style="font-size:14px;color:#111827 !important;-webkit-text-fill-color:#111827;">${escapeHtml(field.name)}</strong>
+            ${badge}
+          </div>
+          <p style="margin:0;font-size:13px;color:#374151 !important;-webkit-text-fill-color:#374151;">${escapeHtml(field.description)}</p>
+          ${tip}
+        </div>
+      `;
+      })
+      .join("")}
+  `
+    : "";
+
   return `
     <h1 style="margin:0 0 12px;font-size:22px;color:#111827 !important;-webkit-text-fill-color:#111827;">${escapeHtml(title)}</h1>
     <p style="margin:0 0 20px;font-size:13px;color:#4b5563 !important;-webkit-text-fill-color:#4b5563;line-height:1.7;">${escapeHtml(intro)}</p>
+    ${workflowBlock}
     ${screenshotBlock}
     <h2 style="margin:0 0 16px;font-size:16px;color:#111827 !important;-webkit-text-fill-color:#111827;">הסבר שדות הטופס (${fields.length} שדות)</h2>
     ${fieldBlocks}
+    ${tableBlock}
   `;
 }
 
@@ -201,20 +250,47 @@ function addCanvasPagesToPdf(doc, canvas) {
 }
 
 /**
- * Client-side PDF export for manual charge guide (Hebrew RTL via rasterized HTML).
- * Uses html2canvas + image pages so Hebrew web fonts render correctly (jsPDF html()
- * context2d path only supports built-in Latin fonts and yields blank/invisible text).
+ * Client-side PDF export for wealthy guide topics (Hebrew RTL via rasterized HTML).
  */
-export async function exportManualChargeGuidePdf({ title, intro, fields, screenshotUrl }) {
-  const guideHtml = buildGuideHtml({ title, intro, fields, screenshotUrl });
+async function exportWealthyGuidePdf({ title, intro, fields, screenshotUrl, workflowSteps, tableFields, filename }) {
+  const guideHtml = buildGuideHtml({ title, intro, fields, screenshotUrl, workflowSteps, tableFields });
   const { root, cleanup } = await mountIsolatedGuideRoot(guideHtml);
 
   try {
     const canvas = await captureGuideCanvas(root);
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4", compress: true });
     addCanvasPagesToPdf(doc, canvas);
-    doc.save("manual-charge-guide.pdf");
+    doc.save(filename);
   } finally {
     cleanup();
   }
+}
+
+export async function exportManualChargeGuidePdf({ title, intro, fields, screenshotUrl }) {
+  return exportWealthyGuidePdf({
+    title,
+    intro,
+    fields,
+    screenshotUrl,
+    filename: "manual-charge-guide.pdf",
+  });
+}
+
+export async function exportPaymentLinkGuidePdf({
+  title,
+  intro,
+  fields,
+  screenshotUrl,
+  workflowSteps,
+  tableFields,
+}) {
+  return exportWealthyGuidePdf({
+    title,
+    intro,
+    fields,
+    screenshotUrl,
+    workflowSteps,
+    tableFields,
+    filename: "payment-link-guide.pdf",
+  });
 }

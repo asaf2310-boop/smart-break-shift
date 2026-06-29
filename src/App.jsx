@@ -41,6 +41,7 @@ import KnowledgeDocumentViewPage from './pages/KnowledgeDocumentViewPage';
 import WealthyGuideLayout from '@/components/wealthy-guide/WealthyGuideLayout';
 import WealthyGuideHome from './pages/wealthy-guide/WealthyGuideHome';
 import ManualChargeGuide from './pages/wealthy-guide/ManualChargeGuide';
+import PaymentLinkGuide from './pages/wealthy-guide/PaymentLinkGuide';
 import ManualChargeGuestVideoPage from './pages/wealthy-guide/ManualChargeGuestVideoPage';
 import ManualChargeGuestPdfPage from './pages/wealthy-guide/ManualChargeGuestPdfPage';
 import WealthyGuideComingSoon from './pages/wealthy-guide/WealthyGuideComingSoon';
@@ -163,6 +164,7 @@ const AuthenticatedApp = () => {
         <Route path="/knowledge/wealthy-guide" element={<ModuleGate module="knowledge_guide"><KnowledgeGate><WealthyGuideLayout /></KnowledgeGate></ModuleGate>}>
           <Route index element={<WealthyGuideHome />} />
           <Route path="manual-charge" element={<ManualChargeGuide />} />
+          <Route path="payment-link" element={<PaymentLinkGuide />} />
           <Route path="*" element={<WealthyGuideComingSoon />} />
         </Route>
         <Route path="/knowledge/document/:documentId" element={<ModuleGate module="knowledge_chat"><KnowledgeGate><KnowledgeDocumentViewPage /></KnowledgeGate></ModuleGate>} />

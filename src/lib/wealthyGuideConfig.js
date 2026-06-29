@@ -18,6 +18,26 @@ export const MANUAL_CHARGE_PRESENTATION_PATH =
 export const MANUAL_CHARGE_INTRO =
   "חיוב ידני מאפשר לחייב לקוח באמצעות הזנת פרטי כרטיס אשראי ישירות במערכת. שימוש נפוץ: כאשר הלקוח מוסר את פרטי האשראי בטלפון, או כשנדרש חיוב מיידי שאינו דרך לינק תשלום.";
 
+export const PAYMENT_LINK_SCREENSHOT_URL = "/training/wealthy-guide/payment-link-screenshot.png";
+
+export const PAYMENT_LINK_INTRO =
+  "לינק לתשלום מאפשר ליצור בקשת תשלום ולשלוח ללקוח קישור מאובטח להשלמת העסקה. שימוש נפוץ: כאשר הלקוח אינו נמצא במערכת, או כשמעדיפים שהלקוח יזין את פרטי האשראי בעצמו בדף תשלום מאובטח.";
+
+export const paymentLinkWorkflowSteps = [
+  {
+    title: "צרו בקשה לתשלום",
+    description: "מלאו את סכום התשלום, תיאור העסקה ופרטי הלקוח בטופס.",
+  },
+  {
+    title: "שלחו אותה ללקוח",
+    description: "שלחו את הבקשה במייל, ב-SMS, או שניהם. אם לא מוזנים פרטי שליחה — נוצר קישור להעתקה ידנית.",
+  },
+  {
+    title: "קבלו אישור על התשלום",
+    description: "הלקוח משלים את התשלום בדף המאובטח, והסטטוס מתעדכן בטבלת הבקשות שנשלחו.",
+  },
+];
+
 export const wealthyGuideFeatures = [
   {
     title: "חיוב ידני",
@@ -30,7 +50,7 @@ export const wealthyGuideFeatures = [
     title: "לינק לתשלום",
     description: "שליחת קישור תשלום ללקוח",
     slug: "payment-link",
-    ready: false,
+    ready: true,
     color: "bg-blue-100 text-blue-600",
   },
   {
@@ -83,7 +103,7 @@ export const wealthyGuideMenuItems = [
     label: "ביצוע פעולות",
     children: [
       { label: "חיוב ידני", slug: "manual-charge", ready: true },
-      { label: "לינק לתשלום", slug: "payment-link", ready: false },
+      { label: "לינק לתשלום", slug: "payment-link", ready: true },
       { label: "הוראת קבע", slug: "standing-order", ready: false },
     ],
   },
@@ -206,6 +226,118 @@ export const manualChargeFields = [
     description: "לחצן סופי לביצוע החיוב. לאחר לחיצה, העסקה נשלחת לאישור מול חברת האשראי.",
     tip: "לפני לחיצה — חובה לוודא שכל הפרטים נכונים! לא ניתן לבטל עסקה בקלות.",
     required: true,
+  },
+];
+
+export const paymentLinkFields = [
+  {
+    name: "סכום לתשלום",
+    description: "הזנת הסכום שהלקוח צריך לשלם. ניתן לבחור את סוג המטבע (ש\"ח, דולר וכו').",
+    tip: "יש לוודא שהסכום תואם למה שסוכם עם הלקוח לפני שליחת הבקשה.",
+    required: true,
+  },
+  {
+    name: "תיאור עסקה / בחירת פריט",
+    description: "שדה חופשי לתיאור העסקה או בחירת פריט מרשימת הפריטים המוגדרים במערכת.",
+    tip: "תיאור ברור יעזור ללקוח לזהות את הבקשה ולמצוא אותה בדוחות.",
+    required: false,
+  },
+  {
+    name: "הגדרות מתקדמות",
+    description: "אזור מתקפל עם אפשרויות נוספות לבקשת התשלום — לדוגמה הגדרות תשלומים, שפה, מטבע ועוד.",
+    required: false,
+  },
+  {
+    name: "ת.ז. (לא חובה)",
+    description: "מספר תעודת הזהות של הלקוח. שדה אופציונלי לזיהוי הלקוח במערכת.",
+    required: false,
+  },
+  {
+    name: "שם פרטי",
+    description: "שם פרטי של הלקוח שאליו מיועדת בקשת התשלום.",
+    required: false,
+  },
+  {
+    name: "שם משפחה",
+    description: "שם משפחה של הלקוח שאליו מיועדת בקשת התשלום.",
+    required: false,
+  },
+  {
+    name: "כתובת מייל",
+    description: "כתובת המייל של הלקוח. אם מוזנת — הבקשה תישלח ללקוח בדוא\"ל עם קישור לתשלום.",
+    tip: "ניתן לשלוח גם במייל וגם ב-SMS — אם מוזנים שני הערוצים, הבקשה תישלח בשניהם.",
+    required: false,
+  },
+  {
+    name: "מספר טלפון נייד",
+    description: "מספר הטלפון הנייד של הלקוח. אם מוזן — הבקשה תישלח ב-SMS עם קישור לתשלום.",
+    tip: "אם שני השדות (מייל וטלפון) ריקים — המערכת תיצור קישור בלבד, לשיתוף ידני עם הלקוח.",
+    required: false,
+  },
+  {
+    name: "שלח בקשה",
+    description: "לחצן ליצירת בקשת התשלום ושליחתה ללקוח (או ליצירת קישור להעתקה). לאחר לחיצה, הבקשה תופיע בטבלת הבקשות שנשלחו.",
+    tip: "לפני שליחה — וודאו שהסכום ופרטי הלקוח נכונים.",
+    required: true,
+  },
+];
+
+export const paymentLinkTableFields = [
+  {
+    name: "סינון: הכל / שולמו / לא שולמו",
+    description: "לשוניות לסינון הבקשות לפי סטטוס תשלום — כל הבקשות, רק ששולמו, או רק שטרם שולמו.",
+    required: false,
+  },
+  {
+    name: "חיפוש בבקשות שנשלחו",
+    description: "שדה חיפוש לאיתור בקשה ספציפית לפי שם, סכום, תיאור או פרטים אחרים.",
+    required: false,
+  },
+  {
+    name: "תאריך",
+    description: "תאריך יצירת או שליחת בקשת התשלום.",
+    required: false,
+  },
+  {
+    name: "סטטוס",
+    description: "מצב הבקשה — למשל: חדשה, נשלחה, שולמה או לא שולמה.",
+    required: false,
+  },
+  {
+    name: "נשלח לנייד/מייל",
+    description: "הערוץ שבו נשלחה הבקשה ללקוח — מספר טלפון, כתובת מייל, או שניהם.",
+    required: false,
+  },
+  {
+    name: "סכום",
+    description: "סכום התשלום שביקשתם מהלקוח.",
+    required: false,
+  },
+  {
+    name: "תיאור עסקה",
+    description: "התיאור שהוזן בעת יצירת הבקשה.",
+    required: false,
+  },
+  {
+    name: "שם",
+    description: "שם הלקוח שאליו נשלחה הבקשה.",
+    required: false,
+  },
+  {
+    name: "אסמכתה",
+    description: "מספר אסמכתה או מזהה פנימי של הבקשה לצורך מעקב.",
+    required: false,
+  },
+  {
+    name: "מסמכים/קישור",
+    description: "גישה לקישור התשלום, חשבונית או מסמכים נלווים לבקשה.",
+    required: false,
+  },
+  {
+    name: "מחיקה",
+    description: "אפשרות למחיקת בקשת תשלום שטרם שולמה. בקשה שכבר שולמה לא ניתנת למחיקה.",
+    tip: "מחיקה רלוונטית רק לבקשות שלא שולמו עדיין.",
+    required: false,
   },
 ];
 
