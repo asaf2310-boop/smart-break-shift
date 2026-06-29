@@ -183,10 +183,9 @@ export const manualChargeFields = [
     required: false,
   },
   {
-    name: "תעודת זהות",
-    description: "מספר תעודת הזהות של בעל הכרטיס.",
-    tip: "שדה זה נדרש לצורך אימות העסקה מול חברת האשראי.",
-    required: true,
+    name: "ת.ז. (לא חובה)",
+    description: "מספר תעודת הזהות של בעל הכרטיס. שדה אופציונלי — ניתן לבצע חיוב גם ללא הזנת ת.ז.",
+    required: false,
   },
   {
     name: "שם פרטי ושם משפחה",
