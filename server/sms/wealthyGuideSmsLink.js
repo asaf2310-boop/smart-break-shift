@@ -6,10 +6,14 @@ export { REVIEW_SMS_MAX_LENGTH as WEALTHY_GUIDE_SMS_MAX_LENGTH };
 
 export const WEALTHY_GUIDE_BASE = "/knowledge/wealthy-guide";
 export const MANUAL_CHARGE_SLUG = "manual-charge";
+export const PAYMENT_LINK_SLUG = "payment-link";
 export const PUBLIC_MANUAL_CHARGE_VIDEO_PATH = "/guide/manual-charge/video";
 export const PUBLIC_MANUAL_CHARGE_PDF_PATH = "/guide/manual-charge/pdf";
+export const PUBLIC_PAYMENT_LINK_VIDEO_PATH = "/guide/payment-link/video";
+export const PUBLIC_PAYMENT_LINK_PDF_PATH = "/guide/payment-link/pdf";
 
 export const WEALTHY_GUIDE_SMS_VARIANTS = ["guide", "presentation", "both"];
+export const WEALTHY_GUIDE_TYPES = ["manual-charge", "payment-link"];
 
 export function getWealthyGuidePublicOrigin() {
   return String(process.env.VITE_APP_URL || process.env.VERCEL_URL || "")
@@ -41,16 +45,54 @@ export function getManualChargePresentationUrl(origin) {
   return `${base}${PUBLIC_MANUAL_CHARGE_VIDEO_PATH}`;
 }
 
-const SMS_TEMPLATES = {
-  guide: "מדריך חיוב ידני: {guideUrl}",
-  presentation: "מצגת הדרכה — חיוב ידני: {presentationUrl}",
-  both: "מדריך חיוב ידני: {guideUrl}\nמצגת: {presentationUrl}",
+export function getPaymentLinkGuideUrl(origin) {
+  const base = String(origin || getWealthyGuidePublicOrigin() || "").replace(/\/$/, "");
+  if (!base) return PUBLIC_PAYMENT_LINK_PDF_PATH;
+  return `${base}${PUBLIC_PAYMENT_LINK_PDF_PATH}`;
+}
+
+export function getPaymentLinkPresentationUrl(origin) {
+  const base = String(origin || getWealthyGuidePublicOrigin() || "").replace(/\/$/, "");
+  if (!base) return PUBLIC_PAYMENT_LINK_VIDEO_PATH;
+  return `${base}${PUBLIC_PAYMENT_LINK_VIDEO_PATH}`;
+}
+
+const SMS_CONFIG = {
+  "manual-charge": {
+    templates: {
+      guide: "מדריך חיוב ידני: {guideUrl}",
+      presentation: "מצגת הדרכה — חיוב ידני: {presentationUrl}",
+      both: "מדריך חיוב ידני: {guideUrl}\nמצגת: {presentationUrl}",
+    },
+    getGuideUrl: getManualChargeGuideUrl,
+    getPresentationUrl: getManualChargePresentationUrl,
+  },
+  "payment-link": {
+    templates: {
+      guide: "מדריך לינק לתשלום: {guideUrl}",
+      presentation: "מצגת הדרכה — לינק לתשלום: {presentationUrl}",
+      both: "מדריך לינק לתשלום: {guideUrl}\nמצגת: {presentationUrl}",
+    },
+    getGuideUrl: getPaymentLinkGuideUrl,
+    getPresentationUrl: getPaymentLinkPresentationUrl,
+  },
 };
 
-export function buildWealthyGuideSmsMessage({ variant = "both", guideUrl, presentationUrl } = {}) {
+function resolveGuideType(guideType) {
+  return WEALTHY_GUIDE_TYPES.includes(guideType) ? guideType : "manual-charge";
+}
+
+export function buildWealthyGuideSmsMessage({
+  variant = "both",
+  guideType = "manual-charge",
+  guideUrl,
+  presentationUrl,
+  origin,
+} = {}) {
   const kind = WEALTHY_GUIDE_SMS_VARIANTS.includes(variant) ? variant : "both";
-  const guide = String(guideUrl || getManualChargeGuideUrl()).trim();
-  const presentation = String(presentationUrl || getManualChargePresentationUrl()).trim();
+  const config = SMS_CONFIG[resolveGuideType(guideType)];
+  const guide = String(guideUrl || config.getGuideUrl(origin)).trim();
+  const presentation = String(presentationUrl || config.getPresentationUrl(origin)).trim();
 
   if (kind === "guide" && !guide) {
     return { ok: false, error: "missing_guide_url", message: "קישור המדריך לא זמין" };
@@ -59,12 +101,19 @@ export function buildWealthyGuideSmsMessage({ variant = "both", guideUrl, presen
     return { ok: false, error: "missing_presentation_url", message: "קישור המצגת לא זמין" };
   }
 
-  const template = SMS_TEMPLATES[kind];
+  const template = config.templates[kind];
   const message = template
     .replace(/\{guideUrl\}/g, guide)
     .replace(/\{presentationUrl\}/g, presentation);
 
-  return { ok: true, message, variant: kind, guideUrl: guide, presentationUrl: presentation };
+  return {
+    ok: true,
+    message,
+    variant: kind,
+    guideType: resolveGuideType(guideType),
+    guideUrl: guide,
+    presentationUrl: presentation,
+  };
 }
 
 export function validateWealthyGuideSmsMessageLength(message) {

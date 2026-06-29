@@ -44,6 +44,8 @@ import ManualChargeGuide from './pages/wealthy-guide/ManualChargeGuide';
 import PaymentLinkGuide from './pages/wealthy-guide/PaymentLinkGuide';
 import ManualChargeGuestVideoPage from './pages/wealthy-guide/ManualChargeGuestVideoPage';
 import ManualChargeGuestPdfPage from './pages/wealthy-guide/ManualChargeGuestPdfPage';
+import PaymentLinkGuestVideoPage from './pages/wealthy-guide/PaymentLinkGuestVideoPage';
+import PaymentLinkGuestPdfPage from './pages/wealthy-guide/PaymentLinkGuestPdfPage';
 import WealthyGuideComingSoon from './pages/wealthy-guide/WealthyGuideComingSoon';
 import AdminKnowledge from './pages/AdminKnowledge';
 import AdminKnowledgeGaps from './pages/AdminKnowledgeGaps';
@@ -158,6 +160,8 @@ const AuthenticatedApp = () => {
         <Route path="/j/:token" element={<RouteErrorBoundary><GuestJoinRedirectPage /></RouteErrorBoundary>} />
         <Route path="/guide/manual-charge/video" element={<RouteErrorBoundary><ManualChargeGuestVideoPage /></RouteErrorBoundary>} />
         <Route path="/guide/manual-charge/pdf" element={<RouteErrorBoundary><ManualChargeGuestPdfPage /></RouteErrorBoundary>} />
+        <Route path="/guide/payment-link/video" element={<RouteErrorBoundary><PaymentLinkGuestVideoPage /></RouteErrorBoundary>} />
+        <Route path="/guide/payment-link/pdf" element={<RouteErrorBoundary><PaymentLinkGuestPdfPage /></RouteErrorBoundary>} />
         <Route path="/support/consent/:token" element={<RouteErrorBoundary><RemoteSupportConsentPage /></RouteErrorBoundary>} />
         <Route path="/support/screen/:sessionId" element={<RouteErrorBoundary><ScreenShareGuestPage /></RouteErrorBoundary>} />
         <Route path="/knowledge" element={<ModuleGate module="knowledge_chat"><KnowledgeGate><KnowledgePage /></KnowledgeGate></ModuleGate>} />

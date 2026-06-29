@@ -20,6 +20,12 @@ export const MANUAL_CHARGE_INTRO =
 
 export const PAYMENT_LINK_SCREENSHOT_URL = "/training/wealthy-guide/payment-link-screenshot.png";
 
+export const PAYMENT_LINK_TRAINING_VIDEO_URL = "/training/wealthy-guide/payment-link.mp4";
+
+/** Public guest routes for SMS links (no agent auth / knowledge module). */
+export const PUBLIC_PAYMENT_LINK_VIDEO_PATH = "/guide/payment-link/video";
+export const PUBLIC_PAYMENT_LINK_PDF_PATH = "/guide/payment-link/pdf";
+
 export const PAYMENT_LINK_INTRO =
   "לינק לתשלום מאפשר ליצור בקשת תשלום ולשלוח ללקוח קישור מאובטח להשלמת העסקה. שימוש נפוץ: כאשר הלקוח אינו נמצא במערכת, או כשמעדיפים שהלקוח יזין את פרטי האשראי בעצמו בדף תשלום מאובטח.";
 
@@ -371,4 +377,12 @@ export function getManualChargePresentationUrl() {
     return `${getPublicAppOrigin()}${path}`;
   }
   return `${getPublicAppOrigin()}${PUBLIC_MANUAL_CHARGE_VIDEO_PATH}`;
+}
+
+export function getPaymentLinkGuideUrl() {
+  return `${getPublicAppOrigin()}${PUBLIC_PAYMENT_LINK_PDF_PATH}`;
+}
+
+export function getPaymentLinkPresentationUrl() {
+  return `${getPublicAppOrigin()}${PUBLIC_PAYMENT_LINK_VIDEO_PATH}`;
 }

@@ -730,11 +730,13 @@ export default async function handler(req, res) {
 
     const phone = String(body.phone || body.to || "").trim();
     const variant = String(body.variant || "both").trim();
+    const guideType = String(body.guideType || body.guide_type || "manual-charge").trim();
 
     try {
       const result = await sendWealthyGuideLinksSms({
         phone,
         variant,
+        guideType,
         actorAgentId: auth.agent.id,
         actorName: auth.agent.name,
         req,

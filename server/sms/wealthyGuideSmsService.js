@@ -10,6 +10,8 @@ export {
   buildWealthyGuideSmsMessage,
   getManualChargeGuideUrl,
   getManualChargePresentationUrl,
+  getPaymentLinkGuideUrl,
+  getPaymentLinkPresentationUrl,
 } from "./wealthyGuideSmsLink.js";
 
 function maskPhoneForAudit(phone) {
@@ -24,6 +26,7 @@ function maskPhoneForAudit(phone) {
 export async function sendWealthyGuideLinksSms({
   phone,
   variant = "both",
+  guideType = "manual-charge",
   actorAgentId,
   actorName,
   req,
@@ -33,7 +36,7 @@ export async function sendWealthyGuideLinksSms({
     return { ok: false, error: "invalid_phone", message: "מספר טלפון לא תקין" };
   }
 
-  const built = buildWealthyGuideSmsMessage({ variant });
+  const built = buildWealthyGuideSmsMessage({ variant, guideType });
   if (!built.ok) return built;
 
   const lengthCheck = validateWealthyGuideSmsMessageLength(built.message);
@@ -78,6 +81,7 @@ export async function sendWealthyGuideLinksSms({
       actorName: actorName || null,
       phoneLast4: normalized.slice(-4),
       variant: built.variant,
+      guideType: built.guideType,
     },
     req,
   });
@@ -88,5 +92,6 @@ export async function sendWealthyGuideLinksSms({
     message: result.message || "נשלח בהצלחה",
     preview: built.message,
     variant: built.variant,
+    guideType: built.guideType,
   };
 }

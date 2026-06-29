@@ -216,12 +216,13 @@ export async function apiSendReviewSms({ phone }) {
   );
 }
 
-export async function apiSendWealthyGuideSms({ phone, variant = "both" }) {
+export async function apiSendWealthyGuideSms({ phone, variant = "both", guideType = "manual-charge" }) {
   return postAgentAuth(
     {
       action: "send_wealthy_guide_sms",
       phone,
       variant,
+      guideType,
     },
     { requireBearer: true }
   );
