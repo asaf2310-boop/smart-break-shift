@@ -6,6 +6,8 @@ export { REVIEW_SMS_MAX_LENGTH as WEALTHY_GUIDE_SMS_MAX_LENGTH };
 
 export const WEALTHY_GUIDE_BASE = "/knowledge/wealthy-guide";
 export const MANUAL_CHARGE_SLUG = "manual-charge";
+export const PUBLIC_MANUAL_CHARGE_VIDEO_PATH = "/guide/manual-charge/video";
+export const PUBLIC_MANUAL_CHARGE_PDF_PATH = "/guide/manual-charge/pdf";
 
 export const WEALTHY_GUIDE_SMS_VARIANTS = ["guide", "presentation", "both"];
 
@@ -18,8 +20,8 @@ export function getWealthyGuidePublicOrigin() {
 
 export function getManualChargeGuideUrl(origin) {
   const base = String(origin || getWealthyGuidePublicOrigin() || "").replace(/\/$/, "");
-  if (!base) return `${WEALTHY_GUIDE_BASE}/${MANUAL_CHARGE_SLUG}`;
-  return `${base}${WEALTHY_GUIDE_BASE}/${MANUAL_CHARGE_SLUG}`;
+  if (!base) return PUBLIC_MANUAL_CHARGE_PDF_PATH;
+  return `${base}${PUBLIC_MANUAL_CHARGE_PDF_PATH}`;
 }
 
 export function getManualChargePresentationUrl(origin) {
@@ -34,7 +36,9 @@ export function getManualChargePresentationUrl(origin) {
     const path = custom.startsWith("/") ? custom : `/${custom}`;
     return base ? `${base}${path}` : path;
   }
-  return getManualChargeGuideUrl(origin);
+  const base = String(origin || getWealthyGuidePublicOrigin() || "").replace(/\/$/, "");
+  if (!base) return PUBLIC_MANUAL_CHARGE_VIDEO_PATH;
+  return `${base}${PUBLIC_MANUAL_CHARGE_VIDEO_PATH}`;
 }
 
 const SMS_TEMPLATES = {

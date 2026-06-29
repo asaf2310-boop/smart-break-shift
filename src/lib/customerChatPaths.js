@@ -15,9 +15,18 @@ export function isRemoteSupportGuestPath(pathname) {
   return false;
 }
 
+/** Wealthy Guide public SMS links — no agent chrome. */
+export function isWealthyGuideGuestPath(pathname) {
+  return pathname.startsWith("/guide/manual-charge/");
+}
+
 /** Public guest flows that should not load agent widgets or Supabase chat tables. */
 export function isGuestChromeHiddenPath(pathname, search = "") {
-  return isCustomerChatGuestPath(pathname, search) || isRemoteSupportGuestPath(pathname);
+  return (
+    isCustomerChatGuestPath(pathname, search) ||
+    isRemoteSupportGuestPath(pathname) ||
+    isWealthyGuideGuestPath(pathname)
+  );
 }
 
 export function isAgentCustomerChatPath(pathname) {

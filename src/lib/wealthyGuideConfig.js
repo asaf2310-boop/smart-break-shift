@@ -7,6 +7,10 @@ export const MANUAL_CHARGE_SCREENSHOT_URL =
 
 export const MANUAL_CHARGE_TRAINING_VIDEO_URL = "/training/wealthy-guide/manual-charge.mp4";
 
+/** Public guest routes for SMS links (no agent auth / knowledge module). */
+export const PUBLIC_MANUAL_CHARGE_VIDEO_PATH = "/guide/manual-charge/video";
+export const PUBLIC_MANUAL_CHARGE_PDF_PATH = "/guide/manual-charge/pdf";
+
 /** נתיב מצגת אופציונלי — env או ברירת מחדל למדריך */
 export const MANUAL_CHARGE_PRESENTATION_PATH =
   import.meta.env.VITE_WEALTHY_GUIDE_MANUAL_CHARGE_PRESENTATION_PATH || null;
@@ -223,7 +227,7 @@ function getPublicAppOrigin() {
 }
 
 export function getManualChargeGuideUrl() {
-  return `${getPublicAppOrigin()}${wealthyGuidePath("manual-charge")}`;
+  return `${getPublicAppOrigin()}${PUBLIC_MANUAL_CHARGE_PDF_PATH}`;
 }
 
 export function getManualChargePresentationUrl() {
@@ -235,5 +239,5 @@ export function getManualChargePresentationUrl() {
     const path = custom.startsWith("/") ? custom : `/${custom}`;
     return `${getPublicAppOrigin()}${path}`;
   }
-  return getManualChargeGuideUrl();
+  return `${getPublicAppOrigin()}${PUBLIC_MANUAL_CHARGE_VIDEO_PATH}`;
 }

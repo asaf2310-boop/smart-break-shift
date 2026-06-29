@@ -151,16 +151,19 @@ export default function WealthyGuideSmsDialog({ open, onOpenChange, initialPhone
 
           <div className="text-xs text-on-surface-variant space-y-1">
             <p>
-              מדריך:{" "}
+              מדריך (PDF):{" "}
               <code className="text-[11px] break-all" dir="ltr">
                 {getManualChargeGuideUrl()}
               </code>
             </p>
             <p>
-              מצגת:{" "}
+              מצגת (סרטון):{" "}
               <code className="text-[11px] break-all" dir="ltr">
                 {getManualChargePresentationUrl()}
               </code>
+            </p>
+            <p className="text-[11px] pt-1">
+              הקישורים מובילים לדפי אורח ציבוריים — ללא התחברות נציג.
             </p>
           </div>
 

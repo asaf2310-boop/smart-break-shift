@@ -41,6 +41,8 @@ import KnowledgeDocumentViewPage from './pages/KnowledgeDocumentViewPage';
 import WealthyGuideLayout from '@/components/wealthy-guide/WealthyGuideLayout';
 import WealthyGuideHome from './pages/wealthy-guide/WealthyGuideHome';
 import ManualChargeGuide from './pages/wealthy-guide/ManualChargeGuide';
+import ManualChargeGuestVideoPage from './pages/wealthy-guide/ManualChargeGuestVideoPage';
+import ManualChargeGuestPdfPage from './pages/wealthy-guide/ManualChargeGuestPdfPage';
 import WealthyGuideComingSoon from './pages/wealthy-guide/WealthyGuideComingSoon';
 import AdminKnowledge from './pages/AdminKnowledge';
 import AdminKnowledgeGaps from './pages/AdminKnowledgeGaps';
@@ -153,6 +155,8 @@ const AuthenticatedApp = () => {
           element={<DemoGate><DemoRecordingPlayPage /></DemoGate>}
         />
         <Route path="/j/:token" element={<RouteErrorBoundary><GuestJoinRedirectPage /></RouteErrorBoundary>} />
+        <Route path="/guide/manual-charge/video" element={<RouteErrorBoundary><ManualChargeGuestVideoPage /></RouteErrorBoundary>} />
+        <Route path="/guide/manual-charge/pdf" element={<RouteErrorBoundary><ManualChargeGuestPdfPage /></RouteErrorBoundary>} />
         <Route path="/support/consent/:token" element={<RouteErrorBoundary><RemoteSupportConsentPage /></RouteErrorBoundary>} />
         <Route path="/support/screen/:sessionId" element={<RouteErrorBoundary><ScreenShareGuestPage /></RouteErrorBoundary>} />
         <Route path="/knowledge" element={<ModuleGate module="knowledge_chat"><KnowledgeGate><KnowledgePage /></KnowledgeGate></ModuleGate>} />
