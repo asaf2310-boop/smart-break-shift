@@ -7,6 +7,10 @@ export const MANUAL_CHARGE_SCREENSHOT_URL =
 
 export const MANUAL_CHARGE_TRAINING_VIDEO_URL = "/training/wealthy-guide/manual-charge.mp4";
 
+/** נתיב מצגת אופציונלי — env או ברירת מחדל למדריך */
+export const MANUAL_CHARGE_PRESENTATION_PATH =
+  import.meta.env.VITE_WEALTHY_GUIDE_MANUAL_CHARGE_PRESENTATION_PATH || null;
+
 export const MANUAL_CHARGE_INTRO =
   "חיוב ידני מאפשר לחייב לקוח באמצעות הזנת פרטי כרטיס אשראי ישירות במערכת. שימוש נפוץ: כאשר הלקוח מוסר את פרטי האשראי בטלפון, או כשנדרש חיוב מיידי שאינו דרך לינק תשלום.";
 
@@ -204,4 +208,32 @@ export const manualChargeFields = [
 export function wealthyGuidePath(slug) {
   if (!slug) return WEALTHY_GUIDE_BASE;
   return `${WEALTHY_GUIDE_BASE}/${slug}`;
+}
+
+function getPublicAppOrigin() {
+  const fromEnv =
+    typeof import.meta !== "undefined" && import.meta.env?.VITE_APP_URL
+      ? String(import.meta.env.VITE_APP_URL).trim().replace(/\/$/, "")
+      : "";
+  if (typeof window === "undefined") return fromEnv;
+  const origin = window.location.origin;
+  const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(origin);
+  if (isLocal && fromEnv) return fromEnv;
+  return fromEnv || origin;
+}
+
+export function getManualChargeGuideUrl() {
+  return `${getPublicAppOrigin()}${wealthyGuidePath("manual-charge")}`;
+}
+
+export function getManualChargePresentationUrl() {
+  const custom = MANUAL_CHARGE_PRESENTATION_PATH
+    ? String(MANUAL_CHARGE_PRESENTATION_PATH).trim()
+    : "";
+  if (custom) {
+    if (/^https?:\/\//i.test(custom)) return custom;
+    const path = custom.startsWith("/") ? custom : `/${custom}`;
+    return `${getPublicAppOrigin()}${path}`;
+  }
+  return getManualChargeGuideUrl();
 }

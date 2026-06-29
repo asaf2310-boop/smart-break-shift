@@ -22,6 +22,7 @@ export const SECURITY_AUDIT_ACTION_LABELS = {
   knowledge_delete: "מחיקת מסמך ידע",
   knowledge_gap_update: "עדכון פער ידע",
   send_review_sms: "שליחת SMS דירוג גוגל",
+  send_wealthy_guide_sms: "שליחת SMS מדריך תשלומים",
   send_schedule_sms: "שליחת SMS שיבוץ",
   sip_token_mint: "הנפקת טוקן SIP",
   sip_token_redeem: "מימוש טוקן SIP",

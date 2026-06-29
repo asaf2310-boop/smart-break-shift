@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ChevronLeft, CreditCard, FileDown, Info, PlayCircle, X, ZoomIn } from "lucide-react";
+import { ChevronLeft, CreditCard, FileDown, Info, MessageSquare, PlayCircle, X, ZoomIn } from "lucide-react";
 import FieldCard from "@/components/wealthy-guide/FieldCard";
+import WealthyGuideSmsDialog from "@/components/wealthy-guide/WealthyGuideSmsDialog";
 import {
   MANUAL_CHARGE_INTRO,
   MANUAL_CHARGE_SCREENSHOT_URL,
@@ -13,8 +14,11 @@ import {
 import { exportManualChargeGuidePdf } from "@/lib/wealthyGuidePdfExport";
 
 export default function ManualChargeGuide() {
+  const [searchParams] = useSearchParams();
+  const initialPhone = searchParams.get("phone") || "";
   const [showFullImage, setShowFullImage] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
+  const [showSmsDialog, setShowSmsDialog] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
 
   const handleExportPdf = async () => {
@@ -54,6 +58,14 @@ export default function ManualChargeGuide() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowSmsDialog(true)}
+              className="m3-btn-outlined text-sm py-2 flex items-center gap-2"
+            >
+              <MessageSquare className="w-4 h-4" />
+              שלח קישורים ב-SMS
+            </button>
             <button
               type="button"
               onClick={handleExportPdf}
@@ -161,6 +173,12 @@ export default function ManualChargeGuide() {
           />
         </div>
       )}
+
+      <WealthyGuideSmsDialog
+        open={showSmsDialog}
+        onOpenChange={setShowSmsDialog}
+        initialPhone={initialPhone}
+      />
 
       <div className="mb-10">
         <h2 className="text-lg font-bold text-on-surface mb-4 flex items-center gap-2">

@@ -216,6 +216,17 @@ export async function apiSendReviewSms({ phone }) {
   );
 }
 
+export async function apiSendWealthyGuideSms({ phone, variant = "both" }) {
+  return postAgentAuth(
+    {
+      action: "send_wealthy_guide_sms",
+      phone,
+      variant,
+    },
+    { requireBearer: true }
+  );
+}
+
 export async function apiGetReviewSmsConfig({ accessToken = null, timeoutMs = AGENT_API_TIMEOUT_MS } = {}) {
   return postAgentAuth(
     { action: "get_review_sms_settings" },

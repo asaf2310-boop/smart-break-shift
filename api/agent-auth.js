@@ -50,6 +50,7 @@ import { listSecurityAuditLog } from "../server/security/auditLogListService.js"
 import { getSmsStatsByAgent } from "../server/security/smsStatsService.js";
 import { endSupportSessionByAgent } from "../server/support/supportSessionEndService.js";
 import { sendReviewSmsToCustomer } from "../server/sms/reviewSmsService.js";
+import { sendWealthyGuideLinksSms } from "../server/sms/wealthyGuideSmsService.js";
 import {
   DEFAULT_REVIEW_SMS_TEMPLATE,
   REVIEW_SMS_MAX_LENGTH,
@@ -75,6 +76,7 @@ const webrtcJoinRateByUser = new Map();
 const adminActionRateByUser = new Map();
 const supportEndRateByUser = new Map();
 const reviewSmsRateByUser = new Map();
+const wealthyGuideSmsRateByUser = new Map();
 const sipTokenRateByUser = new Map();
 const passwordResetRateByIp = new Map();
 const storageUploadRateByKey = new Map();
@@ -89,6 +91,8 @@ const ADMIN_ACTION_RATE_MAX = 60;
 const SUPPORT_END_RATE_MAX = 120;
 const REVIEW_SMS_RATE_MAX = 30;
 const REVIEW_SMS_RATE_WINDOW_MS = 60 * 60 * 1000;
+const WEALTHY_GUIDE_SMS_RATE_MAX = 30;
+const WEALTHY_GUIDE_SMS_RATE_WINDOW_MS = 60 * 60 * 1000;
 const SIP_TOKEN_RATE_MAX = 30;
 const SIP_TOKEN_RATE_WINDOW_MS = 60 * 60 * 1000;
 const PASSWORD_RESET_RATE_MAX = 12;
@@ -696,6 +700,59 @@ export default async function handler(req, res) {
       return json(res, 200, result, req);
     } catch (err) {
       console.error("[agent-auth] send_review_sms", err);
+      return json(
+        res,
+        502,
+        { ok: false, error: "sms_send_failed", message: err.message || "שליחת SMS נכשלה" },
+        req
+      );
+    }
+  }
+
+  if (action === "send_wealthy_guide_sms") {
+    const auth = await verifyBearerAgent(req);
+    if (!auth?.agent) {
+      return json(res, 401, { error: "unauthorized", message: "נדרשת התחברות" }, req);
+    }
+
+    const key = getRateLimitKey(req, auth.agent.id);
+    const rateCheck = await checkRateLimitHybrid({
+      prefix: "wealthy_guide_sms",
+      key,
+      store: wealthyGuideSmsRateByUser,
+      max: WEALTHY_GUIDE_SMS_RATE_MAX,
+      windowMs: WEALTHY_GUIDE_SMS_RATE_WINDOW_MS,
+    });
+    if (!rateCheck.allowed) {
+      return rateLimitResponse(res, req, rateCheck.retryAfterSec);
+    }
+    await recordRateLimitHybrid(rateCheck.entry);
+
+    const phone = String(body.phone || body.to || "").trim();
+    const variant = String(body.variant || "both").trim();
+
+    try {
+      const result = await sendWealthyGuideLinksSms({
+        phone,
+        variant,
+        actorAgentId: auth.agent.id,
+        actorName: auth.agent.name,
+        req,
+      });
+
+      if (!result.ok) {
+        const status =
+          result.error === "invalid_phone" || result.error === "message_too_long"
+            ? 400
+            : result.error === "sms_not_configured"
+              ? 503
+              : 502;
+        return json(res, status, result, req);
+      }
+
+      return json(res, 200, result, req);
+    } catch (err) {
+      console.error("[agent-auth] send_wealthy_guide_sms", err);
       return json(
         res,
         502,
