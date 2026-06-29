@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { customerChatEnabled, crmEnabled, demoModeEnabled, knowledgeEnabled } from "@/api/demoClient";
+import { customerChatEnabled, crmEnabled } from "@/api/demoClient";
 import { useCrmRole } from "@/hooks/useCrmRole";
 
 function buildAdminNavLinks({ includeCrmAdmin = false } = {}) {
@@ -15,10 +15,6 @@ function buildAdminNavLinks({ includeCrmAdmin = false } = {}) {
     { path: "/admin/sms-stats", label: "סטטיסטיקת SMS" },
     { path: "/admin/review-sms", label: "דירוג גוגל" },
   ];
-
-  if (demoModeEnabled || knowledgeEnabled) {
-    links.push({ path: "/admin/knowledge", label: "ניהול ידע", matchPrefix: "/admin/knowledge" });
-  }
 
   if (includeCrmAdmin && crmEnabled) {
     links.push(

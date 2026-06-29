@@ -5,6 +5,11 @@ import { AlertCircle, ArrowRight, CheckCircle2, Loader2, MessageSquareWarning } 
 import { useToast } from "@/components/ui/use-toast";
 import HypPageLayout from "@/components/hyp/HypPageLayout";
 import { hypHeaderIconClass } from "@/lib/hypPage";
+import AdminAiKnowledgeNav from "@/components/admin/AdminAiKnowledgeNav";
+import {
+  ADMIN_AI_KNOWLEDGE_BASE,
+  ADMIN_AI_KNOWLEDGE_LABEL,
+} from "@/lib/adminAiKnowledgeRoutes";
 import {
   listKnowledgeGaps,
   updateKnowledgeGap,
@@ -71,6 +76,7 @@ export default function AdminKnowledgeGaps() {
 
   return (
     <HypPageLayout variant="scheduling" withNav={false} contentClassName="max-w-3xl px-4 py-8">
+      <AdminAiKnowledgeNav />
       <div className="flex items-center justify-between mb-6" dir="rtl">
         <div className="flex items-center gap-3">
           <div
@@ -86,9 +92,9 @@ export default function AdminKnowledgeGaps() {
           </div>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <Link to="/admin/knowledge" className="text-sm text-slate-500 hover:text-slate-800 flex items-center gap-1">
+          <Link to={ADMIN_AI_KNOWLEDGE_BASE} className="text-sm text-slate-500 hover:text-slate-800 flex items-center gap-1">
             <ArrowRight className="w-4 h-4" />
-            ניהול ידע
+            {ADMIN_AI_KNOWLEDGE_LABEL}
           </Link>
           <Link to="/admin" className="text-xs text-primary hover:underline">
             לוח מנהל

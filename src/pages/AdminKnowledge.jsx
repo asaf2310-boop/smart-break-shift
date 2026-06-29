@@ -5,10 +5,17 @@ import { ArrowRight, BookMarked } from "lucide-react";
 import KnowledgeAdmin from "@/components/knowledge/KnowledgeAdmin";
 import HypPageLayout from "@/components/hyp/HypPageLayout";
 import { hypHeaderIconClass } from "@/lib/hypPage";
+import AdminAiKnowledgeNav from "@/components/admin/AdminAiKnowledgeNav";
+import {
+  ADMIN_AI_KNOWLEDGE_BASE,
+  ADMIN_AI_KNOWLEDGE_GAPS,
+  ADMIN_AI_KNOWLEDGE_LABEL,
+} from "@/lib/adminAiKnowledgeRoutes";
 
 export default function AdminKnowledge() {
   return (
     <HypPageLayout variant="scheduling" withNav={false} contentClassName="max-w-3xl px-4 py-8">
+        <AdminAiKnowledgeNav />
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <div
@@ -19,14 +26,14 @@ export default function AdminKnowledge() {
               <BookMarked className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-extrabold text-slate-800">ניהול ידע</h1>
+              <h1 className="text-xl font-extrabold text-slate-800">{ADMIN_AI_KNOWLEDGE_LABEL}</h1>
               <p className="text-sm text-slate-500">
                 העלאה ועריכת מסמכים (txt, md, PDF, Word docx, PNG, JPG, WEBP) לבסיס הידע של הנציגים
               </p>
             </div>
           </div>
           <div className="flex flex-col items-end gap-1">
-            <Link to="/admin/knowledge/gaps" className="text-xs text-amber-700 hover:underline">
+            <Link to={ADMIN_AI_KNOWLEDGE_GAPS} className="text-xs text-amber-700 hover:underline">
               פערי ידע
             </Link>
             <Link to="/admin" className="text-sm text-slate-500 hover:text-slate-800 flex items-center gap-1">
@@ -34,7 +41,7 @@ export default function AdminKnowledge() {
               חזרה
             </Link>
             <Link to="/knowledge" className="text-xs text-primary hover:underline">
-              תצוגת נציג
+              תצוגת נציג (שאל את הידע)
             </Link>
           </div>
         </div>

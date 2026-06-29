@@ -1,4 +1,5 @@
 import { customerChatEnabled, crmEnabled, demoModeEnabled, knowledgeEnabled } from "@/api/demoClient";
+import { ADMIN_AI_KNOWLEDGE_BASE, ADMIN_AI_KNOWLEDGE_LABEL } from "@/lib/adminAiKnowledgeRoutes";
 
 const ADMIN_DEV_ROUTES_CORE = [
   { path: "/admin", label: "דשבורד מנהל" },
@@ -11,7 +12,7 @@ const ADMIN_DEV_ROUTES_CORE = [
   { path: "/admin/review-sms", label: "דירוג גוגל (הגדרות)" },
 ];
 
-const ADMIN_DEV_ROUTES_KNOWLEDGE = [{ path: "/admin/knowledge", label: "ניהול ידע" }];
+const ADMIN_DEV_ROUTES_KNOWLEDGE = [{ path: ADMIN_AI_KNOWLEDGE_BASE, label: ADMIN_AI_KNOWLEDGE_LABEL }];
 
 const ADMIN_DEV_ROUTES_CRM = [{ path: "/crm", label: "CRM (נציגים)" }];
 

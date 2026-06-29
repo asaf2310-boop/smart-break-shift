@@ -163,8 +163,10 @@ const AuthenticatedApp = () => {
         </Route>
         <Route path="/knowledge/document/:documentId" element={<ModuleGate module="knowledge"><KnowledgeGate><KnowledgeDocumentViewPage /></KnowledgeGate></ModuleGate>} />
         <Route path="/admin" element={<AdminGate><AdminDashboard /></AdminGate>} />
-        <Route path="/admin/knowledge" element={<KnowledgeGate><AdminGate><AdminKnowledge /></AdminGate></KnowledgeGate>} />
-        <Route path="/admin/knowledge/gaps" element={<KnowledgeGate><AdminGate><AdminKnowledgeGaps /></AdminGate></KnowledgeGate>} />
+        <Route path="/admin/ai-knowledge" element={<KnowledgeGate><AdminGate><AdminKnowledge /></AdminGate></KnowledgeGate>} />
+        <Route path="/admin/ai-knowledge/gaps" element={<KnowledgeGate><AdminGate><AdminKnowledgeGaps /></AdminGate></KnowledgeGate>} />
+        <Route path="/admin/knowledge" element={<Navigate to="/admin/ai-knowledge" replace />} />
+        <Route path="/admin/knowledge/gaps" element={<Navigate to="/admin/ai-knowledge/gaps" replace />} />
         <Route path="/admin/customer-chat" element={<CustomerChatGate><AdminGate><AdminCustomerChat /></AdminGate></CustomerChatGate>} />
         <Route path="/admin/shifts" element={<AdminGate><AdminShifts /></AdminGate>} />
         <Route path="/admin/users" element={<AdminGate><AdminUsers /></AdminGate>} />

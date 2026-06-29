@@ -4,13 +4,9 @@ import { motion } from "framer-motion";
 import { ArrowRight, BookOpen } from "lucide-react";
 import KnowledgeChat from "@/components/knowledge/KnowledgeChat";
 import KnowledgeSubNav from "@/components/knowledge/KnowledgeSubNav";
-import { knowledgeEnabled } from "@/api/demoClient";
-import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { hypHeaderIconClass, m3PageClass } from "@/lib/hypPage";
-import { cn } from "@/lib/utils";
 
 export default function KnowledgePage() {
-  const isAdmin = useIsAdmin();
 
   return (
     <div className={m3PageClass()} dir="rtl">
@@ -45,14 +41,6 @@ export default function KnowledgePage() {
         >
           <KnowledgeChat />
         </motion.div>
-
-        {(knowledgeEnabled && isAdmin) && (
-          <p className="m3-label-medium text-center mt-4">
-            <Link to="/admin/knowledge" className="text-primary hover:underline">
-              ניהול ידע (מנהל)
-            </Link>
-          </p>
-        )}
       </div>
     </div>
   );

@@ -16,6 +16,7 @@ import {
 import { shouldUseServerRag, probeServerRagHealth, listServerDocuments, submitKnowledgeFeedback, askKnowledgeWebSearch, buildKnowledgeDocumentViewUrl, fetchKnowledgeWelcome } from "@/lib/knowledge/knowledgeClient";
 import { getLocalKnowledgeWelcome } from "@/lib/knowledge/knowledgeWelcome";
 import { demoModeEnabled } from "@/api/demoClient";
+import { ADMIN_AI_KNOWLEDGE_LABEL } from "@/lib/adminAiKnowledgeRoutes";
 import {
   getKnowledgeDocumentsFingerprint,
   readKnowledgeChunkIndex,
@@ -575,7 +576,7 @@ export default function KnowledgeChat({ compact = false }) {
     if (!hasKnowledge) {
       toast({
         title: "אין תוכן בבסיס הידע",
-        description: "מנהל המערכת צריך להעלות מסמכים ב-/admin/knowledge",
+        description: `מנהל המערכת צריך להעלות מסמכים במודול ${ADMIN_AI_KNOWLEDGE_LABEL}`,
         variant: "destructive",
       });
       return;
