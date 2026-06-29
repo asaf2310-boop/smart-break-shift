@@ -1,15 +1,25 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { WEALTHY_GUIDE_BASE } from "@/lib/wealthyGuideConfig";
+import { useAgentModules } from "@/hooks/useAgentModules";
 
-const TABS = [
-  { to: "/knowledge", label: "שאל את הידע", exact: true },
-  { to: WEALTHY_GUIDE_BASE, label: "מדריך תשלומים", exact: false },
+const ALL_TABS = [
+  { to: "/knowledge", label: "שאל את הידע", exact: true, module: "knowledge_chat" },
+  { to: WEALTHY_GUIDE_BASE, label: "מדריך תשלומים", exact: false, module: "knowledge_guide" },
 ];
 
 export default function KnowledgeSubNav() {
   const { pathname } = useLocation();
+  const { hasModule, isLoggedIn } = useAgentModules();
+
+  const tabs = useMemo(
+    () =>
+      ALL_TABS.filter((tab) => !isLoggedIn || !tab.module || hasModule(tab.module)),
+    [hasModule, isLoggedIn]
+  );
+
+  if (tabs.length <= 1) return null;
 
   return (
     <nav
@@ -17,7 +27,7 @@ export default function KnowledgeSubNav() {
       dir="rtl"
       aria-label="תת-ניווט בסיס ידע"
     >
-      {TABS.map((tab) => {
+      {tabs.map((tab) => {
         const active = tab.exact
           ? pathname === tab.to
           : pathname === tab.to || pathname.startsWith(`${tab.to}/`);

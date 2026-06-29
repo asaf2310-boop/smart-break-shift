@@ -1,3 +1,6 @@
+/** מזהה ישן — מעניק גישה לשאל את הידע ולמדריך תשלומים (תאימות לאחור) */
+export const LEGACY_KNOWLEDGE_MODULE = "knowledge";
+
 /** מזהי מודולים שניתן להקצות לנציג */
 export const AGENT_MODULE_IDS = [
   "breaks",
@@ -8,7 +11,8 @@ export const AGENT_MODULE_IDS = [
   "customer_chat",
   "internal_chat",
   "crm",
-  "knowledge",
+  "knowledge_chat",
+  "knowledge_guide",
   "google_review",
 ];
 
@@ -27,7 +31,8 @@ export const AGENT_MODULES = {
   customer_chat: { label: "צ'אט לקוחות", paths: ["/customer-chat"] },
   internal_chat: { label: "צ'אט פנימי", paths: ["/chat"] },
   crm: { label: "CRM", paths: ["/crm"] },
-  knowledge: { label: "בסיס ידע", paths: ["/knowledge"] },
+  knowledge_chat: { label: "שאל את הידע", paths: ["/knowledge"] },
+  knowledge_guide: { label: "מדריך תשלומים", paths: ["/knowledge/wealthy-guide"] },
   google_review: { label: "דירוג בגוגל", paths: ["/review-sms"] },
 };
 
@@ -52,8 +57,48 @@ export function normalizeAgentModules(modules) {
   return unique.filter((id) => AGENT_MODULE_IDS.includes(id));
 }
 
+function hasLegacyKnowledgeModule(modules) {
+  return Array.isArray(modules) && modules.includes(LEGACY_KNOWLEDGE_MODULE);
+}
+
+/** נתיבי שאל את הידע (לא כולל מדריך תשלומים) */
+export function isKnowledgeChatPath(pathname) {
+  if (!pathname) return false;
+  if (pathname === "/knowledge") return true;
+  return pathname.startsWith("/knowledge/document/");
+}
+
+/** נתיבי מדריך תשלומים */
+export function isKnowledgeGuidePath(pathname) {
+  if (!pathname) return false;
+  return (
+    pathname === "/knowledge/wealthy-guide" ||
+    pathname.startsWith("/knowledge/wealthy-guide/")
+  );
+}
+
+export function agentHasAnyKnowledgeModule(modules) {
+  return (
+    agentHasModule(modules, "knowledge_chat") ||
+    agentHasModule(modules, "knowledge_guide")
+  );
+}
+
+/** יעד לשונית בסיס ידע לפי המודולים שהוקצו */
+export function agentKnowledgeNavTarget(modules) {
+  if (agentHasModule(modules, "knowledge_chat")) return "/knowledge";
+  if (agentHasModule(modules, "knowledge_guide")) return "/knowledge/wealthy-guide";
+  return "/knowledge";
+}
+
 export function agentHasModule(modules, moduleId) {
   if (isModuleExplicitlyDenied(modules, moduleId)) return false;
+  if (
+    hasLegacyKnowledgeModule(modules) &&
+    (moduleId === "knowledge_chat" || moduleId === "knowledge_guide")
+  ) {
+    return true;
+  }
   const normalized = normalizeAgentModules(modules);
   if (normalized.includes(moduleId)) return true;
   if (
@@ -100,7 +145,15 @@ export function filterItemsByModules(items, modules, moduleKey = "module") {
 export function pathnameAllowedByModules(pathname, modules) {
   if (!pathname || pathname === "/") return true;
 
+  if (isKnowledgeChatPath(pathname) && agentHasModule(modules, "knowledge_chat")) {
+    return true;
+  }
+  if (isKnowledgeGuidePath(pathname) && agentHasModule(modules, "knowledge_guide")) {
+    return true;
+  }
+
   for (const moduleId of AGENT_MODULE_IDS) {
+    if (moduleId === "knowledge_chat" || moduleId === "knowledge_guide") continue;
     if (!agentHasModule(modules, moduleId)) continue;
     const def = AGENT_MODULES[moduleId];
     if (!def?.paths?.length) continue;

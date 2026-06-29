@@ -4,7 +4,7 @@
 -- ברירת מחדל לנציגים חדשים
 alter table agents
   alter column modules
-  set default '["breaks","shifts","training","metrics","remote_support","customer_chat","internal_chat","crm","knowledge","google_review"]'::jsonb;
+  set default '["breaks","shifts","training","metrics","remote_support","customer_chat","internal_chat","crm","knowledge_chat","knowledge_guide","google_review"]'::jsonb;
 
 -- הוספת google_review לכל נציג קיים שחסר לו המודול
 update agents

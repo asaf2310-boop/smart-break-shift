@@ -294,12 +294,12 @@ export async function verifyAdminAgent(req, body = {}) {
   return auth;
 }
 
-/** Knowledge API: authenticated agent with admin or knowledge module. */
+/** Knowledge API: authenticated agent with admin or knowledge_chat module (legacy: knowledge). */
 export async function verifyKnowledgeAccess(req) {
   const auth = await verifyBearerAgent(req);
   if (!auth?.agent) return null;
   if (auth.agent.isAdmin) return auth;
   const modules = Array.isArray(auth.agent.modules) ? auth.agent.modules : [];
-  if (modules.includes("knowledge")) return auth;
+  if (modules.includes("knowledge_chat") || modules.includes("knowledge")) return auth;
   return null;
 }

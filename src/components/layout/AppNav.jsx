@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { BarChart3, BookOpen, CalendarClock, CalendarDays, Contact, GraduationCap, Home, MessageCircle, Monitor, ShieldCheck, Star } from "lucide-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useAgentModules } from "@/hooks/useAgentModules";
+import { agentHasAnyKnowledgeModule, agentKnowledgeNavTarget } from "@/constants/agentModules";
 import { useTrainingCourseVisible } from "@/hooks/useTrainingCourseVisible";
 import { useCrmRole } from "@/hooks/useCrmRole";
 import { customerChatEnabled, crmEnabled, demoModeEnabled, knowledgeEnabled } from "@/api/demoClient";
@@ -16,10 +17,14 @@ export const APP_NAV_HEIGHT = "var(--app-nav-height)";
 export default function AppNav() {
   const location = useLocation();
   const isAdmin = useIsAdmin();
-  const { hasModule, isLoggedIn } = useAgentModules();
+  const { hasModule, isLoggedIn, rawModules } = useAgentModules();
   const { visible: trainingCourseVisible, ready: trainingCourseReady } = useTrainingCourseVisible();
   const { hasCrmAccess } = useCrmRole();
   const showTab = (moduleId) => !isLoggedIn || hasModule(moduleId);
+  const showKnowledgeTab =
+    knowledgeEnabled &&
+    (!isLoggedIn || agentHasAnyKnowledgeModule(rawModules));
+  const knowledgeNavTo = agentKnowledgeNavTarget(rawModules);
   const showTrainingTab = showTab("training") && trainingCourseReady && trainingCourseVisible;
   const showCrmTab = crmEnabled && (!isLoggedIn || hasCrmAccess || showTab("crm"));
   const isBreaks = location.pathname === "/breaks";
@@ -114,8 +119,8 @@ export default function AppNav() {
               צ&apos;אט לקוחות
             </Link>
           )}
-          {knowledgeEnabled && !demoModeEnabled && showTab("knowledge") && (
-            <Link to="/knowledge" className={tabClass(isKnowledge)}>
+          {knowledgeEnabled && !demoModeEnabled && showKnowledgeTab && (
+            <Link to={knowledgeNavTo} className={tabClass(isKnowledge)}>
               <BookOpen className="w-4 h-4" />
               בסיס ידע
             </Link>
@@ -134,8 +139,8 @@ export default function AppNav() {
                   CRM
                 </Link>
               )}
-              {showTab("knowledge") && (
-                <Link to="/knowledge" className={tabClass(isKnowledge)}>
+              {showKnowledgeTab && (
+                <Link to={knowledgeNavTo} className={tabClass(isKnowledge)}>
                   <BookOpen className="w-4 h-4" />
                   בסיס ידע
                 </Link>

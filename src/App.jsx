@@ -155,13 +155,13 @@ const AuthenticatedApp = () => {
         <Route path="/j/:token" element={<RouteErrorBoundary><GuestJoinRedirectPage /></RouteErrorBoundary>} />
         <Route path="/support/consent/:token" element={<RouteErrorBoundary><RemoteSupportConsentPage /></RouteErrorBoundary>} />
         <Route path="/support/screen/:sessionId" element={<RouteErrorBoundary><ScreenShareGuestPage /></RouteErrorBoundary>} />
-        <Route path="/knowledge" element={<ModuleGate module="knowledge"><KnowledgeGate><KnowledgePage /></KnowledgeGate></ModuleGate>} />
-        <Route path="/knowledge/wealthy-guide" element={<ModuleGate module="knowledge"><KnowledgeGate><WealthyGuideLayout /></KnowledgeGate></ModuleGate>}>
+        <Route path="/knowledge" element={<ModuleGate module="knowledge_chat"><KnowledgeGate><KnowledgePage /></KnowledgeGate></ModuleGate>} />
+        <Route path="/knowledge/wealthy-guide" element={<ModuleGate module="knowledge_guide"><KnowledgeGate><WealthyGuideLayout /></KnowledgeGate></ModuleGate>}>
           <Route index element={<WealthyGuideHome />} />
           <Route path="manual-charge" element={<ManualChargeGuide />} />
           <Route path="*" element={<WealthyGuideComingSoon />} />
         </Route>
-        <Route path="/knowledge/document/:documentId" element={<ModuleGate module="knowledge"><KnowledgeGate><KnowledgeDocumentViewPage /></KnowledgeGate></ModuleGate>} />
+        <Route path="/knowledge/document/:documentId" element={<ModuleGate module="knowledge_chat"><KnowledgeGate><KnowledgeDocumentViewPage /></KnowledgeGate></ModuleGate>} />
         <Route path="/admin" element={<AdminGate><AdminDashboard /></AdminGate>} />
         <Route path="/admin/ai-knowledge" element={<KnowledgeGate><AdminGate><AdminKnowledge /></AdminGate></KnowledgeGate>} />
         <Route path="/admin/ai-knowledge/gaps" element={<KnowledgeGate><AdminGate><AdminKnowledgeGaps /></AdminGate></KnowledgeGate>} />

@@ -10,6 +10,7 @@ import { useAgentSession } from "@/hooks/useAgentSession";
 import { useAgentModules } from "@/hooks/useAgentModules";
 import { useTrainingCourseVisible } from "@/hooks/useTrainingCourseVisible";
 import { filterItemsByModules } from "@/constants/agentModules";
+import { WEALTHY_GUIDE_BASE } from "@/lib/wealthyGuideConfig";
 import { agentLogout, getAgentSession } from "@/lib/agentAuth";
 
 function hadRestorableSessionOnLoad() {
@@ -71,14 +72,25 @@ const customerChatCard = {
   iconTile: "m3-icon-tile",
 };
 
-const knowledgeCard = {
-  module: "knowledge",
+const knowledgeChatCard = {
+  module: "knowledge_chat",
   to: "/knowledge",
-  title: "בסיס ידע",
+  title: "שאל את הידע",
   desc: "שאלות ותשובות ממסמכי הארגון (AI)",
   icon: BookOpen,
   iconTile: "m3-icon-tile",
 };
+
+const knowledgeGuideCard = {
+  module: "knowledge_guide",
+  to: WEALTHY_GUIDE_BASE,
+  title: "מדריך תשלומים",
+  desc: "הנחיות וסימולציות לחיוב ידני",
+  icon: BookOpen,
+  iconTile: "m3-icon-tile",
+};
+
+const knowledgeCards = [knowledgeChatCard, knowledgeGuideCard];
 
 const crmCard = {
   module: "crm",
@@ -100,7 +112,7 @@ const reviewSmsCard = {
 
 const demoOnlyCards = [
   crmCard,
-  knowledgeCard,
+  ...knowledgeCards,
   customerChatCard,
 ];
 
@@ -108,7 +120,7 @@ const liveCardsWithOptionalModules = [
   ...productionCards,
   reviewSmsCard,
   ...(customerChatEnabled && !demoModeEnabled ? [customerChatCard] : []),
-  ...(knowledgeEnabled && !demoModeEnabled ? [knowledgeCard] : []),
+  ...(knowledgeEnabled && !demoModeEnabled ? knowledgeCards : []),
   ...(crmEnabled && !demoModeEnabled ? [crmCard] : []),
 ];
 

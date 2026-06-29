@@ -5,13 +5,16 @@ import KnowledgeChat from "@/components/knowledge/KnowledgeChat";
 import { CHAT_FLOAT_CHROME_CLASS } from "@/lib/floatingWidgetChrome";
 import { knowledgeEnabled } from "@/api/knowledgeMode";
 import { isCustomerChatGuestPath } from "@/lib/customerChatPaths";
+import { useAgentModules } from "@/hooks/useAgentModules";
 
 /** FAB + מיני-צ'אט ידע — לא מוצג בדף /knowledge המלא */
 export default function FloatingKnowledgeWidget() {
   const [open, setOpen] = useState(false);
   const location = useLocation();
+  const { hasModule, isLoggedIn } = useAgentModules();
 
   if (!knowledgeEnabled) return null;
+  if (isLoggedIn && !hasModule("knowledge_chat")) return null;
   if (location.pathname === "/knowledge" || location.pathname.startsWith("/knowledge/")) return null;
   if (isCustomerChatGuestPath(location.pathname, location.search)) return null;
 

@@ -24,7 +24,7 @@ create table if not exists agents (
   needs_password_setup boolean not null default true,
   deleted_at timestamptz,
   is_admin boolean not null default false,
-  modules jsonb not null default '["breaks","shifts","training","metrics","remote_support","customer_chat","internal_chat","crm","knowledge","google_review"]'::jsonb,
+  modules jsonb not null default '["breaks","shifts","training","metrics","remote_support","customer_chat","internal_chat","crm","knowledge_chat","knowledge_guide","google_review"]'::jsonb,
   phone text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -36,7 +36,7 @@ alter table agents add column if not exists deleted_at timestamptz;
 alter table agents add column if not exists needs_password_setup boolean not null default true;
 alter table agents add column if not exists auth_user_id uuid;
 alter table agents add column if not exists is_admin boolean not null default false;
-alter table agents add column if not exists modules jsonb not null default '["breaks","shifts","training","metrics","remote_support","customer_chat","internal_chat","crm","knowledge","google_review"]'::jsonb;
+alter table agents add column if not exists modules jsonb not null default '["breaks","shifts","training","metrics","remote_support","customer_chat","internal_chat","crm","knowledge_chat","knowledge_guide","google_review"]'::jsonb;
 alter table agents add column if not exists phone text;
 alter table agents add column if not exists created_at timestamptz not null default now();
 alter table agents add column if not exists updated_at timestamptz not null default now();
