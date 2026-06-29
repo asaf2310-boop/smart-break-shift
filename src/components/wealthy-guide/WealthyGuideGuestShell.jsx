@@ -3,7 +3,7 @@ import { m3PageClass } from "@/lib/hypPage";
 
 export default function WealthyGuideGuestShell({ title, subtitle, children }) {
   return (
-    <div className={m3PageClass("min-h-screen flex flex-col")} dir="rtl">
+    <div className={m3PageClass("min-h-screen flex flex-col overflow-x-clip")} dir="rtl">
       <header className="border-b border-outline/10 bg-surface/80 backdrop-blur-sm">
         <div className="max-w-3xl mx-auto px-4 py-4 sm:py-5">
           <p className="text-xs font-medium text-primary mb-1">מדריך תשלומים</p>

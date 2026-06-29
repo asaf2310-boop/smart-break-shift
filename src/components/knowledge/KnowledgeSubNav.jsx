@@ -23,7 +23,7 @@ export default function KnowledgeSubNav() {
 
   return (
     <nav
-      className="flex rounded-xl border border-outline/20 bg-surface-container-low p-1 gap-1 mb-6"
+      className="flex rounded-xl border border-outline/20 bg-surface-container-low p-1 gap-1 mb-6 min-w-0"
       dir="rtl"
       aria-label="תת-ניווט בסיס ידע"
     >
@@ -36,7 +36,7 @@ export default function KnowledgeSubNav() {
             key={tab.to}
             to={tab.to}
             className={cn(
-              "flex-1 text-center rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              "flex-1 min-w-0 text-center rounded-lg px-2 sm:px-3 py-2 text-xs sm:text-sm font-medium transition-colors leading-snug",
               active
                 ? "bg-surface text-primary shadow-sm"
                 : "text-on-surface-variant hover:text-on-surface hover:bg-surface/60"

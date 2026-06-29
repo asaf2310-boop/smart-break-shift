@@ -12,7 +12,7 @@ function escapeHtml(text) {
     .replace(/"/g, "&quot;");
 }
 
-function buildGuideHtml({ title, intro, fields }) {
+function buildGuideHtml({ title, intro, fields, screenshotUrl }) {
   const fieldBlocks = fields
     .map((field, index) => {
       const badge = field.required
@@ -35,9 +35,24 @@ function buildGuideHtml({ title, intro, fields }) {
     })
     .join("");
 
+  const screenshotBlock = screenshotUrl
+    ? `
+    <h2 style="margin:0 0 12px;font-size:16px;color:#111827 !important;-webkit-text-fill-color:#111827;">צילום מסך הממשק</h2>
+    <div style="margin:0 0 24px;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;background:#f9fafb;">
+      <img
+        src="${escapeHtml(screenshotUrl)}"
+        alt="ממשק חיוב ידני"
+        crossorigin="anonymous"
+        style="display:block;width:100%;height:auto;"
+      />
+    </div>
+  `
+    : "";
+
   return `
     <h1 style="margin:0 0 12px;font-size:22px;color:#111827 !important;-webkit-text-fill-color:#111827;">${escapeHtml(title)}</h1>
     <p style="margin:0 0 20px;font-size:13px;color:#4b5563 !important;-webkit-text-fill-color:#4b5563;line-height:1.7;">${escapeHtml(intro)}</p>
+    ${screenshotBlock}
     <h2 style="margin:0 0 16px;font-size:16px;color:#111827 !important;-webkit-text-fill-color:#111827;">הסבר שדות הטופס (${fields.length} שדות)</h2>
     ${fieldBlocks}
   `;
@@ -79,6 +94,23 @@ function buildIsolatedGuideDocument(html) {
 </html>`;
 }
 
+async function waitForImages(root) {
+  const images = Array.from(root.querySelectorAll("img"));
+  await Promise.all(
+    images.map(
+      (img) =>
+        new Promise((resolve) => {
+          if (img.complete) {
+            resolve();
+            return;
+          }
+          img.addEventListener("load", resolve, { once: true });
+          img.addEventListener("error", resolve, { once: true });
+        }),
+    ),
+  );
+}
+
 async function mountIsolatedGuideRoot(html) {
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
@@ -104,6 +136,7 @@ async function mountIsolatedGuideRoot(html) {
   if (doc.fonts?.ready) {
     await doc.fonts.ready;
   }
+  await waitForImages(doc.body);
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
   return {
@@ -172,8 +205,8 @@ function addCanvasPagesToPdf(doc, canvas) {
  * Uses html2canvas + image pages so Hebrew web fonts render correctly (jsPDF html()
  * context2d path only supports built-in Latin fonts and yields blank/invisible text).
  */
-export async function exportManualChargeGuidePdf({ title, intro, fields }) {
-  const guideHtml = buildGuideHtml({ title, intro, fields });
+export async function exportManualChargeGuidePdf({ title, intro, fields, screenshotUrl }) {
+  const guideHtml = buildGuideHtml({ title, intro, fields, screenshotUrl });
   const { root, cleanup } = await mountIsolatedGuideRoot(guideHtml);
 
   try {

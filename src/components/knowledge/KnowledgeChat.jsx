@@ -766,12 +766,12 @@ export default function KnowledgeChat({ compact = false }) {
         )}
       </div>
 
-      <form onSubmit={handleSend} className="mt-3 flex gap-2">
+      <form onSubmit={handleSend} className="mt-3 flex gap-2 min-w-0">
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="שאל שאלה על המדיניות, המוצר או הנהלים..."
-          className="flex-1 rounded-2xl border border-outline/25 bg-card px-4 py-3 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
+          className="flex-1 min-w-0 rounded-2xl border border-outline/25 bg-card px-3 sm:px-4 py-3 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
           disabled={loading}
           dir="auto"
         />

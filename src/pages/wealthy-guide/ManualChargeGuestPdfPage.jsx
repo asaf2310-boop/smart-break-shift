@@ -3,6 +3,7 @@ import { FileDown, Info } from "lucide-react";
 import WealthyGuideGuestShell from "@/components/wealthy-guide/WealthyGuideGuestShell";
 import {
   MANUAL_CHARGE_INTRO,
+  MANUAL_CHARGE_SCREENSHOT_URL,
   manualChargeFields,
 } from "@/lib/wealthyGuideConfig";
 import { exportManualChargeGuidePdf } from "@/lib/wealthyGuidePdfExport";
@@ -18,6 +19,7 @@ export default function ManualChargeGuestPdfPage() {
         title: "חיוב ידני — מדריך תשלומים",
         intro: MANUAL_CHARGE_INTRO,
         fields: manualChargeFields,
+        screenshotUrl: MANUAL_CHARGE_SCREENSHOT_URL,
       });
     } catch (err) {
       console.error("PDF export failed:", err);

@@ -10,22 +10,22 @@ export default function KnowledgePage() {
 
   return (
     <div className={m3PageClass()} dir="rtl">
-      <div className="max-w-2xl mx-auto px-4 py-6 sm:py-10">
+      <div className="max-w-2xl mx-auto px-4 py-6 sm:py-10 overflow-x-clip">
         <motion.div
           initial={{ opacity: 0, y: -12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex items-center justify-between mb-6"
+          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 min-w-0"
         >
-          <div className="flex items-center gap-3">
-            <div className={hypHeaderIconClass("w-12 h-12 shadow-elevation-2")}>
+          <div className="flex items-center gap-3 min-w-0">
+            <div className={hypHeaderIconClass("w-12 h-12 shadow-elevation-2 shrink-0")}>
               <BookOpen className="w-6 h-6 text-white" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h1 className="m3-headline-small text-xl font-semibold">שאל את הידע</h1>
-              <p className="m3-label-medium">בסיס ידע · תשובות ממסמכי הארגון</p>
+              <p className="m3-label-medium text-pretty">בסיס ידע · תשובות ממסמכי הארגון</p>
             </div>
           </div>
-          <Link to="/" className="m3-btn-outlined text-xs py-2">
+          <Link to="/" className="m3-btn-outlined text-xs py-2 self-start sm:self-auto shrink-0">
             <ArrowRight className="w-4 h-4" />
             ראשי
           </Link>

@@ -4,7 +4,7 @@ import { Lightbulb } from "lucide-react";
 export default function FieldCard({ field, index }) {
   return (
     <div className="group bg-surface rounded-xl border border-outline/15 hover:border-primary/30 hover:shadow-md transition-all duration-300 overflow-hidden">
-      <div className="flex items-start gap-4 p-5">
+      <div className="flex items-start gap-3 sm:gap-4 p-4 sm:p-5">
         <div className="w-8 h-8 bg-primary/10 text-primary rounded-lg flex items-center justify-center text-sm font-bold shrink-0 mt-0.5">
           {index + 1}
         </div>
