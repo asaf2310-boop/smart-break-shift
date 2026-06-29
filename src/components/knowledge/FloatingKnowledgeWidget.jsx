@@ -12,7 +12,7 @@ export default function FloatingKnowledgeWidget() {
   const location = useLocation();
 
   if (!knowledgeEnabled) return null;
-  if (location.pathname === "/knowledge") return null;
+  if (location.pathname === "/knowledge" || location.pathname.startsWith("/knowledge/")) return null;
   if (isCustomerChatGuestPath(location.pathname, location.search)) return null;
 
   return (

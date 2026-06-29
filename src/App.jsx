@@ -38,6 +38,10 @@ import CrmCustomerDetail from './pages/CrmCustomerDetail';
 import CrmLookupDeepLink from './pages/CrmLookupDeepLink';
 import KnowledgePage from './pages/KnowledgePage';
 import KnowledgeDocumentViewPage from './pages/KnowledgeDocumentViewPage';
+import WealthyGuideLayout from '@/components/wealthy-guide/WealthyGuideLayout';
+import WealthyGuideHome from './pages/wealthy-guide/WealthyGuideHome';
+import ManualChargeGuide from './pages/wealthy-guide/ManualChargeGuide';
+import WealthyGuideComingSoon from './pages/wealthy-guide/WealthyGuideComingSoon';
 import AdminKnowledge from './pages/AdminKnowledge';
 import AdminKnowledgeGaps from './pages/AdminKnowledgeGaps';
 import AdminCustomerChat from './pages/AdminCustomerChat';
@@ -152,6 +156,11 @@ const AuthenticatedApp = () => {
         <Route path="/support/consent/:token" element={<RouteErrorBoundary><RemoteSupportConsentPage /></RouteErrorBoundary>} />
         <Route path="/support/screen/:sessionId" element={<RouteErrorBoundary><ScreenShareGuestPage /></RouteErrorBoundary>} />
         <Route path="/knowledge" element={<ModuleGate module="knowledge"><KnowledgeGate><KnowledgePage /></KnowledgeGate></ModuleGate>} />
+        <Route path="/knowledge/wealthy-guide" element={<ModuleGate module="knowledge"><KnowledgeGate><WealthyGuideLayout /></KnowledgeGate></ModuleGate>}>
+          <Route index element={<WealthyGuideHome />} />
+          <Route path="manual-charge" element={<ManualChargeGuide />} />
+          <Route path="*" element={<WealthyGuideComingSoon />} />
+        </Route>
         <Route path="/knowledge/document/:documentId" element={<ModuleGate module="knowledge"><KnowledgeGate><KnowledgeDocumentViewPage /></KnowledgeGate></ModuleGate>} />
         <Route path="/admin" element={<AdminGate><AdminDashboard /></AdminGate>} />
         <Route path="/admin/knowledge" element={<KnowledgeGate><AdminGate><AdminKnowledge /></AdminGate></KnowledgeGate>} />

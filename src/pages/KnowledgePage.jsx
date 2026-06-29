@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowRight, BookOpen } from "lucide-react";
 import KnowledgeChat from "@/components/knowledge/KnowledgeChat";
+import KnowledgeSubNav from "@/components/knowledge/KnowledgeSubNav";
 import { knowledgeEnabled } from "@/api/demoClient";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { hypHeaderIconClass, m3PageClass } from "@/lib/hypPage";
@@ -33,6 +34,8 @@ export default function KnowledgePage() {
             ראשי
           </Link>
         </motion.div>
+
+        <KnowledgeSubNav />
 
         <motion.div
           initial={{ opacity: 0, y: 8 }}
