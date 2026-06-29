@@ -177,10 +177,10 @@ export const manualChargeFields = [
     required: true,
   },
   {
-    name: "CVV",
-    description: "3 הספרות בגב כרטיס האשראי (קוד אבטחה).",
+    name: "CVV (לא חובה)",
+    description: "3 הספרות בגב כרטיס האשראי (קוד אבטחה). שדה אופציונלי — ניתן לבצע חיוב גם ללא הזנת CVV.",
     tip: "ב-American Express מדובר ב-4 ספרות בחזית הכרטיס.",
-    required: true,
+    required: false,
   },
   {
     name: "תעודת זהות",
