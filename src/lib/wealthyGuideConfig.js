@@ -260,12 +260,12 @@ export const paymentLinkFields = [
   {
     name: "שם פרטי",
     description: "שם פרטי של הלקוח שאליו מיועדת בקשת התשלום.",
-    required: false,
+    required: true,
   },
   {
     name: "שם משפחה",
     description: "שם משפחה של הלקוח שאליו מיועדת בקשת התשלום.",
-    required: false,
+    required: true,
   },
   {
     name: "כתובת מייל",
