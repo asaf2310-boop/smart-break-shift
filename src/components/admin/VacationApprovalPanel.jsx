@@ -6,7 +6,7 @@ import { format } from "date-fns";
 import { motion } from "framer-motion";
 import { Palmtree, Check, X } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import { WEEKDAY_LABELS } from "@/constants/scheduling";
+import { WEEKDAY_LABELS, resolveToCanonicalAgentName } from "@/constants/scheduling";
 import { getLiveQueryOptions } from "@/lib/liveQuery";
 import { apiAdminUpdateVacationRequest } from "@/lib/agentAuthClient";
 
@@ -110,7 +110,7 @@ export default function VacationApprovalPanel({ weekDays }) {
             className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl border border-orange-100 bg-orange-50/40"
           >
             <div>
-              <p className="font-bold text-slate-800">{req.agent_name}</p>
+              <p className="font-bold text-slate-800">{resolveToCanonicalAgentName(req.agent_name)}</p>
               <p className="text-sm text-slate-500">{dayLabel(req.date)}</p>
               {req.note && <p className="text-xs text-slate-400 mt-1">{req.note}</p>}
             </div>

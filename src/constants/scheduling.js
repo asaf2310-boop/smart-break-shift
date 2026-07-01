@@ -40,10 +40,17 @@ const AGENT_NAME_ALIASES = {
 export function resolveToCanonicalAgentName(name) {
   const normalized = String(name || "").trim().replace(/\s+/g, " ");
   if (!normalized) return "";
-  if (AGENT_NAMES.includes(normalized)) return normalized;
   const alias = AGENT_NAME_ALIASES[normalized];
-  if (alias && AGENT_NAMES.includes(alias)) return alias;
+  if (alias) return alias;
+  if (AGENT_NAMES.includes(normalized)) return normalized;
   return normalized;
+}
+
+/** האם שני שמות מתייחסים לאותו נציג (כולל כינויים / שגיאות כתיב). */
+export function agentNamesMatch(a, b) {
+  const left = resolveToCanonicalAgentName(a);
+  const right = resolveToCanonicalAgentName(b);
+  return Boolean(left && right && left === right);
 }
 
 /** רשימת שמות נציגים — בדמו מהרשימה שמנהל מגדיר */
@@ -446,7 +453,7 @@ export function getBlockedAgentNames(managedAgents = []) {
 export function getSchedulingAgentPool(managedAgents = [], fallbackPool = AGENT_NAMES) {
   const fromManaged = managedAgents
     .filter((a) => a.active !== false && a.blocked !== true)
-    .map((a) => String(a.name || "").trim())
+    .map((a) => resolveToCanonicalAgentName(String(a.name || "").trim()))
     .filter(Boolean);
 
   if (fromManaged.length > 0) {
@@ -459,7 +466,10 @@ export function getSchedulingAgentPool(managedAgents = [], fallbackPool = AGENT_
 export function getActiveSchedulingAgentNames(managedAgents = [], agentPool) {
   const pool = agentPool ?? getSchedulingAgentPool(managedAgents);
   const blocked = getBlockedAgentNames(managedAgents);
-  return pool.filter((name) => !blocked.has(resolveToCanonicalAgentName(name)));
+  const names = pool
+    .map((name) => resolveToCanonicalAgentName(name))
+    .filter((name) => name && !blocked.has(name));
+  return [...new Set(names)].sort((a, b) => a.localeCompare(b, "he"));
 }
 
 /** Agents already assigned on `dateStr` in other cells (optional excludeCellKey). */

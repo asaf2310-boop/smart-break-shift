@@ -15,6 +15,7 @@ import {
   parseDateStrLocal,
   formatDateStr,
   resolveToCanonicalAgentName,
+  agentNamesMatch,
   getActiveSchedulingAgentNames,
 } from "@/constants/scheduling";
 import AutoScheduleBuilder from "../components/shifts/AutoScheduleBuilder";
@@ -180,7 +181,10 @@ function ConstraintsView({ weekStart, showDeadlinePanel = true }) {
     () => getActiveSchedulingAgentNames(managedAgents),
     [managedAgents]
   );
-  const activeAgentSet = useMemo(() => new Set(activeAgentNames), [activeAgentNames]);
+  const activeAgentSet = useMemo(
+    () => new Set(activeAgentNames.map((name) => resolveToCanonicalAgentName(name))),
+    [activeAgentNames]
+  );
 
   const { data: allUnavailabilities = [], isLoading: loadingU } = useQuery({
     queryKey: ["all-unavailabilities-week", dateFrom, dateTo],
@@ -316,21 +320,37 @@ function ConstraintsView({ weekStart, showDeadlinePanel = true }) {
               // Build list: unavailable agents + approved vacation agents, deduped by name
               const seenNames = new Set();
               const items = [
-                ...unavailAgents.map(u => ({ name: u.agent_name, type: u.reason, note: u.note })),
+                ...unavailAgents.map((u) => ({
+                  name: resolveToCanonicalAgentName(u.agent_name),
+                  type: u.reason,
+                  note: u.note,
+                })),
                 ...approvedVacAgents
-                  .filter(v => !unavailAgents.find(u => u.agent_name === v.agent_name))
-                  .map(v => ({ name: v.agent_name, type: "vac_approved", note: v.note })),
-                ...vacAgents.filter(v => v.status !== "approved")
-                  .filter(v => !unavailAgents.find(u => u.agent_name === v.agent_name) && !approvedVacAgents.find(a => a.agent_name === v.agent_name))
-                  .map(v => ({ name: v.agent_name, type: "vac_" + v.status, note: v.note })),
-              ].filter(item => {
+                  .filter((v) => !unavailAgents.find((u) => agentNamesMatch(u.agent_name, v.agent_name)))
+                  .map((v) => ({
+                    name: resolveToCanonicalAgentName(v.agent_name),
+                    type: "vac_approved",
+                    note: v.note,
+                  })),
+                ...vacAgents.filter((v) => v.status !== "approved")
+                  .filter(
+                    (v) =>
+                      !unavailAgents.find((u) => agentNamesMatch(u.agent_name, v.agent_name)) &&
+                      !approvedVacAgents.find((a) => agentNamesMatch(a.agent_name, v.agent_name))
+                  )
+                  .map((v) => ({
+                    name: resolveToCanonicalAgentName(v.agent_name),
+                    type: "vac_" + v.status,
+                    note: v.note,
+                  })),
+              ].filter((item) => {
                 if (seenNames.has(item.name)) return false;
                 seenNames.add(item.name);
                 return true;
               });
 
               // Agents who are available for this specific day+shift (confirmed but not in unavail/vacation for this day)
-              const unavailNames = new Set(items.map(i => i.name));
+              const unavailNames = new Set(items.map((i) => resolveToCanonicalAgentName(i.name)));
               const availableAgents = activeAgentNames.filter(name =>
                 confirmedAgents.has(name) && !unavailNames.has(name)
               );
