@@ -1,5 +1,6 @@
 import React from "react";
 import { dataClient } from "@/api/client";
+import { demoModeEnabled } from "@/api/demoMode";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
@@ -7,15 +8,17 @@ import { Palmtree, Check, X } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { WEEKDAY_LABELS } from "@/constants/scheduling";
 import { getLiveQueryOptions } from "@/lib/liveQuery";
+import { apiAdminUpdateVacationRequest } from "@/lib/agentAuthClient";
 
 export default function VacationApprovalPanel({ weekDays }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const dateFrom = format(weekDays[0], "yyyy-MM-dd");
   const dateTo = format(weekDays[4], "yyyy-MM-dd");
+  const adminQueryKey = ["vacation-requests-admin", dateFrom, dateTo];
 
   const { data: requests = [], isLoading } = useQuery({
-    queryKey: ["vacation-requests-admin", dateFrom, dateTo],
+    queryKey: adminQueryKey,
     queryFn: async () => {
       const results = await Promise.all(
         weekDays.map((d) => dataClient.entities.VacationRequest.filter({ date: format(d, "yyyy-MM-dd") }))
@@ -26,13 +29,35 @@ export default function VacationApprovalPanel({ weekDays }) {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, status }) => dataClient.entities.VacationRequest.update(id, { status }),
+    mutationFn: async ({ id, status }) => {
+      if (demoModeEnabled) {
+        return dataClient.entities.VacationRequest.update(id, { status });
+      }
+      return apiAdminUpdateVacationRequest({ id, status });
+    },
+    onMutate: async ({ id }) => {
+      await queryClient.cancelQueries({ queryKey: adminQueryKey });
+      const previous = queryClient.getQueryData(adminQueryKey);
+      queryClient.setQueryData(adminQueryKey, (old = []) => old.filter((r) => r.id !== id));
+      return { previous };
+    },
     onSuccess: (_, { status }) => {
-      queryClient.invalidateQueries({ queryKey: ["vacation-requests-admin", dateFrom, dateTo] });
+      queryClient.invalidateQueries({ queryKey: adminQueryKey });
       queryClient.invalidateQueries({ queryKey: ["all-vac-view"] });
       queryClient.invalidateQueries({ queryKey: ["vacation-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["vacation-requests-builder"] });
       toast({
         title: status === "approved" ? "✓ החופש אושר" : "הבקשה נדחתה",
+      });
+    },
+    onError: (err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(adminQueryKey, context.previous);
+      }
+      toast({
+        title: "שגיאה בעדכון בקשת חופש",
+        description: err?.message || "לא הצלחנו לשמור — נסה שוב",
+        variant: "destructive",
       });
     },
   });

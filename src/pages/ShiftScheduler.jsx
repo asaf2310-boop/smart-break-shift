@@ -277,6 +277,37 @@ export default function ShiftScheduler() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["vacation-requests", constraintsDateFrom, constraintsDateTo, agentName] }),
   });
 
+  const vacationStatusNotifiedRef = useRef(new Set());
+
+  useEffect(() => {
+    vacationRequests.forEach((req) => {
+      if (req.status !== "approved" && req.status !== "rejected") return;
+      if (req.date < constraintsDateFrom || req.date > constraintsDateTo) return;
+      const key = `${req.id}:${req.status}`;
+      if (vacationStatusNotifiedRef.current.has(key)) return;
+      vacationStatusNotifiedRef.current.add(key);
+      const dayLabel = format(new Date(`${req.date}T12:00:00`), "dd/MM");
+      toast({
+        title: req.status === "approved" ? "✓ החופש אושר" : "בקשת החופש נדחתה",
+        description:
+          req.status === "approved"
+            ? `יום ${dayLabel}: החופש אושר על ידי המנהל`
+            : `יום ${dayLabel}: הבקשה נדחתה — ניתן לפנות למנהל`,
+      });
+    });
+  }, [vacationRequests, constraintsDateFrom, constraintsDateTo, toast]);
+
+  const resolvedVacationRequests = useMemo(
+    () =>
+      vacationRequests.filter(
+        (r) =>
+          r.date >= constraintsDateFrom &&
+          r.date <= constraintsDateTo &&
+          (r.status === "approved" || r.status === "rejected")
+      ),
+    [vacationRequests, constraintsDateFrom, constraintsDateTo]
+  );
+
   const getVacationRequest = (date) =>
     vacationRequests.find(r => r.date === format(date, "yyyy-MM-dd") && r.date >= constraintsDateFrom && r.date <= constraintsDateTo);
 
@@ -685,6 +716,42 @@ export default function ShiftScheduler() {
               </div>
 
               {/* ─── Vacation row (per day, below shifts) ─── */}
+              {resolvedVacationRequests.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {resolvedVacationRequests.map((req) => {
+                    const dayIdx = constraintsDays.findIndex(
+                      (d) => format(d, "yyyy-MM-dd") === req.date
+                    );
+                    const dayLabel =
+                      dayIdx >= 0
+                        ? `${WEEKDAY_LABELS[dayIdx]} ${format(constraintsDays[dayIdx], "dd/MM")}`
+                        : format(new Date(`${req.date}T12:00:00`), "dd/MM");
+                    const approved = req.status === "approved";
+                    return (
+                      <div
+                        key={req.id}
+                        className={`flex items-start gap-2 rounded-2xl border px-4 py-3 text-sm ${
+                          approved
+                            ? "bg-green-50 border-green-200 text-green-800"
+                            : "bg-red-50 border-red-200 text-red-700"
+                        }`}
+                      >
+                        <Palmtree className={`w-4 h-4 mt-0.5 flex-shrink-0 ${approved ? "text-green-600" : "text-red-500"}`} />
+                        <div>
+                          <p className="font-semibold">
+                            {approved ? "החופש אושר" : "בקשת החופש נדחתה"} — {dayLabel}
+                          </p>
+                          <p className="text-xs mt-0.5 opacity-90">
+                            {approved
+                              ? "המנהל אישר את בקשת החופש ליום זה"
+                              : "המנהל דחה את הבקשה — ניתן לפנות אליו לפרטים"}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               <div className="mt-3 rounded-2xl border border-orange-100 bg-orange-50/40 overflow-x-auto">
                 <div className="grid grid-cols-6 min-w-[640px]">
                   <div className="px-3 py-3 flex flex-col items-center justify-center gap-1 border-l border-orange-100">
@@ -698,7 +765,13 @@ export default function ShiftScheduler() {
                     const hasUnavailOnDay = unavailabilities.some(u =>
                       u.date === format(date, "yyyy-MM-dd")
                     );
-                    const vacStatusLabel = vacReq?.status === "approved" ? "אושר ✓" : vacReq?.status === "rejected" ? "נדחה ✗" : "ממתין…";
+                    const vacStatusLabel = vacReq?.status === "approved" ? "אושר ✓" : vacReq?.status === "rejected" ? "נדחה ✗" : "ממתין לאישור";
+                    const vacStatusNote =
+                      vacReq?.status === "approved"
+                        ? "אושר ע״י מנהל"
+                        : vacReq?.status === "rejected"
+                          ? "נדחה ע״י מנהל"
+                          : null;
                     const vacStatusColor = vacReq?.status === "approved" ? "text-green-600" : vacReq?.status === "rejected" ? "text-red-400" : "text-orange-500";
                     return (
                       <div key={format(date, "yyyy-MM-dd")} className={`px-1 py-3 flex flex-col items-center justify-center gap-1 ${isHolidayEve ? "bg-purple-50/60 rounded-xl" : ""}`}>
@@ -735,6 +808,11 @@ export default function ShiftScheduler() {
                               <Check className="w-2.5 h-2.5 text-white" />
                             </div>
                             <span className={`text-xs font-semibold leading-none ${vacStatusColor}`}>{vacStatusLabel}</span>
+                            {vacStatusNote && (
+                              <span className={`text-[10px] leading-tight text-center ${vacStatusColor} opacity-80`}>
+                                {vacStatusNote}
+                              </span>
+                            )}
                             {!locked && vacReq.status === "pending" && (
                               <button
                                 onClick={() => deleteVacationMutation.mutate(vacReq.id)}

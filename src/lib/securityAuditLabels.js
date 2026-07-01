@@ -4,6 +4,7 @@ export const SECURITY_AUDIT_ACTION_LABELS = {
   admin_set_password: "הגדרת סיסמה (מנהל)",
   admin_create_break_registration: "יצירת הרשמת הפסקה",
   admin_delete_break_registration: "מחיקת הרשמת הפסקה",
+  admin_update_vacation_request: "עדכון בקשת חופש (אישור/דחייה)",
   admin_agent_create: "יצירת נציג",
   admin_agent_update: "עדכון נציג",
   admin_agent_modules: "עדכון מודולים לנציג",

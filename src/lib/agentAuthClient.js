@@ -206,6 +206,21 @@ export async function apiAdminDeleteBreakRegistration(id) {
   return result;
 }
 
+export async function apiAdminUpdateVacationRequest({ id, status }) {
+  const result = await postAgentAuth(
+    {
+      action: "admin_update_vacation_request",
+      id,
+      status,
+    },
+    { requireBearer: true }
+  );
+  if (!result.ok) {
+    throw new Error(result.message || "לא הצלחנו לעדכן את בקשת החופש");
+  }
+  return result.vacationRequest;
+}
+
 export async function apiSendReviewSms({ phone }) {
   return postAgentAuth(
     {

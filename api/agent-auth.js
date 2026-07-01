@@ -28,6 +28,7 @@ import {
   adminCreateBreakRegistration,
   adminDeleteBreakRegistration,
 } from "../server/agent/breakRegistrationAdminService.js";
+import { adminUpdateVacationRequestStatus } from "../server/agent/vacationRequestAdminService.js";
 import { requestPasswordResetByEmail, requestFirstLoginByEmail } from "../server/agent/agentPasswordResetService.js";
 import {
   guestLinkApiReady,
@@ -845,6 +846,46 @@ export default async function handler(req, res) {
           ? "ההרשמה לא נמצאה"
           : "לא הצלחנו להסיר את ההרשמה";
       return json(res, 500, { error: "delete_failed", message }, req);
+    }
+  }
+
+  if (action === "admin_update_vacation_request") {
+    const auth = await requireAdminAgent(req, res, body);
+    if (!auth) return;
+
+    const requestId = String(body.id || "").trim();
+    const status = String(body.status || "").trim();
+
+    if (!requestId || !status) {
+      return json(
+        res,
+        400,
+        { error: "invalid_fields", message: "חסרים שדות חובה לעדכון בקשת חופש" },
+        req
+      );
+    }
+
+    try {
+      const vacationRequest = await adminUpdateVacationRequestStatus({ id: requestId, status });
+      void logSecurityEvent({
+        action: "admin_update_vacation_request",
+        actorAgentId: auth.agent.id,
+        resourceType: "vacation_request",
+        resourceId: vacationRequest?.id,
+        metadata: { status, agent_name: vacationRequest?.agent_name, date: vacationRequest?.date },
+        req,
+      });
+      return json(res, 200, { ok: true, vacationRequest }, req);
+    } catch (err) {
+      console.error("[agent-auth] admin_update_vacation_request", err);
+      const code = String(err?.message || "");
+      const message =
+        code === "not_found_or_not_pending"
+          ? "הבקשה לא נמצאה או כבר טופלה"
+          : code === "invalid_status"
+            ? "סטטוס לא חוקי"
+            : "לא הצלחנו לעדכן את בקשת החופש";
+      return json(res, 500, { error: "update_failed", message }, req);
     }
   }
 
