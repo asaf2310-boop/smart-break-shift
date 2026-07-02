@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { BarChart3, Loader2 } from "lucide-react";
 import BackendConfigBanner from "@/components/BackendConfigBanner";
 import HypPageLayout from "@/components/hyp/HypPageLayout";
-import MetricsChannelSection from "@/components/metrics/MetricsChannelSection";
+import AgentMetricsTable from "@/components/metrics/AgentMetricsTable";
 import { hypHeaderIconClass } from "@/lib/hypPage";
 import { useAgentMetricsSnapshots } from "@/hooks/useAgentMetricsSnapshot";
 import { useAgentSession } from "@/hooks/useAgentSession";
@@ -12,7 +12,7 @@ import { getStoredAgentName } from "@/constants/scheduling";
 export default function AgentMetricsPage() {
   const { displayName } = useAgentSession();
   const agentName = displayName || getStoredAgentName();
-  const { loading, phone, whatsapp, unified, hasAnyData } = useAgentMetricsSnapshots();
+  const { loading, unified, hasAnyData } = useAgentMetricsSnapshots();
 
   return (
     <HypPageLayout variant="scheduling" contentClassName="max-w-[min(100%,80rem)] px-3 sm:px-4 py-8">
@@ -67,24 +67,17 @@ export default function AgentMetricsPage() {
               <p>{unified.rankingNote}</p>
             </div>
             <p className="text-xs text-slate-500 leading-relaxed">
-              כל ערוץ מדורג מול עצמו בלבד. הנציג המוביל בכל ערוץ מסומן בצהוב; השורה שלך בירוק.
+              הכל מוצג בטבלה אחת. עמודת דירוג בערוץ משווה רק מול נציגים מאותו ערוץ; המוביל בכל ערוץ מסומן בצהוב והשורה שלך בירוק.
             </p>
-            <div className="grid gap-4 xl:grid-cols-2">
-              <MetricsChannelSection
-                channel="phone"
-                view={phone}
-                highlightAgentName={agentName}
-                showRank
-                showCompositeScore
-              />
-              <MetricsChannelSection
-                channel="whatsapp"
-                view={whatsapp}
-                highlightAgentName={agentName}
-                showRank
-                showCompositeScore
-              />
-            </div>
+            <AgentMetricsTable
+              columns={unified.displayColumns}
+              rows={unified.rankedRows}
+              highlightAgentName={agentName}
+              showRank
+              rankLabel="דירוג בערוץ"
+              showChannel
+              showCompositeScore
+            />
           </>
         )}
       </motion.div>

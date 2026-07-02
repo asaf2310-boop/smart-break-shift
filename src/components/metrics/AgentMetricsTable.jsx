@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
  *   highlightLeader?: boolean,
  *   hideMetricColumns?: boolean,
  *   showChannel?: boolean,
+ *   rankLabel?: string,
  * }} props
  */
 export default function AgentMetricsTable({
@@ -27,6 +28,7 @@ export default function AgentMetricsTable({
   highlightLeader = true,
   hideMetricColumns = false,
   showChannel = false,
+  rankLabel = "#",
 }) {
   const displayColumns = filterMetricsColumns(columns);
   const agentColumn = displayColumns[0] || "שם נציג";
@@ -61,7 +63,7 @@ export default function AgentMetricsTable({
         <thead>
           <tr className="bg-slate-100 text-slate-700">
             {showRank && (
-              <th className="px-1 py-2 text-center font-semibold leading-tight">#</th>
+              <th className="px-1 py-2 text-center font-semibold leading-tight">{rankLabel}</th>
             )}
             <th className="px-1.5 py-2 text-right font-semibold leading-tight break-words">
               {agentColumn}

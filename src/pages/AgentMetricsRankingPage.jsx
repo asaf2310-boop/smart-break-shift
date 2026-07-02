@@ -1,7 +1,7 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { Loader2, Trophy } from "lucide-react";
-import MetricsChannelSection from "@/components/metrics/MetricsChannelSection";
+import AgentMetricsTable from "@/components/metrics/AgentMetricsTable";
 import MetricsSubNav from "@/components/metrics/MetricsSubNav";
 import BackendConfigBanner from "@/components/BackendConfigBanner";
 import HypPageLayout from "@/components/hyp/HypPageLayout";
@@ -93,20 +93,17 @@ export default function AgentMetricsRankingPage() {
               </div>
             )}
 
-            <div className="grid gap-4 xl:grid-cols-2">
-              <MetricsChannelSection
-                channel="phone"
-                view={phone}
+            <div className="space-y-2">
+              <p className="text-xs text-slate-500 leading-relaxed">
+                כל הנציגים מופיעים באותה טבלה, אבל עמודת דירוג בערוץ נשארת נפרדת לטלפון ול-WhatsApp.
+              </p>
+              <AgentMetricsTable
+                columns={unified.displayColumns}
+                rows={unified.rankedRows}
                 highlightAgentName={agentName}
                 showRank
-                showCompositeScore
-                hideMetricColumns
-              />
-              <MetricsChannelSection
-                channel="whatsapp"
-                view={whatsapp}
-                highlightAgentName={agentName}
-                showRank
+                rankLabel="דירוג בערוץ"
+                showChannel
                 showCompositeScore
                 hideMetricColumns
               />
