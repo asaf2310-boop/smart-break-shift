@@ -56,6 +56,10 @@ VITE_DEMO_MODE=true
 
 ב-Supabase צרו bucket ציבורי לקריאה `training-docs` — [`docs/TRAINING_STORAGE_SETUP.md`](docs/TRAINING_STORAGE_SETUP.md) או הריצו [`supabase/training_docs_storage.sql`](supabase/training_docs_storage.sql).
 
+## סוכן AI
+
+ראו [`AI_AGENT_README.md`](AI_AGENT_README.md). משתני סביבה ב-Vercel: `OPENAI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
+
 ## פריסה
 
 **שני פרויקטי Vercel מומלצים** (דמו + פרודקשן) על אותו repo `asaf2310-boop/smart-break-shift` — ההפרדה היא במשתני סביבה בזמן build, לא בשני repos. פירוט מלא: [`docs/DEMO_VS_PRODUCTION.md`](docs/DEMO_VS_PRODUCTION.md).

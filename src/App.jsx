@@ -36,8 +36,7 @@ import CrmDashboard from './pages/CrmDashboard';
 import CrmNewReferral from './pages/CrmNewReferral';
 import CrmCustomerDetail from './pages/CrmCustomerDetail';
 import CrmLookupDeepLink from './pages/CrmLookupDeepLink';
-import KnowledgePage from './pages/KnowledgePage';
-import KnowledgeDocumentViewPage from './pages/KnowledgeDocumentViewPage';
+import AiAgentPage from './pages/AiAgentPage';
 import WealthyGuideLayout from '@/components/wealthy-guide/WealthyGuideLayout';
 import WealthyGuideHome from './pages/wealthy-guide/WealthyGuideHome';
 import ManualChargeGuide from './pages/wealthy-guide/ManualChargeGuide';
@@ -47,10 +46,7 @@ import ManualChargeGuestPdfPage from './pages/wealthy-guide/ManualChargeGuestPdf
 import PaymentLinkGuestVideoPage from './pages/wealthy-guide/PaymentLinkGuestVideoPage';
 import PaymentLinkGuestPdfPage from './pages/wealthy-guide/PaymentLinkGuestPdfPage';
 import WealthyGuideComingSoon from './pages/wealthy-guide/WealthyGuideComingSoon';
-import AdminKnowledge from './pages/AdminKnowledge';
-import AdminKnowledgeGaps from './pages/AdminKnowledgeGaps';
 import AdminCustomerChat from './pages/AdminCustomerChat';
-import FloatingKnowledgeWidget from '@/components/knowledge/FloatingKnowledgeWidget';
 import AdminLocalhostLinksFloating from '@/components/admin/AdminLocalhostLinksFloating';
 import RemoteSupportConsentPage from './pages/RemoteSupportConsentPage';
 import RemoteSupportPage from './pages/RemoteSupportPage';
@@ -164,19 +160,15 @@ const AuthenticatedApp = () => {
         <Route path="/guide/payment-link/pdf" element={<RouteErrorBoundary><PaymentLinkGuestPdfPage /></RouteErrorBoundary>} />
         <Route path="/support/consent/:token" element={<RouteErrorBoundary><RemoteSupportConsentPage /></RouteErrorBoundary>} />
         <Route path="/support/screen/:sessionId" element={<RouteErrorBoundary><ScreenShareGuestPage /></RouteErrorBoundary>} />
-        <Route path="/knowledge" element={<ModuleGate module="knowledge_chat"><KnowledgeGate><KnowledgePage /></KnowledgeGate></ModuleGate>} />
+        <Route path="/ai-agent" element={<ModuleGate module="ai_agent"><AiAgentPage /></ModuleGate>} />
         <Route path="/knowledge/wealthy-guide" element={<ModuleGate module="knowledge_guide"><KnowledgeGate><WealthyGuideLayout /></KnowledgeGate></ModuleGate>}>
           <Route index element={<WealthyGuideHome />} />
           <Route path="manual-charge" element={<ManualChargeGuide />} />
           <Route path="payment-link" element={<PaymentLinkGuide />} />
           <Route path="*" element={<WealthyGuideComingSoon />} />
         </Route>
-        <Route path="/knowledge/document/:documentId" element={<ModuleGate module="knowledge_chat"><KnowledgeGate><KnowledgeDocumentViewPage /></KnowledgeGate></ModuleGate>} />
+        <Route path="/knowledge" element={<Navigate to="/knowledge/wealthy-guide" replace />} />
         <Route path="/admin" element={<AdminGate><AdminDashboard /></AdminGate>} />
-        <Route path="/admin/ai-knowledge" element={<KnowledgeGate><AdminGate><AdminKnowledge /></AdminGate></KnowledgeGate>} />
-        <Route path="/admin/ai-knowledge/gaps" element={<KnowledgeGate><AdminGate><AdminKnowledgeGaps /></AdminGate></KnowledgeGate>} />
-        <Route path="/admin/knowledge" element={<Navigate to="/admin/ai-knowledge" replace />} />
-        <Route path="/admin/knowledge/gaps" element={<Navigate to="/admin/ai-knowledge/gaps" replace />} />
         <Route path="/admin/customer-chat" element={<CustomerChatGate><AdminGate><AdminCustomerChat /></AdminGate></CustomerChatGate>} />
         <Route path="/admin/shifts" element={<AdminGate><AdminShifts /></AdminGate>} />
         <Route path="/admin/users" element={<AdminGate><AdminUsers /></AdminGate>} />
@@ -202,7 +194,6 @@ const AuthenticatedApp = () => {
         </Routes>
       </AppMain>
       <FloatingChatWidget />
-      <FloatingKnowledgeWidget />
       <SoftphoneWidget />
       <AdminLocalhostLinksFloating />
     </div>

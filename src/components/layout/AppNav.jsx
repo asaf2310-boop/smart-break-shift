@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { BarChart3, BookOpen, CalendarClock, CalendarDays, Contact, GraduationCap, Home, MessageCircle, Monitor, ShieldCheck, Star } from "lucide-react";
+import { BarChart3, BookOpen, Bot, CalendarClock, CalendarDays, Contact, GraduationCap, Home, MessageCircle, Monitor, ShieldCheck, Star } from "lucide-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useAgentModules } from "@/hooks/useAgentModules";
 import { agentHasAnyKnowledgeModule, agentKnowledgeNavTarget } from "@/constants/agentModules";
@@ -33,7 +33,8 @@ export default function AppNav() {
   const isMetrics =
     location.pathname === "/metrics" || location.pathname.startsWith("/metrics/");
   const isCrm = location.pathname.startsWith("/crm");
-  const isKnowledge = location.pathname.startsWith("/knowledge");
+  const isKnowledge = pathname.startsWith("/knowledge");
+  const isAiAgent = pathname.startsWith("/ai-agent");
   const isRemoteSupport = location.pathname.startsWith("/remote-support");
   const isGoogleReview = location.pathname.startsWith("/review-sms");
   const isCustomerChat = location.pathname.startsWith("/customer-chat");
@@ -119,10 +120,16 @@ export default function AppNav() {
               צ&apos;אט לקוחות
             </Link>
           )}
+          {showTab("ai_agent") && (
+            <Link to="/ai-agent" className={tabClass(isAiAgent)}>
+              <Bot className="w-4 h-4" />
+              סוכן AI
+            </Link>
+          )}
           {knowledgeEnabled && !demoModeEnabled && showKnowledgeTab && (
             <Link to={knowledgeNavTo} className={tabClass(isKnowledge)}>
               <BookOpen className="w-4 h-4" />
-              בסיס ידע
+              מדריך תשלומים
             </Link>
           )}
           {showCrmTab && !demoModeEnabled && (
@@ -142,7 +149,7 @@ export default function AppNav() {
               {showKnowledgeTab && (
                 <Link to={knowledgeNavTo} className={tabClass(isKnowledge)}>
                   <BookOpen className="w-4 h-4" />
-                  בסיס ידע
+                  מדריך תשלומים
                 </Link>
               )}
               {showTab("customer_chat") && (

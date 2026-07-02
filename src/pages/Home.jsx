@@ -1,5 +1,5 @@
 import React, { useRef, useState } from "react";
-import { BarChart3, BookOpen, CalendarClock, CalendarDays, Contact, GraduationCap, Loader2, MessageCircle, Monitor, Star } from "lucide-react";
+import { BarChart3, BookOpen, Bot, CalendarClock, CalendarDays, Contact, GraduationCap, Loader2, MessageCircle, Monitor, Star } from "lucide-react";
 import { getAgentNamesList } from "@/constants/scheduling";
 import AgentLogin from "@/components/auth/AgentLogin";
 import HypHomeShell from "@/components/hyp/HypHomeShell";
@@ -72,12 +72,12 @@ const customerChatCard = {
   iconTile: "m3-icon-tile",
 };
 
-const knowledgeChatCard = {
-  module: "knowledge_chat",
-  to: "/knowledge",
-  title: "שאל את הידע",
-  desc: "שאלות ותשובות ממסמכי הארגון (AI)",
-  icon: BookOpen,
+const aiAgentCard = {
+  module: "ai_agent",
+  to: "/ai-agent",
+  title: "סוכן AI",
+  desc: "שאלות על לקוחות, תורים וכרטיסים",
+  icon: Bot,
   iconTile: "m3-icon-tile",
 };
 
@@ -89,8 +89,6 @@ const knowledgeGuideCard = {
   icon: BookOpen,
   iconTile: "m3-icon-tile",
 };
-
-const knowledgeCards = [knowledgeChatCard, knowledgeGuideCard];
 
 const crmCard = {
   module: "crm",
@@ -112,15 +110,17 @@ const reviewSmsCard = {
 
 const demoOnlyCards = [
   crmCard,
-  ...knowledgeCards,
+  aiAgentCard,
+  knowledgeGuideCard,
   customerChatCard,
 ];
 
 const liveCardsWithOptionalModules = [
   ...productionCards,
   reviewSmsCard,
+  aiAgentCard,
   ...(customerChatEnabled && !demoModeEnabled ? [customerChatCard] : []),
-  ...(knowledgeEnabled && !demoModeEnabled ? knowledgeCards : []),
+  ...(knowledgeEnabled && !demoModeEnabled ? [knowledgeGuideCard] : []),
   ...(crmEnabled && !demoModeEnabled ? [crmCard] : []),
 ];
 

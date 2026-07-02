@@ -27,8 +27,6 @@ import { getLiveQueryOptions } from "@/lib/liveQuery";
 import HypPageLayout from "@/components/hyp/HypPageLayout";
 import { hypHeaderIconClass } from "@/lib/hypPage";
 import AdminSubNav from "@/components/admin/AdminSubNav";
-import AdminAiKnowledgeModuleCard from "@/components/admin/AdminAiKnowledgeModuleCard";
-import { knowledgeEnabled, demoModeEnabled } from "@/api/demoClient";
 
 export default function AdminDashboard() {
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -250,12 +248,6 @@ export default function AdminDashboard() {
           <ChatBrandingPanel />
         </div>
         <AdminSubNav />
-
-        {(demoModeEnabled || knowledgeEnabled) && (
-          <div className="mb-6">
-            <AdminAiKnowledgeModuleCard />
-          </div>
-        )}
 
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
           <div className="text-center">

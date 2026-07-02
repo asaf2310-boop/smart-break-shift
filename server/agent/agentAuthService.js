@@ -303,3 +303,13 @@ export async function verifyKnowledgeAccess(req) {
   if (modules.includes("knowledge_chat") || modules.includes("knowledge")) return auth;
   return null;
 }
+
+/** AI Agent API: authenticated agent with admin or ai_agent module. */
+export async function verifyAiAgentAccess(req) {
+  const auth = await verifyBearerAgent(req);
+  if (!auth?.agent) return null;
+  if (auth.agent.isAdmin) return auth;
+  const modules = Array.isArray(auth.agent.modules) ? auth.agent.modules : [];
+  if (modules.includes("ai_agent")) return auth;
+  return null;
+}
