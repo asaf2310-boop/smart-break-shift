@@ -130,9 +130,10 @@ export default function AdminShifts() {
           </button>
         </div>
 
+        <VacationApprovalPanel />
+
         {activeTab === "current" && (
           <>
-            <VacationApprovalPanel weekDays={weekDays} />
             <ConstraintsView weekStart={weekStart} />
             <div className="mt-6">
               <PublishedScheduleEditor weekStart={weekStart} />
@@ -143,7 +144,6 @@ export default function AdminShifts() {
         {activeTab === "next" && (
           <>
             <ConstraintsDeadlinePanel constraintsWeekStart={agentConstraintsWeekStart} />
-            <VacationApprovalPanel weekDays={getWeekDays(addDays(weekStart, 7))} />
             <ConstraintsView weekStart={addDays(weekStart, 7)} showDeadlinePanel={false} />
 
             <div className="mt-6">

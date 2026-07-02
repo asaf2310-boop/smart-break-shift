@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { dataClient } from "@/api/client";
 import { demoModeEnabled } from "@/api/demoMode";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -6,43 +6,50 @@ import { format } from "date-fns";
 import { motion } from "framer-motion";
 import { Palmtree, Check, X } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import { WEEKDAY_LABELS, resolveToCanonicalAgentName } from "@/constants/scheduling";
+import { parseDateStrLocal } from "@/constants/scheduling";
 import { getLiveQueryOptions } from "@/lib/liveQuery";
 import { apiAdminUpdateVacationRequest } from "@/lib/agentAuthClient";
+import {
+  groupVacationRequests,
+  formatVacationDateRange,
+} from "@/lib/vacationRequestGrouping";
 
-export default function VacationApprovalPanel({ weekDays }) {
+const ADMIN_QUERY_KEY = ["vacation-requests-admin", "all-pending"];
+
+function formatDisplayDate(dateStr) {
+  return format(parseDateStrLocal(dateStr), "dd/MM");
+}
+
+export default function VacationApprovalPanel() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const dateFrom = format(weekDays[0], "yyyy-MM-dd");
-  const dateTo = format(weekDays[4], "yyyy-MM-dd");
-  const adminQueryKey = ["vacation-requests-admin", dateFrom, dateTo];
 
   const { data: requests = [], isLoading } = useQuery({
-    queryKey: adminQueryKey,
-    queryFn: async () => {
-      const results = await Promise.all(
-        weekDays.map((d) => dataClient.entities.VacationRequest.filter({ date: format(d, "yyyy-MM-dd") }))
-      );
-      return results.flat().filter((r) => r.status === "pending");
-    },
+    queryKey: ADMIN_QUERY_KEY,
+    queryFn: () => dataClient.entities.VacationRequest.filter({ status: "pending" }),
     ...getLiveQueryOptions(),
   });
 
+  const groupedRequests = useMemo(() => groupVacationRequests(requests), [requests]);
+
   const updateMutation = useMutation({
-    mutationFn: async ({ id, status }) => {
+    mutationFn: async ({ ids, status }) => {
       if (demoModeEnabled) {
-        return dataClient.entities.VacationRequest.update(id, { status });
+        return Promise.all(
+          ids.map((id) => dataClient.entities.VacationRequest.update(id, { status }))
+        );
       }
-      return apiAdminUpdateVacationRequest({ id, status });
+      return Promise.all(ids.map((id) => apiAdminUpdateVacationRequest({ id, status })));
     },
-    onMutate: async ({ id }) => {
-      await queryClient.cancelQueries({ queryKey: adminQueryKey });
-      const previous = queryClient.getQueryData(adminQueryKey);
-      queryClient.setQueryData(adminQueryKey, (old = []) => old.filter((r) => r.id !== id));
+    onMutate: async ({ ids }) => {
+      await queryClient.cancelQueries({ queryKey: ADMIN_QUERY_KEY });
+      const previous = queryClient.getQueryData(ADMIN_QUERY_KEY);
+      const idSet = new Set(ids);
+      queryClient.setQueryData(ADMIN_QUERY_KEY, (old = []) => old.filter((r) => !idSet.has(r.id)));
       return { previous };
     },
     onSuccess: (_, { status }) => {
-      queryClient.invalidateQueries({ queryKey: adminQueryKey });
+      queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ["all-vac-view"] });
       queryClient.invalidateQueries({ queryKey: ["vacation-requests"] });
       queryClient.invalidateQueries({ queryKey: ["vacation-requests-builder"] });
@@ -52,7 +59,7 @@ export default function VacationApprovalPanel({ weekDays }) {
     },
     onError: (err, _vars, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(adminQueryKey, context.previous);
+        queryClient.setQueryData(ADMIN_QUERY_KEY, context.previous);
       }
       toast({
         title: "שגיאה בעדכון בקשת חופש",
@@ -70,23 +77,17 @@ export default function VacationApprovalPanel({ weekDays }) {
     );
   }
 
-  if (requests.length === 0) {
+  if (groupedRequests.length === 0) {
     return (
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         className="rounded-3xl border border-slate-200 bg-white shadow-lg p-6 mb-4 text-center text-sm text-slate-400"
       >
-        אין בקשות חופש ממתינות לשבוע זה
+        אין בקשות חופש ממתינות
       </motion.div>
     );
   }
-
-  const dayLabel = (dateStr) => {
-    const idx = weekDays.findIndex((d) => format(d, "yyyy-MM-dd") === dateStr);
-    const day = idx >= 0 ? WEEKDAY_LABELS[idx] : "";
-    return `${day} ${format(new Date(dateStr + "T12:00:00"), "dd/MM")}`;
-  };
 
   return (
     <motion.div
@@ -100,42 +101,52 @@ export default function VacationApprovalPanel({ weekDays }) {
         </div>
         <div>
           <h2 className="font-bold text-slate-800">אישור בקשות חופש</h2>
-          <p className="text-xs text-slate-400">{requests.length} ממתינות</p>
+          <p className="text-xs text-slate-400">{groupedRequests.length} ממתינות</p>
         </div>
       </div>
       <div className="p-4 space-y-3">
-        {requests.map((req) => (
-          <div
-            key={req.id}
-            className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl border border-orange-100 bg-orange-50/40"
-          >
-            <div>
-              <p className="font-bold text-slate-800">{resolveToCanonicalAgentName(req.agent_name)}</p>
-              <p className="text-sm text-slate-500">{dayLabel(req.date)}</p>
-              {req.note && <p className="text-xs text-slate-400 mt-1">{req.note}</p>}
+        {groupedRequests.map((group) => {
+          const rangeLabel = formatVacationDateRange(
+            group.startDate,
+            group.endDate,
+            formatDisplayDate
+          );
+          const groupKey = `${group.agentName}-${group.startDate}-${group.endDate}-${group.note}`;
+
+          return (
+            <div
+              key={groupKey}
+              className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl border border-orange-100 bg-orange-50/40"
+            >
+              <div>
+                <p className="font-bold text-slate-800">{group.agentName}</p>
+                <p className="text-sm text-slate-500">{rangeLabel}</p>
+                {group.note && <p className="text-xs text-slate-400 mt-1">{group.note}</p>}
+                <p className="text-xs text-orange-600 mt-1 font-medium">ממתין לאישור</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={updateMutation.isPending}
+                  onClick={() => updateMutation.mutate({ ids: group.ids, status: "approved" })}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-green-500 text-white text-sm font-semibold hover:bg-green-600 transition-colors disabled:opacity-50"
+                >
+                  <Check className="w-4 h-4" />
+                  אישור
+                </button>
+                <button
+                  type="button"
+                  disabled={updateMutation.isPending}
+                  onClick={() => updateMutation.mutate({ ids: group.ids, status: "rejected" })}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-50"
+                >
+                  <X className="w-4 h-4" />
+                  דחייה
+                </button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                disabled={updateMutation.isPending}
-                onClick={() => updateMutation.mutate({ id: req.id, status: "approved" })}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-green-500 text-white text-sm font-semibold hover:bg-green-600 transition-colors disabled:opacity-50"
-              >
-                <Check className="w-4 h-4" />
-                אישור
-              </button>
-              <button
-                type="button"
-                disabled={updateMutation.isPending}
-                onClick={() => updateMutation.mutate({ id: req.id, status: "rejected" })}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-50"
-              >
-                <X className="w-4 h-4" />
-                דחייה
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </motion.div>
   );
