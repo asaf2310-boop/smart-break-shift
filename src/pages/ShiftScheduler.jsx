@@ -43,6 +43,7 @@ import {
   resolveAgentSchedulePanels,
 } from "@/lib/shiftScheduleQuery";
 import WeeklySchedulePanel from "@/components/shifts/WeeklySchedulePanel";
+import VacationRequestPanel from "@/components/shifts/VacationRequestPanel";
 import BackendConfigBanner from "@/components/BackendConfigBanner";
 import HypPageLayout from "@/components/hyp/HypPageLayout";
 import { hypHeaderIconClass } from "@/lib/hypPage";
@@ -860,6 +861,15 @@ export default function ShiftScheduler() {
         {activeTab === "schedule" && (
           <div className="space-y-6">
             <BackendConfigBanner />
+            <VacationRequestPanel
+              agentName={agentName}
+              currentDateFrom={currentDateFrom}
+              scheduleDateFrom={scheduleDateFrom}
+              currentWeekPublished={currentWeekRegistrationsFiltered.length > 0}
+              nextWeekPublished={scheduleRegistrationsFiltered.length > 0}
+              lastPublished={lastPublishedFocus}
+              vacationRequests={vacationRequests}
+            />
             <p className="text-center text-xs text-slate-500 px-4">
               מוצג שיבוץ שבוע העבודה ({scheduleDateFrom}–{scheduleDateTo}, א׳–ה׳ ישראל). לא לוח 31/05–04/06 — זה שבוע קלנדרי אחר.
             </p>

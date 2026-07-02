@@ -118,6 +118,45 @@ export function getAgentConstraintsWeekStart(now = new Date()) {
   return addDays(getWeekStartIsrael(now), 7);
 }
 
+/**
+ * Min/max for agent vacation requests (schedule tab).
+ * min = first day of the scheduling week after the latest published schedule.
+ */
+export function getVacationRequestDateBounds({
+  currentDateFrom,
+  scheduleDateFrom,
+  currentWeekPublished,
+  nextWeekPublished,
+  lastPublished,
+}) {
+  const nextWeekStartStr = scheduleDateFrom;
+  const weekAfterNextStartStr = formatDateStr(addDays(parseDateStrLocal(scheduleDateFrom), 7));
+
+  let latestPublishedFrom = null;
+  if (nextWeekPublished) {
+    latestPublishedFrom = nextWeekStartStr;
+  } else if (currentWeekPublished) {
+    latestPublishedFrom = currentDateFrom;
+  }
+  if (lastPublished?.dateFrom) {
+    if (!latestPublishedFrom || lastPublished.dateFrom > latestPublishedFrom) {
+      latestPublishedFrom = lastPublished.dateFrom;
+    }
+  }
+
+  let minDateStr;
+  if (latestPublishedFrom === nextWeekStartStr) {
+    minDateStr = weekAfterNextStartStr;
+  } else if (latestPublishedFrom === currentDateFrom) {
+    minDateStr = nextWeekStartStr;
+  } else {
+    minDateStr = nextWeekStartStr;
+  }
+
+  const maxDateStr = formatDateStr(addDays(parseDateStrLocal(minDateStr), 90));
+  return { minDate: minDateStr, maxDate: maxDateStr };
+}
+
 /** דד-ליין אילוצים: רביעי 16:00 (שבוע ההגשה — השבוע שלפני שבוע האילוצים) */
 export function getConstraintsDeadline(submissionWeekStart) {
   const wednesday = addDays(submissionWeekStart, 3);
