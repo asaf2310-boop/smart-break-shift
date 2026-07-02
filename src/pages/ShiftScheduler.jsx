@@ -54,7 +54,6 @@ import { dataClient } from "@/api/client";
 export default function ShiftScheduler() {
   const { refresh: refreshAgentSession } = useAgentSession();
   const [agentName, setAgentName] = useState(() => getStoredAgentName());
-  const [noteDialog, setNoteDialog] = useState(null); // { date, type: "unavailable"|"vacation_request" }
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState("schedule"); // "constraints" | "schedule"
   const [lastPublishedFocus, setLastPublishedFocus] = useState(() =>
@@ -266,38 +265,6 @@ export default function ShiftScheduler() {
     ...getLiveQueryOptions(),
   });
 
-  const createVacationMutation = useMutation({
-    mutationFn: (data) => dataClient.entities.VacationRequest.create(data),
-    onMutate: async (data) => {
-      await queryClient.cancelQueries({ queryKey: ["vacation-requests"] });
-      const snapshots = queryClient.getQueriesData({ queryKey: ["vacation-requests"] });
-      const optimistic = {
-        id: `optimistic-vac-${data.date}`,
-        ...data,
-        status: "pending",
-      };
-      queryClient.setQueriesData({ queryKey: ["vacation-requests"] }, (old = []) => [
-        ...old.filter((row) => row.date !== data.date || row.status === "rejected"),
-        optimistic,
-      ]);
-      return { snapshots };
-    },
-    onError: (_err, _vars, context) => {
-      context?.snapshots?.forEach(([key, data]) => {
-        queryClient.setQueryData(key, data);
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["vacation-requests"] });
-      toast({ title: "✓ בקשת החופש נשלחה", description: "ממתין לאישור מנהל" });
-    },
-  });
-
-  const deleteVacationMutation = useMutation({
-    mutationFn: (id) => dataClient.entities.VacationRequest.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["vacation-requests"] }),
-  });
-
   const vacationStatusNotifiedRef = useRef(new Set());
 
   useEffect(() => {
@@ -317,20 +284,6 @@ export default function ShiftScheduler() {
       });
     });
   }, [vacationRequests, constraintsDateFrom, constraintsDateTo, toast]);
-
-  const resolvedVacationRequests = useMemo(
-    () =>
-      vacationRequests.filter(
-        (r) =>
-          r.date >= constraintsDateFrom &&
-          r.date <= constraintsDateTo &&
-          (r.status === "approved" || r.status === "rejected")
-      ),
-    [vacationRequests, constraintsDateFrom, constraintsDateTo]
-  );
-
-  const getVacationRequest = (date) =>
-    vacationRequests.find(r => r.date === format(date, "yyyy-MM-dd") && r.date >= constraintsDateFrom && r.date <= constraintsDateTo);
 
   // Fetch confirmation for the constraints week
   const { data: confirmations = [], isLoading: loadingConfirm } = useQuery({
@@ -541,14 +494,6 @@ export default function ShiftScheduler() {
     }
   };
 
-  const handleNoteSubmit = (note) => {
-    const dateStr = format(noteDialog.date, "yyyy-MM-dd");
-    if (noteDialog.type === "vacation_request") {
-      createVacationMutation.mutate({ agent_name: agentName, date: dateStr, note, status: "pending" });
-    }
-    setNoteDialog(null);
-  };
-
   const handleConstraintNoteSave = (date, shiftType, note) => {
     const dateStr = format(date, "yyyy-MM-dd");
     if (isAgentOnApprovedVacation(agentName, dateStr, vacationRequests)) {
@@ -722,10 +667,6 @@ export default function ShiftScheduler() {
                 לא זמין
               </div>
               <div className="flex items-center gap-2 text-xs text-slate-500">
-                <span className="w-4 h-4 rounded border-2 border-orange-300 bg-white inline-block" />
-                חופש (לחץ לבקשה)
-              </div>
-              <div className="flex items-center gap-2 text-xs text-slate-500">
                 <MessageSquare className="w-3.5 h-3.5 text-indigo-500 fill-indigo-200" />
                 הערה לתא (בועה)
               </div>
@@ -762,125 +703,11 @@ export default function ShiftScheduler() {
                 </div>
               </div>
 
-              {/* ─── Vacation row (per day, below shifts) ─── */}
-              {resolvedVacationRequests.length > 0 && (
-                <div className="mt-3 space-y-2">
-                  {resolvedVacationRequests.map((req) => {
-                    const dayIdx = constraintsDays.findIndex(
-                      (d) => format(d, "yyyy-MM-dd") === req.date
-                    );
-                    const dayLabel =
-                      dayIdx >= 0
-                        ? `${WEEKDAY_LABELS[dayIdx]} ${format(constraintsDays[dayIdx], "dd/MM")}`
-                        : format(new Date(`${req.date}T12:00:00`), "dd/MM");
-                    const approved = req.status === "approved";
-                    return (
-                      <div
-                        key={req.id}
-                        className={`flex items-start gap-2 rounded-2xl border px-4 py-3 text-sm ${
-                          approved
-                            ? "bg-green-50 border-green-200 text-green-800"
-                            : "bg-red-50 border-red-200 text-red-700"
-                        }`}
-                      >
-                        <Palmtree className={`w-4 h-4 mt-0.5 flex-shrink-0 ${approved ? "text-green-600" : "text-red-500"}`} />
-                        <div>
-                          <p className="font-semibold">
-                            {approved ? "החופש אושר" : "בקשת החופש נדחתה"} — {dayLabel}
-                          </p>
-                          <p className="text-xs mt-0.5 opacity-90">
-                            {approved
-                              ? "המנהל אישר את בקשת החופש ליום זה"
-                              : "המנהל דחה את הבקשה — ניתן לפנות אליו לפרטים"}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              <div className="mt-3 rounded-2xl border border-orange-100 bg-orange-50/40 overflow-x-auto">
-                <div className="grid grid-cols-6 min-w-[640px]">
-                  <div className="px-3 py-3 flex flex-col items-center justify-center gap-1 border-l border-orange-100">
-                    <Palmtree className="w-4 h-4 text-orange-400" />
-                    <span className="text-xs font-bold text-orange-500">חופש</span>
-                  </div>
-                  {constraintsDays.map((date) => {
-                    const vacReq = getVacationRequest(date);
-                    const locked = isPastDeadline;
-                    const isHolidayEve = HOLIDAY_EVE_DATES.includes(format(date, "yyyy-MM-dd"));
-                    const hasUnavailOnDay = unavailabilities.some(u =>
-                      u.date === format(date, "yyyy-MM-dd")
-                    );
-                    const vacStatusLabel = vacReq?.status === "approved" ? "אושר ✓" : vacReq?.status === "rejected" ? "נדחה ✗" : "ממתין לאישור";
-                    const vacStatusNote =
-                      vacReq?.status === "approved"
-                        ? "אושר ע״י מנהל"
-                        : vacReq?.status === "rejected"
-                          ? "נדחה ע״י מנהל"
-                          : null;
-                    const vacStatusColor = vacReq?.status === "approved" ? "text-green-600" : vacReq?.status === "rejected" ? "text-red-400" : "text-orange-500";
-                    return (
-                      <div key={format(date, "yyyy-MM-dd")} className={`px-1 py-3 flex flex-col items-center justify-center gap-1 ${isHolidayEve ? "bg-purple-50/60 rounded-xl" : ""}`}>
-
-                        {!vacReq && !locked && (
-                          hasUnavailOnDay ? (
-                            <span
-                              title="לא ניתן לבקש חופש כשיש כבר אי-זמינות באותו יום"
-                              className="w-4 h-4 rounded border-2 border-slate-200 bg-slate-100 opacity-40 cursor-not-allowed"
-                            />
-                          ) : (
-                            <button
-                              onClick={() => {
-                                toast({ title: "⚠️ שים לב", description: "החופש באישור מנהל" });
-                                setNoteDialog({ date, type: "vacation_request" });
-                              }}
-                              title="בקשת חופש (דורש אישור מנהל)"
-                              className="flex items-center gap-1 group"
-                            >
-                              <span className="w-4 h-4 rounded border-2 border-orange-300 group-hover:border-orange-500 bg-white flex items-center justify-center transition-all flex-shrink-0" />
-                            </button>
-                          )
-                        )}
-                        {!vacReq && locked && (
-                          <span className="w-4 h-4 rounded border-2 border-orange-100 bg-white opacity-40" />
-                        )}
-                        {vacReq && (
-                          <div className="flex flex-col items-center gap-0.5">
-                            <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
-                              vacReq.status === "approved" ? "bg-green-500 border-green-500" :
-                              vacReq.status === "rejected" ? "bg-red-300 border-red-300" :
-                              "bg-orange-400 border-orange-400"
-                            }`}>
-                              <Check className="w-2.5 h-2.5 text-white" />
-                            </div>
-                            <span className={`text-xs font-semibold leading-none ${vacStatusColor}`}>{vacStatusLabel}</span>
-                            {vacStatusNote && (
-                              <span className={`text-[10px] leading-tight text-center ${vacStatusColor} opacity-80`}>
-                                {vacStatusNote}
-                              </span>
-                            )}
-                            {!locked && vacReq.status === "pending" && (
-                              <button
-                                onClick={() => deleteVacationMutation.mutate(vacReq.id)}
-                                className="text-xs text-slate-300 hover:text-red-400 transition-colors leading-none"
-                              >
-                                ביטול
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
               {/* Confirm / hint row */}
               {!isPastDeadline && (
                 <div className="mt-4 flex flex-col items-center gap-2">
                   <p className="text-center text-xs text-slate-400">
-                    לחץ לסימון "לא רוצה לעבוד" ← "חופש" ← חזרה לזמין
+                    לחץ לסימון "לא רוצה לעבוד" ← חזרה לזמין
                   </p>
                   <button
                     onClick={handleConfirm}
@@ -940,67 +767,7 @@ export default function ShiftScheduler() {
           </div>
         )}
 
-      {noteDialog && (
-        <NoteDialog
-          type={noteDialog.type}
-          onSubmit={handleNoteSubmit}
-          onCancel={() => setNoteDialog(null)}
-        />
-      )}
     </HypPageLayout>
-  );
-}
-
-function NoteDialog({ onSubmit, onCancel, type }) {
-  const [note, setNote] = useState("");
-  const isVacReq = type === "vacation_request";
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" dir="rtl">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.92 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="bg-white rounded-3xl shadow-2xl p-6 w-full max-w-sm mx-4"
-      >
-        <div className="flex items-center gap-3 mb-4">
-          <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isVacReq ? "bg-orange-100" : "bg-red-100"}`}>
-            {isVacReq ? <Palmtree className="w-4 h-4 text-orange-500" /> : <MessageSquare className="w-4 h-4 text-red-500" />}
-          </div>
-          <div>
-            <h3 className="font-bold text-slate-800">{isVacReq ? "בקשת חופש" : "סיבה לאי-זמינות"}</h3>
-            {isVacReq && <p className="text-xs text-slate-400">הבקשה תישלח לאישור מנהל</p>}
-          </div>
-        </div>
-        <textarea
-          autoFocus
-          value={note}
-          onChange={e => setNote(e.target.value)}
-          placeholder={isVacReq ? "סיבה לחופש (אופציונלי)..." : "פרט את הסיבה (אופציונלי)..."}
-          rows={3}
-          className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-sm outline-none focus:border-indigo-400 resize-none text-right"
-        />
-        {isVacReq && (
-          <div className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-            <span className="text-amber-600 text-xs">⚠️ הבקשה תוצג למנהל ותטופל בהתאם</span>
-          </div>
-        )}
-        <div className="flex gap-2 mt-4">
-          <button
-            onClick={() => onSubmit(note)}
-            className={`flex-1 py-2.5 rounded-2xl text-white text-sm font-semibold hover:shadow-md transition-all bg-gradient-to-r ${
-              isVacReq ? "from-orange-400 to-orange-500" : "from-red-400 to-red-500"
-            }`}
-          >
-            {isVacReq ? "שלח בקשה" : "אישור"}
-          </button>
-          <button
-            onClick={onCancel}
-            className="px-4 py-2.5 rounded-2xl border border-slate-200 text-slate-500 text-sm font-semibold hover:bg-slate-50 transition-all"
-          >
-            ביטול
-          </button>
-        </div>
-      </motion.div>
-    </div>
   );
 }
 
