@@ -46,6 +46,21 @@ const ENGLISH_MONTHS = [
   "december",
 ];
 
+const ENGLISH_MONTH_ALIASES = [
+  ["jan"],
+  ["feb"],
+  ["mar"],
+  ["apr"],
+  ["may"],
+  ["jun"],
+  ["jul"],
+  ["aug"],
+  ["sep", "sept"],
+  ["oct"],
+  ["nov"],
+  ["dec"],
+];
+
 function normalizeHeader(value) {
   return String(value ?? "")
     .trim()
@@ -57,7 +72,58 @@ function normalizeSheetName(value) {
   return String(value ?? "")
     .trim()
     .toLowerCase()
+    .replace(/["'`׳״]+/g, " ")
+    .replace(/[._\-\/\\]+/g, " ")
     .replace(/\s+/g, " ");
+}
+
+function escapeRegex(value) {
+  return String(value ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildMonthAliases(monthIndex) {
+  const hebrew = normalizeSheetName(HEBREW_MONTHS[monthIndex]);
+  const english = normalizeSheetName(ENGLISH_MONTHS[monthIndex]);
+  return Array.from(
+    new Set([hebrew, english, ...(ENGLISH_MONTH_ALIASES[monthIndex] || [])].map(normalizeSheetName).filter(Boolean))
+  );
+}
+
+function createMonthBoundaryRegex(alias) {
+  return new RegExp(`(^|\\s)${escapeRegex(alias)}(\\s|$)`, "i");
+}
+
+function createMonthNumberPatterns(monthIndex, year) {
+  const monthNum = String(monthIndex + 1);
+  const monthNumPadded = monthNum.padStart(2, "0");
+  const yearStr = String(year);
+  const prevYearStr = String(year - 1);
+  const nextYearStr = String(year + 1);
+  const yearCandidates = [yearStr, prevYearStr, nextYearStr];
+  const patterns = [];
+
+  for (const candidateYear of yearCandidates) {
+    patterns.push(`${monthNum} ${candidateYear}`);
+    patterns.push(`${monthNumPadded} ${candidateYear}`);
+    patterns.push(`${candidateYear} ${monthNum}`);
+    patterns.push(`${candidateYear} ${monthNumPadded}`);
+  }
+
+  return Array.from(new Set(patterns));
+}
+
+export function getReferenceDateFromPeriodLabel(periodLabel, fallbackDate = new Date()) {
+  const normalized = normalizeSheetName(periodLabel);
+  if (!normalized) return fallbackDate;
+
+  const yearMatch = normalized.match(/\b(20\d{2})\b/);
+  const year = yearMatch ? Number(yearMatch[1]) : fallbackDate.getFullYear();
+  const monthIndex = HEBREW_MONTHS.findIndex((_, index) =>
+    buildMonthAliases(index).some((alias) => createMonthBoundaryRegex(alias).test(normalized))
+  );
+
+  if (monthIndex === -1) return fallbackDate;
+  return new Date(year, monthIndex, 1);
 }
 
 /** הקשר חודש נוכחי — לבחירת גיליון בקובץ Excel מרובה חוצצים */
@@ -85,27 +151,32 @@ export function findMetricsSheetName(sheetNames = [], referenceDate = new Date()
   if (names.length === 1) return names[0];
 
   const ctx = getCurrentMonthSheetContext(referenceDate);
-  const hebrew = normalizeSheetName(ctx.hebrewMonth);
-  const english = ctx.englishMonth;
+  const monthAliases = buildMonthAliases(ctx.monthIndex);
+  const primaryHebrew = normalizeSheetName(ctx.hebrewMonth);
   const yearStr = String(ctx.year);
-  const monthNum = String(ctx.monthIndex + 1);
-  const monthNumPadded = monthNum.padStart(2, "0");
+  const monthNumberPatterns = createMonthNumberPatterns(ctx.monthIndex, ctx.year);
 
   const scored = names.map((name) => {
     const norm = normalizeSheetName(name);
     let score = 0;
+    const matchedAlias = monthAliases.find((alias) => {
+      if (!alias) return false;
+      return (
+        norm === alias ||
+        norm.startsWith(`${alias} `) ||
+        norm.endsWith(` ${alias}`) ||
+        createMonthBoundaryRegex(alias).test(norm)
+      );
+    });
+    const hasMonthNumberPattern = monthNumberPatterns.some((pattern) => norm.includes(pattern));
 
-    if (norm === hebrew) score = 100;
-    else if (norm === `${hebrew} ${yearStr}`) score = 98;
-    else if (norm.startsWith(`${hebrew} `) && norm.includes(yearStr)) score = 95;
-    else if (norm.startsWith(hebrew) || norm.endsWith(` ${hebrew}`) || norm.includes(` ${hebrew} `)) {
+    if (norm === primaryHebrew) score = 100;
+    else if (matchedAlias && norm === `${matchedAlias} ${yearStr}`) score = 98;
+    else if (matchedAlias && norm.startsWith(`${matchedAlias} `) && norm.includes(yearStr)) score = 95;
+    else if (matchedAlias && matchedAlias === primaryHebrew) {
       score = 85;
-    } else if (norm.includes(hebrew)) score = 75;
-    else if (norm === english || norm.startsWith(`${english} `) || norm.includes(` ${english}`)) score = 65;
-    else if (
-      (norm === monthNum || norm === monthNumPadded || norm.startsWith(`${monthNumPadded}-`) || norm.startsWith(`${monthNum}-`)) &&
-      (norm.includes(hebrew) || norm.includes(english))
-    ) {
+    } else if (matchedAlias) score = 75;
+    else if (hasMonthNumberPattern) {
       score = 55;
     }
 
@@ -258,7 +329,8 @@ export function detectMetricsChannel(columns = []) {
 export async function parseMetricsFile(file, options = {}) {
   if (!file) throw new Error("לא נבחר קובץ");
 
-  const referenceDate = options.referenceDate || new Date();
+  const referenceDate =
+    options.referenceDate || getReferenceDateFromPeriodLabel(options.periodLabel, new Date());
   const name = String(file.name || "").toLowerCase();
   let sheetRows = [];
   let sheetName = null;

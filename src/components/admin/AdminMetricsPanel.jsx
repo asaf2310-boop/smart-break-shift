@@ -14,6 +14,7 @@ import {
 import {
   downloadMetricsTemplate,
   getCurrentMonthSheetContext,
+  getReferenceDateFromPeriodLabel,
   parseMetricsFile,
 } from "@/lib/agentMetricsImport";
 import { filterMetricsColumns } from "@/lib/agentMetricsFormat";
@@ -138,7 +139,10 @@ export default function AdminMetricsPanel() {
     if (!file) return;
     setSelectedFile(file);
     try {
-      const parsed = await parseMetricsFile(file);
+      const parsed = await parseMetricsFile(file, {
+        periodLabel,
+        referenceDate: getReferenceDateFromPeriodLabel(periodLabel, new Date()),
+      });
       if (parsed.errors?.length && !parsed.rows?.length) {
         toast({
           title: "קובץ לא תקין",
