@@ -94,6 +94,30 @@ export default function VacationRequestPanel({
       );
       return results;
     },
+    onMutate: async ({ dates, note: requestNote }) => {
+      await queryClient.cancelQueries({ queryKey: ["vacation-requests"] });
+      const snapshots = queryClient.getQueriesData({ queryKey: ["vacation-requests"] });
+      const trimmedNote = String(requestNote || "").trim();
+      const optimistic = dates.map((date, index) => ({
+        id: `optimistic-vac-${date}-${index}`,
+        agent_name: agentName,
+        date,
+        note: trimmedNote,
+        status: "pending",
+      }));
+      queryClient.setQueriesData({ queryKey: ["vacation-requests"] }, (old = []) => [
+        ...old,
+        ...optimistic.filter(
+          (entry) => !old.some((row) => row.date === entry.date && row.status !== "rejected")
+        ),
+      ]);
+      return { snapshots };
+    },
+    onError: (_err, _vars, context) => {
+      context?.snapshots?.forEach(([key, data]) => {
+        queryClient.setQueryData(key, data);
+      });
+    },
     onSuccess: (created) => {
       invalidateVacationQueries();
       setNote("");
@@ -170,7 +194,7 @@ export default function VacationRequestPanel({
   const statusLabel = (status) => {
     if (status === "approved") return "אושר";
     if (status === "rejected") return "נדחה";
-    return "ממתין";
+    return "ממתין לאישור";
   };
 
   const statusColor = (status) => {

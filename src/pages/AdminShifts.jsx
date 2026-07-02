@@ -232,7 +232,10 @@ function ConstraintsView({ weekStart, showDeadlinePanel = true }) {
     allUnavailabilities.map((u) => toCanonical(u.agent_name)).filter(Boolean)
   );
   const submittedByVacation = new Set(
-    vacationRequests.map((v) => toCanonical(v.agent_name)).filter(Boolean)
+    vacationRequests
+      .filter((v) => v.status === "approved")
+      .map((v) => toCanonical(v.agent_name))
+      .filter(Boolean)
   );
   const confirmedAgents = new Set([...confirmedByForm, ...submittedByUnavail, ...submittedByVacation]);
   // "allAvailable" = confirmed via form but has NO unavailability/vacation records (submitted as fully available)

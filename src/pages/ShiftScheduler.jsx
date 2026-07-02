@@ -27,6 +27,7 @@ import {
   countMorningUnavailableDays,
   MAX_MORNING_UNAVAILABLE_DAYS_PER_WEEK,
   MORNING_UNAVAILABLE_LIMIT_MESSAGE,
+  isAgentOnApprovedVacation,
 } from "@/constants/scheduling";
 import AgentLogin from "@/components/auth/AgentLogin";
 import { useAgentSession } from "@/hooks/useAgentSession";
@@ -267,15 +268,34 @@ export default function ShiftScheduler() {
 
   const createVacationMutation = useMutation({
     mutationFn: (data) => dataClient.entities.VacationRequest.create(data),
+    onMutate: async (data) => {
+      await queryClient.cancelQueries({ queryKey: ["vacation-requests"] });
+      const snapshots = queryClient.getQueriesData({ queryKey: ["vacation-requests"] });
+      const optimistic = {
+        id: `optimistic-vac-${data.date}`,
+        ...data,
+        status: "pending",
+      };
+      queryClient.setQueriesData({ queryKey: ["vacation-requests"] }, (old = []) => [
+        ...old.filter((row) => row.date !== data.date || row.status === "rejected"),
+        optimistic,
+      ]);
+      return { snapshots };
+    },
+    onError: (_err, _vars, context) => {
+      context?.snapshots?.forEach(([key, data]) => {
+        queryClient.setQueryData(key, data);
+      });
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["vacation-requests", constraintsDateFrom, constraintsDateTo, agentName] });
+      queryClient.invalidateQueries({ queryKey: ["vacation-requests"] });
       toast({ title: "✓ בקשת החופש נשלחה", description: "ממתין לאישור מנהל" });
     },
   });
 
   const deleteVacationMutation = useMutation({
     mutationFn: (id) => dataClient.entities.VacationRequest.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["vacation-requests", constraintsDateFrom, constraintsDateTo, agentName] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["vacation-requests"] }),
   });
 
   const vacationStatusNotifiedRef = useRef(new Set());
@@ -443,8 +463,27 @@ export default function ShiftScheduler() {
     window.location.href = "/";
   };
 
-  const getDayRecord = (date, shiftType) =>
-    unavailabilities.find(r => r.date === format(date, "yyyy-MM-dd") && r.shift_type === shiftType);
+  const isApprovedVacationDay = (date) =>
+    isAgentOnApprovedVacation(agentName, format(date, "yyyy-MM-dd"), vacationRequests);
+
+  const getDayRecord = (date, shiftType) => {
+    const dateStr = format(date, "yyyy-MM-dd");
+    if (isAgentOnApprovedVacation(agentName, dateStr, vacationRequests)) {
+      const vacReq = vacationRequests.find(
+        (r) => r.date === dateStr && r.status === "approved"
+      );
+      return {
+        reason: "vacation",
+        note: vacReq?.note || "",
+        shift_type: shiftType,
+        date: dateStr,
+        isApprovedVacation: true,
+      };
+    }
+    return unavailabilities.find(
+      (r) => r.date === dateStr && r.shift_type === shiftType
+    );
+  };
 
   const morningUnavailableCount = useMemo(
     () => countMorningUnavailableDays(unavailabilities, constraintsDateFrom, constraintsDateTo),
@@ -472,6 +511,9 @@ export default function ShiftScheduler() {
 
   const handleDayClick = (date, newReason, shiftType) => {
     const dateStr = format(date, "yyyy-MM-dd");
+    if (isAgentOnApprovedVacation(agentName, dateStr, vacationRequests)) {
+      return;
+    }
     // Find ALL records for this date+shiftType (to handle any existing duplicates)
     const allRecords = unavailabilities.filter(r => r.date === dateStr && r.shift_type === shiftType);
     const existing = allRecords[0] || null;
@@ -509,6 +551,9 @@ export default function ShiftScheduler() {
 
   const handleConstraintNoteSave = (date, shiftType, note) => {
     const dateStr = format(date, "yyyy-MM-dd");
+    if (isAgentOnApprovedVacation(agentName, dateStr, vacationRequests)) {
+      return;
+    }
     const trimmed = String(note ?? "").trim();
     const existing = unavailabilities.find(
       (r) => r.date === dateStr && r.shift_type === shiftType
@@ -711,6 +756,7 @@ export default function ShiftScheduler() {
                     onNoteSave={handleConstraintNoteSave}
                     noteSaving={updateMutation.isPending || createMutation.isPending}
                     locked={isPastDeadline || (isConfirmed && !isEditing)}
+                    isApprovedVacationDay={isApprovedVacationDay}
                     holidayEveDates={HOLIDAY_EVE_DATES}
                   />
                 </div>
@@ -1035,17 +1081,18 @@ function ConstraintNotePopover({ record, date, shiftType, locked, onSave, saving
 
 function ShiftCell({ date, shiftType, getDayRecord, onMark, onNoteSave, noteSaving, locked }) {
   const record = getDayRecord(date, shiftType);
+  const isApprovedVacation = record?.isApprovedVacation === true;
   const isUnavailable = record?.reason === "unavailable";
   const isVacation = record?.reason === "vacation";
 
   let btnStyle, btnIcon, btnTitle, btnAction, btnLabel, btnTextColor;
   if (isVacation) {
-    btnStyle = "bg-sky-50 border-sky-300";
-    btnIcon = <Palmtree className="w-4 h-4 text-sky-500" />;
-    btnTitle = "חופש · לחץ לביטול";
+    btnStyle = isApprovedVacation ? "bg-green-50 border-green-300" : "bg-sky-50 border-sky-300";
+    btnIcon = <Palmtree className={`w-4 h-4 ${isApprovedVacation ? "text-green-600" : "text-sky-500"}`} />;
+    btnTitle = isApprovedVacation ? "חופש מאושר — לא ניתן לערוך" : "חופש · לחץ לביטול";
     btnAction = () => onMark(date, "vacation", shiftType);
-    btnLabel = "חופש";
-    btnTextColor = "text-sky-600";
+    btnLabel = isApprovedVacation ? "חופש מאושר" : "חופש";
+    btnTextColor = isApprovedVacation ? "text-green-700" : "text-sky-600";
   } else if (isUnavailable) {
     btnStyle = "bg-red-50 border-red-300";
     btnIcon = <X className="w-4 h-4 text-red-500" />;
@@ -1064,7 +1111,7 @@ function ShiftCell({ date, shiftType, getDayRecord, onMark, onNoteSave, noteSavi
 
   return (
     <div className="relative px-1 py-2 flex flex-col items-center justify-center gap-1">
-      {onNoteSave && (
+      {onNoteSave && !isApprovedVacation && (
         <ConstraintNotePopover
           record={record}
           date={date}
@@ -1075,16 +1122,19 @@ function ShiftCell({ date, shiftType, getDayRecord, onMark, onNoteSave, noteSavi
         />
       )}
       <button
-        onClick={() => !locked && btnAction()}
-        disabled={locked}
-        title={locked ? "הדד-ליין עבר" : btnTitle}
+        onClick={() => !locked && !isApprovedVacation && btnAction()}
+        disabled={locked || isApprovedVacation}
+        title={isApprovedVacation ? "חופש מאושר על ידי מנהל" : locked ? "הדד-ליין עבר" : btnTitle}
         className={`w-full px-1 py-2 rounded-2xl border-2 flex flex-col items-center justify-center gap-0.5 transition-all ${btnStyle} ${
-          locked ? "opacity-50 cursor-default" : "hover:brightness-95 hover:shadow-sm cursor-pointer active:scale-95"
+          locked || isApprovedVacation ? "opacity-80 cursor-default" : "hover:brightness-95 hover:shadow-sm cursor-pointer active:scale-95"
         }`}
       >
         {btnIcon}
         <span className={`text-xs font-bold leading-none ${btnTextColor}`}>{btnLabel}</span>
-        {!locked && <span className="text-xs text-slate-400 leading-none">לחץ לשינוי</span>}
+        {!locked && !isApprovedVacation && <span className="text-xs text-slate-400 leading-none">לחץ לשינוי</span>}
+        {isApprovedVacation && (
+          <span className="text-[10px] text-green-600 font-medium leading-tight">אושר ע״י מנהל</span>
+        )}
         {record?.note?.trim() && (
           <span className="text-[10px] text-indigo-600 font-medium leading-tight max-w-full truncate px-1" title={record.note}>
             {record.note}
@@ -1095,7 +1145,7 @@ function ShiftCell({ date, shiftType, getDayRecord, onMark, onNoteSave, noteSavi
   );
 }
 
-function CombinedShiftGrid({ weekDays, getDayRecord, onMark, onNoteSave, noteSaving, locked, holidayEveDates = [] }) {
+function CombinedShiftGrid({ weekDays, getDayRecord, onMark, onNoteSave, noteSaving, locked, isApprovedVacationDay, holidayEveDates = [] }) {
   return (
     <table className="w-full border-collapse" style={{ tableLayout: "fixed" }}>
       <colgroup>
@@ -1130,6 +1180,17 @@ function CombinedShiftGrid({ weekDays, getDayRecord, onMark, onNoteSave, noteSav
             const dateStr = format(date, "yyyy-MM-dd");
             const isHolidayEve = holidayEveDates.includes(dateStr);
             if (isHolidayEve) {
+              if (isApprovedVacationDay?.(date)) {
+                return (
+                  <td key={dateStr} rowSpan={2} className="px-1 align-middle">
+                    <div className="mx-0.5 my-2 px-1 py-4 rounded-2xl border-2 border-green-300 bg-green-50 flex flex-col items-center justify-center gap-1 opacity-90">
+                      <Palmtree className="w-4 h-4 text-green-600" />
+                      <span className="text-xs font-bold text-green-700 leading-none">חופש מאושר</span>
+                      <span className="text-[10px] text-green-600 leading-tight">אושר ע״י מנהל</span>
+                    </div>
+                  </td>
+                );
+              }
               return (
                 <td key={dateStr} rowSpan={2} className="px-1 align-middle">
                   <div className="mx-0.5 my-2 px-1 py-4 rounded-2xl border-2 border-green-200 bg-green-50 flex flex-col items-center justify-center gap-1">
