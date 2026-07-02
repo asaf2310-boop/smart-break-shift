@@ -456,6 +456,53 @@ export function buildScoreComponents(metricColumns = [], channel = METRICS_CHANN
     : buildPhoneScoreComponents(metricColumns, pointSettings);
 }
 
+function getComponentGroup(key) {
+  switch (key) {
+    case "callsPerHour":
+    case "whatsappPerHour":
+      return "throughput";
+    case "emailPoints":
+    case "writtenWorkPoints":
+      return "writtenWork";
+    case "avgDuration":
+    case "handleTime":
+      return "handlingTime";
+    case "unavailability":
+      return "availability";
+    case "documentation":
+      return "quality";
+    default:
+      return key;
+  }
+}
+
+function getComponentLabel(key) {
+  switch (key) {
+    case "callsPerHour":
+      return "טלפון לשעה";
+    case "whatsappPerHour":
+      return "WhatsApp לשעה";
+    case "documentation":
+      return "תיעוד";
+    case "emailPoints":
+      return "מיילים";
+    case "writtenWorkPoints":
+      return "מיילים+טיקטים";
+    case "avgDuration":
+      return "משך שיחה";
+    case "handleTime":
+      return "זמן טיפול";
+    case "unavailability":
+      return "אי זמינות";
+    default:
+      return key;
+  }
+}
+
+function formatWeightPercent(weight) {
+  return `${Math.round(Number(weight || 0) * 100)}%`;
+}
+
 function scoreAgentRows(agentRows, metricColumns, channel, pointSettings) {
   const components = buildScoreComponents(metricColumns, channel, pointSettings).filter((c) => c.getRaw);
   if (!components.length) {
@@ -513,6 +560,106 @@ export function rankMetricRows(rows = [], columns = [], channel, pointSettings) 
   return scored;
 }
 
+function buildUnifiedScoreEntries({
+  phoneRows = [],
+  phoneColumns = [],
+  whatsappRows = [],
+  whatsappColumns = [],
+  pointSettings,
+} = {}) {
+  const phoneMetricColumns = phoneColumns.slice(1);
+  const whatsappMetricColumns = whatsappColumns.slice(1);
+
+  return [
+    ...phoneRows
+      .filter((row) => !isTeamAverageLabel(row.agent_name || row.agentName))
+      .map((row) => ({
+        row,
+        channel: METRICS_CHANNEL.phone,
+        metricColumns: phoneMetricColumns,
+        components: buildScoreComponents(phoneMetricColumns, METRICS_CHANNEL.phone, pointSettings).filter(
+          (c) => c.getRaw
+        ),
+      })),
+    ...whatsappRows
+      .filter((row) => !isTeamAverageLabel(row.agent_name || row.agentName))
+      .map((row) => ({
+        row,
+        channel: METRICS_CHANNEL.whatsapp,
+        metricColumns: whatsappMetricColumns,
+        components: buildScoreComponents(
+          whatsappMetricColumns,
+          METRICS_CHANNEL.whatsapp,
+          pointSettings
+        ).filter((c) => c.getRaw),
+      })),
+  ];
+}
+
+function scoreUnifiedEntries(entries = []) {
+  if (!entries.length) return [];
+
+  const componentBestByGroup = new Map();
+  for (const entry of entries) {
+    for (const component of entry.components) {
+      const group = getComponentGroup(component.key);
+      const raw = component.getRaw(entry.row);
+      const current = componentBestByGroup.get(group);
+      const best = pickBestValue(
+        [current?.bestValue ?? null, raw],
+        current?.higherIsBetter ?? component.higherIsBetter
+      );
+      componentBestByGroup.set(group, {
+        bestValue: best,
+        higherIsBetter: current?.higherIsBetter ?? component.higherIsBetter,
+      });
+    }
+  }
+
+  const scored = entries.map((entry) => {
+    let compositeScore = 0;
+    const scoreBreakdown = entry.components.map((component) => {
+      const group = getComponentGroup(component.key);
+      const { bestValue, higherIsBetter } = componentBestByGroup.get(group) || {};
+      const raw = component.getRaw(entry.row);
+      const normalized = relativeMetricScore(raw, bestValue, higherIsBetter);
+      const weighted = component.weight * normalized;
+      compositeScore += weighted;
+      return {
+        key: component.key,
+        label: getComponentLabel(component.key),
+        weight: component.weight,
+        raw,
+        normalized,
+        weighted,
+        group,
+      };
+    });
+
+    const breakdownSummary = scoreBreakdown
+      .map(
+        (part) =>
+          `${part.label} ${formatWeightPercent(part.weight)}: ${Math.round(part.weighted)}`
+      )
+      .join(" · ");
+
+    return {
+      ...entry.row,
+      agent_name: entry.row.agent_name || entry.row.agentName,
+      _channel: entry.channel,
+      _compositeScore: compositeScore,
+      _scoreBreakdown: scoreBreakdown,
+      _scoreBreakdownSummary: breakdownSummary,
+    };
+  });
+
+  scored.sort((a, b) => b._compositeScore - a._compositeScore);
+  scored.forEach((row, index) => {
+    row._rank = index + 1;
+  });
+  return scored;
+}
+
 /** תצוגה משולבת — טלפון + WhatsApp באותו מסך, עם דירוג נפרד לכל ערוץ */
 export function rankUnifiedMetricRows({
   phoneRows = [],
@@ -521,20 +668,14 @@ export function rankUnifiedMetricRows({
   whatsappColumns = [],
   pointSettings,
 } = {}) {
-  const phoneRanked = rankMetricRows(
-    phoneRows.filter((r) => !isTeamAverageLabel(r.agent_name || r.agentName)),
+  const entries = buildUnifiedScoreEntries({
+    phoneRows,
     phoneColumns,
-    METRICS_CHANNEL.phone,
-    pointSettings
-  );
-  const whatsappRanked = rankMetricRows(
-    whatsappRows.filter((r) => !isTeamAverageLabel(r.agent_name || r.agentName)),
+    whatsappRows,
     whatsappColumns,
-    METRICS_CHANNEL.whatsapp,
-    pointSettings
-  );
-
-  return [...phoneRanked, ...whatsappRanked];
+    pointSettings,
+  });
+  return scoreUnifiedEntries(entries);
 }
 
 export function mergeDisplayColumns(phoneColumns = [], whatsappColumns = []) {
@@ -548,9 +689,10 @@ export function mergeDisplayColumns(phoneColumns = [], whatsappColumns = []) {
 export function getUnifiedRankingNote(pointSettings) {
   const s = resolvePointSettings(pointSettings);
   return (
-    `טלפון ו-WhatsApp מוצגים באותו מסך, אבל הדירוג מחושב בנפרד לכל ערוץ כדי לא להשוות ישירות בין KPI שונים. ` +
-    `לכל מדד מחשבים ניקוד גולמי (שיחה טלפונית=${s.phoneCall} · WhatsApp=${s.whatsappCall} · מייל=${s.email} · טיקט=${s.ticket}), ` +
-    `מנרמלים ל-0–100 מול הטוב ביותר באותו ערוץ, ומכפילים במשקל. ` +
+    `טלפון ו-WhatsApp מוצגים ומדורגים יחד באותה טבלה. ` +
+    `לכל ערוץ יש KPI שונים, אבל כל רכיב מומר קודם לניקוד גולמי לפי ההגדרות (שיחה טלפונית=${s.phoneCall} · WhatsApp=${s.whatsappCall} · מייל=${s.email} · טיקט=${s.ticket}), ` +
+    `ואז מנורמל ל-0–100 מול הטוב ביותר בקבוצת המדד המקבילה בכלל הערוצים לפני כפל במשקל. ` +
+    `כך לדוגמה רכיב ה-50% של WhatsApp לשעה מושפע מהמכפיל ${s.whatsappCall} ולכן שווה פחות משיחות טלפון כשההגדרה היא חצי. ` +
     `טלפון: 50% שיחות/שעה · 20% תיעוד · 10% מיילים · 10% משך שיחה · 10% אי זמינות. ` +
     `WhatsApp: 50% שיחות/שעה · 30% מיילים+טיקטים · 10% זמן טיפול · 10% אי זמינות.`
   );
@@ -622,62 +764,35 @@ export function debugUnifiedRankingBreakdown({
   pointSettings,
 } = {}) {
   const settings = resolvePointSettings(pointSettings);
-  const phoneAgents = phoneRows.filter((r) => !isTeamAverageLabel(r.agent_name || r.agentName));
-  const waAgents = whatsappRows.filter((r) => !isTeamAverageLabel(r.agent_name || r.agentName));
   const phoneMetricCols = phoneColumns.slice(1);
   const waMetricCols = whatsappColumns.slice(1);
-
-  const entries = [
-    ...phoneAgents.map((row) => ({
-      row,
-      channel: METRICS_CHANNEL.phone,
-      metricColumns: phoneMetricCols,
-      callsCol: findCallsPerHourColumn(phoneMetricCols),
-    })),
-    ...waAgents.map((row) => ({
-      row,
-      channel: METRICS_CHANNEL.whatsapp,
-      metricColumns: waMetricCols,
-      callsCol: findWhatsappPerHourColumn(waMetricCols),
-    })),
-  ];
-
-  const ranked = rankUnifiedMetricRows({
-    phoneRows: phoneAgents,
+  const entries = buildUnifiedScoreEntries({
+    phoneRows,
     phoneColumns,
-    whatsappRows: waAgents,
+    whatsappRows,
     whatsappColumns,
     pointSettings: settings,
   });
+  const ranked = scoreUnifiedEntries(entries);
 
-  return ranked.map((scored) => {
-    const entry = entries.find(
-      (e) => (e.row.agent_name || e.row.agentName) === scored.agent_name
-    );
-    const components = buildScoreComponents(
-      entry?.metricColumns ?? [],
-      scored._channel,
-      settings
-    ).filter((c) => c.getRaw);
-
-    const parts = components.map((comp) => {
-      const raw = comp.getRaw(entry.row);
-      return {
-        key: comp.key,
-        weight: comp.weight,
-        raw,
-        callsColumn: comp.key === "callsPerHour" || comp.key === "whatsappPerHour" ? entry?.callsCol : undefined,
-      };
-    });
-
-    return {
-      agent: scored.agent_name,
-      channel: scored._channel,
-      rank: scored._rank,
-      compositeScore: scored._compositeScore,
-      callsColumn: entry?.callsCol ?? null,
-      components: parts,
-      pointSettings: settings,
-    };
-  });
+  return ranked.map((scored) => ({
+    agent: scored.agent_name,
+    channel: scored._channel,
+    rank: scored._rank,
+    compositeScore: scored._compositeScore,
+    callsColumn:
+      scored._channel === METRICS_CHANNEL.whatsapp
+        ? findWhatsappPerHourColumn(waMetricCols)
+        : findCallsPerHourColumn(phoneMetricCols),
+    components: (scored._scoreBreakdown || []).map((part) => ({
+      key: part.key,
+      label: part.label,
+      weight: part.weight,
+      raw: part.raw,
+      normalized: part.normalized,
+      weighted: part.weighted,
+      group: part.group,
+    })),
+    pointSettings: settings,
+  }));
 }

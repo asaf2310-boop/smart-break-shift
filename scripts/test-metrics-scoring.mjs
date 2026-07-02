@@ -1,6 +1,6 @@
 /**
  * Run: npx vite-node scripts/test-metrics-scoring.mjs
- * Verifies channel-safe ranking — no direct phone vs WhatsApp comparison.
+ * Verifies unified cross-channel ranking with channel-specific weights.
  */
 import {
   findCallsPerHourColumn,
@@ -63,17 +63,35 @@ const ranked = rankUnifiedMetricRows({
   pointSettings: settings,
 });
 
-console.log("\n=== Unified view keeps channel-local ranking ===");
+console.log("\n=== Unified ranking across channels ===");
 for (const r of ranked) {
   console.log(`  #${r._rank} ${r.agent_name} (${r._channel}) → ${r._compositeScore.toFixed(2)}`);
 }
 
 const phoneRankOk = ranked.find((r) => r.agent_name === "נציג טלפון")?._rank === 1;
-const waRankOk = ranked.find((r) => r.agent_name === "נציגת ווטסאפ")?._rank === 1;
+const waRankOk = ranked.find((r) => r.agent_name === "נציגת ווטסאפ")?._rank === 2;
 console.log(
   phoneRankOk && waRankOk
-    ? "\n✓ PASS: each channel keeps its own #1"
-    : "\n✗ FAIL: cross-channel ranking still leaks"
+    ? "\n✓ PASS: unified ranking orders channels together"
+    : "\n✗ FAIL: unified ranking is incorrect"
+);
+
+const phoneThroughput = ranked.find((r) => r.agent_name === "נציג טלפון")?._scoreBreakdown?.find(
+  (part) => part.key === "callsPerHour"
+);
+const waThroughput = ranked.find((r) => r.agent_name === "נציגת ווטסאפ")?._scoreBreakdown?.find(
+  (part) => part.key === "whatsappPerHour"
+);
+const halfWeightApplied =
+  phoneThroughput &&
+  waThroughput &&
+  waThroughput.weighted < phoneThroughput.weighted &&
+  Math.round(waThroughput.weighted) === 30 &&
+  Math.round(phoneThroughput.weighted) === 50;
+console.log(
+  halfWeightApplied
+    ? "✓ PASS: WhatsApp throughput contributes less than phone throughput"
+    : "✗ FAIL: WhatsApp throughput is not discounted by point settings"
 );
 
 const phoneRowBad = {
@@ -123,4 +141,4 @@ console.log(
   )
 );
 
-if (!phoneRankOk || !waRankOk || !fixedEmptyCol) process.exit(1);
+if (!phoneRankOk || !waRankOk || !halfWeightApplied || !fixedEmptyCol) process.exit(1);

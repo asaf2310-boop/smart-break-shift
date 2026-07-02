@@ -34,7 +34,7 @@ export default function AgentMetricsPage() {
         </div>
         <p className="text-sm text-slate-500">
           {agentName ? `מחובר כ־${agentName}` : "יש להתחבר כנציג"}
-          {hasAnyData && " · דירוג לפי ערוץ"}
+          {hasAnyData && " · דירוג מאוחד"}
         </p>
       </motion.div>
 
@@ -67,14 +67,14 @@ export default function AgentMetricsPage() {
               <p>{unified.rankingNote}</p>
             </div>
             <p className="text-xs text-slate-500 leading-relaxed">
-              הכל מוצג בטבלה אחת. עמודת דירוג בערוץ משווה רק מול נציגים מאותו ערוץ; המוביל בכל ערוץ מסומן בצהוב והשורה שלך בירוק.
+              הכל מוצג בטבלה אחת ומדורג לפי ציון משוקלל אחיד. מעבר עכבר על עמודת הציון מציג את פירוט התרומה של כל מדד; המוביל מסומן בצהוב והשורה שלך בירוק.
             </p>
             <AgentMetricsTable
               columns={unified.displayColumns}
               rows={unified.rankedRows}
               highlightAgentName={agentName}
               showRank
-              rankLabel="דירוג בערוץ"
+              rankLabel="דירוג"
               showChannel
               showCompositeScore
             />

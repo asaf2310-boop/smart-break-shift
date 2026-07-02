@@ -156,6 +156,7 @@ export default function AgentMetricsTable({
                       "px-1 py-1.5 font-bold bg-violet-50/50 text-center",
                       isLeader ? "text-amber-800" : "text-violet-800"
                     )}
+                    title={row._scoreBreakdownSummary || undefined}
                   >
                     {formatCompositeScore(row._compositeScore)}
                   </td>

@@ -231,7 +231,8 @@ export default function AdminMetricsPanel() {
 
       <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-950 leading-relaxed">
         העלו קובץ Excel לכל ערוץ בנפרד — <strong>טלפון</strong> ו-<strong>WhatsApp</strong>.
-        כל הערוצים מוצגים אחר כך באותה טבלה, אבל הדירוג מחושב בתוך כל ערוץ בלבד.
+        כל הערוצים מוצגים אחר כך באותה טבלה ומקבלים דירוג משותף,
+        אבל לכל ערוץ נשמרת נוסחת KPI ומשקולות משלו.
         שמירה מחליפה רק את הדיווח של אותו ערוץ.
       </div>
 
@@ -286,7 +287,7 @@ export default function AdminMetricsPanel() {
             1. ניקוד גולמי לכל פעולה (שיחה / WhatsApp / מייל / טיקט) לפי ההגדרות למעלה
           </p>
           <p className="text-xs">
-            2. נרמול כל מדד ל-0–100 מול הטוב ביותר בחודש
+            2. נרמול כל מדד ל-0–100 מול הטוב ביותר בקבוצת המדד בכלל הערוצים
           </p>
           <p className="text-xs">
             3. כפל במשקל האחוזי וסיכום לציון סופי

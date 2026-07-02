@@ -41,7 +41,7 @@ export default function AgentMetricsRankingPage() {
           </div>
           <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">ציון משוקלל</h1>
         </div>
-        <p className="text-sm text-slate-500">דירוג חודשי לפי ערוץ — טלפון ו-WhatsApp</p>
+        <p className="text-sm text-slate-500">דירוג חודשי מאוחד — טלפון ו-WhatsApp</p>
       </motion.div>
 
       <motion.div
@@ -73,7 +73,7 @@ export default function AgentMetricsRankingPage() {
                 {myPhoneRow && (
                   <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-sm">
                     <span className="text-teal-900">
-                      המיקום שלך בטלפון: <strong>#{myPhoneRow._rank}</strong> מתוך {phone.rankedRows.length}
+                      המיקום שלך בטלפון: <strong>#{myPhoneRow._rank}</strong> מתוך {unified.rankedRows.length}
                     </span>
                     <span className="font-bold text-teal-800">
                       ציון: {formatCompositeScore(myPhoneRow._compositeScore)}
@@ -83,7 +83,7 @@ export default function AgentMetricsRankingPage() {
                 {myWhatsappRow && (
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-sm">
                     <span className="text-emerald-900">
-                      המיקום שלך ב-WhatsApp: <strong>#{myWhatsappRow._rank}</strong> מתוך {whatsapp.rankedRows.length}
+                      המיקום שלך ב-WhatsApp: <strong>#{myWhatsappRow._rank}</strong> מתוך {unified.rankedRows.length}
                     </span>
                     <span className="font-bold text-emerald-800">
                       ציון: {formatCompositeScore(myWhatsappRow._compositeScore)}
@@ -95,14 +95,14 @@ export default function AgentMetricsRankingPage() {
 
             <div className="space-y-2">
               <p className="text-xs text-slate-500 leading-relaxed">
-                כל הנציגים מופיעים באותה טבלה, אבל עמודת דירוג בערוץ נשארת נפרדת לטלפון ול-WhatsApp.
+                כל הנציגים מופיעים באותה טבלה ומדורגים לפי ציון משוקלל אחיד. מעבר עכבר על עמודת הציון מציג את פירוט התרומה של כל מדד.
               </p>
               <AgentMetricsTable
                 columns={unified.displayColumns}
                 rows={unified.rankedRows}
                 highlightAgentName={agentName}
                 showRank
-                rankLabel="דירוג בערוץ"
+                rankLabel="דירוג"
                 showChannel
                 showCompositeScore
                 hideMetricColumns
