@@ -2,9 +2,16 @@ import React, { useMemo, useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, eachDayOfInterval } from "date-fns";
 import { motion } from "framer-motion";
-import { Palmtree, SendHorizonal, Check, X, Trash2 } from "lucide-react";
+import { Palmtree, SendHorizonal, Check, X, Trash2, Plus } from "lucide-react";
 import { dataClient } from "@/api/client";
 import { useToast } from "@/components/ui/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import {
   parseDateStrLocal,
   getVacationRequestDateBounds,
@@ -51,6 +58,7 @@ export default function VacationRequestPanel({
     ]
   );
 
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [dateFrom, setDateFrom] = useState(minDate);
   const [dateTo, setDateTo] = useState(minDate);
   const [note, setNote] = useState("");
@@ -89,6 +97,7 @@ export default function VacationRequestPanel({
     onSuccess: (created) => {
       invalidateVacationQueries();
       setNote("");
+      setDialogOpen(false);
       toast({
         title: "✓ בקשת החופש נשלחה",
         description:
@@ -216,57 +225,82 @@ export default function VacationRequestPanel({
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <label className="block">
-            <span className="text-xs font-semibold text-slate-600 mb-1.5 block">מ</span>
-            <input
-              type="date"
-              value={dateFrom}
-              min={minDate}
-              max={maxDate}
-              onChange={(e) => {
-                const next = e.target.value;
-                setDateFrom(next);
-                if (dateTo < next) setDateTo(next);
-              }}
-              className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-xl px-3 py-2.5 shadow-sm outline-none focus:border-orange-400"
-            />
-          </label>
-          <label className="block">
-            <span className="text-xs font-semibold text-slate-600 mb-1.5 block">עד</span>
-            <input
-              type="date"
-              value={dateTo}
-              min={dateFrom || minDate}
-              max={maxDate}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-xl px-3 py-2.5 shadow-sm outline-none focus:border-orange-400"
-            />
-          </label>
-        </div>
-
-        <label className="block">
-          <span className="text-xs font-semibold text-slate-600 mb-1.5 block">הערה (אופציונלי)</span>
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="סיבה לחופש..."
-            rows={2}
-            maxLength={280}
-            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-orange-400 resize-none text-right"
-          />
-        </label>
-
+      <div className="p-4 sm:p-6">
         <button
-          type="submit"
-          disabled={createMutation.isPending}
-          className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-2xl bg-gradient-to-r from-orange-400 to-amber-500 text-white text-sm font-bold shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 transition-all disabled:opacity-50"
+          type="button"
+          onClick={() => setDialogOpen(true)}
+          className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-orange-400 to-amber-500 text-white text-sm font-bold shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 transition-all"
         >
-          <SendHorizonal className="w-4 h-4" />
-          {createMutation.isPending ? "שולח..." : "שלח בקשה"}
+          <Plus className="w-4 h-4" />
+          הגשת בקשה לחופש
         </button>
-      </form>
+      </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-right">
+              <Palmtree className="w-5 h-5 text-orange-500" />
+              הגשת בקשה לחופש
+            </DialogTitle>
+            <DialogDescription className="text-right text-xs">
+              החל מ-{formatDisplayDate(minDate)} · לאחר השיבוץ שכבר פורסם
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="block">
+                <span className="text-xs font-semibold text-slate-600 mb-1.5 block">מ</span>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  min={minDate}
+                  max={maxDate}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setDateFrom(next);
+                    if (dateTo < next) setDateTo(next);
+                  }}
+                  className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-xl px-3 py-2.5 shadow-sm outline-none focus:border-orange-400"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-semibold text-slate-600 mb-1.5 block">עד</span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  min={dateFrom || minDate}
+                  max={maxDate}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="w-full text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-xl px-3 py-2.5 shadow-sm outline-none focus:border-orange-400"
+                />
+              </label>
+            </div>
+
+            <label className="block">
+              <span className="text-xs font-semibold text-slate-600 mb-1.5 block">הערה (אופציונלי)</span>
+              <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="סיבה לחופש..."
+                rows={2}
+                maxLength={280}
+                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-orange-400 resize-none text-right"
+              />
+            </label>
+
+            <button
+              type="submit"
+              disabled={createMutation.isPending}
+              className="w-full flex items-center justify-center gap-2 px-6 py-2.5 rounded-2xl bg-gradient-to-r from-orange-400 to-amber-500 text-white text-sm font-bold shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 transition-all disabled:opacity-50"
+            >
+              <SendHorizonal className="w-4 h-4" />
+              {createMutation.isPending ? "שולח..." : "שלח בקשה"}
+            </button>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {groupedRequests.length > 0 && (
         <div className="px-4 sm:px-6 pb-5 space-y-2 border-t border-orange-50 pt-4">
