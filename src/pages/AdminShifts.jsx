@@ -21,6 +21,7 @@ import {
 import AutoScheduleBuilder from "../components/shifts/AutoScheduleBuilder";
 import PublishedScheduleEditor from "../components/shifts/PublishedScheduleEditor";
 import VacationApprovalPanel from "../components/admin/VacationApprovalPanel";
+import ApprovedVacationsDialog from "../components/admin/ApprovedVacationsDialog";
 import BackendConfigBanner from "@/components/BackendConfigBanner";
 import { getLiveQueryOptions } from "@/lib/liveQuery";
 import ScheduleSmsLog from "@/components/admin/ScheduleSmsLog";
@@ -128,6 +129,10 @@ export default function AdminShifts() {
               {format(addDays(weekStart, 7), "dd/MM")}–{format(addDays(weekStart, 11), "dd/MM")}
             </span>
           </button>
+        </div>
+
+        <div className="flex justify-center mb-4">
+          <ApprovedVacationsDialog />
         </div>
 
         <VacationApprovalPanel />

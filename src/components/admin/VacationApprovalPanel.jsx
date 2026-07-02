@@ -53,6 +53,7 @@ export default function VacationApprovalPanel() {
       queryClient.invalidateQueries({ queryKey: ["all-vac-view"] });
       queryClient.invalidateQueries({ queryKey: ["vacation-requests"] });
       queryClient.invalidateQueries({ queryKey: ["vacation-requests-builder"] });
+      queryClient.invalidateQueries({ queryKey: ["vacation-requests-admin", "all-approved"] });
       toast({
         title: status === "approved" ? "✓ החופש אושר" : "הבקשה נדחתה",
       });
