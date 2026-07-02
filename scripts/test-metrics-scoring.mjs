@@ -1,6 +1,6 @@
 /**
  * Run: npx vite-node scripts/test-metrics-scoring.mjs
- * Verifies unified ranking — phone 2× call weight vs WhatsApp.
+ * Verifies channel-safe ranking — no direct phone vs WhatsApp comparison.
  */
 import {
   findCallsPerHourColumn,
@@ -63,13 +63,18 @@ const ranked = rankUnifiedMetricRows({
   pointSettings: settings,
 });
 
-console.log("\n=== Ranking: phone 10/hr (raw 10) vs WA 12/hr (raw 6) ===");
+console.log("\n=== Unified view keeps channel-local ranking ===");
 for (const r of ranked) {
   console.log(`  #${r._rank} ${r.agent_name} (${r._channel}) → ${r._compositeScore.toFixed(2)}`);
 }
 
-const phoneFirst = ranked[0]?.agent_name === "נציג טלפון";
-console.log(phoneFirst ? "\n✓ PASS: phone agent ranks first" : "\n✗ FAIL: WhatsApp still first");
+const phoneRankOk = ranked.find((r) => r.agent_name === "נציג טלפון")?._rank === 1;
+const waRankOk = ranked.find((r) => r.agent_name === "נציגת ווטסאפ")?._rank === 1;
+console.log(
+  phoneRankOk && waRankOk
+    ? "\n✓ PASS: each channel keeps its own #1"
+    : "\n✗ FAIL: cross-channel ranking still leaks"
+);
 
 const phoneRowBad = {
   agent_name: "טלפון עמודה ריקה קודמת",
@@ -99,7 +104,8 @@ console.log(
 for (const r of rankedBad) {
   console.log(`  #${r._rank} ${r.agent_name} → ${r._compositeScore.toFixed(2)}`);
 }
-const fixedEmptyCol = rankedBad[0]?.agent_name === "טלפון עמודה ריקה קודמת";
+const fixedEmptyCol =
+  rankedBad.find((r) => r.agent_name === "טלפון עמודה ריקה קודמת")?._rank === 1;
 console.log(fixedEmptyCol ? "✓ PASS: uses ממוצע שיחה בשעה despite empty col first" : "✗ FAIL");
 
 console.log("\n=== Breakdown sample ===");
@@ -117,4 +123,4 @@ console.log(
   )
 );
 
-if (!phoneFirst || !fixedEmptyCol) process.exit(1);
+if (!phoneRankOk || !waRankOk || !fixedEmptyCol) process.exit(1);

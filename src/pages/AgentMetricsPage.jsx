@@ -1,9 +1,9 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { BarChart3, Loader2 } from "lucide-react";
-import AgentMetricsTable from "@/components/metrics/AgentMetricsTable";
 import BackendConfigBanner from "@/components/BackendConfigBanner";
 import HypPageLayout from "@/components/hyp/HypPageLayout";
+import MetricsChannelSection from "@/components/metrics/MetricsChannelSection";
 import { hypHeaderIconClass } from "@/lib/hypPage";
 import { useAgentMetricsSnapshots } from "@/hooks/useAgentMetricsSnapshot";
 import { useAgentSession } from "@/hooks/useAgentSession";
@@ -12,7 +12,7 @@ import { getStoredAgentName } from "@/constants/scheduling";
 export default function AgentMetricsPage() {
   const { displayName } = useAgentSession();
   const agentName = displayName || getStoredAgentName();
-  const { loading, unified, hasAnyData } = useAgentMetricsSnapshots();
+  const { loading, phone, whatsapp, unified, hasAnyData } = useAgentMetricsSnapshots();
 
   return (
     <HypPageLayout variant="scheduling" contentClassName="max-w-[min(100%,80rem)] px-3 sm:px-4 py-8">
@@ -34,7 +34,7 @@ export default function AgentMetricsPage() {
         </div>
         <p className="text-sm text-slate-500">
           {agentName ? `מחובר כ־${agentName}` : "יש להתחבר כנציג"}
-          {hasAnyData && " · דירוג חודשי מאוחד (טלפון + WhatsApp)"}
+          {hasAnyData && " · דירוג לפי ערוץ"}
         </p>
       </motion.div>
 
@@ -67,17 +67,24 @@ export default function AgentMetricsPage() {
               <p>{unified.rankingNote}</p>
             </div>
             <p className="text-xs text-slate-500 leading-relaxed">
-              טבלה אחת לכל הנציגים. הנציג המוביל מסומן בצהוב; השורה שלך בירוק.
+              כל ערוץ מדורג מול עצמו בלבד. הנציג המוביל בכל ערוץ מסומן בצהוב; השורה שלך בירוק.
             </p>
-            <AgentMetricsTable
-              columns={unified.displayColumns}
-              rows={unified.rankedRows}
-              highlightAgentName={agentName}
-              showRank
-              showChannel
-              showCompositeScore
-              highlightLeader
-            />
+            <div className="grid gap-4 xl:grid-cols-2">
+              <MetricsChannelSection
+                channel="phone"
+                view={phone}
+                highlightAgentName={agentName}
+                showRank
+                showCompositeScore
+              />
+              <MetricsChannelSection
+                channel="whatsapp"
+                view={whatsapp}
+                highlightAgentName={agentName}
+                showRank
+                showCompositeScore
+              />
+            </div>
           </>
         )}
       </motion.div>

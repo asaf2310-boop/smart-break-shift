@@ -1,7 +1,7 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { Loader2, Trophy } from "lucide-react";
-import AgentMetricsTable from "@/components/metrics/AgentMetricsTable";
+import MetricsChannelSection from "@/components/metrics/MetricsChannelSection";
 import MetricsSubNav from "@/components/metrics/MetricsSubNav";
 import BackendConfigBanner from "@/components/BackendConfigBanner";
 import HypPageLayout from "@/components/hyp/HypPageLayout";
@@ -14,9 +14,12 @@ import { getStoredAgentName } from "@/constants/scheduling";
 export default function AgentMetricsRankingPage() {
   const { displayName } = useAgentSession();
   const agentName = displayName || getStoredAgentName();
-  const { loading, unified, hasAnyData } = useAgentMetricsSnapshots();
+  const { loading, phone, whatsapp, unified, hasAnyData } = useAgentMetricsSnapshots();
 
-  const myRow = unified.rankedRows.find(
+  const myPhoneRow = phone.rankedRows.find(
+    (r) => String(r.agent_name || "").trim() === String(agentName || "").trim()
+  );
+  const myWhatsappRow = whatsapp.rankedRows.find(
     (r) => String(r.agent_name || "").trim() === String(agentName || "").trim()
   );
 
@@ -38,7 +41,7 @@ export default function AgentMetricsRankingPage() {
           </div>
           <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">ציון משוקלל</h1>
         </div>
-        <p className="text-sm text-slate-500">דירוג חודשי מאוחד — טלפון ו-WhatsApp</p>
+        <p className="text-sm text-slate-500">דירוג חודשי לפי ערוץ — טלפון ו-WhatsApp</p>
       </motion.div>
 
       <motion.div
@@ -65,27 +68,49 @@ export default function AgentMetricsRankingPage() {
               <p className="text-violet-900/90 text-xs sm:text-sm">{unified.rankingNote}</p>
             </div>
 
-            {myRow && (
-              <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-sm">
-                <span className="text-teal-900">
-                  המיקום שלך: <strong>#{myRow._rank}</strong> מתוך {unified.rankedRows.length}
-                </span>
-                <span className="font-bold text-teal-800">
-                  ציון: {formatCompositeScore(myRow._compositeScore)}
-                </span>
+            {(myPhoneRow || myWhatsappRow) && (
+              <div className="grid gap-3 lg:grid-cols-2">
+                {myPhoneRow && (
+                  <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-sm">
+                    <span className="text-teal-900">
+                      המיקום שלך בטלפון: <strong>#{myPhoneRow._rank}</strong> מתוך {phone.rankedRows.length}
+                    </span>
+                    <span className="font-bold text-teal-800">
+                      ציון: {formatCompositeScore(myPhoneRow._compositeScore)}
+                    </span>
+                  </div>
+                )}
+                {myWhatsappRow && (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-sm">
+                    <span className="text-emerald-900">
+                      המיקום שלך ב-WhatsApp: <strong>#{myWhatsappRow._rank}</strong> מתוך {whatsapp.rankedRows.length}
+                    </span>
+                    <span className="font-bold text-emerald-800">
+                      ציון: {formatCompositeScore(myWhatsappRow._compositeScore)}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 
-            <AgentMetricsTable
-              columns={unified.displayColumns}
-              rows={unified.rankedRows}
-              highlightAgentName={agentName}
-              showRank
-              showChannel
-              showCompositeScore
-              highlightLeader
-              hideMetricColumns
-            />
+            <div className="grid gap-4 xl:grid-cols-2">
+              <MetricsChannelSection
+                channel="phone"
+                view={phone}
+                highlightAgentName={agentName}
+                showRank
+                showCompositeScore
+                hideMetricColumns
+              />
+              <MetricsChannelSection
+                channel="whatsapp"
+                view={whatsapp}
+                highlightAgentName={agentName}
+                showRank
+                showCompositeScore
+                hideMetricColumns
+              />
+            </div>
           </>
         )}
       </motion.div>

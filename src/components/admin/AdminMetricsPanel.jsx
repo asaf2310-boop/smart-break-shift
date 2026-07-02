@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import AgentMetricsTable from "@/components/metrics/AgentMetricsTable";
+import MetricsChannelSection from "@/components/metrics/MetricsChannelSection";
 import MetricsPointSettingsPanel from "@/components/admin/MetricsPointSettingsPanel";
 import {
   clearAllMetrics,
@@ -20,15 +21,7 @@ import {
 import { filterMetricsColumns } from "@/lib/agentMetricsFormat";
 import { isTeamAverageLabel } from "@/lib/agentMetricsImport";
 import { loadMetricsPointSettings } from "@/lib/agentMetricsPointSettings";
-import {
-  getChannelLabel,
-  getMetricsRankingNote,
-  getUnifiedRankingNote,
-  mergeDisplayColumns,
-  METRICS_CHANNEL,
-  rankMetricRows,
-  rankUnifiedMetricRows,
-} from "@/lib/agentMetricsScoring";
+import { getChannelLabel, getMetricsRankingNote, METRICS_CHANNEL, rankMetricRows } from "@/lib/agentMetricsScoring";
 
 function buildRankedPreview(preview, pointSettings) {
   if (!preview?.rows?.length) return [];
@@ -43,26 +36,6 @@ function buildRankedPreview(preview, pointSettings) {
     preview.channel,
     pointSettings
   );
-}
-
-function buildUnifiedSaved(snapshots, pointSettings) {
-  const phoneColumns = filterMetricsColumns(snapshots.phone?.columns || []);
-  const whatsappColumns = filterMetricsColumns(snapshots.whatsapp?.columns || []);
-  const phoneAgents = (snapshots.phone?.rows || []).filter((r) => !isTeamAverageLabel(r.agent_name));
-  const waAgents = (snapshots.whatsapp?.rows || []).filter((r) => !isTeamAverageLabel(r.agent_name));
-
-  return {
-    displayColumns: mergeDisplayColumns(phoneColumns, whatsappColumns),
-    rankedRows: rankUnifiedMetricRows({
-      phoneRows: phoneAgents,
-      phoneColumns,
-      whatsappRows: waAgents,
-      whatsappColumns,
-      pointSettings,
-    }),
-    rankingNote: getUnifiedRankingNote(pointSettings),
-    hasData: Boolean(phoneAgents.length || waAgents.length),
-  };
 }
 
 export default function AdminMetricsPanel() {
@@ -126,11 +99,6 @@ export default function AdminMetricsPanel() {
         ? getMetricsRankingNote(previewColumns, preview.channel, pointSettings)
         : "",
     [preview, previewColumns, pointSettings]
-  );
-
-  const unifiedSavedView = useMemo(
-    () => buildUnifiedSaved(snapshots, pointSettings),
-    [snapshots, pointSettings]
   );
 
   const handleFileChange = async (event) => {
@@ -244,7 +212,7 @@ export default function AdminMetricsPanel() {
 
       <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-950 leading-relaxed">
         העלו קובץ Excel לכל ערוץ בנפרד — <strong>טלפון</strong> ו-<strong>WhatsApp</strong>.
-        הדירוג מוצג ב<strong>טבלה מאוחדת אחת</strong>. שמירה מחליפה רק את הדיווח של אותו ערוץ.
+        כל ערוץ מדורג מול עצמו בלבד. שמירה מחליפה רק את הדיווח של אותו ערוץ.
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -388,14 +356,50 @@ export default function AdminMetricsPanel() {
             <Loader2 className="h-4 w-4 animate-spin" />
             טוען...
           </div>
-        ) : unifiedSavedView.hasData ? (
-          <div className="space-y-3">
-            <p className="text-xs text-slate-500">{unifiedSavedView.rankingNote}</p>
-            <AgentMetricsTable
-              columns={unifiedSavedView.displayColumns}
-              rows={unifiedSavedView.rankedRows}
+        ) : snapshots.phone?.upload || snapshots.whatsapp?.upload ? (
+          <div className="grid gap-4 xl:grid-cols-2">
+            <MetricsChannelSection
+              channel="phone"
+              view={{
+                snapshot: snapshots.phone,
+                displayColumns: filterMetricsColumns(snapshots.phone?.columns || []),
+                rankedRows: rankMetricRows(
+                  (snapshots.phone?.rows || []).filter((r) => !isTeamAverageLabel(r.agent_name)),
+                  filterMetricsColumns(snapshots.phone?.columns || []),
+                  METRICS_CHANNEL.phone,
+                  pointSettings
+                ),
+                teamSummary: snapshots.phone?.upload?.team_summary || null,
+                rankingNote: getMetricsRankingNote(
+                  filterMetricsColumns(snapshots.phone?.columns || []),
+                  METRICS_CHANNEL.phone,
+                  pointSettings
+                ),
+                hasData: Boolean(snapshots.phone?.upload),
+              }}
               showRank
-              showChannel
+              showCompositeScore
+            />
+            <MetricsChannelSection
+              channel="whatsapp"
+              view={{
+                snapshot: snapshots.whatsapp,
+                displayColumns: filterMetricsColumns(snapshots.whatsapp?.columns || []),
+                rankedRows: rankMetricRows(
+                  (snapshots.whatsapp?.rows || []).filter((r) => !isTeamAverageLabel(r.agent_name)),
+                  filterMetricsColumns(snapshots.whatsapp?.columns || []),
+                  METRICS_CHANNEL.whatsapp,
+                  pointSettings
+                ),
+                teamSummary: snapshots.whatsapp?.upload?.team_summary || null,
+                rankingNote: getMetricsRankingNote(
+                  filterMetricsColumns(snapshots.whatsapp?.columns || []),
+                  METRICS_CHANNEL.whatsapp,
+                  pointSettings
+                ),
+                hasData: Boolean(snapshots.whatsapp?.upload),
+              }}
+              showRank
               showCompositeScore
             />
           </div>
