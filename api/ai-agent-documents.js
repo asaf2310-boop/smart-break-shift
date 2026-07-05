@@ -10,6 +10,9 @@ import {
   deleteAiAgentDocument,
 } from "../server/ai-agent/documentIngestService.js";
 import {
+  AI_AGENT_SCHEMA_MIGRATION_MESSAGE_HE,
+} from "../server/ai-agent/schemaErrors.js";
+import {
   checkRateLimit,
   getRateLimitKey,
   rateLimitHebrewMessage,
@@ -77,7 +80,12 @@ export default async function handler(req, res) {
 
     const { documents, error } = await listAiAgentDocuments();
     if (error === "schema_not_migrated") {
-      return json(res, 503, { error, message: "הריצו supabase/ai_agent_documents.sql" }, req);
+      return json(
+        res,
+        503,
+        { error, message: AI_AGENT_SCHEMA_MIGRATION_MESSAGE_HE },
+        req,
+      );
     }
     if (error) return json(res, 500, { error }, req);
     return json(res, 200, { documents }, req);
@@ -124,7 +132,18 @@ export default async function handler(req, res) {
     const result = await ingestAiAgentDocument({ title, content, fileName, mimeType });
     if (!result.ok) {
       const status = result.error === "schema_not_migrated" ? 503 : 400;
-      return json(res, status, { error: result.error }, req);
+      return json(
+        res,
+        status,
+        {
+          error: result.error,
+          message:
+            result.error === "schema_not_migrated"
+              ? AI_AGENT_SCHEMA_MIGRATION_MESSAGE_HE
+              : undefined,
+        },
+        req,
+      );
     }
     return json(res, 200, result, req);
   }

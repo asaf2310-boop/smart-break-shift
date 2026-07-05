@@ -18,6 +18,34 @@ import {
   fetchAiAgentDocuments,
   ingestAiAgentDocument,
 } from "@/lib/aiAgentDocumentsClient";
+import {
+  AI_AGENT_DOCUMENTS_MIGRATION_FILE,
+  AI_AGENT_SCHEMA_MIGRATION_MESSAGE_HE,
+  AI_AGENT_SCHEMA_MIGRATION_STEPS_HE,
+  formatAiAgentSchemaError,
+} from "@/lib/aiAgentMigrationHint";
+
+function SchemaMigrationAlert({ steps = AI_AGENT_SCHEMA_MIGRATION_STEPS_HE }) {
+  return (
+    <div
+      className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 space-y-2"
+      role="alert"
+    >
+      <p className="font-semibold">{AI_AGENT_SCHEMA_MIGRATION_MESSAGE_HE}</p>
+      <ol className="list-decimal list-inside space-y-1 text-amber-800">
+        {steps.map((step) => (
+          <li key={step}>{step}</li>
+        ))}
+      </ol>
+      <p className="text-xs text-amber-700 pt-1">
+        קובץ המיגרציה:{" "}
+        <code className="bg-amber-100/80 px-1.5 py-0.5 rounded font-mono">
+          {AI_AGENT_DOCUMENTS_MIGRATION_FILE}
+        </code>
+      </p>
+    </div>
+  );
+}
 
 function StatusRow({ label, ok, detail }) {
   return (
@@ -69,8 +97,8 @@ export default function AiAgentAdminPanel() {
       const docs = await fetchAiAgentDocuments();
       setDocuments(docs);
     } catch (err) {
-      if (err?.code === "schema_not_migrated") {
-        setDocsError("טבלאות המסמכים חסרות — הריצו supabase/ai_agent_documents.sql");
+      if (isAiAgentSchemaNotMigratedCode(err?.code)) {
+        setDocsError(AI_AGENT_SCHEMA_MIGRATION_MESSAGE_HE);
       } else {
         setDocsError(err?.message || "לא ניתן לטעון מסמכים");
       }
@@ -140,7 +168,7 @@ export default function AiAgentAdminPanel() {
       );
       await loadDocuments();
     } catch (err) {
-      setUploadMessage(err?.message || "שגיאה בהעלאת המסמך");
+      setUploadMessage(formatAiAgentSchemaError(err) || "שגיאה בהעלאת המסמך");
     } finally {
       setUploading(false);
     }
@@ -159,6 +187,11 @@ export default function AiAgentAdminPanel() {
     }
   }
 
+  const documentsSchemaMissing =
+    status?.documents?.schemaOk === false ||
+    docsError === AI_AGENT_SCHEMA_MIGRATION_MESSAGE_HE;
+
+  const migrationSteps = status?.documents?.migrationSteps || AI_AGENT_SCHEMA_MIGRATION_STEPS_HE;
   const moduleLabel = AGENT_MODULES.ai_agent?.label || "סוכן AI";
 
   return (
@@ -175,6 +208,10 @@ export default function AiAgentAdminPanel() {
           </Link>
         </p>
       </section>
+
+      {documentsSchemaMissing ? (
+        <SchemaMigrationAlert steps={migrationSteps} />
+      ) : null}
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between gap-3 mb-4">
@@ -205,15 +242,21 @@ export default function AiAgentAdminPanel() {
         </p>
 
         {uploadMessage ? (
-          <p
-            className={`text-sm mb-4 rounded-xl px-4 py-3 border ${
-              uploadMessage.includes("שגיאה") || uploadMessage.includes("לא")
-                ? "text-amber-800 bg-amber-50 border-amber-200"
-                : "text-emerald-800 bg-emerald-50 border-emerald-200"
-            }`}
-          >
-            {uploadMessage}
-          </p>
+          uploadMessage === AI_AGENT_SCHEMA_MIGRATION_MESSAGE_HE ? (
+            <div className="mb-4">
+              <SchemaMigrationAlert steps={migrationSteps} />
+            </div>
+          ) : (
+            <p
+              className={`text-sm mb-4 rounded-xl px-4 py-3 border ${
+                uploadMessage.includes("שגיאה") || uploadMessage.includes("לא")
+                  ? "text-amber-800 bg-amber-50 border-amber-200"
+                  : "text-emerald-800 bg-emerald-50 border-emerald-200"
+              }`}
+            >
+              {uploadMessage}
+            </p>
+          )
         ) : null}
 
         {docsLoading ? (
@@ -222,9 +265,13 @@ export default function AiAgentAdminPanel() {
             טוען מסמכים...
           </div>
         ) : docsError ? (
-          <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-            {docsError}
-          </p>
+          docsError === AI_AGENT_SCHEMA_MIGRATION_MESSAGE_HE ? (
+            <SchemaMigrationAlert steps={migrationSteps} />
+          ) : (
+            <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+              {docsError}
+            </p>
+          )
         ) : documents.length === 0 ? (
           <p className="text-sm text-slate-500 py-6 text-center border border-dashed border-slate-200 rounded-xl">
             אין מסמכים עדיין — העלו PDF או TXT כדי שהסוכן יוכל לשלוף מהם ידע.
@@ -296,7 +343,7 @@ export default function AiAgentAdminPanel() {
               detail={
                 status.documents?.schemaOk !== false
                   ? `${status.documents?.count ?? 0} מסמכים`
-                  : "טבלאות חסרות"
+                  : "טבלאות חסרות — ראו הוראות למעלה"
               }
             />
             <StatusRow

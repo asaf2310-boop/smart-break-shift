@@ -6,16 +6,13 @@ import { chunkDocument } from "../knowledge/chunkingService.js";
 import { normalizeExtractedDocumentText } from "../knowledge/textExtractionNormalize.js";
 import { buildEmbeddingInput, embedTexts, isEmbeddingConfigured } from "../knowledge/embeddingService.js";
 import { getEmbeddingDimensions } from "../ai/aiProvider.js";
+import { isAiAgentSchemaError } from "./schemaErrors.js";
 
 const MAX_CONTENT_CHARS = 500_000;
 const BATCH = 40;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function isSchemaError(message) {
-  return /relation.*does not exist|column|vector|dimension/i.test(String(message || ""));
 }
 
 async function insertChunkBatches(supabase, rows, documentId) {
@@ -64,7 +61,7 @@ export async function ingestAiAgentDocument(input) {
   if (insertErr) {
     return {
       ok: false,
-      error: isSchemaError(insertErr.message) ? "schema_not_migrated" : insertErr.message,
+      error: isAiAgentSchemaError(insertErr) ? "schema_not_migrated" : insertErr.message,
     };
   }
 
@@ -119,7 +116,7 @@ export async function ingestAiAgentDocument(input) {
       await supabase.from("ai_agent_documents").delete().eq("id", documentId);
       return {
         ok: false,
-        error: isSchemaError(chunkInsertErr) ? "schema_not_migrated" : chunkInsertErr,
+        error: isAiAgentSchemaError(chunkInsertErr) ? "schema_not_migrated" : chunkInsertErr,
       };
     }
   } else {
@@ -166,7 +163,7 @@ export async function listAiAgentDocuments() {
     .order("created_at", { ascending: false });
 
   if (error) {
-    if (isSchemaError(error.message)) return { documents: [], error: "schema_not_migrated" };
+    if (isAiAgentSchemaError(error)) return { documents: [], error: "schema_not_migrated" };
     return { documents: [], error: error.message };
   }
 
@@ -218,7 +215,7 @@ export async function getAiAgentDocumentCount() {
     .eq("status", "ready");
 
   if (error) {
-    if (isSchemaError(error.message)) return { count: 0, error: "schema_not_migrated" };
+    if (isAiAgentSchemaError(error)) return { count: 0, error: "schema_not_migrated" };
     return { count: 0, error: error.message };
   }
   return { count: count ?? 0, error: null };

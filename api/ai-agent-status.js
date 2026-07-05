@@ -7,6 +7,11 @@ import { getSupabaseAdmin } from "../server/knowledge/supabaseAdmin.js";
 import { ALLOWED_TABLES, ALLOWED_COLUMNS } from "../server/ai-agent/getBusinessData.js";
 import { getAiAgentDocumentCount } from "../server/ai-agent/documentIngestService.js";
 import { isEmbeddingConfigured } from "../server/knowledge/embeddingService.js";
+import {
+  AI_AGENT_DOCUMENTS_MIGRATION_FILE,
+  AI_AGENT_SCHEMA_MIGRATION_MESSAGE_HE,
+  AI_AGENT_SCHEMA_MIGRATION_STEPS_HE,
+} from "../server/ai-agent/schemaErrors.js";
 
 const RATE_MAX_PER_HOUR = 30;
 
@@ -43,6 +48,7 @@ export default async function handler(req, res) {
   }
 
   const docStats = await getAiAgentDocumentCount();
+  const documentsSchemaOk = docStats.error !== "schema_not_migrated";
 
   return json(
     res,
@@ -57,8 +63,11 @@ export default async function handler(req, res) {
       tableStatus,
       documents: {
         count: docStats.count,
-        schemaOk: docStats.error !== "schema_not_migrated",
-        error: docStats.error && docStats.error !== "schema_not_migrated" ? docStats.error : null,
+        schemaOk: documentsSchemaOk,
+        error: documentsSchemaOk && docStats.error ? docStats.error : null,
+        migrationFile: AI_AGENT_DOCUMENTS_MIGRATION_FILE,
+        migrationMessage: documentsSchemaOk ? null : AI_AGENT_SCHEMA_MIGRATION_MESSAGE_HE,
+        migrationSteps: documentsSchemaOk ? null : AI_AGENT_SCHEMA_MIGRATION_STEPS_HE,
       },
       rateLimit: { maxPerHour: RATE_MAX_PER_HOUR },
       agentModuleId: "ai_agent",
