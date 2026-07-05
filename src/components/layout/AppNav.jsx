@@ -33,8 +33,8 @@ export default function AppNav() {
   const isMetrics =
     location.pathname === "/metrics" || location.pathname.startsWith("/metrics/");
   const isCrm = location.pathname.startsWith("/crm");
-  const isKnowledge = pathname.startsWith("/knowledge");
-  const isAiAgent = pathname.startsWith("/ai-agent");
+  const isKnowledge = location.pathname.startsWith("/knowledge");
+  const isAiAgent = location.pathname.startsWith("/ai-agent");
   const isRemoteSupport = location.pathname.startsWith("/remote-support");
   const isGoogleReview = location.pathname.startsWith("/review-sms");
   const isCustomerChat = location.pathname.startsWith("/customer-chat");
