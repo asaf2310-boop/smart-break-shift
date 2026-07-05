@@ -1,6 +1,6 @@
 # סוכן AI — MVP
 
-סוכן שיחה בעברית עם גישה לנתונים עסקיים מ-Supabase (קריאה בלבד) דרך OpenAI Function Calling.
+סוכן שיחה בעברית עם גישה לנתונים עסקיים מ-Supabase (קריאה בלבד) ולמסמכי ידע (RAG) דרך OpenAI Function Calling.
 
 ## משתני סביבה (Vercel)
 
@@ -10,10 +10,16 @@
 | `OPENAI_MODEL` | לא | ברירת מחדל: `gpt-4o-mini` |
 | `SUPABASE_URL` | כן | כתובת Supabase |
 | `SUPABASE_SERVICE_ROLE_KEY` | כן | מפתח שירות — **שרת בלבד**, לשאילתות read-only |
+| `GEMINI_API_KEY` | לא* | embeddings לחיפוש מסמכים (אם `AI_PROVIDER=gemini` או auto) |
+| `AI_PROVIDER` | לא | `auto` (ברירת מחדל), `gemini`, או `openai` |
+
+\* לחיפוש סמנטי במסמכים נדרש לפחות מפתח AI אחד (OpenAI או Gemini). ללא embeddings — fallback למילות מפתח.
 
 אין להגדיר מפתחות AI ב-`VITE_*`.
 
 ## API
+
+### צ'אט
 
 `POST /api/ai-agent`
 
@@ -30,6 +36,30 @@
 - דורש JWT נציג עם מודול `ai_agent` (או מנהל)
 - Rate limit: 30 בקשות לשעה למשתמש/IP
 
+### ניהול מסמכים (מנהל בלבד)
+
+`GET /api/ai-agent-documents` — רשימת מסמכים
+
+`POST /api/ai-agent-documents`
+
+```json
+{
+  "action": "ingest",
+  "title": "נהלי החזרות",
+  "content": "...",
+  "fileName": "returns.pdf",
+  "mimeType": "application/pdf"
+}
+```
+
+```json
+{ "action": "delete", "documentId": "uuid" }
+```
+
+- דורש JWT מנהל (`is_admin`)
+- Rate limit: 30 העלאות לשעה
+- סוגי קובץ: PDF, TXT, MD, DOCX — עד 5MB תוכן
+
 ## כלי `getBusinessData`
 
 פרמטרים:
@@ -45,16 +75,41 @@
 - רק שוויון (`eq`) על עמודות מורשות
 - אין SQL חופשי, אין כתיבה/עדכון/מחיקה
 
+## כלי `searchDocuments`
+
+פרמטרים:
+
+```ts
+{
+  query: string,   // שאילתה בעברית או באנגלית
+  topK?: number    // 1–8, ברירת מחדל 5
+}
+```
+
+- קריאה בלבד — מחפש ב-`ai_agent_document_chunks` (vector) או fallback keyword/fulltext
+- הסוכן מסכם בעברית על בסיס הקטעים — לא ממציא
+
 ## טבלאות
 
-הריצו [`supabase/ai_agent_tables.sql`](../supabase/ai_agent_tables.sql) אם הטבלאות חסרות.
+הריצו [`supabase/ai_agent_tables.sql`](../supabase/ai_agent_tables.sql) אם טבלאות העסק חסרות.
+
+הריצו [`supabase/ai_agent_documents.sql`](../supabase/ai_agent_documents.sql) לבסיס מסמכי הידע (RAG).
 
 מיגרציית מודול נציגים: [`supabase/agent_module_ai_agent.sql`](../supabase/agent_module_ai_agent.sql)
 
 ## פרונט
 
-- נתיב: `/ai-agent`
+- צ'אט נציג: `/ai-agent`
+- ניהול מסמכים (אדמין): `/admin/knowledge/ai-agent`
 - מודול: `ai_agent` ב-`AgentModulesPicker`
+
+## זרימת העלאה (אדמין)
+
+1. מנהל נכנס ל-`/admin/knowledge/ai-agent`
+2. לוחץ "העלאת מסמך" — PDF / TXT / MD / DOCX
+3. הדפדפן מחלץ טקסט (`knowledgeFileExtract.js`)
+4. `POST /api/ai-agent-documents` — שמירה ב-`ai_agent_documents` + chunking + embeddings
+5. הסוכן משתמש ב-`searchDocuments` כשהנציג שואל על נהלים/מדריכים
 
 ## הרחבה
 

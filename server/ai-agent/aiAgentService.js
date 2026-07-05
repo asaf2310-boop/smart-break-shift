@@ -1,6 +1,7 @@
 import { fetchOpenAiWithRetry } from "../openaiRetry.js";
 import { getOpenAiChatModel, isOpenAiConfigured } from "../ai/openaiClient.js";
 import { getBusinessData, GET_BUSINESS_DATA_TOOL } from "./getBusinessData.js";
+import { searchDocuments, SEARCH_DOCUMENTS_TOOL } from "./searchDocuments.js";
 
 const CHAT_URL = "https://api.openai.com/v1/chat/completions";
 const MAX_TOOL_ROUNDS = 5;
@@ -9,7 +10,8 @@ const SYSTEM_PROMPT = `אתה סוכן AI עוזר לנציגי מוקד טלפ�
 ענה תמיד בעברית ברורה ומקצועית.
 כשחסר מידע — שאל שאלת הבהרה לפני שאתה מסיק מסקנות.
 כשצריך נתונים עסקיים (לקוחות, תורים, כרטיסים, שירותים) — השתמש בכלי getBusinessData.
-אל תמציא נתונים. אם הכלי נכשל או הטבלה חסרה — הסבר לנציג בבירור.
+כשצריך מידע ממסמכי ידע (נהלים, מדריכים, מדיניות) — השתמש בכלי searchDocuments וסכם בעברית.
+אל תמציא נתונים. אם הכלי נכשל, אין תוצאות, או הטבלה חסרה — הסבר לנציג בבירור.
 הצג תשובות מסודרות; אם יש רשימות — השתמש בנקודות.`;
 
 function getApiKey() {
@@ -32,7 +34,7 @@ async function callOpenAi(messages) {
       temperature: 0.3,
       max_tokens: 800,
       messages,
-      tools: [GET_BUSINESS_DATA_TOOL],
+      tools: [GET_BUSINESS_DATA_TOOL, SEARCH_DOCUMENTS_TOOL],
       tool_choice: "auto",
     }),
   });
@@ -101,7 +103,17 @@ export async function runAiAgent(userMessage) {
     }
 
     for (const toolCall of toolCalls) {
-      if (toolCall.type !== "function" || toolCall.function?.name !== "getBusinessData") {
+      if (toolCall.type !== "function") {
+        messages.push({
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: JSON.stringify({ ok: false, error: "tool_not_allowed" }),
+        });
+        continue;
+      }
+
+      const toolName = toolCall.function?.name;
+      if (toolName !== "getBusinessData" && toolName !== "searchDocuments") {
         messages.push({
           role: "tool",
           tool_call_id: toolCall.id,
@@ -117,7 +129,10 @@ export async function runAiAgent(userMessage) {
         parsedArgs = {};
       }
 
-      const toolResult = await getBusinessData(parsedArgs);
+      const toolResult =
+        toolName === "searchDocuments"
+          ? await searchDocuments(parsedArgs)
+          : await getBusinessData(parsedArgs);
       messages.push({
         role: "tool",
         tool_call_id: toolCall.id,

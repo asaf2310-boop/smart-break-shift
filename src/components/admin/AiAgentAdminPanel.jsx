@@ -1,8 +1,23 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Bot, CheckCircle2, ExternalLink, Loader2, XCircle } from "lucide-react";
+import {
+  Bot,
+  CheckCircle2,
+  ExternalLink,
+  FileText,
+  Loader2,
+  Trash2,
+  Upload,
+  XCircle,
+} from "lucide-react";
 import { getAgentBearerHeaders } from "@/lib/agentAuthClient";
 import { AGENT_MODULES } from "@/constants/agentModules";
+import { extractTextFromFile } from "@/lib/knowledgeFileExtract";
+import {
+  deleteAiAgentDocument,
+  fetchAiAgentDocuments,
+  ingestAiAgentDocument,
+} from "@/lib/aiAgentDocumentsClient";
 
 function StatusRow({ label, ok, detail }) {
   return (
@@ -20,10 +35,49 @@ function StatusRow({ label, ok, detail }) {
   );
 }
 
+function formatDate(iso) {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString("he-IL", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
 export default function AiAgentAdminPanel() {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [documents, setDocuments] = useState([]);
+  const [docsLoading, setDocsLoading] = useState(true);
+  const [docsError, setDocsError] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState("");
+  const [deletingId, setDeletingId] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const loadDocuments = useCallback(async () => {
+    setDocsLoading(true);
+    setDocsError("");
+    try {
+      const docs = await fetchAiAgentDocuments();
+      setDocuments(docs);
+    } catch (err) {
+      if (err?.code === "schema_not_migrated") {
+        setDocsError("טבלאות המסמכים חסרות — הריצו supabase/ai_agent_documents.sql");
+      } else {
+        setDocsError(err?.message || "לא ניתן לטעון מסמכים");
+      }
+    } finally {
+      setDocsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,10 +104,60 @@ export default function AiAgentAdminPanel() {
     }
 
     void load();
+    void loadDocuments();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadDocuments]);
+
+  async function handleFileSelect(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setUploading(true);
+    setUploadMessage("");
+    try {
+      const extracted = await extractTextFromFile(file);
+      if (extracted.error) {
+        setUploadMessage(extracted.error);
+        return;
+      }
+      if (!extracted.text?.trim()) {
+        setUploadMessage("לא נמצא טקסט במסמך. נסו קובץ אחר.");
+        return;
+      }
+
+      const result = await ingestAiAgentDocument({
+        title: extracted.title || file.name,
+        content: extracted.text,
+        fileName: file.name,
+        mimeType: file.type || null,
+      });
+
+      setUploadMessage(
+        `המסמך "${extracted.title || file.name}" הועלה (${result.chunkCount ?? 0} קטעים)`,
+      );
+      await loadDocuments();
+    } catch (err) {
+      setUploadMessage(err?.message || "שגיאה בהעלאת המסמך");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleDelete(doc) {
+    if (!window.confirm(`למחוק את "${doc.title}"?`)) return;
+    setDeletingId(doc.id);
+    try {
+      await deleteAiAgentDocument(doc.id);
+      await loadDocuments();
+    } catch (err) {
+      setUploadMessage(err?.message || "שגיאה במחיקה");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   const moduleLabel = AGENT_MODULES.ai_agent?.label || "סוכן AI";
 
@@ -62,14 +166,105 @@ export default function AiAgentAdminPanel() {
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-base font-bold text-slate-800 mb-2">סקירה</h2>
         <p className="text-sm text-slate-600 leading-relaxed">
-          סוכן AI עונה לנציגים בעברית ושולף נתונים מ-Supabase (קריאה בלבד) דרך OpenAI Function
-          Calling. מודול:{" "}
+          סוכן AI עונה לנציגים בעברית, שולף נתונים מ-Supabase (קריאה בלבד) ומחפש במסמכי ידע
+          שהועלו כאן. מודול:{" "}
           <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">ai_agent</code>
           {" · "}
           <Link to="/admin/users" className="text-primary font-semibold hover:underline">
             ניהול נציגים
           </Link>
         </p>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <h2 className="text-base font-bold text-slate-800">מסמכי ידע</h2>
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 text-white text-sm font-semibold px-4 py-2 hover:bg-violet-700 transition-colors disabled:opacity-60"
+          >
+            {uploading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Upload className="w-4 h-4" />
+            )}
+            העלאת מסמך
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.txt,.md,.docx,application/pdf,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            className="hidden"
+            onChange={handleFileSelect}
+          />
+        </div>
+        <p className="text-sm text-slate-500 mb-4">
+          PDF, TXT, MD, DOCX — עד 5MB. הטקסט מאונדקס לחיפוש סמנטי (embeddings) או מילות מפתח.
+        </p>
+
+        {uploadMessage ? (
+          <p
+            className={`text-sm mb-4 rounded-xl px-4 py-3 border ${
+              uploadMessage.includes("שגיאה") || uploadMessage.includes("לא")
+                ? "text-amber-800 bg-amber-50 border-amber-200"
+                : "text-emerald-800 bg-emerald-50 border-emerald-200"
+            }`}
+          >
+            {uploadMessage}
+          </p>
+        ) : null}
+
+        {docsLoading ? (
+          <div className="flex items-center gap-2 text-sm text-slate-500 py-4">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            טוען מסמכים...
+          </div>
+        ) : docsError ? (
+          <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+            {docsError}
+          </p>
+        ) : documents.length === 0 ? (
+          <p className="text-sm text-slate-500 py-6 text-center border border-dashed border-slate-200 rounded-xl">
+            אין מסמכים עדיין — העלו PDF או TXT כדי שהסוכן יוכל לשלוף מהם ידע.
+          </p>
+        ) : (
+          <ul className="divide-y divide-slate-100 rounded-xl border border-slate-100 overflow-hidden">
+            {documents.map((doc) => (
+              <li
+                key={doc.id}
+                className="flex items-center justify-between gap-3 px-4 py-3 bg-slate-50/50 hover:bg-slate-50"
+              >
+                <div className="flex items-start gap-3 min-w-0">
+                  <FileText className="w-4 h-4 text-violet-600 shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 truncate">{doc.title}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {doc.fileName ? `${doc.fileName} · ` : ""}
+                      {formatDate(doc.createdAt)}
+                      {doc.chunkCount != null ? ` · ${doc.chunkCount} קטעים` : ""}
+                      {doc.status && doc.status !== "ready" ? ` · ${doc.status}` : ""}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={deletingId === doc.id}
+                  onClick={() => handleDelete(doc)}
+                  className="shrink-0 p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                  aria-label={`מחק ${doc.title}`}
+                >
+                  {deletingId === doc.id ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -91,6 +286,19 @@ export default function AiAgentAdminPanel() {
               detail={status.openaiModel || undefined}
             />
             <StatusRow label="SUPABASE_URL + SERVICE_ROLE_KEY" ok={status.supabaseConfigured} />
+            <StatusRow
+              label="Embeddings (חיפוש מסמכים)"
+              ok={status.embeddingsConfigured}
+            />
+            <StatusRow
+              label="מסמכי ידע"
+              ok={status.documents?.schemaOk !== false}
+              detail={
+                status.documents?.schemaOk !== false
+                  ? `${status.documents?.count ?? 0} מסמכים`
+                  : "טבלאות חסרות"
+              }
+            />
             <StatusRow
               label="Rate limit"
               ok
@@ -160,10 +368,13 @@ export default function AiAgentAdminPanel() {
         <h2 className="text-base font-bold text-slate-800 mb-2">משתני סביבה (Vercel)</h2>
         <ul className="text-sm text-slate-600 space-y-1.5 list-disc list-inside marker:text-slate-400">
           <li>
-            <code className="text-xs">OPENAI_API_KEY</code> — חובה
+            <code className="text-xs">OPENAI_API_KEY</code> — חובה (צ&apos;אט)
           </li>
           <li>
             <code className="text-xs">OPENAI_MODEL</code> — אופציונלי (ברירת מחדל: gpt-4o-mini)
+          </li>
+          <li>
+            <code className="text-xs">GEMINI_API_KEY</code> — אופציונלי (embeddings אם AI_PROVIDER=gemini)
           </li>
           <li>
             <code className="text-xs">SUPABASE_URL</code> +{" "}

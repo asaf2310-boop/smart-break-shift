@@ -5,6 +5,8 @@ import { verifyAdminAgent } from "../server/agent/agentAuthService.js";
 import { isOpenAiConfigured, getOpenAiChatModel } from "../server/ai/openaiClient.js";
 import { getSupabaseAdmin } from "../server/knowledge/supabaseAdmin.js";
 import { ALLOWED_TABLES, ALLOWED_COLUMNS } from "../server/ai-agent/getBusinessData.js";
+import { getAiAgentDocumentCount } from "../server/ai-agent/documentIngestService.js";
+import { isEmbeddingConfigured } from "../server/knowledge/embeddingService.js";
 
 const RATE_MAX_PER_HOUR = 30;
 
@@ -40,6 +42,8 @@ export default async function handler(req, res) {
     }
   }
 
+  const docStats = await getAiAgentDocumentCount();
+
   return json(
     res,
     200,
@@ -47,12 +51,19 @@ export default async function handler(req, res) {
       openaiConfigured: isOpenAiConfigured(),
       openaiModel: getOpenAiChatModel(),
       supabaseConfigured: Boolean(supabase),
+      embeddingsConfigured: isEmbeddingConfigured(),
       allowedTables: ALLOWED_TABLES,
       allowedColumns: ALLOWED_COLUMNS,
       tableStatus,
+      documents: {
+        count: docStats.count,
+        schemaOk: docStats.error !== "schema_not_migrated",
+        error: docStats.error && docStats.error !== "schema_not_migrated" ? docStats.error : null,
+      },
       rateLimit: { maxPerHour: RATE_MAX_PER_HOUR },
       agentModuleId: "ai_agent",
       agentPath: "/ai-agent",
+      documentsAdminPath: "/admin/knowledge/ai-agent",
     },
     req,
   );
