@@ -1,4 +1,4 @@
-/** POST /api/ai-agent — OpenAI agent with read-only Supabase tool calling. */
+/** POST /api/ai-agent — AI agent (Gemini default, OpenAI fallback) with tool calling. */
 
 import { json, readJsonBody, handleOptions, isSameOrigin } from "../server/knowledge/httpUtils.js";
 import { requireAiAgentAccess } from "../server/ai-agent/requireAiAgentAccess.js";
@@ -84,13 +84,16 @@ export default async function handler(req, res) {
     const status =
       result.error === "ai_not_configured"
         ? 503
-        : result.error === "openai_quota_exceeded"
+        : result.error === "openai_quota_exceeded" || result.error === "gemini_quota_exceeded"
           ? 503
-        : result.error === "openai_rate_limited" || result.error === "rate_limited"
-          ? 429
-          : result.error === "openai_auth_error"
-            ? 401
-            : 400;
+          : result.error === "openai_rate_limited" ||
+              result.error === "gemini_rate_limited" ||
+              result.error === "gemini_high_demand" ||
+              result.error === "rate_limited"
+            ? 429
+            : result.error === "openai_auth_error" || result.error === "gemini_auth_error"
+              ? 401
+              : 400;
     return json(res, status, { error: result.error, message: result.message }, req);
   }
 

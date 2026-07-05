@@ -1,19 +1,20 @@
 # סוכן AI — MVP
 
-סוכן שיחה בעברית עם גישה לנתונים עסקיים מ-Supabase (קריאה בלבד) ולמסמכי ידע (RAG) דרך OpenAI Function Calling.
+סוכן שיחה בעברית עם גישה לנתונים עסקיים מ-Supabase (קריאה בלבד) ולמסמכי ידע (RAG) דרך Function Calling (Gemini ברירת מחדל, OpenAI כגיבוי).
 
 ## משתני סביבה (Vercel)
 
 | משתנה | חובה | תיאור |
 |--------|------|--------|
-| `OPENAI_API_KEY` | כן | מפתח OpenAI לצ'אט |
-| `OPENAI_MODEL` | לא | ברירת מחדל: `gpt-4o-mini` |
+| `GEMINI_API_KEY` | כן | מפתח Google AI לצ'אט ו-embeddings — [Google AI Studio](https://aistudio.google.com/apikey) |
+| `GEMINI_CHAT_MODEL` | לא | ברירת מחדל: `gemini-2.0-flash` |
+| `GEMINI_EMBED_MODEL` | לא | ברירת מחדל: `gemini-embedding-001` |
+| `GEMINI_EMBED_DIMENSIONS` | לא | ברירת מחדל: `768` (תואם pgvector) |
+| `AI_PROVIDER` | לא | `auto` (ברירת מחדל — Gemini אם המפתח קיים), `gemini`, או `openai` |
+| `OPENAI_API_KEY` | לא | גיבוי לצ'אט אם `AI_PROVIDER=openai` |
+| `OPENAI_MODEL` | לא | ברירת מחדל: `gpt-4o-mini` (רק עם OpenAI) |
 | `SUPABASE_URL` | כן | כתובת Supabase |
 | `SUPABASE_SERVICE_ROLE_KEY` | כן | מפתח שירות — **שרת בלבד**, לשאילתות read-only |
-| `GEMINI_API_KEY` | לא* | embeddings לחיפוש מסמכים (אם `AI_PROVIDER=gemini` או auto) |
-| `AI_PROVIDER` | לא | `auto` (ברירת מחדל), `gemini`, או `openai` |
-
-\* לחיפוש סמנטי במסמכים נדרש לפחות מפתח AI אחד (OpenAI או Gemini). ללא embeddings — fallback למילות מפתח.
 
 אין להגדיר מפתחות AI ב-`VITE_*`.
 
@@ -35,6 +36,11 @@
 
 - דורש JWT נציג עם מודול `ai_agent` (או מנהל)
 - Rate limit: 30 בקשות לשעה למשתמש/IP
+- ספק ברירת מחדל: **Gemini** (`gemini-2.0-flash`) עם כלי `getBusinessData` ו-`searchDocuments`
+
+### סטטוס (מנהל)
+
+`GET /api/ai-agent-status` — מחזיר `provider` (`gemini` / `openai`), מצב מפתח, מכסה, embeddings, מסמכים.
 
 ### ניהול מסמכים (מנהל בלבד)
 
@@ -110,6 +116,14 @@
 3. הדפדפן מחלץ טקסט (`knowledgeFileExtract.js`)
 4. `POST /api/ai-agent-documents` — שמירה ב-`ai_agent_documents` + chunking + embeddings
 5. הסוכן משתמש ב-`searchDocuments` כשהנציג שואל על נהלים/מדריכים
+
+## ארכיטקטורה
+
+- `server/ai-agent/aiAgentService.js` — לולאת tool calling (Gemini / OpenAI)
+- `server/ai-agent/geminiAgentChat.js` — קריאות Gemini REST + functionDeclarations
+- `server/ai-agent/openaiAgentChat.js` — גיבוי OpenAI
+- `server/ai/aiProvider.js` — בחירת ספק (`gemini` ברירת מחדל)
+- `server/ai/geminiErrors.js` — מיפוי שגיאות Gemini לעברית
 
 ## הרחבה
 

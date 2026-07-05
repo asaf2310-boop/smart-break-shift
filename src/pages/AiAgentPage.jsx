@@ -17,14 +17,14 @@ function formatAgentApiError(res, data) {
 
   if (res.status === 500) return "שגיאת שרת — נסו שוב בעוד רגע";
   if (res.status === 503 && data?.error === "ai_not_configured") {
-    return "סוכן AI לא מוגדר בשרת (חסר OPENAI_API_KEY ב-Vercel)";
+    return friendlyOpenAiErrorMessage({ error: "ai_not_configured" });
   }
-  if (res.status === 503 && data?.error === "openai_quota_exceeded") {
-    return friendlyOpenAiErrorMessage({ error: "openai_quota_exceeded" });
+  if (res.status === 503 && (data?.error === "openai_quota_exceeded" || data?.error === "gemini_quota_exceeded")) {
+    return friendlyOpenAiErrorMessage(data);
   }
   if (res.status === 401) {
-    if (data?.error === "openai_auth_error") {
-      return friendlyOpenAiErrorMessage({ error: "openai_auth_error" });
+    if (data?.error === "openai_auth_error" || data?.error === "gemini_auth_error") {
+      return friendlyOpenAiErrorMessage(data);
     }
     return data?.error === "unauthorized"
       ? "נדרשת התחברות עם הרשאת סוכן AI — פנו למנהל לעדכון מודול ai_agent"
@@ -32,9 +32,14 @@ function formatAgentApiError(res, data) {
   }
   if (res.status === 403) return "גישה נדחתה (CORS) — רעננו את הדף ונסו שוב";
   if (res.status === 429) {
-    return data?.error === "openai_rate_limited"
-      ? friendlyOpenAiErrorMessage(data)
-      : "יותר מדי בקשות — נסו שוב בעוד כמה דקות";
+    if (
+      data?.error === "openai_rate_limited" ||
+      data?.error === "gemini_rate_limited" ||
+      data?.error === "gemini_high_demand"
+    ) {
+      return friendlyOpenAiErrorMessage(data);
+    }
+    return "יותר מדי בקשות — נסו שוב בעוד כמה דקות";
   }
   return data?.error || "שגיאה בשליחה";
 }

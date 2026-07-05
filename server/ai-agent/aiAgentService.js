@@ -1,10 +1,10 @@
-import { fetchOpenAiWithRetry } from "../openaiRetry.js";
-import { getOpenAiChatModel, isOpenAiConfigured } from "../ai/openaiClient.js";
-import { mapOpenAiHttpError } from "../ai/openaiErrors.js";
-import { getBusinessData, GET_BUSINESS_DATA_TOOL } from "./getBusinessData.js";
-import { searchDocuments, SEARCH_DOCUMENTS_TOOL } from "./searchDocuments.js";
+import { getAiProvider, isAiConfigured } from "../ai/aiProvider.js";
+import { getBusinessData } from "./getBusinessData.js";
+import { searchDocuments } from "./searchDocuments.js";
+import { ALLOWED_TOOL_NAMES } from "./agentTools.js";
+import { callGeminiAgent } from "./geminiAgentChat.js";
+import { callOpenAiAgent } from "./openaiAgentChat.js";
 
-const CHAT_URL = "https://api.openai.com/v1/chat/completions";
 const MAX_TOOL_ROUNDS = 5;
 
 const SYSTEM_PROMPT = `אתה סוכן AI עוזר לנציגי מוקד טלפוני בישראל.
@@ -16,48 +16,29 @@ const SYSTEM_PROMPT = `אתה סוכן AI עוזר לנציגי מוקד טלפ�
 אל תמציא נתונים. אם הכלי נכשל, אין תוצאות, או הטבלה חסרה — הסבר לנציג בבירור.
 הצג תשובות מסודרות; אם יש רשימות — השתמש בנקודות.`;
 
-function getApiKey() {
-  return String(process.env.OPENAI_API_KEY || "").trim();
+function notConfiguredMessage() {
+  const provider = getAiProvider();
+  if (provider === "openai") {
+    return "סוכן AI לא מוגדר בשרת — חסר OPENAI_API_KEY ב-Vercel.";
+  }
+  return "סוכן AI לא מוגדר בשרת — חסר GEMINI_API_KEY ב-Vercel.";
 }
 
 /**
- * @param {Array<{ role: string, content?: string, tool_calls?: unknown[], tool_call_id?: string }>} messages
+ * @param {string} toolName
+ * @param {Record<string, unknown>} parsedArgs
  */
-async function callOpenAi(messages) {
-  const apiKey = getApiKey();
-  let res;
+async function executeTool(toolName, parsedArgs) {
   try {
-    res = await fetchOpenAiWithRetry(CHAT_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: getOpenAiChatModel(),
-        temperature: 0.3,
-        max_tokens: 800,
-        messages,
-        tools: [GET_BUSINESS_DATA_TOOL, SEARCH_DOCUMENTS_TOOL],
-        tool_choice: "auto",
-      }),
-    });
+    return toolName === "searchDocuments"
+      ? await searchDocuments(parsedArgs)
+      : await getBusinessData(parsedArgs);
   } catch {
-    return { ok: false, error: "ai_network_error", message: "שגיאת רשת בחיבור ל-OpenAI — נסו שוב" };
-  }
-
-  if (!res.ok) {
-    const errText = await res.text().catch(() => "");
-    const mapped = mapOpenAiHttpError(res.status, errText, res);
-    return { ok: false, error: mapped.error, message: mapped.message };
-  }
-
-  try {
-    const data = await res.json();
-    const choice = data.choices?.[0];
-    return { ok: true, message: choice?.message || null, finishReason: choice?.finish_reason };
-  } catch {
-    return { ok: false, error: "ai_parse_error", message: "שגיאה בפענוח תגובת OpenAI" };
+    return {
+      ok: false,
+      error: "tool_exception",
+      message: "שגיאה בהרצת הכלי — נסו שוב או נסחו את השאלה אחרת",
+    };
   }
 }
 
@@ -89,14 +70,95 @@ async function runAiAgentInner(userMessage) {
     return { ok: false, error: "message_too_long", message: "ההודעה ארוכה מדי (מקסימום 4000 תווים)" };
   }
 
-  if (!isOpenAiConfigured()) {
+  if (!isAiConfigured()) {
     return {
       ok: false,
       error: "ai_not_configured",
-      message: "סוכן AI לא מוגדר בשרת — חסר OPENAI_API_KEY ב-Vercel.",
+      message: notConfiguredMessage(),
     };
   }
 
+  const provider = getAiProvider();
+  if (provider === "gemini") {
+    return runGeminiAgentLoop(text);
+  }
+  return runOpenAiAgentLoop(text);
+}
+
+/**
+ * @param {string} text
+ */
+async function runGeminiAgentLoop(text) {
+  /** @type {Array<{ role: string, parts: unknown[] }>} */
+  const contents = [{ role: "user", parts: [{ text }] }];
+
+  for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
+    const result = await callGeminiAgent(SYSTEM_PROMPT, contents);
+    if (!result.ok) {
+      return { ok: false, error: result.error, message: result.message };
+    }
+
+    const parts = result.parts || [];
+    if (!parts.length) {
+      return { ok: false, error: "empty_response", message: "לא התקבלה תשובה מהמודל" };
+    }
+
+    const functionCalls = parts.filter((p) => p.functionCall);
+    if (!functionCalls.length) {
+      const reply = parts
+        .map((p) => p.text || "")
+        .join("")
+        .trim();
+      return {
+        ok: true,
+        reply: reply || "לא הצלחתי לנסח תשובה. נסו לנסח מחדש.",
+        toolRounds: round,
+        provider: "gemini",
+      };
+    }
+
+    contents.push({ role: "model", parts });
+
+    /** @type {Array<{ functionResponse: { name: string, response: unknown } }>} */
+    const responseParts = [];
+
+    for (const part of functionCalls) {
+      const toolName = part.functionCall?.name;
+      const args = part.functionCall?.args || {};
+
+      if (!ALLOWED_TOOL_NAMES.has(toolName)) {
+        responseParts.push({
+          functionResponse: {
+            name: toolName || "unknown",
+            response: { ok: false, error: "tool_not_allowed" },
+          },
+        });
+        continue;
+      }
+
+      const toolResult = await executeTool(toolName, args);
+      responseParts.push({
+        functionResponse: {
+          name: toolName,
+          response: toolResult,
+        },
+      });
+    }
+
+    contents.push({ role: "user", parts: responseParts });
+  }
+
+  return {
+    ok: false,
+    error: "tool_loop_exceeded",
+    message: "חריגה ממספר סיבובי כלים — נסו שאלה ממוקדת יותר.",
+  };
+}
+
+/**
+ * @param {string} text
+ */
+async function runOpenAiAgentLoop(text) {
   /** @type {Array<{ role: string, content?: string, tool_calls?: unknown[], tool_call_id?: string }>} */
   const messages = [
     { role: "system", content: SYSTEM_PROMPT },
@@ -104,7 +166,7 @@ async function runAiAgentInner(userMessage) {
   ];
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
-    const result = await callOpenAi(messages);
+    const result = await callOpenAiAgent(messages);
     if (!result.ok) {
       return { ok: false, error: result.error, message: result.message };
     }
@@ -123,6 +185,7 @@ async function runAiAgentInner(userMessage) {
         ok: true,
         reply: reply || "לא הצלחתי לנסח תשובה. נסו לנסח מחדש.",
         toolRounds: round,
+        provider: "openai",
       };
     }
 
@@ -137,7 +200,7 @@ async function runAiAgentInner(userMessage) {
       }
 
       const toolName = toolCall.function?.name;
-      if (toolName !== "getBusinessData" && toolName !== "searchDocuments") {
+      if (!ALLOWED_TOOL_NAMES.has(toolName)) {
         messages.push({
           role: "tool",
           tool_call_id: toolCall.id,
@@ -153,19 +216,7 @@ async function runAiAgentInner(userMessage) {
         parsedArgs = {};
       }
 
-      let toolResult;
-      try {
-        toolResult =
-          toolName === "searchDocuments"
-            ? await searchDocuments(parsedArgs)
-            : await getBusinessData(parsedArgs);
-      } catch {
-        toolResult = {
-          ok: false,
-          error: "tool_exception",
-          message: "שגיאה בהרצת הכלי — נסו שוב או נסחו את השאלה אחרת",
-        };
-      }
+      const toolResult = await executeTool(toolName, parsedArgs);
       messages.push({
         role: "tool",
         tool_call_id: toolCall.id,
@@ -180,3 +231,5 @@ async function runAiAgentInner(userMessage) {
     message: "חריגה ממספר סיבובי כלים — נסו שאלה ממוקדת יותר.",
   };
 }
+
+export { SYSTEM_PROMPT };

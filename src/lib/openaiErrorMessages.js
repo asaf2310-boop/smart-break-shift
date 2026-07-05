@@ -1,11 +1,18 @@
 export const OPENAI_QUOTA_MESSAGE_HE =
   "מכסת OpenAI אזלה. יש לעדכן חיוב או מפתח API בהגדרות Vercel.";
 
+export const GEMINI_QUOTA_MESSAGE_HE =
+  "מכסת Gemini אזלה. בדקו מגבלות ב-Google AI Studio או עדכנו את GEMINI_API_KEY ב-Vercel.";
+
 const ERROR_CODE_MESSAGES = {
   openai_quota_exceeded: OPENAI_QUOTA_MESSAGE_HE,
   openai_rate_limited: "מגבלת קצב ב-OpenAI — המתן כדקה ונסו שוב.",
   openai_auth_error: "מפתח OpenAI לא תקין או חסר הרשאה — עדכנו את OPENAI_API_KEY ב-Vercel.",
-  ai_not_configured: "סוכן AI לא מוגדר בשרת (חסר OPENAI_API_KEY ב-Vercel)",
+  gemini_quota_exceeded: GEMINI_QUOTA_MESSAGE_HE,
+  gemini_rate_limited: "מגבלת קצב ב-Gemini — המתן כדקה ונסו שוב.",
+  gemini_high_demand: "שירות Gemini עמוס זמנית — נסו שוב בעוד דקה.",
+  gemini_auth_error: "מפתח Gemini לא תקין או חסר הרשאה — עדכנו את GEMINI_API_KEY ב-Vercel.",
+  ai_not_configured: "סוכן AI לא מוגדר בשרת (חסר GEMINI_API_KEY ב-Vercel)",
 };
 
 /**

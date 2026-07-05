@@ -213,13 +213,17 @@ export default function AiAgentAdminPanel() {
         <SchemaMigrationAlert steps={migrationSteps} />
       ) : null}
 
-      {status?.openaiQuotaWarning ? (
+      {status?.aiQuotaWarning || status?.openaiQuotaWarning || status?.geminiQuotaWarning ? (
         <div
           className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3"
           role="alert"
         >
-          <p className="font-semibold">אזהרת מכסת OpenAI</p>
-          <p className="mt-1 text-amber-800">{status.openaiQuotaWarning}</p>
+          <p className="font-semibold">
+            אזהרת מכסת {status?.provider === "openai" ? "OpenAI" : "Gemini"}
+          </p>
+          <p className="mt-1 text-amber-800">
+            {status.aiQuotaWarning || status.geminiQuotaWarning || status.openaiQuotaWarning}
+          </p>
         </div>
       ) : null}
 
@@ -338,15 +342,29 @@ export default function AiAgentAdminPanel() {
         ) : status ? (
           <div>
             <StatusRow
-              label="OPENAI_API_KEY"
-              ok={status.openaiConfigured && !status.openaiQuotaWarning}
+              label={`ספק צ'אט (${status.provider === "openai" ? "OpenAI" : status.provider === "gemini" ? "Gemini" : "לא מוגדר"})`}
+              ok={status.aiConfigured && !status.aiQuotaWarning}
               detail={
-                status.openaiQuotaWarning
+                status.aiQuotaWarning
                   ? "מכסה אזלה"
-                  : status.openaiHealth?.ok === false && status.openaiHealth?.message
-                    ? status.openaiHealth.message
-                    : status.openaiModel || undefined
+                  : status.aiHealth?.ok === false && status.aiHealth?.message
+                    ? status.aiHealth.message
+                    : status.chatModel || undefined
               }
+            />
+            <StatusRow
+              label="GEMINI_API_KEY"
+              ok={status.geminiConfigured && !status.geminiQuotaWarning}
+              detail={
+                status.provider === "gemini" && status.geminiQuotaWarning
+                  ? "מכסה אזלה"
+                  : status.geminiModel || undefined
+              }
+            />
+            <StatusRow
+              label="OPENAI_API_KEY (גיבוי)"
+              ok={status.openaiConfigured}
+              detail={status.openaiModel || undefined}
             />
             <StatusRow label="SUPABASE_URL + SERVICE_ROLE_KEY" ok={status.supabaseConfigured} />
             <StatusRow
@@ -431,13 +449,16 @@ export default function AiAgentAdminPanel() {
         <h2 className="text-base font-bold text-slate-800 mb-2">משתני סביבה (Vercel)</h2>
         <ul className="text-sm text-slate-600 space-y-1.5 list-disc list-inside marker:text-slate-400">
           <li>
-            <code className="text-xs">OPENAI_API_KEY</code> — חובה (צ&apos;אט)
+            <code className="text-xs">GEMINI_API_KEY</code> — חובה (צ&apos;אט + embeddings)
           </li>
           <li>
-            <code className="text-xs">OPENAI_MODEL</code> — אופציונלי (ברירת מחדל: gpt-4o-mini)
+            <code className="text-xs">GEMINI_CHAT_MODEL</code> — אופציונלי (ברירת מחדל: gemini-2.0-flash)
           </li>
           <li>
-            <code className="text-xs">GEMINI_API_KEY</code> — אופציונלי (embeddings אם AI_PROVIDER=gemini)
+            <code className="text-xs">AI_PROVIDER</code> — אופציונלי (ברירת מחדל: gemini אם המפתח קיים)
+          </li>
+          <li>
+            <code className="text-xs">OPENAI_API_KEY</code> — אופציונלי (גיבוי אם AI_PROVIDER=openai)
           </li>
           <li>
             <code className="text-xs">SUPABASE_URL</code> +{" "}

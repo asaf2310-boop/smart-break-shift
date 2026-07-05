@@ -3,7 +3,11 @@
 import { json, handleOptions, isSameOrigin } from "../server/knowledge/httpUtils.js";
 import { verifyAdminAgent } from "../server/agent/agentAuthService.js";
 import { isOpenAiConfigured, getOpenAiChatModel } from "../server/ai/openaiClient.js";
+import { isGeminiConfigured, getGeminiChatModel } from "../server/ai/geminiClient.js";
+import { getAiProvider, isAiConfigured } from "../server/ai/aiProvider.js";
 import { probeOpenAiAccess } from "../server/ai/openaiErrors.js";
+import { probeGeminiAccess } from "../server/ai/geminiErrors.js";
+import { buildGeminiAgentUrl } from "../server/ai-agent/geminiAgentChat.js";
 import { getSupabaseAdmin } from "../server/knowledge/supabaseAdmin.js";
 import { ALLOWED_TABLES, ALLOWED_COLUMNS } from "../server/ai-agent/getBusinessData.js";
 import { getAiAgentDocumentCount } from "../server/ai-agent/documentIngestService.js";
@@ -16,9 +20,11 @@ import {
 
 const RATE_MAX_PER_HOUR = 30;
 
-/** @type {{ at: number, result: { ok: boolean, error: string | null, message: string | null } } | null} */
+/** @type {{ at: number, result: { ok: boolean, error: string | null, message: string | null, quotaExceeded?: boolean } } | null} */
 let openAiProbeCache = null;
-const OPENAI_PROBE_TTL_MS = 5 * 60 * 1000;
+/** @type {{ at: number, result: { ok: boolean, error: string | null, message: string | null, quotaExceeded?: boolean } } | null} */
+let geminiProbeCache = null;
+const PROBE_TTL_MS = 5 * 60 * 1000;
 
 async function getOpenAiHealth() {
   if (!isOpenAiConfigured()) {
@@ -26,7 +32,7 @@ async function getOpenAiHealth() {
   }
 
   const now = Date.now();
-  if (openAiProbeCache && now - openAiProbeCache.at < OPENAI_PROBE_TTL_MS) {
+  if (openAiProbeCache && now - openAiProbeCache.at < PROBE_TTL_MS) {
     return openAiProbeCache.result;
   }
 
@@ -41,6 +47,31 @@ async function getOpenAiHealth() {
     quotaExceeded: probe.error === "openai_quota_exceeded",
   };
   openAiProbeCache = { at: now, result };
+  return result;
+}
+
+async function getGeminiHealth() {
+  if (!isGeminiConfigured()) {
+    return { ok: false, error: "not_configured", message: null, quotaExceeded: false };
+  }
+
+  const now = Date.now();
+  if (geminiProbeCache && now - geminiProbeCache.at < PROBE_TTL_MS) {
+    return geminiProbeCache.result;
+  }
+
+  const probe = await probeGeminiAccess(
+    () => String(process.env.GEMINI_API_KEY || "").trim(),
+    buildGeminiAgentUrl,
+    getGeminiChatModel,
+  );
+  const result = {
+    ok: probe.ok,
+    error: probe.error,
+    message: probe.message,
+    quotaExceeded: probe.error === "gemini_quota_exceeded",
+  };
+  geminiProbeCache = { at: now, result };
   return result;
 }
 
@@ -78,16 +109,32 @@ export default async function handler(req, res) {
 
   const docStats = await getAiAgentDocumentCount();
   const documentsSchemaOk = docStats.error !== "schema_not_migrated";
+  const provider = getAiProvider();
   const openaiHealth = await getOpenAiHealth();
+  const geminiHealth = await getGeminiHealth();
+  const activeHealth = provider === "openai" ? openaiHealth : geminiHealth;
+  const quotaWarning =
+    activeHealth.quotaExceeded && activeHealth.message ? activeHealth.message : null;
 
   return json(
     res,
     200,
     {
+      provider,
+      aiConfigured: isAiConfigured(),
+      chatModel: provider === "openai" ? getOpenAiChatModel() : getGeminiChatModel(),
+      aiHealth: activeHealth,
+      aiQuotaWarning: quotaWarning,
+      geminiConfigured: isGeminiConfigured(),
+      geminiModel: getGeminiChatModel(),
+      geminiHealth,
+      geminiQuotaWarning:
+        provider === "gemini" && geminiHealth.quotaExceeded ? geminiHealth.message : null,
       openaiConfigured: isOpenAiConfigured(),
       openaiModel: getOpenAiChatModel(),
       openaiHealth,
-      openaiQuotaWarning: openaiHealth.quotaExceeded ? openaiHealth.message : null,
+      openaiQuotaWarning:
+        provider === "openai" && openaiHealth.quotaExceeded ? openaiHealth.message : null,
       supabaseConfigured: Boolean(supabase),
       embeddingsConfigured: isEmbeddingConfigured(),
       allowedTables: ALLOWED_TABLES,
