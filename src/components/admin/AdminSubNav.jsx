@@ -14,6 +14,7 @@ function buildAdminNavLinks({ includeCrmAdmin = false } = {}) {
     { path: "/admin/security-audit", label: "יומן ביקורת" },
     { path: "/admin/sms-stats", label: "סטטיסטיקת SMS" },
     { path: "/admin/review-sms", label: "דירוג גוגל" },
+    { path: "/admin/knowledge", label: "ניהול ידע", matchPrefix: "/admin/knowledge" },
   ];
 
   if (includeCrmAdmin && crmEnabled) {

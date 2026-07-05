@@ -5,7 +5,7 @@ import { getSupabaseAdmin } from "../knowledge/supabaseAdmin.js";
 export const ALLOWED_TABLES = ["customers", "appointments", "tickets", "services"];
 
 /** @type {Record<string, string[]>} */
-const ALLOWED_COLUMNS = {
+export const ALLOWED_COLUMNS = {
   customers: ["id", "name", "email", "phone", "status", "created_at", "updated_at"],
   appointments: [
     "id",

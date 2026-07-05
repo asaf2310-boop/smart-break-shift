@@ -63,6 +63,9 @@ import AdminCrmDashboard from './pages/AdminCrmDashboard';
 import AdminSecurityAudit from './pages/AdminSecurityAudit';
 import AdminSmsStats from './pages/AdminSmsStats';
 import AdminReviewSms from './pages/AdminReviewSms';
+import AdminKnowledge from './pages/AdminKnowledge';
+import AdminKnowledgePaymentGuide from './pages/AdminKnowledgePaymentGuide';
+import AdminKnowledgeAiAgent from './pages/AdminKnowledgeAiAgent';
 import AgentReviewSms from './pages/AgentReviewSms';
 import AgentMetricsPage from './pages/AgentMetricsPage';
 import AgentMetricsRankingPage from './pages/AgentMetricsRankingPage';
@@ -181,6 +184,11 @@ const AuthenticatedApp = () => {
         <Route path="/admin/security-audit" element={<AdminGate><AdminSecurityAudit /></AdminGate>} />
         <Route path="/admin/sms-stats" element={<AdminGate><AdminSmsStats /></AdminGate>} />
         <Route path="/admin/review-sms" element={<AdminGate><AdminReviewSms /></AdminGate>} />
+        <Route path="/admin/knowledge" element={<AdminGate><AdminKnowledge /></AdminGate>}>
+          <Route index element={<Navigate to="payment-guide" replace />} />
+          <Route path="payment-guide" element={<AdminKnowledgePaymentGuide />} />
+          <Route path="ai-agent" element={<AdminKnowledgeAiAgent />} />
+        </Route>
         <Route
           path="/admin/recordings/play"
           element={
