@@ -6,7 +6,7 @@ import { callGeminiAgent } from "./geminiAgentChat.js";
 import { callOpenAiAgent } from "./openaiAgentChat.js";
 
 const MAX_TOOL_ROUNDS = 5;
-const MAX_GEMINI_TOOL_ROUNDS = 3;
+const MAX_GEMINI_TOOL_ROUNDS = 2;
 
 const SYSTEM_PROMPT = `אתה סוכן AI עוזר לנציגי מוקד טלפוני בישראל.
 ענה תמיד בעברית ברורה ומקצועית.

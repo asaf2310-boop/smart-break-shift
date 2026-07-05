@@ -6,8 +6,7 @@ import { isOpenAiConfigured, getOpenAiChatModel } from "../server/ai/openaiClien
 import { isGeminiConfigured, getGeminiChatModel } from "../server/ai/geminiClient.js";
 import { getAiProvider, isAiConfigured } from "../server/ai/aiProvider.js";
 import { probeOpenAiAccess } from "../server/ai/openaiErrors.js";
-import { probeGeminiAccess } from "../server/ai/geminiErrors.js";
-import { buildGeminiAgentUrl } from "../server/ai-agent/geminiAgentChat.js";
+import { probeGeminiKeyPresence } from "../server/ai/geminiErrors.js";
 import { getSupabaseAdmin } from "../server/knowledge/supabaseAdmin.js";
 import { ALLOWED_TABLES, ALLOWED_COLUMNS } from "../server/ai-agent/getBusinessData.js";
 import { getAiAgentDocumentCount } from "../server/ai-agent/documentIngestService.js";
@@ -24,7 +23,7 @@ const RATE_MAX_PER_HOUR = 30;
 let openAiProbeCache = null;
 /** @type {{ at: number, result: { ok: boolean, error: string | null, message: string | null, quotaExceeded?: boolean } } | null} */
 let geminiProbeCache = null;
-const PROBE_TTL_MS = 5 * 60 * 1000;
+const PROBE_TTL_MS = 60 * 60 * 1000;
 
 async function getOpenAiHealth() {
   if (!isOpenAiConfigured()) {
@@ -60,16 +59,12 @@ async function getGeminiHealth() {
     return geminiProbeCache.result;
   }
 
-  const probe = await probeGeminiAccess(
-    () => String(process.env.GEMINI_API_KEY || "").trim(),
-    buildGeminiAgentUrl,
-    getGeminiChatModel,
-  );
+  const probe = probeGeminiKeyPresence(() => String(process.env.GEMINI_API_KEY || "").trim());
   const result = {
     ok: probe.ok,
     error: probe.error,
     message: probe.message,
-    quotaExceeded: probe.error === "gemini_quota_exceeded",
+    quotaExceeded: false,
   };
   geminiProbeCache = { at: now, result };
   return result;

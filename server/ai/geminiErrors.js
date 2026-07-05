@@ -5,7 +5,7 @@ import {
 } from "../knowledge/geminiErrorMessages.js";
 
 export const GEMINI_QUOTA_DAILY_MESSAGE_HE =
-  "מכסה יומית של Gemini אזלה — נסו שוב מחר או בדקו מגבלות ב-Google AI Studio (aistudio.google.com).";
+  "מכסה יומית של Gemini אזלה. נסו שוב מחר (איפוס סביב חצות PT), או צרו מפתח API חדש מחשבון Google אחר ב-aistudio.google.com/apikey.";
 
 export const GEMINI_QUOTA_MESSAGE_HE = GEMINI_QUOTA_DAILY_MESSAGE_HE;
 
@@ -105,29 +105,29 @@ export function classifyGeminiResourceExhausted(status, apiMessage, apiStatus, d
 
   if (!exhausted) return null;
 
-  if (details.isPerDay || /per day|daily limit|requests per day/i.test(msg)) {
-    return "daily";
-  }
-
-  if (
+  const explicitDaily =
+    details.isPerDay ||
+    /\bper day\b|\bdaily limit\b|\brequests per day\b|\bperday\b/i.test(msg);
+  const explicitRate =
     status === 429 ||
     details.isPerMinute ||
     details.retryDelaySec != null ||
-    /per minute|requests per minute|rate limit|too many requests/i.test(msg)
-  ) {
-    return "rate";
-  }
+    /\bper minute\b|\brequests per minute\b|\brate limit\b|\btoo many requests\b/i.test(msg);
 
-  if (msg.includes("billing") && !details.isPerMinute) {
+  // Per-minute quota is checked first — Gemini often uses the same generic message for RPM.
+  if (explicitRate && !explicitDaily) return "rate";
+  if (explicitDaily && !explicitRate) return "daily";
+  if (explicitDaily && explicitRate) {
+    if (details.retryDelaySec != null && details.retryDelaySec <= 120) return "rate";
     return "daily";
   }
 
-  // Free-tier 429 RESOURCE_EXHAUSTED without PerDay signal is almost always RPM.
+  // Generic RESOURCE_EXHAUSTED / 429 without quota breakdown → treat as RPM, not daily.
   if (status === 429 || apiStatus === "RESOURCE_EXHAUSTED") {
     return "rate";
   }
 
-  return "daily";
+  return "rate";
 }
 
 /**
@@ -240,48 +240,49 @@ export function mapGeminiHttpError(status, bodyText, response = null) {
 }
 
 /**
- * Lightweight key / connectivity check for admin status (minimal tokens, no tools).
- * @param {() => string} getApiKey
- * @param {(model: string) => string} buildUrl — (model) => generateContent URL
- * @param {() => string} getModel
+ * Log full Gemini error payload for debugging (truncated for safety).
+ * @param {string} context
+ * @param {number} status
+ * @param {string} bodyText
+ * @param {Record<string, unknown>} [extra]
  */
-export async function probeGeminiAccess(getApiKey, buildUrl, getModel) {
+export function logGeminiApiError(context, status, bodyText, extra = {}) {
+  const apiError = parseGeminiErrorBody(bodyText);
+  const details = parseGeminiErrorDetails(apiError);
+  const classification = classifyGeminiResourceExhausted(
+    status,
+    String(apiError?.message || bodyText || "").toLowerCase(),
+    String(apiError?.status || "").toUpperCase(),
+    details,
+  );
+  console.error(`[${context}] Gemini API error`, {
+    status,
+    classification,
+    apiStatus: apiError?.status ?? null,
+    apiCode: apiError?.code ?? null,
+    apiMessage: apiError?.message ?? bodyText?.slice(0, 200) ?? null,
+    details: apiError?.details ?? null,
+    rawBody: bodyText?.slice(0, 2000) ?? null,
+    ...extra,
+  });
+}
+
+/**
+ * Admin status check — key presence only (no generateContent ping; saves free-tier quota).
+ * @param {() => string} getApiKey
+ */
+export function probeGeminiKeyPresence(getApiKey) {
   const apiKey = getApiKey();
   if (!apiKey) {
     return { ok: false, error: "not_configured", message: null };
   }
-
-  const model = getModel();
-  const body = {
-    contents: [{ role: "user", parts: [{ text: "ping" }] }],
-    generationConfig: { maxOutputTokens: 1 },
-  };
-
-  let res;
-  try {
-    res = await fetch(buildUrl(model), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-  } catch {
-    return { ok: false, error: "network_error", message: null };
+  if (apiKey.length < 20) {
+    return { ok: false, error: "gemini_auth_error", message: GEMINI_AUTH_MESSAGE_HE };
   }
+  return { ok: true, error: null, message: null };
+}
 
-  if (res.ok) {
-    return { ok: true, error: null, message: null };
-  }
-
-  const errText = await res.text().catch(() => "");
-  console.error("[probeGeminiAccess] Gemini probe failed", {
-    status: res.status,
-    model,
-    body: errText.slice(0, 500),
-  });
-  const mapped = mapGeminiHttpError(res.status, errText, res);
-  return {
-    ok: false,
-    error: mapped.error,
-    message: mapped.message,
-  };
+/** @deprecated Use probeGeminiKeyPresence — live ping burns free-tier daily quota. */
+export async function probeGeminiAccess(getApiKey) {
+  return probeGeminiKeyPresence(getApiKey);
 }

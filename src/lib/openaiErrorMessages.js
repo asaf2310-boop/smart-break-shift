@@ -2,7 +2,7 @@ export const OPENAI_QUOTA_MESSAGE_HE =
   "מכסת OpenAI אזלה. יש לעדכן חיוב או מפתח API בהגדרות Vercel.";
 
 export const GEMINI_QUOTA_MESSAGE_HE =
-  "מכסה יומית של Gemini אזלה — נסו שוב מחר או בדקו מגבלות ב-Google AI Studio (aistudio.google.com).";
+  "מכסה יומית של Gemini אזלה. נסו שוב מחר (איפוס סביב חצות PT), או צרו מפתח API חדש מחשבון Google אחר ב-aistudio.google.com/apikey.";
 
 const ERROR_CODE_MESSAGES = {
   openai_quota_exceeded: OPENAI_QUOTA_MESSAGE_HE,
@@ -81,10 +81,19 @@ export function messageFromOpenAiJsonString(text) {
 
   if (
     code === "insufficient_quota" ||
-    apiMessage.includes("exceeded your current quota") ||
     apiMessage.includes("insufficient_quota")
   ) {
     return OPENAI_QUOTA_MESSAGE_HE;
+  }
+  if (
+    code === "429" ||
+    apiMessage.includes("resource exhausted") ||
+    apiMessage.includes("exceeded your current quota")
+  ) {
+    if (/\bper day\b|\bdaily\b|\bperday\b/i.test(apiMessage)) {
+      return GEMINI_QUOTA_MESSAGE_HE;
+    }
+    return ERROR_CODE_MESSAGES.gemini_rate_limited;
   }
   if (code === "rate_limit_exceeded" || code === "rate_limit") {
     return ERROR_CODE_MESSAGES.openai_rate_limited;

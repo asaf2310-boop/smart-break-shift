@@ -3,6 +3,7 @@ import { getGeminiChatModel, isGeminiConfigured } from "../ai/geminiClient.js";
 import {
   getGeminiRetryDelayMs,
   isGeminiDailyQuotaError,
+  logGeminiApiError,
   mapGeminiHttpError,
 } from "../ai/geminiErrors.js";
 import { AGENT_TOOLS_GEMINI } from "./agentTools.js";
@@ -68,7 +69,7 @@ async function callGeminiAgentOnce(model, systemPrompt, contents) {
       }),
     },
     {
-      maxRetries: 1,
+      maxRetries: 0,
       maxDelayMs: 20_000,
       parseBodyRetryMs: getGeminiRetryDelayMs,
       skipRetryIf: isGeminiDailyQuotaError,
@@ -133,6 +134,7 @@ export async function callGeminiAgent(systemPrompt, contents) {
       modelsTried: models.slice(0, i + 1),
       body: errText.slice(0, 800),
     });
+    logGeminiApiError("callGeminiAgent", res.status, errText, { model, attempt: i + 1 });
 
     const isRateOrQuota =
       res.status === 429 ||

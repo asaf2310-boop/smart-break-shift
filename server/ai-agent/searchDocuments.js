@@ -12,6 +12,29 @@ import {
   isAiAgentSchemaError,
 } from "./schemaErrors.js";
 
+/** When true (default), agent document search skips Gemini embed API — keyword/fulltext only. */
+function isAgentVectorSearchEnabled() {
+  const flag = String(process.env.GEMINI_AGENT_VECTOR_SEARCH || "0").trim().toLowerCase();
+  return flag === "1" || flag === "true" || flag === "yes";
+}
+
+/** Skip embed after a quota/rate error in this process (avoids burning quota on every search). */
+let embedQuotaBlockedUntil = 0;
+
+function markEmbedQuotaBlocked(retryAfterSec) {
+  const blockMs = Math.max(60_000, (retryAfterSec || 300) * 1000);
+  embedQuotaBlockedUntil = Date.now() + blockMs;
+}
+
+function shouldSkipEmbedApi() {
+  if (!isAgentVectorSearchEnabled()) return true;
+  return Date.now() < embedQuotaBlockedUntil;
+}
+
+function isEmbedQuotaError(error) {
+  const e = String(error || "").toLowerCase();
+  return e.includes("429") || e.includes("quota") || e.includes("resource_exhausted");
+}
 const MAX_TOP_K = 8;
 const DEFAULT_TOP_K = 5;
 const MIN_VECTOR_SCORE = 0.48;
@@ -43,8 +66,15 @@ function truncate(text, max = 600) {
 }
 
 async function vectorSearch(supabase, query, topK) {
-  const { embedding, error: embedErr } = await embedQuery(query);
+  if (shouldSkipEmbedApi()) {
+    return { hits: [], error: null, skipped: true };
+  }
+
+  const { embedding, error: embedErr, retryAfterSec } = await embedQuery(query);
   if (embedErr || !embedding) {
+    if (isEmbedQuotaError(embedErr)) {
+      markEmbedQuotaBlocked(retryAfterSec);
+    }
     return { hits: [], error: embedErr || "embedding_failed" };
   }
 
@@ -175,24 +205,12 @@ export async function searchDocuments(args) {
     let method = "none";
     let searchError = null;
 
-    if (isEmbeddingConfigured()) {
-      const vectorResult = await vectorSearch(supabase, query, topK);
-      if (vectorResult.hits.length) {
-        hits = vectorResult.hits;
-        method = "vector";
-      } else if (vectorResult.error) {
-        searchError = vectorResult.error;
-      }
-    }
-
-    if (!hits.length) {
-      const kwResult = await keywordSearch(supabase, query, topK);
-      if (kwResult.hits.length) {
-        hits = kwResult.hits;
-        method = "keyword";
-      } else if (kwResult.error) {
-        searchError = kwResult.error;
-      }
+    const kwResult = await keywordSearch(supabase, query, topK);
+    if (kwResult.hits.length) {
+      hits = kwResult.hits;
+      method = "keyword";
+    } else if (kwResult.error) {
+      searchError = kwResult.error;
     }
 
     if (!hits.length) {
@@ -202,6 +220,16 @@ export async function searchDocuments(args) {
         method = "fulltext";
       } else if (ftResult.error) {
         searchError = ftResult.error;
+      }
+    }
+
+    if (!hits.length && isEmbeddingConfigured()) {
+      const vectorResult = await vectorSearch(supabase, query, topK);
+      if (vectorResult.hits.length) {
+        hits = vectorResult.hits;
+        method = "vector";
+      } else if (vectorResult.error) {
+        searchError = vectorResult.error;
       }
     }
 
