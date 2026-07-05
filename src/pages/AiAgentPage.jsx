@@ -7,6 +7,17 @@ import { getAgentBearerHeaders } from "@/lib/agentAuthClient";
 import { hypHeaderIconClass } from "@/lib/hypPage";
 import { cn } from "@/lib/utils";
 
+function formatAgentApiError(res, data) {
+  if (data?.message) return data.message;
+  if (res.status === 500) return "שגיאת שרת — נסו שוב בעוד רגע";
+  if (res.status === 503 && data?.error === "ai_not_configured") {
+    return "סוכן AI לא מוגדר בשרת (חסר OPENAI_API_KEY)";
+  }
+  if (res.status === 401) return "נדרשת התחברות מחדש";
+  if (res.status === 429) return "יותר מדי בקשות — נסו שוב בעוד כמה דקות";
+  return data?.error || "שגיאה בשליחה";
+}
+
 export default function AiAgentPage() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([]);
@@ -41,7 +52,7 @@ export default function AiAgentPage() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        const msg = data.message || data.error || "שגיאה בשליחה";
+        const msg = formatAgentApiError(res, data);
         setError(msg);
         setMessages((prev) => [
           ...prev,

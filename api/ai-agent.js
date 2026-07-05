@@ -57,7 +57,17 @@ export default async function handler(req, res) {
     return json(res, 400, { error: "message_required", message: "נדרשת הודעה" }, req);
   }
 
-  const result = await runAiAgent(message);
+  let result;
+  try {
+    result = await runAiAgent(message);
+  } catch {
+    return json(
+      res,
+      500,
+      { error: "internal_error", message: "שגיאת שרת — נסו שוב בעוד רגע" },
+      req,
+    );
+  }
 
   if (!result.ok) {
     const status =

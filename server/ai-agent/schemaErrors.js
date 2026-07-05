@@ -26,3 +26,6 @@ export const AI_AGENT_SCHEMA_MIGRATION_STEPS_HE = [
   "אם אחרי ההרצה עדיין מופיעה שגיאת schema cache — הריצו: NOTIFY pgrst, 'reload schema';",
   "רעננו את דף הניהול בדפדפן",
 ];
+
+/** Friendly tool result when document tables are missing or RAG is unavailable. */
+export const AI_AGENT_DOCUMENTS_UNAVAILABLE_HE = "אין מסמכים זמינים";

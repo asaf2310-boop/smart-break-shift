@@ -7,11 +7,34 @@ import {
   scoreChunkKeywordMatch,
   normalizeKeywordScore,
 } from "../knowledge/queryTermsService.js";
+import {
+  AI_AGENT_DOCUMENTS_UNAVAILABLE_HE,
+  isAiAgentSchemaError,
+} from "./schemaErrors.js";
 
 const MAX_TOP_K = 8;
 const DEFAULT_TOP_K = 5;
 const MIN_VECTOR_SCORE = 0.48;
 const MAX_KEYWORD_CHUNKS = 200;
+
+function documentsUnavailableResult(query, reason = AI_AGENT_DOCUMENTS_UNAVAILABLE_HE) {
+  return {
+    ok: true,
+    query,
+    method: "none",
+    count: 0,
+    snippets: [],
+    documentsUnavailable: true,
+    message: reason,
+  };
+}
+
+async function isDocumentsSchemaAvailable(supabase) {
+  const { error } = await supabase.from("ai_agent_documents").select("id").limit(1);
+  if (!error) return true;
+  if (isAiAgentSchemaError(error)) return false;
+  return true;
+}
 
 function truncate(text, max = 600) {
   const s = String(text || "").trim();
@@ -137,71 +160,81 @@ export async function searchDocuments(args) {
 
   const supabase = getSupabaseAdmin();
   if (!supabase) {
-    return {
-      ok: false,
-      error: "supabase_not_configured",
-      message: "חיבור Supabase לא מוגדר בשרת.",
-    };
+    return documentsUnavailableResult(query);
   }
 
-  const topK = Math.min(MAX_TOP_K, Math.max(1, Number(args?.topK) || DEFAULT_TOP_K));
-
-  let hits = [];
-  let method = "none";
-  let searchError = null;
-
-  if (isEmbeddingConfigured()) {
-    const vectorResult = await vectorSearch(supabase, query, topK);
-    if (vectorResult.hits.length) {
-      hits = vectorResult.hits;
-      method = "vector";
-    } else {
-      searchError = vectorResult.error;
+  try {
+    const schemaOk = await isDocumentsSchemaAvailable(supabase);
+    if (!schemaOk) {
+      return documentsUnavailableResult(query);
     }
-  }
 
-  if (!hits.length) {
-    const kwResult = await keywordSearch(supabase, query, topK);
-    if (kwResult.hits.length) {
-      hits = kwResult.hits;
-      method = "keyword";
-    } else if (kwResult.error) {
-      searchError = kwResult.error;
+    const topK = Math.min(MAX_TOP_K, Math.max(1, Number(args?.topK) || DEFAULT_TOP_K));
+
+    let hits = [];
+    let method = "none";
+    let searchError = null;
+
+    if (isEmbeddingConfigured()) {
+      const vectorResult = await vectorSearch(supabase, query, topK);
+      if (vectorResult.hits.length) {
+        hits = vectorResult.hits;
+        method = "vector";
+      } else if (vectorResult.error) {
+        searchError = vectorResult.error;
+      }
     }
-  }
 
-  if (!hits.length) {
-    const ftResult = await fullTextFallback(supabase, query, topK);
-    if (ftResult.hits.length) {
-      hits = ftResult.hits;
-      method = "fulltext";
+    if (!hits.length) {
+      const kwResult = await keywordSearch(supabase, query, topK);
+      if (kwResult.hits.length) {
+        hits = kwResult.hits;
+        method = "keyword";
+      } else if (kwResult.error) {
+        searchError = kwResult.error;
+      }
     }
-  }
 
-  if (!hits.length) {
+    if (!hits.length) {
+      const ftResult = await fullTextFallback(supabase, query, topK);
+      if (ftResult.hits.length) {
+        hits = ftResult.hits;
+        method = "fulltext";
+      } else if (ftResult.error) {
+        searchError = ftResult.error;
+      }
+    }
+
+    if (!hits.length) {
+      if (searchError && isAiAgentSchemaError(searchError)) {
+        return documentsUnavailableResult(query);
+      }
+      return {
+        ok: true,
+        query,
+        method,
+        count: 0,
+        snippets: [],
+        message: "לא נמצאו קטעים רלוונטיים במסמכי הידע.",
+      };
+    }
+
     return {
       ok: true,
       query,
       method,
-      count: 0,
-      snippets: [],
-      message: "לא נמצאו קטעים רלוונטיים במסמכי הידע.",
+      count: hits.length,
+      snippets: hits.map((h) => ({
+        documentTitle: h.documentTitle,
+        sectionTitle: h.sectionTitle,
+        chunkIndex: h.chunkIndex,
+        score: Number(h.score?.toFixed?.(3) ?? h.score),
+        excerpt: truncate(h.text, 700),
+      })),
     };
+  } catch {
+    return documentsUnavailableResult(query);
   }
-
-  return {
-    ok: true,
-    query,
-    method,
-    count: hits.length,
-    snippets: hits.map((h) => ({
-      documentTitle: h.documentTitle,
-      sectionTitle: h.sectionTitle,
-      chunkIndex: h.chunkIndex,
-      score: Number(h.score?.toFixed?.(3) ?? h.score),
-      excerpt: truncate(h.text, 700),
-    })),
-  };
 }
 
 export const SEARCH_DOCUMENTS_TOOL = {

@@ -11,6 +11,7 @@ const SYSTEM_PROMPT = `אתה סוכן AI עוזר לנציגי מוקד טלפ�
 כשחסר מידע — שאל שאלת הבהרה לפני שאתה מסיק מסקנות.
 כשצריך נתונים עסקיים (לקוחות, תורים, כרטיסים, שירותים) — השתמש בכלי getBusinessData.
 כשצריך מידע ממסמכי ידע (נהלים, מדריכים, מדיניות) — השתמש בכלי searchDocuments וסכם בעברית.
+אם searchDocuments מחזיר documentsUnavailable או "אין מסמכים זמינים" — אל תנסה שוב; ענה מ-getBusinessData או מידע כללי.
 אל תמציא נתונים. אם הכלי נכשל, אין תוצאות, או הטבלה חסרה — הסבר לנציג בבירור.
 הצג תשובות מסודרות; אם יש רשימות — השתמש בנקודות.`;
 
@@ -23,21 +24,26 @@ function getApiKey() {
  */
 async function callOpenAi(messages) {
   const apiKey = getApiKey();
-  const res = await fetchOpenAiWithRetry(CHAT_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: getOpenAiChatModel(),
-      temperature: 0.3,
-      max_tokens: 800,
-      messages,
-      tools: [GET_BUSINESS_DATA_TOOL, SEARCH_DOCUMENTS_TOOL],
-      tool_choice: "auto",
-    }),
-  });
+  let res;
+  try {
+    res = await fetchOpenAiWithRetry(CHAT_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: getOpenAiChatModel(),
+        temperature: 0.3,
+        max_tokens: 800,
+        messages,
+        tools: [GET_BUSINESS_DATA_TOOL, SEARCH_DOCUMENTS_TOOL],
+        tool_choice: "auto",
+      }),
+    });
+  } catch {
+    return { ok: false, error: "ai_network_error", message: "שגיאת רשת בחיבור ל-OpenAI — נסו שוב" };
+  }
 
   if (!res.ok) {
     const errText = await res.text().catch(() => "");
@@ -48,9 +54,13 @@ async function callOpenAi(messages) {
     };
   }
 
-  const data = await res.json();
-  const choice = data.choices?.[0];
-  return { ok: true, message: choice?.message || null, finishReason: choice?.finish_reason };
+  try {
+    const data = await res.json();
+    const choice = data.choices?.[0];
+    return { ok: true, message: choice?.message || null, finishReason: choice?.finish_reason };
+  } catch {
+    return { ok: false, error: "ai_parse_error", message: "שגיאה בפענוח תגובת OpenAI" };
+  }
 }
 
 /**
@@ -129,10 +139,19 @@ export async function runAiAgent(userMessage) {
         parsedArgs = {};
       }
 
-      const toolResult =
-        toolName === "searchDocuments"
-          ? await searchDocuments(parsedArgs)
-          : await getBusinessData(parsedArgs);
+      let toolResult;
+      try {
+        toolResult =
+          toolName === "searchDocuments"
+            ? await searchDocuments(parsedArgs)
+            : await getBusinessData(parsedArgs);
+      } catch {
+        toolResult = {
+          ok: false,
+          error: "tool_exception",
+          message: "שגיאה בהרצת הכלי — נסו שוב או נסחו את השאלה אחרת",
+        };
+      }
       messages.push({
         role: "tool",
         tool_call_id: toolCall.id,
