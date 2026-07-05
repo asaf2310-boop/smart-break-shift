@@ -3,6 +3,7 @@
 import { json, handleOptions, isSameOrigin } from "../server/knowledge/httpUtils.js";
 import { verifyAdminAgent } from "../server/agent/agentAuthService.js";
 import { isOpenAiConfigured, getOpenAiChatModel } from "../server/ai/openaiClient.js";
+import { probeOpenAiAccess } from "../server/ai/openaiErrors.js";
 import { getSupabaseAdmin } from "../server/knowledge/supabaseAdmin.js";
 import { ALLOWED_TABLES, ALLOWED_COLUMNS } from "../server/ai-agent/getBusinessData.js";
 import { getAiAgentDocumentCount } from "../server/ai-agent/documentIngestService.js";
@@ -14,6 +15,34 @@ import {
 } from "../server/ai-agent/schemaErrors.js";
 
 const RATE_MAX_PER_HOUR = 30;
+
+/** @type {{ at: number, result: { ok: boolean, error: string | null, message: string | null } } | null} */
+let openAiProbeCache = null;
+const OPENAI_PROBE_TTL_MS = 5 * 60 * 1000;
+
+async function getOpenAiHealth() {
+  if (!isOpenAiConfigured()) {
+    return { ok: false, error: "not_configured", message: null, quotaExceeded: false };
+  }
+
+  const now = Date.now();
+  if (openAiProbeCache && now - openAiProbeCache.at < OPENAI_PROBE_TTL_MS) {
+    return openAiProbeCache.result;
+  }
+
+  const probe = await probeOpenAiAccess(
+    () => String(process.env.OPENAI_API_KEY || "").trim(),
+    getOpenAiChatModel,
+  );
+  const result = {
+    ok: probe.ok,
+    error: probe.error,
+    message: probe.message,
+    quotaExceeded: probe.error === "openai_quota_exceeded",
+  };
+  openAiProbeCache = { at: now, result };
+  return result;
+}
 
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") {
@@ -49,6 +78,7 @@ export default async function handler(req, res) {
 
   const docStats = await getAiAgentDocumentCount();
   const documentsSchemaOk = docStats.error !== "schema_not_migrated";
+  const openaiHealth = await getOpenAiHealth();
 
   return json(
     res,
@@ -56,6 +86,8 @@ export default async function handler(req, res) {
     {
       openaiConfigured: isOpenAiConfigured(),
       openaiModel: getOpenAiChatModel(),
+      openaiHealth,
+      openaiQuotaWarning: openaiHealth.quotaExceeded ? openaiHealth.message : null,
       supabaseConfigured: Boolean(supabase),
       embeddingsConfigured: isEmbeddingConfigured(),
       allowedTables: ALLOWED_TABLES,

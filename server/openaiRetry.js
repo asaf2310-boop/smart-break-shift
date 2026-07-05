@@ -38,6 +38,13 @@ export async function fetchOpenAiWithRetry(url, options, config = {}) {
       return lastResponse;
     }
 
+    if (lastResponse.status === 429) {
+      const errText = await lastResponse.clone().text().catch(() => "");
+      if (errText.includes("insufficient_quota")) {
+        return lastResponse;
+      }
+    }
+
     const retryAfterMs = parseRetryAfterMs(lastResponse) ?? initialDelayMs * 2 ** attempt;
     await sleep(Math.min(maxDelayMs, retryAfterMs));
   }

@@ -213,6 +213,16 @@ export default function AiAgentAdminPanel() {
         <SchemaMigrationAlert steps={migrationSteps} />
       ) : null}
 
+      {status?.openaiQuotaWarning ? (
+        <div
+          className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3"
+          role="alert"
+        >
+          <p className="font-semibold">אזהרת מכסת OpenAI</p>
+          <p className="mt-1 text-amber-800">{status.openaiQuotaWarning}</p>
+        </div>
+      ) : null}
+
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between gap-3 mb-4">
           <h2 className="text-base font-bold text-slate-800">מסמכי ידע</h2>
@@ -329,8 +339,14 @@ export default function AiAgentAdminPanel() {
           <div>
             <StatusRow
               label="OPENAI_API_KEY"
-              ok={status.openaiConfigured}
-              detail={status.openaiModel || undefined}
+              ok={status.openaiConfigured && !status.openaiQuotaWarning}
+              detail={
+                status.openaiQuotaWarning
+                  ? "מכסה אזלה"
+                  : status.openaiHealth?.ok === false && status.openaiHealth?.message
+                    ? status.openaiHealth.message
+                    : status.openaiModel || undefined
+              }
             />
             <StatusRow label="SUPABASE_URL + SERVICE_ROLE_KEY" ok={status.supabaseConfigured} />
             <StatusRow

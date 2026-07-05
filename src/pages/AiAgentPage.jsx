@@ -6,21 +6,44 @@ import HypPageLayout from "@/components/hyp/HypPageLayout";
 import { getAgentBearerHeaders } from "@/lib/agentAuthClient";
 import { hypHeaderIconClass } from "@/lib/hypPage";
 import { cn } from "@/lib/utils";
+import {
+  friendlyOpenAiErrorMessage,
+  messageFromOpenAiJsonString,
+} from "@/lib/openaiErrorMessages";
 
 function formatAgentApiError(res, data) {
-  if (data?.message) return data.message;
+  const friendly = friendlyOpenAiErrorMessage(data);
+  if (friendly && friendly !== "שגיאה בשליחה") return friendly;
+
   if (res.status === 500) return "שגיאת שרת — נסו שוב בעוד רגע";
   if (res.status === 503 && data?.error === "ai_not_configured") {
     return "סוכן AI לא מוגדר בשרת (חסר OPENAI_API_KEY ב-Vercel)";
   }
+  if (res.status === 503 && data?.error === "openai_quota_exceeded") {
+    return friendlyOpenAiErrorMessage({ error: "openai_quota_exceeded" });
+  }
   if (res.status === 401) {
+    if (data?.error === "openai_auth_error") {
+      return friendlyOpenAiErrorMessage({ error: "openai_auth_error" });
+    }
     return data?.error === "unauthorized"
       ? "נדרשת התחברות עם הרשאת סוכן AI — פנו למנהל לעדכון מודול ai_agent"
       : "נדרשת התחברות מחדש";
   }
   if (res.status === 403) return "גישה נדחתה (CORS) — רעננו את הדף ונסו שוב";
-  if (res.status === 429) return "יותר מדי בקשות — נסו שוב בעוד כמה דקות";
+  if (res.status === 429) {
+    return data?.error === "openai_rate_limited"
+      ? friendlyOpenAiErrorMessage(data)
+      : "יותר מדי בקשות — נסו שוב בעוד כמה דקות";
+  }
   return data?.error || "שגיאה בשליחה";
+}
+
+function normalizeAssistantReply(reply) {
+  const text = String(reply || "").trim();
+  if (!text) return "אין תשובה";
+  const fromJson = messageFromOpenAiJsonString(text);
+  return fromJson || text;
 }
 
 export default function AiAgentPage() {
@@ -66,10 +89,17 @@ export default function AiAgentPage() {
         return;
       }
 
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: data.reply || "אין תשובה" },
-      ]);
+      const reply = normalizeAssistantReply(data.reply);
+      if (messageFromOpenAiJsonString(data.reply)) {
+        setError(reply);
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: `⚠️ ${reply}`, isError: true },
+        ]);
+        return;
+      }
+
+      setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
     } catch {
       const msg = "שגיאת רשת — נסו שוב";
       setError(msg);

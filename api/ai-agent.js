@@ -84,9 +84,13 @@ export default async function handler(req, res) {
     const status =
       result.error === "ai_not_configured"
         ? 503
-        : result.error === "rate_limited"
+        : result.error === "openai_quota_exceeded"
+          ? 503
+        : result.error === "openai_rate_limited" || result.error === "rate_limited"
           ? 429
-          : 400;
+          : result.error === "openai_auth_error"
+            ? 401
+            : 400;
     return json(res, status, { error: result.error, message: result.message }, req);
   }
 

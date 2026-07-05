@@ -1,5 +1,6 @@
 import { fetchOpenAiWithRetry } from "../openaiRetry.js";
 import { getOpenAiChatModel, isOpenAiConfigured } from "../ai/openaiClient.js";
+import { mapOpenAiHttpError } from "../ai/openaiErrors.js";
 import { getBusinessData, GET_BUSINESS_DATA_TOOL } from "./getBusinessData.js";
 import { searchDocuments, SEARCH_DOCUMENTS_TOOL } from "./searchDocuments.js";
 
@@ -47,11 +48,8 @@ async function callOpenAi(messages) {
 
   if (!res.ok) {
     const errText = await res.text().catch(() => "");
-    return {
-      ok: false,
-      error: `ai_error:${res.status}`,
-      message: errText.slice(0, 200) || "שגיאת OpenAI",
-    };
+    const mapped = mapOpenAiHttpError(res.status, errText, res);
+    return { ok: false, error: mapped.error, message: mapped.message };
   }
 
   try {
