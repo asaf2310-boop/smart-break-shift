@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { getSupabaseAdmin, getSupabaseUrl } from "../knowledge/supabaseAdmin.js";
+import { agentHasModule } from "./agentModuleAccess.js";
 
 function getSupabaseAnonKey() {
   return String(process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "").trim();
@@ -22,7 +23,12 @@ function mapAgentRow(row) {
     blocked: row.blocked === true,
     isAdmin: row.is_admin === true,
     crmRole: row.crm_role || "none",
-    modules: Array.isArray(row.modules) ? row.modules : [],
+    modules:
+      row.modules === undefined || row.modules === null
+        ? null
+        : Array.isArray(row.modules)
+          ? row.modules
+          : null,
   };
 }
 
@@ -304,12 +310,11 @@ export async function verifyKnowledgeAccess(req) {
   return null;
 }
 
-/** AI Agent API: authenticated agent with admin or ai_agent module. */
+/** AI Agent API: authenticated agent with admin or ai_agent module (legacy: knowledge_chat). */
 export async function verifyAiAgentAccess(req) {
   const auth = await verifyBearerAgent(req);
   if (!auth?.agent) return null;
   if (auth.agent.isAdmin) return auth;
-  const modules = Array.isArray(auth.agent.modules) ? auth.agent.modules : [];
-  if (modules.includes("ai_agent")) return auth;
+  if (agentHasModule(auth.agent.modules, "ai_agent")) return auth;
   return null;
 }

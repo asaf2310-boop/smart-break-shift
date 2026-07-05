@@ -67,6 +67,22 @@ async function callOpenAi(messages) {
  * @param {string} userMessage
  */
 export async function runAiAgent(userMessage) {
+  try {
+    return await runAiAgentInner(userMessage);
+  } catch (err) {
+    console.error("[runAiAgent] unexpected error", {
+      message: err?.message,
+      stack: err?.stack,
+    });
+    return {
+      ok: false,
+      error: "internal_error",
+      message: "שגיאת שרת פנימית — נסו שוב בעוד רגע",
+    };
+  }
+}
+
+async function runAiAgentInner(userMessage) {
   const text = String(userMessage || "").trim();
   if (!text) {
     return { ok: false, error: "message_required", message: "נדרשת הודעה" };
@@ -79,7 +95,7 @@ export async function runAiAgent(userMessage) {
     return {
       ok: false,
       error: "ai_not_configured",
-      message: "OPENAI_API_KEY לא מוגדר בשרת.",
+      message: "סוכן AI לא מוגדר בשרת — חסר OPENAI_API_KEY ב-Vercel.",
     };
   }
 

@@ -60,11 +60,22 @@ export default async function handler(req, res) {
   let result;
   try {
     result = await runAiAgent(message);
-  } catch {
+  } catch (err) {
+    console.error("[ai-agent] runAiAgent threw", {
+      agentId: auth.agent?.id,
+      message: err?.message,
+      stack: err?.stack,
+    });
+    const isDev =
+      process.env.NODE_ENV !== "production" || process.env.VERCEL_ENV === "preview";
     return json(
       res,
       500,
-      { error: "internal_error", message: "שגיאת שרת — נסו שוב בעוד רגע" },
+      {
+        error: "internal_error",
+        message: "שגיאת שרת — נסו שוב בעוד רגע",
+        ...(isDev && err?.message ? { detail: String(err.message) } : {}),
+      },
       req,
     );
   }

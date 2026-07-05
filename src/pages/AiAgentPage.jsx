@@ -11,9 +11,14 @@ function formatAgentApiError(res, data) {
   if (data?.message) return data.message;
   if (res.status === 500) return "שגיאת שרת — נסו שוב בעוד רגע";
   if (res.status === 503 && data?.error === "ai_not_configured") {
-    return "סוכן AI לא מוגדר בשרת (חסר OPENAI_API_KEY)";
+    return "סוכן AI לא מוגדר בשרת (חסר OPENAI_API_KEY ב-Vercel)";
   }
-  if (res.status === 401) return "נדרשת התחברות מחדש";
+  if (res.status === 401) {
+    return data?.error === "unauthorized"
+      ? "נדרשת התחברות עם הרשאת סוכן AI — פנו למנהל לעדכון מודול ai_agent"
+      : "נדרשת התחברות מחדש";
+  }
+  if (res.status === 403) return "גישה נדחתה (CORS) — רעננו את הדף ונסו שוב";
   if (res.status === 429) return "יותר מדי בקשות — נסו שוב בעוד כמה דקות";
   return data?.error || "שגיאה בשליחה";
 }

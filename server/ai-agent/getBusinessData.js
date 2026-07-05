@@ -26,6 +26,16 @@ const DEFAULT_LIMIT = 20;
 
 const SAFE_VALUE_RE = /^[\w\s@.\-+:/(),א-ת]{0,200}$/u;
 
+const TABLE_MISSING_RE =
+  /relation.*does not exist|schema cache|could not find the table|pgrst205|42p01/i;
+
+function isMissingTableError(error) {
+  if (!error) return false;
+  const code = String(error.code || "").toUpperCase();
+  if (code === "PGRST205" || code === "42P01") return true;
+  return TABLE_MISSING_RE.test(String(error.message || ""));
+}
+
 function isSafeFilterValue(value) {
   if (value === null || value === undefined) return false;
   if (typeof value === "number" && Number.isFinite(value)) return true;
@@ -89,17 +99,32 @@ export async function getBusinessData(args) {
     query = query.eq(col, value);
   }
 
-  const { data, error } = await query;
+  let data;
+  let error;
+  try {
+    ({ data, error } = await query);
+  } catch (err) {
+    console.error("[getBusinessData] query threw", { table, message: err?.message });
+    return {
+      ok: false,
+      error: "query_failed",
+      message: "שגיאה בשאילתה — נסו שוב או פנו למנהל המערכת",
+    };
+  }
 
   if (error) {
-    const code = String(error.code || "");
-    if (code === "42P01" || error.message?.includes("does not exist")) {
+    if (isMissingTableError(error)) {
       return {
         ok: false,
         error: "table_missing",
         message: `הטבלה "${table}" אינה קיימת ב-Supabase. הריצו supabase/ai_agent_tables.sql.`,
       };
     }
+    console.warn("[getBusinessData] query failed", {
+      table,
+      code: error.code,
+      message: error.message,
+    });
     return {
       ok: false,
       error: "query_failed",
