@@ -21,7 +21,13 @@ function isRetryableStatus(status) {
 /**
  * @param {string} url
  * @param {RequestInit} options
- * @param {{ maxRetries?: number, initialDelayMs?: number, maxDelayMs?: number }} [config]
+ * @param {{
+ *   maxRetries?: number,
+ *   initialDelayMs?: number,
+ *   maxDelayMs?: number,
+ *   parseBodyRetryMs?: (bodyText: string) => number | null,
+ *   skipRetryIf?: (status: number, bodyText: string) => boolean,
+ * }} [config]
  * @returns {Promise<Response>}
  */
 export async function fetchOpenAiWithRetry(url, options, config = {}) {
@@ -38,14 +44,19 @@ export async function fetchOpenAiWithRetry(url, options, config = {}) {
       return lastResponse;
     }
 
-    if (lastResponse.status === 429) {
-      const errText = await lastResponse.clone().text().catch(() => "");
-      if (errText.includes("insufficient_quota")) {
-        return lastResponse;
-      }
+    const errText = await lastResponse.clone().text().catch(() => "");
+
+    if (config.skipRetryIf?.(lastResponse.status, errText)) {
+      return lastResponse;
     }
 
-    const retryAfterMs = parseRetryAfterMs(lastResponse) ?? initialDelayMs * 2 ** attempt;
+    if (lastResponse.status === 429 && errText.includes("insufficient_quota")) {
+      return lastResponse;
+    }
+
+    const bodyRetryMs = config.parseBodyRetryMs?.(errText) ?? null;
+    const retryAfterMs =
+      bodyRetryMs ?? parseRetryAfterMs(lastResponse) ?? initialDelayMs * 2 ** attempt;
     await sleep(Math.min(maxDelayMs, retryAfterMs));
   }
 

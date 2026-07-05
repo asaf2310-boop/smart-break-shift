@@ -6,6 +6,7 @@ import { callGeminiAgent } from "./geminiAgentChat.js";
 import { callOpenAiAgent } from "./openaiAgentChat.js";
 
 const MAX_TOOL_ROUNDS = 5;
+const MAX_GEMINI_TOOL_ROUNDS = 3;
 
 const SYSTEM_PROMPT = `אתה סוכן AI עוזר לנציגי מוקד טלפוני בישראל.
 ענה תמיד בעברית ברורה ומקצועית.
@@ -114,7 +115,7 @@ async function runGeminiAgentLoop(text) {
   /** @type {Array<{ role: string, parts: unknown[] }>} */
   const contents = [{ role: "user", parts: [{ text }] }];
 
-  for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
+  for (let round = 0; round < MAX_GEMINI_TOOL_ROUNDS; round += 1) {
     const result = await callGeminiAgent(SYSTEM_PROMPT, contents);
     if (!result.ok) {
       return { ok: false, error: result.error, message: result.message };

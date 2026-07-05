@@ -8,7 +8,11 @@ export function isGeminiHighDemandError(status, message = "") {
 
 export function isGeminiRateLimitError(status, message = "") {
   const code = Number(status);
-  return code === 429 || /rate limit|quota|resource exhausted/i.test(String(message || ""));
+  const msg = String(message || "");
+  return (
+    code === 429 ||
+    /rate limit|too many requests|requests per minute|per minute/i.test(msg)
+  );
 }
 
 /**

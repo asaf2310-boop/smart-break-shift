@@ -452,7 +452,7 @@ export default function AiAgentAdminPanel() {
             <code className="text-xs">GEMINI_API_KEY</code> — חובה (צ&apos;אט + embeddings)
           </li>
           <li>
-            <code className="text-xs">GEMINI_CHAT_MODEL</code> — אופציונלי (ברירת מחדל: gemini-2.0-flash)
+            <code className="text-xs">GEMINI_CHAT_MODEL</code> — אופציונלי (ברירת מחדל: gemini-2.0-flash-lite)
           </li>
           <li>
             <code className="text-xs">AI_PROVIDER</code> — אופציונלי (ברירת מחדל: gemini אם המפתח קיים)

@@ -12,7 +12,7 @@ function getApiKey() {
 }
 
 export function getGeminiChatModel() {
-  return String(process.env.GEMINI_CHAT_MODEL || "gemini-2.0-flash").trim();
+  return String(process.env.GEMINI_CHAT_MODEL || "gemini-2.0-flash-lite").trim();
 }
 
 /** Model for Google Search grounding — stable default with optional override. */

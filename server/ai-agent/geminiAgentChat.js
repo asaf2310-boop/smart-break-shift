@@ -1,11 +1,16 @@
 import { fetchOpenAiWithRetry } from "../openaiRetry.js";
 import { getGeminiChatModel, isGeminiConfigured } from "../ai/geminiClient.js";
-import { mapGeminiHttpError } from "../ai/geminiErrors.js";
+import {
+  getGeminiRetryDelayMs,
+  isGeminiDailyQuotaError,
+  mapGeminiHttpError,
+} from "../ai/geminiErrors.js";
 import { AGENT_TOOLS_GEMINI } from "./agentTools.js";
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 
-const MODEL_FALLBACKS = ["gemini-2.0-flash", "gemini-2.0-flash-001", "gemini-1.5-flash-latest"];
+/** Only used on 404 / model-not-found — never on 429 (would triple RPM spend). */
+const MODEL_FALLBACKS = ["gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash-latest"];
 
 function getApiKey() {
   return String(process.env.GEMINI_API_KEY || "").trim();
@@ -61,6 +66,12 @@ async function callGeminiAgentOnce(model, systemPrompt, contents) {
           maxOutputTokens: 800,
         },
       }),
+    },
+    {
+      maxRetries: 1,
+      maxDelayMs: 20_000,
+      parseBodyRetryMs: getGeminiRetryDelayMs,
+      skipRetryIf: isGeminiDailyQuotaError,
     },
   );
 }
@@ -123,9 +134,13 @@ export async function callGeminiAgent(systemPrompt, contents) {
       body: errText.slice(0, 800),
     });
 
+    const isRateOrQuota =
+      res.status === 429 ||
+      /"status"\s*:\s*"RESOURCE_EXHAUSTED"/i.test(errText);
     const isModelMissing =
-      res.status === 404 ||
-      /model.*not found|not found for api version|is not supported/i.test(errText);
+      !isRateOrQuota &&
+      (res.status === 404 ||
+        /model.*not found|not found for api version|is not supported/i.test(errText));
     if (isModelMissing && i < models.length - 1) {
       continue;
     }
