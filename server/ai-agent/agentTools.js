@@ -1,5 +1,6 @@
 import { GET_BUSINESS_DATA_TOOL } from "./getBusinessData.js";
 import { SEARCH_DOCUMENTS_TOOL } from "./searchDocuments.js";
+import { sanitizeGeminiFunctionParameters } from "../ai/geminiSchema.js";
 
 export const AGENT_TOOLS_OPENAI = [GET_BUSINESS_DATA_TOOL, SEARCH_DOCUMENTS_TOOL];
 
@@ -12,7 +13,7 @@ export function toGeminiFunctionDeclaration(tool) {
   return {
     name: fn.name,
     description: fn.description,
-    parameters: fn.parameters,
+    parameters: sanitizeGeminiFunctionParameters(fn.parameters),
   };
 }
 

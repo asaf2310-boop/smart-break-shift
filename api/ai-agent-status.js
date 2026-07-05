@@ -8,6 +8,7 @@ import { getAiProvider, isAiConfigured } from "../server/ai/aiProvider.js";
 import { probeOpenAiAccess } from "../server/ai/openaiErrors.js";
 import { probeGeminiAccess } from "../server/ai/geminiErrors.js";
 import { buildGeminiAgentUrl } from "../server/ai-agent/geminiAgentChat.js";
+import { AGENT_TOOLS_GEMINI } from "../server/ai-agent/agentTools.js";
 import { getSupabaseAdmin } from "../server/knowledge/supabaseAdmin.js";
 import { ALLOWED_TABLES, ALLOWED_COLUMNS } from "../server/ai-agent/getBusinessData.js";
 import { getAiAgentDocumentCount } from "../server/ai-agent/documentIngestService.js";
@@ -64,6 +65,7 @@ async function getGeminiHealth() {
     () => String(process.env.GEMINI_API_KEY || "").trim(),
     buildGeminiAgentUrl,
     getGeminiChatModel,
+    { withTools: true, functionDeclarations: AGENT_TOOLS_GEMINI },
   );
   const result = {
     ok: probe.ok,

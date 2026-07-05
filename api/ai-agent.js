@@ -93,7 +93,9 @@ export default async function handler(req, res) {
             ? 429
             : result.error === "openai_auth_error" || result.error === "gemini_auth_error"
               ? 401
-              : 400;
+              : result.error === "gemini_model_not_found"
+                ? 404
+                : 400;
     return json(res, status, { error: result.error, message: result.message }, req);
   }
 

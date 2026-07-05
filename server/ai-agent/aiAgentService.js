@@ -25,6 +25,28 @@ function notConfiguredMessage() {
 }
 
 /**
+ * Gemini may return JSON-string tool args (e.g. filters) when schema uses type string.
+ * @param {string} toolName
+ * @param {Record<string, unknown>} args
+ */
+function normalizeGeminiToolArgs(toolName, args) {
+  const out = { ...args };
+  if (toolName === "getBusinessData" && typeof out.filters === "string") {
+    const raw = String(out.filters || "").trim();
+    if (!raw) {
+      delete out.filters;
+    } else {
+      try {
+        out.filters = JSON.parse(raw);
+      } catch {
+        out.filters = {};
+      }
+    }
+  }
+  return out;
+}
+
+/**
  * @param {string} toolName
  * @param {Record<string, unknown>} parsedArgs
  */
@@ -124,7 +146,7 @@ async function runGeminiAgentLoop(text) {
 
     for (const part of functionCalls) {
       const toolName = part.functionCall?.name;
-      const args = part.functionCall?.args || {};
+      const args = normalizeGeminiToolArgs(toolName, part.functionCall?.args || {});
 
       if (!ALLOWED_TOOL_NAMES.has(toolName)) {
         responseParts.push({

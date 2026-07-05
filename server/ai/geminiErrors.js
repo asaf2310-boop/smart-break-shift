@@ -12,6 +12,12 @@ export const GEMINI_AUTH_MESSAGE_HE =
 
 export const GEMINI_GENERIC_MESSAGE_HE = "שגיאה ב-Gemini — נסו שוב מאוחר יותר.";
 
+export const GEMINI_MODEL_NOT_FOUND_MESSAGE_HE =
+  "מודל Gemini לא נמצא — בדקו את GEMINI_CHAT_MODEL ב-Vercel (לדוגמה: gemini-2.0-flash).";
+
+export const GEMINI_INVALID_REQUEST_MESSAGE_HE =
+  "בקשה לא תקינה ל-Gemini — ייתכן שהמודל או הגדרת הכלים שגויים. פנו למנהל המערכת.";
+
 export const GEMINI_HIGH_DEMAND_MESSAGE_HE =
   "שירות Gemini עמוס זמנית — נסו שוב בעוד דקה.";
 
@@ -77,8 +83,30 @@ export function mapGeminiHttpError(status, bodyText, response = null) {
     return { error: "gemini_high_demand", message: GEMINI_HIGH_DEMAND_MESSAGE_HE };
   }
 
-  if (status === 401 || status === 403 || apiMessage.includes("api key not valid")) {
+  if (
+    status === 401 ||
+    status === 403 ||
+    apiMessage.includes("api key not valid") ||
+    apiMessage.includes("api key invalid") ||
+    apiMessage.includes("invalid api key") ||
+    apiMessage.includes("permission denied")
+  ) {
     return { error: "gemini_auth_error", message: GEMINI_AUTH_MESSAGE_HE };
+  }
+
+  if (
+    status === 404 ||
+    apiStatus === "NOT_FOUND" ||
+    /model.*not found|not found for api version|is not supported/i.test(apiMessage)
+  ) {
+    return { error: "gemini_model_not_found", message: GEMINI_MODEL_NOT_FOUND_MESSAGE_HE };
+  }
+
+  if (status === 400) {
+    if (/api[_ ]?key|unregistered caller|access token/i.test(apiMessage)) {
+      return { error: "gemini_auth_error", message: GEMINI_AUTH_MESSAGE_HE };
+    }
+    return { error: "gemini_invalid_request", message: GEMINI_INVALID_REQUEST_MESSAGE_HE };
   }
 
   return {
@@ -92,23 +120,32 @@ export function mapGeminiHttpError(status, bodyText, response = null) {
  * @param {() => string} getApiKey
  * @param {(model: string) => string} buildUrl — (model) => generateContent URL
  * @param {() => string} getModel
+ * @param {{ withTools?: boolean, functionDeclarations?: unknown[] }} [options]
  */
-export async function probeGeminiAccess(getApiKey, buildUrl, getModel) {
+export async function probeGeminiAccess(getApiKey, buildUrl, getModel, options = {}) {
   const apiKey = getApiKey();
   if (!apiKey) {
     return { ok: false, error: "not_configured", message: null };
   }
 
   const model = getModel();
+  /** @type {Record<string, unknown>} */
+  const body = {
+    contents: [{ role: "user", parts: [{ text: "ping" }] }],
+    generationConfig: { maxOutputTokens: 1 },
+  };
+
+  if (options.withTools && options.functionDeclarations?.length) {
+    body.tools = [{ functionDeclarations: options.functionDeclarations }];
+    body.toolConfig = { functionCallingConfig: { mode: "AUTO" } };
+  }
+
   let res;
   try {
     res = await fetch(buildUrl(model), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: "ping" }] }],
-        generationConfig: { maxOutputTokens: 1 },
-      }),
+      body: JSON.stringify(body),
     });
   } catch {
     return { ok: false, error: "network_error", message: null };
@@ -119,6 +156,12 @@ export async function probeGeminiAccess(getApiKey, buildUrl, getModel) {
   }
 
   const errText = await res.text().catch(() => "");
+  console.error("[probeGeminiAccess] Gemini probe failed", {
+    status: res.status,
+    model,
+    withTools: Boolean(options.withTools),
+    body: errText.slice(0, 500),
+  });
   const mapped = mapGeminiHttpError(res.status, errText, res);
   return {
     ok: false,
