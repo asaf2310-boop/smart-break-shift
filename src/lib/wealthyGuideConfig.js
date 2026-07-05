@@ -29,6 +29,19 @@ export const PUBLIC_PAYMENT_LINK_PDF_PATH = "/guide/payment-link/pdf";
 export const PAYMENT_LINK_INTRO =
   "לינק לתשלום מאפשר ליצור בקשת תשלום ולשלוח ללקוח קישור מאובטח להשלמת העסקה. שימוש נפוץ: כאשר הלקוח אינו נמצא במערכת, או כשמעדיפים שהלקוח יזין את פרטי האשראי בעצמו בדף תשלום מאובטח.";
 
+export const TRANSACTION_DETAILS_SCREENSHOT_URL =
+  "/training/wealthy-guide/transaction-details-screenshot.png";
+
+export const TRANSACTION_DETAILS_TRAINING_VIDEO_URL =
+  "/training/wealthy-guide/transaction-details.mp4";
+
+/** Public guest routes for SMS links (no agent auth / knowledge module). */
+export const PUBLIC_TRANSACTION_DETAILS_VIDEO_PATH = "/guide/transaction-details/video";
+export const PUBLIC_TRANSACTION_DETAILS_PDF_PATH = "/guide/transaction-details/pdf";
+
+export const TRANSACTION_DETAILS_INTRO =
+  "פירוט עסקאות מאפשר לצפות בכל העסקאות שבוצעו במערכת, לסנן לפי טווח תאריכים, לייצא דוח לאקסל ולבטל עסקאות אשראי במידת הצורך. שימוש נפוץ: מעקב אחר תשלומים, איתור עסקה ספציפית ובדיקת סטטוס עסקה מול הלקוח.";
+
 export const paymentLinkWorkflowSteps = [
   {
     title: "צרו בקשה לתשלום",
@@ -69,8 +82,8 @@ export const wealthyGuideFeatures = [
   {
     title: "פירוט עסקאות",
     description: "צפייה בכל העסקאות שבוצעו",
-    slug: "transactions",
-    ready: false,
+    slug: "transaction-details",
+    ready: true,
     color: "bg-orange-100 text-orange-600",
   },
   {
@@ -113,7 +126,7 @@ export const wealthyGuideMenuItems = [
       { label: "הוראת קבע", slug: "standing-order", ready: false },
     ],
   },
-  { label: "פירוט עסקאות", slug: "transactions", ready: false },
+  { label: "פירוט עסקאות", slug: "transaction-details", ready: true },
   {
     label: "חשבוניות דיגיטליות",
     children: [{ label: "התחברות למערכת החשבוניות", slug: "invoice-connect", ready: false }],
@@ -287,6 +300,76 @@ export const paymentLinkFields = [
   },
 ];
 
+export const transactionDetailsFilterFields = [
+  {
+    name: "מתאריך",
+    description: "תאריך התחלה לסינון העסקאות. יוצגו רק עסקאות מתאריך זה ואילך.",
+    tip: "ניתן לבחור טווח תאריכים קצר (למשל יום אחד) או רחב (חודש שלם) לפי הצורך.",
+    required: false,
+  },
+  {
+    name: "עד תאריך",
+    description: "תאריך סיום לסינון העסקאות. יוצגו עסקאות עד תאריך זה כולל.",
+    required: false,
+  },
+  {
+    name: "הצגה",
+    description: "לחצן להצגת רשימת העסקאות לפי טווח התאריכים שנבחר. לאחר לחיצה, הטבלה מתעדכנת בהתאם.",
+    required: true,
+  },
+  {
+    name: "ייצוא לאקסל",
+    description: "ייצוא רשימת העסקאות המוצגת לקובץ Excel להורדה. שימושי לדוחות, הנהלת חשבונות ומעקב.",
+    tip: "מומלץ לסנן קודם לטווח התאריכים הרצוי ואז לייצא — כך הקובץ יכלול רק את העסקאות הרלוונטיות.",
+    required: false,
+  },
+  {
+    name: "ביטול עסקאות אשראי",
+    description: "אפשרות לביטול עסקאות אשראי שבוצעו. רלוונטי לעסקאות מאושרות שנדרש לבטל.",
+    tip: "ביטול עסקה אפשרי רק בתנאים מסוימים ובמסגרת זמן מוגבלת — לפי מדיניות חברת האשראי.",
+    required: false,
+  },
+];
+
+export const transactionDetailsTableFields = [
+  {
+    name: "מס. עסקה",
+    description: "מספר מזהה ייחודי של העסקה במערכת. משמש לאיתור ומעקב.",
+    required: false,
+  },
+  {
+    name: "סטטוס",
+    description: "מצב העסקה — למשל: אושרה (עסקה שעברה בהצלחה) או נכשלה (עסקה שנדחתה, מסומנת ב-X אדום).",
+    tip: "עסקה שנכשלה לא חויבה בפועל — ניתן לנסות שוב או לפנות לתמיכה.",
+    required: false,
+  },
+  {
+    name: "תאריך",
+    description: "תאריך ביצוע העסקה.",
+    required: false,
+  },
+  {
+    name: "שעה",
+    description: "שעת ביצוע העסקה.",
+    required: false,
+  },
+  {
+    name: "שם לקוח",
+    description: "שם הלקוח שביצע את העסקה, כפי שהוזן בעת החיוב.",
+    required: false,
+  },
+  {
+    name: "פרטי העסקה",
+    description: "תיאור או פרטים נוספים על העסקה — למשל תיאור המוצר/שירות או הערות.",
+    required: false,
+  },
+  {
+    name: "סכום",
+    description: "סכום העסקה במטבע שבו בוצעה.",
+    required: false,
+  },
+];
+
 export const paymentLinkTableFields = [
   {
     name: "סינון: הכל / שולמו / לא שולמו",
@@ -385,4 +468,12 @@ export function getPaymentLinkGuideUrl() {
 
 export function getPaymentLinkPresentationUrl() {
   return `${getPublicAppOrigin()}${PUBLIC_PAYMENT_LINK_VIDEO_PATH}`;
+}
+
+export function getTransactionDetailsGuideUrl() {
+  return `${getPublicAppOrigin()}${PUBLIC_TRANSACTION_DETAILS_PDF_PATH}`;
+}
+
+export function getTransactionDetailsPresentationUrl() {
+  return `${getPublicAppOrigin()}${PUBLIC_TRANSACTION_DETAILS_VIDEO_PATH}`;
 }

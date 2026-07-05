@@ -6,6 +6,8 @@ import {
   getManualChargePresentationUrl,
   getPaymentLinkGuideUrl,
   getPaymentLinkPresentationUrl,
+  getTransactionDetailsGuideUrl,
+  getTransactionDetailsPresentationUrl,
 } from "@/lib/wealthyGuideConfig";
 import { REVIEW_SMS_MAX_LENGTH } from "@/lib/reviewSms";
 
@@ -15,7 +17,7 @@ export const WEALTHY_GUIDE_SMS_VARIANTS = [
   { id: "presentation", label: "מצגת בלבד" },
 ];
 
-export const WEALTHY_GUIDE_TYPES = ["manual-charge", "payment-link"];
+export const WEALTHY_GUIDE_TYPES = ["manual-charge", "payment-link", "transaction-details"];
 
 const SMS_CONFIG = {
   "manual-charge": {
@@ -35,6 +37,15 @@ const SMS_CONFIG = {
     },
     getGuideUrl: getPaymentLinkGuideUrl,
     getPresentationUrl: getPaymentLinkPresentationUrl,
+  },
+  "transaction-details": {
+    templates: {
+      guide: "מדריך פירוט עסקאות: {guideUrl}",
+      presentation: "מצגת הדרכה — פירוט עסקאות: {presentationUrl}",
+      both: "מדריך פירוט עסקאות: {guideUrl}\nמצגת: {presentationUrl}",
+    },
+    getGuideUrl: getTransactionDetailsGuideUrl,
+    getPresentationUrl: getTransactionDetailsPresentationUrl,
   },
 };
 

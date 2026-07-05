@@ -12,6 +12,8 @@ export {
   getManualChargePresentationUrl,
   getPaymentLinkGuideUrl,
   getPaymentLinkPresentationUrl,
+  getTransactionDetailsGuideUrl,
+  getTransactionDetailsPresentationUrl,
 } from "./wealthyGuideSmsLink.js";
 
 function maskPhoneForAudit(phone) {

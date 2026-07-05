@@ -11,9 +11,11 @@ export const PUBLIC_MANUAL_CHARGE_VIDEO_PATH = "/guide/manual-charge/video";
 export const PUBLIC_MANUAL_CHARGE_PDF_PATH = "/guide/manual-charge/pdf";
 export const PUBLIC_PAYMENT_LINK_VIDEO_PATH = "/guide/payment-link/video";
 export const PUBLIC_PAYMENT_LINK_PDF_PATH = "/guide/payment-link/pdf";
+export const PUBLIC_TRANSACTION_DETAILS_VIDEO_PATH = "/guide/transaction-details/video";
+export const PUBLIC_TRANSACTION_DETAILS_PDF_PATH = "/guide/transaction-details/pdf";
 
 export const WEALTHY_GUIDE_SMS_VARIANTS = ["guide", "presentation", "both"];
-export const WEALTHY_GUIDE_TYPES = ["manual-charge", "payment-link"];
+export const WEALTHY_GUIDE_TYPES = ["manual-charge", "payment-link", "transaction-details"];
 
 export function getWealthyGuidePublicOrigin() {
   return String(process.env.VITE_APP_URL || process.env.VERCEL_URL || "")
@@ -57,6 +59,18 @@ export function getPaymentLinkPresentationUrl(origin) {
   return `${base}${PUBLIC_PAYMENT_LINK_VIDEO_PATH}`;
 }
 
+export function getTransactionDetailsGuideUrl(origin) {
+  const base = String(origin || getWealthyGuidePublicOrigin() || "").replace(/\/$/, "");
+  if (!base) return PUBLIC_TRANSACTION_DETAILS_PDF_PATH;
+  return `${base}${PUBLIC_TRANSACTION_DETAILS_PDF_PATH}`;
+}
+
+export function getTransactionDetailsPresentationUrl(origin) {
+  const base = String(origin || getWealthyGuidePublicOrigin() || "").replace(/\/$/, "");
+  if (!base) return PUBLIC_TRANSACTION_DETAILS_VIDEO_PATH;
+  return `${base}${PUBLIC_TRANSACTION_DETAILS_VIDEO_PATH}`;
+}
+
 const SMS_CONFIG = {
   "manual-charge": {
     templates: {
@@ -75,6 +89,15 @@ const SMS_CONFIG = {
     },
     getGuideUrl: getPaymentLinkGuideUrl,
     getPresentationUrl: getPaymentLinkPresentationUrl,
+  },
+  "transaction-details": {
+    templates: {
+      guide: "מדריך פירוט עסקאות: {guideUrl}",
+      presentation: "מצגת הדרכה — פירוט עסקאות: {presentationUrl}",
+      both: "מדריך פירוט עסקאות: {guideUrl}\nמצגת: {presentationUrl}",
+    },
+    getGuideUrl: getTransactionDetailsGuideUrl,
+    getPresentationUrl: getTransactionDetailsPresentationUrl,
   },
 };
 

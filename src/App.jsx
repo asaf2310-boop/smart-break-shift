@@ -41,10 +41,13 @@ import WealthyGuideLayout from '@/components/wealthy-guide/WealthyGuideLayout';
 import WealthyGuideHome from './pages/wealthy-guide/WealthyGuideHome';
 import ManualChargeGuide from './pages/wealthy-guide/ManualChargeGuide';
 import PaymentLinkGuide from './pages/wealthy-guide/PaymentLinkGuide';
+import TransactionDetailsGuide from './pages/wealthy-guide/TransactionDetailsGuide';
 import ManualChargeGuestVideoPage from './pages/wealthy-guide/ManualChargeGuestVideoPage';
 import ManualChargeGuestPdfPage from './pages/wealthy-guide/ManualChargeGuestPdfPage';
 import PaymentLinkGuestVideoPage from './pages/wealthy-guide/PaymentLinkGuestVideoPage';
 import PaymentLinkGuestPdfPage from './pages/wealthy-guide/PaymentLinkGuestPdfPage';
+import TransactionDetailsGuestVideoPage from './pages/wealthy-guide/TransactionDetailsGuestVideoPage';
+import TransactionDetailsGuestPdfPage from './pages/wealthy-guide/TransactionDetailsGuestPdfPage';
 import WealthyGuideComingSoon from './pages/wealthy-guide/WealthyGuideComingSoon';
 import AdminCustomerChat from './pages/AdminCustomerChat';
 import AdminLocalhostLinksFloating from '@/components/admin/AdminLocalhostLinksFloating';
@@ -161,6 +164,8 @@ const AuthenticatedApp = () => {
         <Route path="/guide/manual-charge/pdf" element={<RouteErrorBoundary><ManualChargeGuestPdfPage /></RouteErrorBoundary>} />
         <Route path="/guide/payment-link/video" element={<RouteErrorBoundary><PaymentLinkGuestVideoPage /></RouteErrorBoundary>} />
         <Route path="/guide/payment-link/pdf" element={<RouteErrorBoundary><PaymentLinkGuestPdfPage /></RouteErrorBoundary>} />
+        <Route path="/guide/transaction-details/video" element={<RouteErrorBoundary><TransactionDetailsGuestVideoPage /></RouteErrorBoundary>} />
+        <Route path="/guide/transaction-details/pdf" element={<RouteErrorBoundary><TransactionDetailsGuestPdfPage /></RouteErrorBoundary>} />
         <Route path="/support/consent/:token" element={<RouteErrorBoundary><RemoteSupportConsentPage /></RouteErrorBoundary>} />
         <Route path="/support/screen/:sessionId" element={<RouteErrorBoundary><ScreenShareGuestPage /></RouteErrorBoundary>} />
         <Route path="/ai-agent" element={<ModuleGate module="ai_agent"><AiAgentPage /></ModuleGate>} />
@@ -168,6 +173,7 @@ const AuthenticatedApp = () => {
           <Route index element={<WealthyGuideHome />} />
           <Route path="manual-charge" element={<ManualChargeGuide />} />
           <Route path="payment-link" element={<PaymentLinkGuide />} />
+          <Route path="transaction-details" element={<TransactionDetailsGuide />} />
           <Route path="*" element={<WealthyGuideComingSoon />} />
         </Route>
         <Route path="/knowledge" element={<Navigate to="/knowledge/wealthy-guide" replace />} />

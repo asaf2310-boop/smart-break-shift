@@ -30,7 +30,17 @@ function buildWorkflowHtml(workflowSteps) {
   `;
 }
 
-function buildGuideHtml({ title, intro, fields, screenshotUrl, workflowSteps, tableFields, screenshotAlt }) {
+function buildGuideHtml({
+  title,
+  intro,
+  fields,
+  screenshotUrl,
+  workflowSteps,
+  tableFields,
+  screenshotAlt,
+  fieldsSectionTitle = "הסבר שדות הטופס",
+  tableSectionTitle = "טבלת בקשות שנשלחו",
+}) {
   const fieldBlocks = fields
     .map((field, index) => {
       const badge = field.required
@@ -71,7 +81,7 @@ function buildGuideHtml({ title, intro, fields, screenshotUrl, workflowSteps, ta
 
   const tableBlock = tableFields?.length
     ? `
-    <h2 style="margin:0 0 16px;font-size:16px;color:#111827 !important;-webkit-text-fill-color:#111827;">טבלת בקשות שנשלחו (${tableFields.length} עמודות ופעולות)</h2>
+    <h2 style="margin:0 0 16px;font-size:16px;color:#111827 !important;-webkit-text-fill-color:#111827;">${escapeHtml(tableSectionTitle)} (${tableFields.length} עמודות ופעולות)</h2>
     ${tableFields
       .map((field, index) => {
         const badge = field.required
@@ -101,7 +111,7 @@ function buildGuideHtml({ title, intro, fields, screenshotUrl, workflowSteps, ta
     <p style="margin:0 0 20px;font-size:13px;color:#4b5563 !important;-webkit-text-fill-color:#4b5563;line-height:1.7;">${escapeHtml(intro)}</p>
     ${workflowBlock}
     ${screenshotBlock}
-    <h2 style="margin:0 0 16px;font-size:16px;color:#111827 !important;-webkit-text-fill-color:#111827;">הסבר שדות הטופס (${fields.length} שדות)</h2>
+    <h2 style="margin:0 0 16px;font-size:16px;color:#111827 !important;-webkit-text-fill-color:#111827;">${escapeHtml(fieldsSectionTitle)} (${fields.length} שדות)</h2>
     ${fieldBlocks}
     ${tableBlock}
   `;
@@ -252,8 +262,29 @@ function addCanvasPagesToPdf(doc, canvas) {
 /**
  * Client-side PDF export for wealthy guide topics (Hebrew RTL via rasterized HTML).
  */
-async function exportWealthyGuidePdf({ title, intro, fields, screenshotUrl, workflowSteps, tableFields, filename, screenshotAlt }) {
-  const guideHtml = buildGuideHtml({ title, intro, fields, screenshotUrl, workflowSteps, tableFields, screenshotAlt });
+async function exportWealthyGuidePdf({
+  title,
+  intro,
+  fields,
+  screenshotUrl,
+  workflowSteps,
+  tableFields,
+  filename,
+  screenshotAlt,
+  fieldsSectionTitle,
+  tableSectionTitle,
+}) {
+  const guideHtml = buildGuideHtml({
+    title,
+    intro,
+    fields,
+    screenshotUrl,
+    workflowSteps,
+    tableFields,
+    screenshotAlt,
+    fieldsSectionTitle,
+    tableSectionTitle,
+  });
   const { root, cleanup } = await mountIsolatedGuideRoot(guideHtml);
 
   try {
@@ -294,5 +325,26 @@ export async function exportPaymentLinkGuidePdf({
     tableFields,
     filename: "payment-link-guide.pdf",
     screenshotAlt: "ממשק לינק לתשלום",
+    tableSectionTitle: "טבלת בקשות שנשלחו",
+  });
+}
+
+export async function exportTransactionDetailsGuidePdf({
+  title,
+  intro,
+  filterFields,
+  tableFields,
+  screenshotUrl,
+}) {
+  return exportWealthyGuidePdf({
+    title,
+    intro,
+    fields: filterFields,
+    tableFields,
+    screenshotUrl,
+    filename: "transaction-details-guide.pdf",
+    screenshotAlt: "ממשק פירוט עסקאות",
+    fieldsSectionTitle: "סינון ופעולות",
+    tableSectionTitle: "עמודות טבלת העסקאות",
   });
 }
