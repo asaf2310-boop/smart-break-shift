@@ -86,7 +86,7 @@ export default function ThreeDsSettingsGuide() {
           <ChevronLeft className="w-3.5 h-3.5 shrink-0" />
           <span>הגדרות</span>
           <ChevronLeft className="w-3.5 h-3.5 shrink-0" />
-          <span className="text-primary font-medium">עסקה בגובה 3DS</span>
+          <span className="text-primary font-medium">עסקה בטוחה 3DS</span>
         </div>
         <div className="flex flex-col gap-4 mb-3">
           <div className="flex items-center gap-3 min-w-0">

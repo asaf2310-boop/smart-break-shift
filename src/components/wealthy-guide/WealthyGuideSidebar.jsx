@@ -24,11 +24,14 @@ const ICONS = {
   "ניהול התראות": Bell,
 };
 
+const ALWAYS_OPEN_SECTIONS = ["הגדרות"];
+
 export default function WealthyGuideSidebar({ isOpen, onClose }) {
   const location = useLocation();
-  const [openSections, setOpenSections] = React.useState(["ביצוע פעולות"]);
+  const [openSections, setOpenSections] = React.useState(["ביצוע פעולות", ...ALWAYS_OPEN_SECTIONS]);
 
   const toggleSection = (label) => {
+    if (ALWAYS_OPEN_SECTIONS.includes(label)) return;
     setOpenSections((prev) =>
       prev.includes(label) ? prev.filter((l) => l !== label) : [...prev, label]
     );
@@ -70,30 +73,39 @@ export default function WealthyGuideSidebar({ isOpen, onClose }) {
             const Icon = ICONS[item.label] || Home;
 
             if (item.children) {
-              const isSectionOpen = openSections.includes(item.label);
+              const isAlwaysOpen = ALWAYS_OPEN_SECTIONS.includes(item.label);
+              const isSectionOpen = isAlwaysOpen || openSections.includes(item.label);
               const hasActiveChild = item.children.some((c) => isActive(c.slug));
+              const sectionHeaderClass = cn(
+                "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+                hasActiveChild
+                  ? "bg-primary/10 text-primary"
+                  : "text-on-surface hover:bg-surface-container"
+              );
 
               return (
                 <div key={item.label}>
-                  <button
-                    type="button"
-                    onClick={() => toggleSection(item.label)}
-                    className={cn(
-                      "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
-                      hasActiveChild
-                        ? "bg-primary/10 text-primary"
-                        : "text-on-surface hover:bg-surface-container"
-                    )}
-                  >
-                    <Icon className="w-4 h-4 shrink-0" />
-                    <span className="flex-1 text-right">{item.label}</span>
-                    <ChevronDown
-                      className={cn(
-                        "w-4 h-4 text-on-surface-variant transition-transform duration-200",
-                        isSectionOpen && "rotate-180"
-                      )}
-                    />
-                  </button>
+                  {isAlwaysOpen ? (
+                    <div className={sectionHeaderClass}>
+                      <Icon className="w-4 h-4 shrink-0" />
+                      <span className="flex-1 text-right">{item.label}</span>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => toggleSection(item.label)}
+                      className={sectionHeaderClass}
+                    >
+                      <Icon className="w-4 h-4 shrink-0" />
+                      <span className="flex-1 text-right">{item.label}</span>
+                      <ChevronDown
+                        className={cn(
+                          "w-4 h-4 text-on-surface-variant transition-transform duration-200",
+                          isSectionOpen && "rotate-180"
+                        )}
+                      />
+                    </button>
+                  )}
                   <div
                     className={cn(
                       "overflow-hidden transition-all duration-200",

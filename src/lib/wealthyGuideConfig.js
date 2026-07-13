@@ -123,7 +123,7 @@ export const wealthyGuideFeatures = [
     color: "bg-orange-100 text-orange-600",
   },
   {
-    title: "עסקה בגובה 3DS",
+    title: "עסקה בטוחה 3DS",
     description: "הגדרת שירות 3D Secure (עסקה בטוחה)",
     slug: "3ds-settings",
     ready: true,
@@ -186,7 +186,7 @@ export const wealthyGuideMenuItems = [
     children: [
       { label: "דף תשלום ו-API", slug: "payment-page-api", ready: false },
       { label: "מניעת עסקאות כפולות", slug: "duplicate-prevention", ready: false },
-      { label: "עסקה בגובה 3DS", slug: "3ds-settings", ready: true },
+      { label: "עסקה בטוחה 3DS", slug: "3ds-settings", ready: true },
       { label: "Bit", slug: "bit", ready: false },
       { label: "Apple Pay", slug: "apple-pay", ready: false },
       { label: "Google Pay", slug: "google-pay", ready: false },

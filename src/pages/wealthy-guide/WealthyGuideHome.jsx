@@ -21,7 +21,7 @@ const FEATURE_ICONS = {
   "לינק לתשלום": Link2,
   "הוראת קבע": RefreshCw,
   "פירוט עסקאות": Receipt,
-  "עסקה בגובה 3DS": Shield,
+  "עסקה בטוחה 3DS": Shield,
   "חשבוניות דיגיטליות": FileText,
   דוחות: BarChart3,
   הגדרות: Settings,
