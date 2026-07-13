@@ -351,6 +351,41 @@ export async function exportTransactionDetailsGuidePdf({
   });
 }
 
+export async function exportWordPressPluginGuidePdf({
+  title,
+  intro,
+  installFields,
+  paramsFields,
+  successUrlFields,
+  displayFields,
+  paymentMethodFields,
+  invoiceFields,
+  refundFields,
+  faqs,
+  screenshotUrl,
+  workflowSteps,
+}) {
+  return exportWealthyGuidePdf({
+    title,
+    intro,
+    fields: installFields,
+    screenshotUrl,
+    workflowSteps,
+    filename: "wordpress-plugin-guide.pdf",
+    screenshotAlt: "ממשק הגדרת תוסף Hyp ל-WooCommerce",
+    fieldsSectionTitle: "שלבי ההתקנה",
+    additionalSections: [
+      { title: "עדכון פרמטרים מפורטל Hyp", fields: paramsFields },
+      { title: "הגדרת כתובת הצלחה (Success URL)", fields: successUrlFields },
+      { title: "הגדרות תצוגה ותשלומים", fields: displayFields },
+      { title: "שיטות תשלום", fields: paymentMethodFields },
+      { title: "הגדרת חשבוניות", fields: invoiceFields },
+      { title: "זיכוי עסקה", fields: refundFields },
+      { title: "שאלות נפוצות", fields: faqs },
+    ],
+  });
+}
+
 export async function exportThreeDsSettingsGuidePdf({
   title,
   intro,

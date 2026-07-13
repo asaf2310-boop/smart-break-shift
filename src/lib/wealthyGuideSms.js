@@ -9,6 +9,7 @@ import {
   getTransactionDetailsGuideUrl,
   getTransactionDetailsPresentationUrl,
   getThreeDsSettingsGuideUrl,
+  getWordPressPluginGuideUrl,
 } from "@/lib/wealthyGuideConfig";
 import { REVIEW_SMS_MAX_LENGTH } from "@/lib/reviewSms";
 
@@ -18,7 +19,7 @@ export const WEALTHY_GUIDE_SMS_VARIANTS = [
   { id: "presentation", label: "מצגת בלבד" },
 ];
 
-export const WEALTHY_GUIDE_TYPES = ["manual-charge", "payment-link", "transaction-details", "3ds-settings"];
+export const WEALTHY_GUIDE_TYPES = ["manual-charge", "payment-link", "transaction-details", "3ds-settings", "wordpress-plugin"];
 
 const SMS_CONFIG = {
   "manual-charge": {
@@ -56,6 +57,15 @@ const SMS_CONFIG = {
     },
     getGuideUrl: getThreeDsSettingsGuideUrl,
     getPresentationUrl: getThreeDsSettingsGuideUrl,
+  },
+  "wordpress-plugin": {
+    templates: {
+      guide: "מדריך תוסף וורדפרס (WooCommerce): {guideUrl}",
+      presentation: "מדריך תוסף וורדפרס (WooCommerce): {guideUrl}",
+      both: "מדריך תוסף וורדפרס (WooCommerce): {guideUrl}",
+    },
+    getGuideUrl: getWordPressPluginGuideUrl,
+    getPresentationUrl: getWordPressPluginGuideUrl,
   },
 };
 

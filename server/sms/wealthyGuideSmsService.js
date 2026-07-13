@@ -15,6 +15,7 @@ export {
   getTransactionDetailsGuideUrl,
   getTransactionDetailsPresentationUrl,
   getThreeDsSettingsGuideUrl,
+  getWordPressPluginGuideUrl,
 } from "./wealthyGuideSmsLink.js";
 
 function maskPhoneForAudit(phone) {

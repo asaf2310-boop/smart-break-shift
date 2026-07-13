@@ -51,6 +51,54 @@ export const PUBLIC_THREE_DS_SETTINGS_PDF_PATH = "/guide/3ds-settings/pdf";
 export const THREE_DS_SETTINGS_INTRO =
   "שירות 3D Secure (עסקה בטוחה) מאפשר אימות מאובטח של בעל הכרטיס בעסקאות אשראי. המדריך מלווה את הנציג בשלבי ההגדרה בממשק המסוף — מפרטי העסקה ועד בדיקת החיבור עם כרטיסי טסט.";
 
+export const WORDPRESS_PLUGIN_SCREENSHOT_URL =
+  "/training/wealthy-guide/wordpress-plugin-params-1.png";
+
+/** גלריית צילומי מסך של התוסף (מוצגת בעמוד ההדרכה). */
+export const wordPressPluginScreenshots = [
+  {
+    url: "/training/wealthy-guide/wordpress-plugin-params-1.png",
+    alt: "העתקת פרמטרים מפורטל Hyp",
+    caption: "פרטי החיבור בפורטל Hyp (הגדרות ← דף תשלום ו-API)",
+  },
+  {
+    url: "/training/wealthy-guide/wordpress-plugin-params-2.png",
+    alt: "הזנת הפרמטרים בלשונית General בתוסף",
+    caption: "הדבקת Terminal, Signature ו-PassP בלשונית General בתוסף",
+  },
+  {
+    url: "/training/wealthy-guide/wordpress-plugin-success-url-1.png",
+    alt: "כתובת הצלחה בהגדרות התוסף",
+    caption: "כתובת ההצלחה (Success URL) בהגדרות התוסף ב-WooCommerce",
+  },
+  {
+    url: "/training/wealthy-guide/wordpress-plugin-success-url-2.png",
+    alt: "הדבקת כתובת ההצלחה בפורטל Hyp",
+    caption: "הדבקת הכתובת בפורטל Hyp — כתובת הפניה לאחר עסקה (הצלחה)",
+  },
+  {
+    url: "/training/wealthy-guide/wordpress-plugin-payment-methods.png",
+    alt: "בחירת שיטת תשלום בתוסף",
+    caption: "מסך שיטות תשלום — חיוב / J-5 / חיוב מושהה",
+  },
+  {
+    url: "/training/wealthy-guide/wordpress-plugin-invoice-1.png",
+    alt: "הגדרת סוג חשבונית בלשונית מתקדם",
+    caption: "בחירת סוג חשבונית (Invoice Options) בלשונית מתקדם",
+  },
+  {
+    url: "/training/wealthy-guide/wordpress-plugin-invoice-2.png",
+    alt: "ביטול הפעלת מסים ב-WooCommerce לעוסק פטור",
+    caption: "עוסק פטור — ביטול 'הפעלת מסים' בהגדרות WooCommerce",
+  },
+];
+
+/** Public guest route for SMS links (no agent auth / knowledge module). */
+export const PUBLIC_WORDPRESS_PLUGIN_PDF_PATH = "/guide/wordpress-plugin/pdf";
+
+export const WORDPRESS_PLUGIN_INTRO =
+  "תוסף Hyp ל־WooCommerce מחבר את חנות ה-WordPress של הלקוח לדף התשלום המאובטח של Hyp. המדריך מלווה את הנציג משלב ההתקנה, דרך הזנת פרמטרי החיבור, הגדרת כתובת הצלחה, עיצוב דף התשלום, חשבוניות וזיכויים — ועד טיפול בתקלות נפוצות.";
+
 export const threeDsSettingsWorkflowSteps = [
   {
     title: "כניסה למערכת",
@@ -130,6 +178,13 @@ export const wealthyGuideFeatures = [
     color: "bg-sky-100 text-sky-600",
   },
   {
+    title: "תוסף וורדפרס",
+    description: "התקנה והגדרת תוסף Hyp ל-WooCommerce",
+    slug: "wordpress-plugin",
+    ready: true,
+    color: "bg-cyan-100 text-cyan-600",
+  },
+  {
     title: "חשבוניות דיגיטליות",
     description: "ניהול וחיבור מערכת חשבוניות",
     slug: "invoice-connect",
@@ -170,6 +225,10 @@ export const wealthyGuideMenuItems = [
     ],
   },
   { label: "פירוט עסקאות", slug: "transaction-details", ready: true },
+  {
+    label: "תוספי סליקה",
+    children: [{ label: "תוסף וורדפרס", slug: "wordpress-plugin", ready: true }],
+  },
   {
     label: "חשבוניות דיגיטליות",
     children: [{ label: "התחברות למערכת החשבוניות", slug: "invoice-connect", ready: false }],
@@ -593,6 +652,244 @@ export const paymentLinkTableFields = [
   },
 ];
 
+export const wordPressPluginWorkflowSteps = [
+  {
+    title: "התקנת התוסף",
+    description:
+      "מתקינים ומפעילים את התוסף Yaad Sarig Payment Gateway For WC ממאגר התוספים של WordPress.",
+  },
+  {
+    title: "עדכון פרמטרים",
+    description:
+      "מעתיקים מפורטל Hyp את Terminal Number, Authentication Signature ו-PassP ומדביקים בלשונית General.",
+  },
+  {
+    title: "הגדרת Success URL",
+    description:
+      "מעתיקים את כתובת ההצלחה מהתוסף ומדביקים אותה בפורטל Hyp תחת 'כתובת הפניה לאחר עסקה – הצלחה'.",
+  },
+  {
+    title: "תצוגה ותשלומים",
+    description:
+      "מגדירים כותרת, שפה, מטבע, מספר תשלומים ואופן פתיחת הדף (Redirect או iFrame).",
+  },
+  {
+    title: "חשבוניות",
+    description: "בוחרים את סוג החשבונית בלשונית מתקדם — מומלץ Hyp invoice.",
+  },
+  {
+    title: "זיכויים",
+    description: "מבצעים זיכויים דרך מערכת ההזמנות של WooCommerce בלבד (Refund via Yaadpay).",
+  },
+];
+
+export const wordPressPluginInstallFields = [
+  {
+    name: "כניסה לאתר הניהול",
+    description: "נכנסים לאתר הניהול (WP-Admin) של הלקוח.",
+    required: true,
+  },
+  {
+    name: "הורדת התוסף",
+    description:
+      "בתפריט 'תוספים' לוחצים על Add plugin ומורידים את התוסף בשם המדויק: Yaad Sarig Payment Gateway For WC.",
+    tip: "שם התוסף קריטי — יש לוודא עם הלקוח שמותקן בדיוק התוסף הנכון.",
+    required: true,
+  },
+  {
+    name: "התקנה והפעלה",
+    description: "מתקינים ומפעילים את התוסף באתר ה-WooCommerce.",
+    required: true,
+  },
+  {
+    name: "כניסה להגדרות התוסף",
+    description: "לאחר ההפעלה — בתפריט התוספים לוחצים על 'הגדרות' (Settings) בתוסף שהותקן.",
+    required: true,
+  },
+];
+
+export const wordPressPluginParamsFields = [
+  {
+    name: "כניסה לפורטל Hyp",
+    description: "נכנסים לפורטל Hyp עם הפרטים שהתקבלו במייל, ונווטים ל'הגדרות ← דף תשלום ו-API'.",
+    required: true,
+  },
+  {
+    name: "Terminal Number",
+    description: "מספר המסוף — מועתק מפורטל Hyp ומודבק בתוסף תחת לשונית General.",
+    required: true,
+  },
+  {
+    name: "Authentication Signature",
+    description: "חתימת האימות — מועתקת מהפורטל ומודבקת בתוסף תחת לשונית General.",
+    required: true,
+  },
+  {
+    name: "PassP (פרמטר מאובטח)",
+    description:
+      "מומלץ לעבוד עם פרמטר מאובטח (PassP) — מאובטח יותר מסיסמה רגילה. אם נוצר פרמטר מאובטח חדש בפורטל — חובה לעדכן את הערך החדש גם בהגדרות WooCommerce.",
+    tip: "אי-התאמה בפרמטר PassP היא הסיבה הנפוצה ביותר לתקלה בהגעה לדף התשלום.",
+    required: true,
+  },
+];
+
+export const wordPressPluginSuccessUrlFields = [
+  {
+    name: "העתקת כתובת ההצלחה",
+    description: "מעתיקים את כתובת ההצלחה (Success URL) מהגדרות התוסף ב-WooCommerce.",
+    required: true,
+  },
+  {
+    name: "הדבקה בפורטל Hyp",
+    description:
+      "בפורטל Hyp (הגדרות דף תשלום ו-API) מדביקים את הכתובת בשדה 'כתובת הפניה לאחר עסקה – הצלחה'.",
+    tip: "לקוח שילם ולא חזר לאתר? ודאו שהכתובת הועתקה במדויק וללא רווחים מיותרים.",
+    required: true,
+  },
+  {
+    name: "שמירת הגדרות",
+    description: "לוחצים על 'שמירת הגדרות' בפורטל כדי להחיל את השינוי.",
+    required: true,
+  },
+];
+
+export const wordPressPluginDisplayFields = [
+  {
+    name: "Title ו-Description",
+    description: "כותרת ותיאור דף התשלום — הטקסט שמופיע בעמוד הצ'קאאוט.",
+    required: false,
+  },
+  {
+    name: "אופן פתיחת הדף",
+    description:
+      "Redirect (מומלץ) או iFrame. שיטת iFrame מחייבת אתר מאובטח עם SSL בתוקף (HTTPS).",
+    tip: "אם האתר אינו מאובטח (ללא HTTPS) — יש להשתמש ב-Redirect בלבד.",
+    required: true,
+  },
+  {
+    name: "רוחב וגובה (iFrame)",
+    description: "אם נבחר iFrame — יש להגדיר רוחב וגובה בהתאם לתבנית האתר.",
+    required: false,
+  },
+  {
+    name: "שפה ומטבע",
+    description: "בחירת שפת דף התשלום (Language) והמטבע (Coin).",
+    required: false,
+  },
+  {
+    name: "Max Payments",
+    description: "מספר התשלומים המקסימלי הקבוע שיוצע ללקוח בדף התשלום.",
+    required: false,
+  },
+  {
+    name: "Tiered Payments (מדרגות תשלום)",
+    description:
+      "מדרגות תשלום לפי סכום. לדוגמה: הזנת 200,400 תאפשר תשלום אחד עד ₪200, שניים עד ₪400, ושלושה ומעלה מעבר לכך.",
+    required: false,
+  },
+];
+
+export const wordPressPluginPaymentMethodFields = [
+  {
+    name: "חיוב",
+    description: "חיוב מיידי של הלקוח בעת ביצוע העסקה.",
+    required: false,
+  },
+  {
+    name: "תשלום J-5",
+    description: "תפיסת מסגרת אשראי בלבד — ללא חיוב מיידי.",
+    required: false,
+  },
+  {
+    name: "חיוב מושהה",
+    description: "אפשרות קיימת בתוסף אך אינה מומלצת לשימוש.",
+    tip: "חשוב להסביר ללקוח את ההבדל בין חיוב מיידי לתפיסת מסגרת — טעות בבחירה משפיעה ישירות על מועד החיוב.",
+    required: false,
+  },
+];
+
+export const wordPressPluginInvoiceFields = [
+  {
+    name: "כניסה ללשונית מתקדם",
+    description: "הגדרת החשבוניות מתבצעת בהגדרות התוסף תחת לשונית 'מתקדם'.",
+    required: true,
+  },
+  {
+    name: "Invoice Options",
+    description:
+      "בחירת סוג החשבונית: Without invoice (ללא חשבוניות), Yaad invoice (מודול ישן — לא מומלץ), או Hyp invoice (מומלץ).",
+    required: true,
+  },
+  {
+    name: "עוסק פטור — Tax Settings",
+    description: "עבור עוסק פטור: יש לשנות את Tax Settings ל-WC Setting בלשונית מתקדם.",
+    required: false,
+  },
+  {
+    name: "ביטול הפעלת מסים ב-WooCommerce",
+    description:
+      "עבור עוסק פטור: בתפריט WooCommerce ← הגדרות, יש להסיר את הסימון מ'הפעלת מסים'.",
+    tip: "עוסק פטור שאינו מבטל את המסים — הקבלות יופקו עם מע\"מ שגוי.",
+    required: false,
+  },
+];
+
+export const wordPressPluginRefundFields = [
+  {
+    name: "כניסה להזמנה",
+    description: "נכנסים להזמנה שרוצים לזכות במערכת ההזמנות של WooCommerce.",
+    required: true,
+  },
+  {
+    name: "לחיצה על Refund",
+    description: "לוחצים על Refund — נפתח תפריט הזיכוי.",
+    required: true,
+  },
+  {
+    name: "מילוי פרטי הזיכוי",
+    description: "בוחרים את הכמות להחזר וממלאים את פרטי הזיכוי.",
+    required: true,
+  },
+  {
+    name: "Refund via Yaadpay",
+    description: "לוחצים על 'Refund via Yaadpay' ומאשרים את הזיכוי.",
+    tip: "זיכוי חייב להתבצע מתוך מערכת ההזמנות בלבד — זיכוי ישיר מהפורטל לא יעדכן את הסטטוס ב-WooCommerce.",
+    required: true,
+  },
+  {
+    name: "אימות הזיכוי",
+    description: "הזיכוי יופיע בפרטי ההזמנה ב-WooCommerce וגם בפורטל Hyp.",
+    required: false,
+  },
+];
+
+export const wordPressPluginFaqs = [
+  {
+    name: "לא מצליחים להגיע לדף התשלום למרות הזנת כל הפרטים",
+    description:
+      "ברוב המקרים הבעיה נובעת מאי-התאמה בפרמטר PassP. אם נוצר פרמטר מאובטח חדש בפורטל — יש לעדכן את הערך החדש גם בהגדרות WooCommerce.",
+    required: false,
+  },
+  {
+    name: "הלקוח שילם אך לא חזר לאתר",
+    description:
+      "יש לוודא שכתובת ההצלחה הועתקה מהגדרות התוסף והודבקה בפורטל Hyp תחת 'כתובת הפניה לאחר עסקה – הצלחה'.",
+    required: false,
+  },
+  {
+    name: "האם אפשר לעצב את דף התשלום בהתאם למותג?",
+    description:
+      "כן. בתבניות Hyp החדשות ניתן לשנות צבע כפתור, צבע רקע ולערוך טקסט, וכן להגדיר אילו שדות להציג (כגון ת\"ז ו-CVV).",
+    required: false,
+  },
+  {
+    name: "אין אפשרות לבחור שיטת תשלום של Hyp בצ'קאאוט",
+    description:
+      "ייתכן שהוגדר עיצוב שאינו נתמך. יש לוודא שלא נעשה שימוש בתוסף Checkout Blocks — אין לו תמיכה בשיטת התשלום.",
+    required: false,
+  },
+];
+
 export function wealthyGuidePath(slug) {
   if (!slug) return WEALTHY_GUIDE_BASE;
   return `${WEALTHY_GUIDE_BASE}/${slug}`;
@@ -644,4 +941,8 @@ export function getTransactionDetailsPresentationUrl() {
 
 export function getThreeDsSettingsGuideUrl() {
   return `${getPublicAppOrigin()}${PUBLIC_THREE_DS_SETTINGS_PDF_PATH}`;
+}
+
+export function getWordPressPluginGuideUrl() {
+  return `${getPublicAppOrigin()}${PUBLIC_WORDPRESS_PLUGIN_PDF_PATH}`;
 }

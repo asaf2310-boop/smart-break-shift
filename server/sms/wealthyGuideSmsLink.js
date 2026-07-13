@@ -14,9 +14,10 @@ export const PUBLIC_PAYMENT_LINK_PDF_PATH = "/guide/payment-link/pdf";
 export const PUBLIC_TRANSACTION_DETAILS_VIDEO_PATH = "/guide/transaction-details/video";
 export const PUBLIC_TRANSACTION_DETAILS_PDF_PATH = "/guide/transaction-details/pdf";
 export const PUBLIC_THREE_DS_SETTINGS_PDF_PATH = "/guide/3ds-settings/pdf";
+export const PUBLIC_WORDPRESS_PLUGIN_PDF_PATH = "/guide/wordpress-plugin/pdf";
 
 export const WEALTHY_GUIDE_SMS_VARIANTS = ["guide", "presentation", "both"];
-export const WEALTHY_GUIDE_TYPES = ["manual-charge", "payment-link", "transaction-details", "3ds-settings"];
+export const WEALTHY_GUIDE_TYPES = ["manual-charge", "payment-link", "transaction-details", "3ds-settings", "wordpress-plugin"];
 
 export function getWealthyGuidePublicOrigin() {
   return String(process.env.VITE_APP_URL || process.env.VERCEL_URL || "")
@@ -78,6 +79,12 @@ export function getThreeDsSettingsGuideUrl(origin) {
   return `${base}${PUBLIC_THREE_DS_SETTINGS_PDF_PATH}`;
 }
 
+export function getWordPressPluginGuideUrl(origin) {
+  const base = String(origin || getWealthyGuidePublicOrigin() || "").replace(/\/$/, "");
+  if (!base) return PUBLIC_WORDPRESS_PLUGIN_PDF_PATH;
+  return `${base}${PUBLIC_WORDPRESS_PLUGIN_PDF_PATH}`;
+}
+
 const SMS_CONFIG = {
   "manual-charge": {
     templates: {
@@ -114,6 +121,15 @@ const SMS_CONFIG = {
     },
     getGuideUrl: getThreeDsSettingsGuideUrl,
     getPresentationUrl: getThreeDsSettingsGuideUrl,
+  },
+  "wordpress-plugin": {
+    templates: {
+      guide: "מדריך תוסף וורדפרס (WooCommerce): {guideUrl}",
+      presentation: "מדריך תוסף וורדפרס (WooCommerce): {guideUrl}",
+      both: "מדריך תוסף וורדפרס (WooCommerce): {guideUrl}",
+    },
+    getGuideUrl: getWordPressPluginGuideUrl,
+    getPresentationUrl: getWordPressPluginGuideUrl,
   },
 };
 
