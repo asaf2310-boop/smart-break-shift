@@ -13,9 +13,10 @@ export const PUBLIC_PAYMENT_LINK_VIDEO_PATH = "/guide/payment-link/video";
 export const PUBLIC_PAYMENT_LINK_PDF_PATH = "/guide/payment-link/pdf";
 export const PUBLIC_TRANSACTION_DETAILS_VIDEO_PATH = "/guide/transaction-details/video";
 export const PUBLIC_TRANSACTION_DETAILS_PDF_PATH = "/guide/transaction-details/pdf";
+export const PUBLIC_THREE_DS_SETTINGS_PDF_PATH = "/guide/3ds-settings/pdf";
 
 export const WEALTHY_GUIDE_SMS_VARIANTS = ["guide", "presentation", "both"];
-export const WEALTHY_GUIDE_TYPES = ["manual-charge", "payment-link", "transaction-details"];
+export const WEALTHY_GUIDE_TYPES = ["manual-charge", "payment-link", "transaction-details", "3ds-settings"];
 
 export function getWealthyGuidePublicOrigin() {
   return String(process.env.VITE_APP_URL || process.env.VERCEL_URL || "")
@@ -71,6 +72,12 @@ export function getTransactionDetailsPresentationUrl(origin) {
   return `${base}${PUBLIC_TRANSACTION_DETAILS_VIDEO_PATH}`;
 }
 
+export function getThreeDsSettingsGuideUrl(origin) {
+  const base = String(origin || getWealthyGuidePublicOrigin() || "").replace(/\/$/, "");
+  if (!base) return PUBLIC_THREE_DS_SETTINGS_PDF_PATH;
+  return `${base}${PUBLIC_THREE_DS_SETTINGS_PDF_PATH}`;
+}
+
 const SMS_CONFIG = {
   "manual-charge": {
     templates: {
@@ -98,6 +105,15 @@ const SMS_CONFIG = {
     },
     getGuideUrl: getTransactionDetailsGuideUrl,
     getPresentationUrl: getTransactionDetailsPresentationUrl,
+  },
+  "3ds-settings": {
+    templates: {
+      guide: "מדריך הגדרת 3D Secure: {guideUrl}",
+      presentation: "מדריך הגדרת 3D Secure: {guideUrl}",
+      both: "מדריך הגדרת 3D Secure: {guideUrl}",
+    },
+    getGuideUrl: getThreeDsSettingsGuideUrl,
+    getPresentationUrl: getThreeDsSettingsGuideUrl,
   },
 };
 

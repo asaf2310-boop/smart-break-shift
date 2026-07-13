@@ -8,6 +8,7 @@ import {
   PUBLIC_PAYMENT_LINK_VIDEO_PATH,
   PUBLIC_TRANSACTION_DETAILS_PDF_PATH,
   PUBLIC_TRANSACTION_DETAILS_VIDEO_PATH,
+  PUBLIC_THREE_DS_SETTINGS_PDF_PATH,
   WEALTHY_GUIDE_BASE,
   wealthyGuideFeatures,
 } from "@/lib/wealthyGuideConfig";
@@ -109,9 +110,9 @@ export default function PaymentGuideAdminPanel() {
           </li>
           <li className="flex items-center gap-2 flex-wrap">
             <FileText className="w-4 h-4 text-slate-400 shrink-0" />
-            <span className="text-slate-700">פירוט עסקאות — PDF:</span>
-            <Link to={PUBLIC_TRANSACTION_DETAILS_PDF_PATH} className="text-primary hover:underline font-mono text-xs">
-              {PUBLIC_TRANSACTION_DETAILS_PDF_PATH}
+            <span className="text-slate-700">3D Secure — PDF:</span>
+            <Link to={PUBLIC_THREE_DS_SETTINGS_PDF_PATH} className="text-primary hover:underline font-mono text-xs">
+              {PUBLIC_THREE_DS_SETTINGS_PDF_PATH}
             </Link>
           </li>
         </ul>

@@ -42,6 +42,42 @@ export const PUBLIC_TRANSACTION_DETAILS_PDF_PATH = "/guide/transaction-details/p
 export const TRANSACTION_DETAILS_INTRO =
   "פירוט עסקאות מאפשר לצפות בכל העסקאות שבוצעו במערכת, לסנן לפי טווח תאריכים, לייצא דוח לאקסל ולבטל עסקאות אשראי במידת הצורך. שימוש נפוץ: מעקב אחר תשלומים, איתור עסקה ספציפית ובדיקת סטטוס עסקה מול הלקוח.";
 
+export const THREE_DS_SETTINGS_SCREENSHOT_URL =
+  "/training/wealthy-guide/3ds-settings-screenshot.png";
+
+/** Public guest route for SMS links (no agent auth / knowledge module). */
+export const PUBLIC_THREE_DS_SETTINGS_PDF_PATH = "/guide/3ds-settings/pdf";
+
+export const THREE_DS_SETTINGS_INTRO =
+  "שירות 3D Secure (עסקה בטוחה) מאפשר אימות מאובטח של בעל הכרטיס בעסקאות אשראי. המדריך מלווה את הנציג בשלבי ההגדרה בממשק המסוף — מפרטי העסקה ועד בדיקת החיבור עם כרטיסי טסט.";
+
+export const threeDsSettingsWorkflowSteps = [
+  {
+    title: "כניסה למערכת",
+    description: "היכנסו לממשק הניהול עם פרטי הגישה ממייל פתיחת המסוף, ונווטו להגדרות → עסקה בטוחה.",
+  },
+  {
+    title: "פרטי עסקה בטוחה",
+    description: "הגדירו שם בית עסק באנגלית, דומיין, קוד מדינה 376 וגודל חלון אימות (מסך מלא).",
+  },
+  {
+    title: "הגדרת מותגי אשראי",
+    description: "לכל מותג שהלקוח סולק — בחרו סולק, הזינו MID ו-MCC, והפעילו ישראלי + תייר.",
+  },
+  {
+    title: "הגדרות מתקדמות",
+    description: "סמנו את תיבות הסימון (Fallback, חסימת ישראכרט מקומי, אילוץ OTP) לפי ההנחיות.",
+  },
+  {
+    title: "שמירה ובדיקה",
+    description: "שמרו את ההגדרות, בצעו עסקת טסט ואמתו בפרטי העסקה שמופיע Suspected fraud.",
+  },
+  {
+    title: "סיום והפעלה",
+    description: "עדכנו סכום מינימלי לעסקה בטוחה (אם נדרש) — השירות פעיל.",
+  },
+];
+
 export const paymentLinkWorkflowSteps = [
   {
     title: "צרו בקשה לתשלום",
@@ -85,6 +121,13 @@ export const wealthyGuideFeatures = [
     slug: "transaction-details",
     ready: true,
     color: "bg-orange-100 text-orange-600",
+  },
+  {
+    title: "עסקה בגובה 3DS",
+    description: "הגדרת שירות 3D Secure (עסקה בטוחה)",
+    slug: "3ds-settings",
+    ready: true,
+    color: "bg-sky-100 text-sky-600",
   },
   {
     title: "חשבוניות דיגיטליות",
@@ -143,7 +186,7 @@ export const wealthyGuideMenuItems = [
     children: [
       { label: "דף תשלום ו-API", slug: "payment-page-api", ready: false },
       { label: "מניעת עסקאות כפולות", slug: "duplicate-prevention", ready: false },
-      { label: "עסקה בגובה 3DS", slug: "3ds", ready: false },
+      { label: "עסקה בגובה 3DS", slug: "3ds-settings", ready: true },
       { label: "Bit", slug: "bit", ready: false },
       { label: "Apple Pay", slug: "apple-pay", ready: false },
       { label: "Google Pay", slug: "google-pay", ready: false },
@@ -370,6 +413,127 @@ export const transactionDetailsTableFields = [
   },
 ];
 
+export const threeDsSettingsFields = [
+  {
+    name: "כניסה לממשק הניהול",
+    description:
+      "יש להיכנס לממשק הניהול של המסוף עם פרטי הגישה שנשלחו ללקוח במייל פתיחת המסוף (מספר מסוף, שם משתמש, סיסמה ראשונית וסיסמת זיכוי).",
+    required: true,
+  },
+  {
+    name: "ניווט להגדרות",
+    description: 'לאחר הכניסה, יש ללחוץ בסרגל הימני על "הגדרות" ← "עסקה בטוחה".',
+    required: true,
+  },
+  {
+    name: "שם בית העסק (Merchant Name)",
+    description:
+      "יש להקליד את שם בית העסק באנגלית כפי שמופיע בחברת האשראי של הלקוח. ללא רווחים, עד 10 תווים.",
+    tip: "שם בית העסק חייב להיות באנגלית, ללא רווחים, עד 10 תווים בלבד.",
+    required: true,
+  },
+  {
+    name: "כתובת אתר (דומיין בלבד)",
+    description:
+      "יש להזין את הדומיין של בית העסק בלבד. אם הלקוח עובד עם לינק לתשלום דרך פורטל / אפליקציית HYP — יש להזין hyp.co.il.",
+    tip: "אם הלקוח עובד עם לינק לתשלום — יש להזין hyp.co.il ככתובת האתר.",
+    required: true,
+  },
+  {
+    name: "קוד מדינה",
+    description: "יש להקליד את קוד מדינה ישראל: 376.",
+    required: true,
+  },
+  {
+    name: "גודל חלון אימות",
+    description:
+      "יש לבחור מסך מלא — זהו החלון שבו הלקוח הסופי מקליד את קוד ה-OTP.",
+    required: true,
+  },
+];
+
+export const threeDsSettingsBrandFields = [
+  {
+    name: "בחירת סולק",
+    description: "לכל מותג — יש לבחור את חברת האשראי הסולקת: Max / Cal / Visa / Isracard.",
+    required: true,
+  },
+  {
+    name: "הזנת MID",
+    description: 'מספר הספק מופיע במערכת ניהול יעד תחת "פרטי מסוף שב"א".',
+    required: true,
+  },
+  {
+    name: "MID עבור American Express בלבד",
+    description:
+      "מספר ייעודי בן 10 ספרות שמתחיל ב-972 — מגיע מחברת האשראי. רלוונטי רק למותג Amex.",
+    tip: "עבור American Express בלבד — ה-MID הוא מספר ייעודי בן 10 ספרות שמתחיל ב-972.",
+    required: false,
+  },
+  {
+    name: "הזנת MCC",
+    description:
+      'קוד ה-MCC מופיע במערכת ניהול יעד תחת "הערות בכרטיס לקוח". במידה ולא מופיע — יש לשלוח לתפעול לבדיקה.',
+    tip: "ה-MCC מייצג את תחום העיסוק — יש לוודא שהוא תואם למה שהלקוח קיבל מחברת האשראי.",
+    required: true,
+  },
+  {
+    name: "ישראלי + תייר",
+    description:
+      "יש להפעיל למצב פעיל לכל המותגים — גם אם הלקוח לא סולק כרטיס תייר, חובה להגדיר תייר!",
+    required: true,
+  },
+];
+
+export const threeDsSettingsAdvancedFields = [
+  {
+    name: "Fallback — ביצוע עסקאות ללא עסקה בטוחה",
+    description:
+      "מאפשר לעסקה לעבור ללא אימות במקרה של כשל טכני זמני. המלצה: לא לסמן — לשמור על רמת אבטחה גבוהה.",
+    required: false,
+  },
+  {
+    name: "חסימת עסקאות ישראכרט מקומי",
+    description:
+      'מותג ישראכרט מקומי אינו נתמך בשירות עסקה בטוחה. מסומן — הלקוח יקבל שגיאה "כרטיס לא נתמך". לא מסומן — העסקה תעבור, אך ללא עסקה בטוחה.',
+    required: false,
+  },
+  {
+    name: "אילוץ אימות OTP",
+    description:
+      "כופה הזנת סיסמה חד-פעמית בכל עסקה — ללא קשר להחלטת מנפיק הכרטיס. המלצה: לא לסמן — מאפשר אימות חלק וחוסך דף אימות נוסף.",
+    required: false,
+  },
+];
+
+export const threeDsSettingsTestFields = [
+  {
+    name: 'שמור הגדרות',
+    description: 'יש לוודא שכל ההגדרות תקינות וללחוץ על "שמור הגדרות".',
+    required: true,
+  },
+  {
+    name: "בדיקה עם כרטיסי טסט",
+    description:
+      "יש להעביר עסקה בכרטיסי טסט (MasterCard: 5326 1053 0098 5614, Amex: 3755 1039 0552 649 — תוקף 02/99). העסקה לא תעבור — אך תיתן אינדיקציה האם השירות מחובר.",
+    tip: "העסקה עם כרטיס טסט לא תעבור — זה תקין! מטרת הבדיקה היא לוודא שהשירות מחובר.",
+    required: true,
+  },
+  {
+    name: "אימות החיבור",
+    description:
+      'יש לגשת ל"ביצוע פעולות ← פירוט עסקאות", ללחוץ על מספר העסקה, ולחפש את המלל Suspected fraud — סימן שהשירות מחובר תקין.',
+    tip: 'אם מופיע "Suspected fraud" בפרטי העסקה — השירות מחובר בהצלחה!',
+    required: true,
+  },
+  {
+    name: "עדכון סכום מינימלי",
+    description:
+      'יש לחזור למסך ההגדרות ולהגדיר מחדש את סכום העסקה המינימלי הנדרש. אם הלקוח מעוניין לצאת לאימות החל מ-0 ש"ח — אין צורך להגדיר כלום.',
+    required: false,
+  },
+];
+
 export const paymentLinkTableFields = [
   {
     name: "סינון: הכל / שולמו / לא שולמו",
@@ -476,4 +640,8 @@ export function getTransactionDetailsGuideUrl() {
 
 export function getTransactionDetailsPresentationUrl() {
   return `${getPublicAppOrigin()}${PUBLIC_TRANSACTION_DETAILS_VIDEO_PATH}`;
+}
+
+export function getThreeDsSettingsGuideUrl() {
+  return `${getPublicAppOrigin()}${PUBLIC_THREE_DS_SETTINGS_PDF_PATH}`;
 }

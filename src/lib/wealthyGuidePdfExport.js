@@ -30,18 +30,8 @@ function buildWorkflowHtml(workflowSteps) {
   `;
 }
 
-function buildGuideHtml({
-  title,
-  intro,
-  fields,
-  screenshotUrl,
-  workflowSteps,
-  tableFields,
-  screenshotAlt,
-  fieldsSectionTitle = "הסבר שדות הטופס",
-  tableSectionTitle = "טבלת בקשות שנשלחו",
-}) {
-  const fieldBlocks = fields
+function buildFieldBlocks(fields, startIndex = 0) {
+  return fields
     .map((field, index) => {
       const badge = field.required
         ? '<span style="color:#dc2626 !important;font-size:11px;-webkit-text-fill-color:#dc2626;">שדה חובה</span>'
@@ -52,7 +42,7 @@ function buildGuideHtml({
       return `
         <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #e5e7eb;">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-            <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;background:#eef2ff;color:#4f46e5 !important;-webkit-text-fill-color:#4f46e5;border-radius:6px;font-size:12px;font-weight:700;">${index + 1}</span>
+            <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;background:#eef2ff;color:#4f46e5 !important;-webkit-text-fill-color:#4f46e5;border-radius:6px;font-size:12px;font-weight:700;">${startIndex + index + 1}</span>
             <strong style="font-size:14px;color:#111827 !important;-webkit-text-fill-color:#111827;">${escapeHtml(field.name)}</strong>
             ${badge}
           </div>
@@ -62,6 +52,29 @@ function buildGuideHtml({
       `;
     })
     .join("");
+}
+
+function buildFieldsSectionHtml(title, fields, startIndex = 0, countLabel = "שדות") {
+  if (!fields?.length) return "";
+  return `
+    <h2 style="margin:0 0 16px;font-size:16px;color:#111827 !important;-webkit-text-fill-color:#111827;">${escapeHtml(title)} (${fields.length} ${countLabel})</h2>
+    ${buildFieldBlocks(fields, startIndex)}
+  `;
+}
+
+function buildGuideHtml({
+  title,
+  intro,
+  fields,
+  screenshotUrl,
+  workflowSteps,
+  tableFields,
+  additionalSections,
+  screenshotAlt,
+  fieldsSectionTitle = "הסבר שדות הטופס",
+  tableSectionTitle = "טבלת בקשות שנשלחו",
+}) {
+  const fieldBlocks = buildFieldBlocks(fields);
 
   const screenshotBlock = screenshotUrl
     ? `
@@ -80,31 +93,17 @@ function buildGuideHtml({
   const workflowBlock = buildWorkflowHtml(workflowSteps);
 
   const tableBlock = tableFields?.length
-    ? `
-    <h2 style="margin:0 0 16px;font-size:16px;color:#111827 !important;-webkit-text-fill-color:#111827;">${escapeHtml(tableSectionTitle)} (${tableFields.length} עמודות ופעולות)</h2>
-    ${tableFields
-      .map((field, index) => {
-        const badge = field.required
-          ? '<span style="color:#dc2626 !important;font-size:11px;-webkit-text-fill-color:#dc2626;">שדה חובה</span>'
-          : '<span style="color:#6b7280 !important;font-size:11px;-webkit-text-fill-color:#6b7280;">אופציונלי</span>';
-        const tip = field.tip
-          ? `<p style="margin:8px 0 0;padding:8px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:12px;color:#92400e !important;-webkit-text-fill-color:#92400e;">טיפ: ${escapeHtml(field.tip)}</p>`
-          : "";
-        return `
-        <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #e5e7eb;">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-            <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;background:#eef2ff;color:#4f46e5 !important;-webkit-text-fill-color:#4f46e5;border-radius:6px;font-size:12px;font-weight:700;">${index + 1}</span>
-            <strong style="font-size:14px;color:#111827 !important;-webkit-text-fill-color:#111827;">${escapeHtml(field.name)}</strong>
-            ${badge}
-          </div>
-          <p style="margin:0;font-size:13px;color:#374151 !important;-webkit-text-fill-color:#374151;">${escapeHtml(field.description)}</p>
-          ${tip}
-        </div>
-      `;
-      })
-      .join("")}
-  `
+    ? buildFieldsSectionHtml(tableSectionTitle, tableFields, fields.length, "עמודות ופעולות")
     : "";
+
+  let runningIndex = fields.length;
+  const additionalBlocks = (additionalSections || [])
+    .map((section) => {
+      const block = buildFieldsSectionHtml(section.title, section.fields, runningIndex);
+      runningIndex += section.fields?.length || 0;
+      return block;
+    })
+    .join("");
 
   return `
     <h1 style="margin:0 0 12px;font-size:22px;color:#111827 !important;-webkit-text-fill-color:#111827;">${escapeHtml(title)}</h1>
@@ -114,6 +113,7 @@ function buildGuideHtml({
     <h2 style="margin:0 0 16px;font-size:16px;color:#111827 !important;-webkit-text-fill-color:#111827;">${escapeHtml(fieldsSectionTitle)} (${fields.length} שדות)</h2>
     ${fieldBlocks}
     ${tableBlock}
+    ${additionalBlocks}
   `;
 }
 
@@ -269,6 +269,7 @@ async function exportWealthyGuidePdf({
   screenshotUrl,
   workflowSteps,
   tableFields,
+  additionalSections,
   filename,
   screenshotAlt,
   fieldsSectionTitle,
@@ -281,6 +282,7 @@ async function exportWealthyGuidePdf({
     screenshotUrl,
     workflowSteps,
     tableFields,
+    additionalSections,
     screenshotAlt,
     fieldsSectionTitle,
     tableSectionTitle,
@@ -346,5 +348,32 @@ export async function exportTransactionDetailsGuidePdf({
     screenshotAlt: "ממשק פירוט עסקאות",
     fieldsSectionTitle: "סינון ופעולות",
     tableSectionTitle: "עמודות טבלת העסקאות",
+  });
+}
+
+export async function exportThreeDsSettingsGuidePdf({
+  title,
+  intro,
+  fields,
+  brandFields,
+  advancedFields,
+  testFields,
+  screenshotUrl,
+  workflowSteps,
+}) {
+  return exportWealthyGuidePdf({
+    title,
+    intro,
+    fields,
+    screenshotUrl,
+    workflowSteps,
+    filename: "3ds-settings-guide.pdf",
+    screenshotAlt: "מסך הגדרות עסקה בטוחה",
+    fieldsSectionTitle: "פרטי עסקה בטוחה",
+    additionalSections: [
+      { title: "הגדרות מותגי אשראי (3DSecure)", fields: brandFields },
+      { title: "הגדרות מתקדמות", fields: advancedFields },
+      { title: "שמירה, בדיקה וסיום", fields: testFields },
+    ],
   });
 }

@@ -12,6 +12,7 @@ import {
   Receipt,
   RefreshCw,
   Settings,
+  Shield,
 } from "lucide-react";
 import { wealthyGuideFeatures, wealthyGuidePath } from "@/lib/wealthyGuideConfig";
 
@@ -20,6 +21,7 @@ const FEATURE_ICONS = {
   "לינק לתשלום": Link2,
   "הוראת קבע": RefreshCw,
   "פירוט עסקאות": Receipt,
+  "עסקה בגובה 3DS": Shield,
   "חשבוניות דיגיטליות": FileText,
   דוחות: BarChart3,
   הגדרות: Settings,

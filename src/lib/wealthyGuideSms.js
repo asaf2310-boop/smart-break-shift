@@ -8,6 +8,7 @@ import {
   getPaymentLinkPresentationUrl,
   getTransactionDetailsGuideUrl,
   getTransactionDetailsPresentationUrl,
+  getThreeDsSettingsGuideUrl,
 } from "@/lib/wealthyGuideConfig";
 import { REVIEW_SMS_MAX_LENGTH } from "@/lib/reviewSms";
 
@@ -17,7 +18,7 @@ export const WEALTHY_GUIDE_SMS_VARIANTS = [
   { id: "presentation", label: "מצגת בלבד" },
 ];
 
-export const WEALTHY_GUIDE_TYPES = ["manual-charge", "payment-link", "transaction-details"];
+export const WEALTHY_GUIDE_TYPES = ["manual-charge", "payment-link", "transaction-details", "3ds-settings"];
 
 const SMS_CONFIG = {
   "manual-charge": {
@@ -46,6 +47,15 @@ const SMS_CONFIG = {
     },
     getGuideUrl: getTransactionDetailsGuideUrl,
     getPresentationUrl: getTransactionDetailsPresentationUrl,
+  },
+  "3ds-settings": {
+    templates: {
+      guide: "מדריך הגדרת 3D Secure: {guideUrl}",
+      presentation: "מדריך הגדרת 3D Secure: {guideUrl}",
+      both: "מדריך הגדרת 3D Secure: {guideUrl}",
+    },
+    getGuideUrl: getThreeDsSettingsGuideUrl,
+    getPresentationUrl: getThreeDsSettingsGuideUrl,
   },
 };
 
