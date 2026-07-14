@@ -10,6 +10,8 @@ import {
   getTransactionDetailsPresentationUrl,
   getThreeDsSettingsGuideUrl,
   getWordPressPluginGuideUrl,
+  getShvaErrorsGuideUrl,
+  getThreeDsErrorsGuideUrl,
 } from "@/lib/wealthyGuideConfig";
 import { REVIEW_SMS_MAX_LENGTH } from "@/lib/reviewSms";
 
@@ -19,7 +21,15 @@ export const WEALTHY_GUIDE_SMS_VARIANTS = [
   { id: "presentation", label: "מצגת בלבד" },
 ];
 
-export const WEALTHY_GUIDE_TYPES = ["manual-charge", "payment-link", "transaction-details", "3ds-settings", "wordpress-plugin"];
+export const WEALTHY_GUIDE_TYPES = [
+  "manual-charge",
+  "payment-link",
+  "transaction-details",
+  "3ds-settings",
+  "wordpress-plugin",
+  "shva-errors",
+  "3ds-errors",
+];
 
 const SMS_CONFIG = {
   "manual-charge": {
@@ -66,6 +76,24 @@ const SMS_CONFIG = {
     },
     getGuideUrl: getWordPressPluginGuideUrl,
     getPresentationUrl: getWordPressPluginGuideUrl,
+  },
+  "shva-errors": {
+    templates: {
+      guide: 'מדריך שגיאות שב"א: {guideUrl}',
+      presentation: 'מדריך שגיאות שב"א: {guideUrl}',
+      both: 'מדריך שגיאות שב"א: {guideUrl}',
+    },
+    getGuideUrl: getShvaErrorsGuideUrl,
+    getPresentationUrl: getShvaErrorsGuideUrl,
+  },
+  "3ds-errors": {
+    templates: {
+      guide: "מדריך שגיאות 3DS: {guideUrl}",
+      presentation: "מדריך שגיאות 3DS: {guideUrl}",
+      both: "מדריך שגיאות 3DS: {guideUrl}",
+    },
+    getGuideUrl: getThreeDsErrorsGuideUrl,
+    getPresentationUrl: getThreeDsErrorsGuideUrl,
   },
 };
 

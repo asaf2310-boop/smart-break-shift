@@ -99,6 +99,22 @@ export const PUBLIC_WORDPRESS_PLUGIN_PDF_PATH = "/guide/wordpress-plugin/pdf";
 export const WORDPRESS_PLUGIN_INTRO =
   "תוסף Hyp ל־WooCommerce מחבר את חנות ה-WordPress של הלקוח לדף התשלום המאובטח של Hyp. המדריך מלווה את הנציג משלב ההתקנה, דרך הזנת פרמטרי החיבור, הגדרת כתובת הצלחה, עיצוב דף התשלום, חשבוניות וזיכויים — ועד טיפול בתקלות נפוצות.";
 
+export {
+  SHVA_ERRORS_INTRO,
+  THREE_DS_ERRORS_INTRO,
+  SHVA_ERROR_SOURCES,
+  THREE_DS_ERROR_SOURCES,
+  shvaErrorCodes,
+  threeDsErrorCodes,
+  threeDsTransStatusCodes,
+  threeDsTransStatusReasonCodes,
+  threeDsMerchantFacingErrors,
+  paymentErrorToField,
+} from "./wealthyGuidePaymentErrors";
+
+/** Public guest routes for SMS links (no agent auth / knowledge module). */
+export const PUBLIC_SHVA_ERRORS_PDF_PATH = "/guide/shva-errors/pdf";
+export const PUBLIC_THREE_DS_ERRORS_PDF_PATH = "/guide/3ds-errors/pdf";
 export const threeDsSettingsWorkflowSteps = [
   {
     title: "כניסה למערכת",
@@ -185,6 +201,20 @@ export const wealthyGuideFeatures = [
     color: "bg-cyan-100 text-cyan-600",
   },
   {
+    title: 'שגיאות שב"א',
+    description: "קודי סירוב ותשובה של שב״א",
+    slug: "shva-errors",
+    ready: true,
+    color: "bg-rose-100 text-rose-600",
+  },
+  {
+    title: "שגיאות 3DS",
+    description: "כישלונות אימות ומסרים נפוצים",
+    slug: "3ds-errors",
+    ready: true,
+    color: "bg-red-100 text-red-600",
+  },
+  {
     title: "חשבוניות דיגיטליות",
     description: "ניהול וחיבור מערכת חשבוניות",
     slug: "invoice-connect",
@@ -228,6 +258,13 @@ export const wealthyGuideMenuItems = [
   {
     label: "תוספי סליקה",
     children: [{ label: "תוסף וורדפרס", slug: "wordpress-plugin", ready: true }],
+  },
+  {
+    label: "שגיאות תשלום",
+    children: [
+      { label: 'שגיאות שב"א', slug: "shva-errors", ready: true },
+      { label: "שגיאות 3DS", slug: "3ds-errors", ready: true },
+    ],
   },
   {
     label: "חשבוניות דיגיטליות",
@@ -945,4 +982,12 @@ export function getThreeDsSettingsGuideUrl() {
 
 export function getWordPressPluginGuideUrl() {
   return `${getPublicAppOrigin()}${PUBLIC_WORDPRESS_PLUGIN_PDF_PATH}`;
+}
+
+export function getShvaErrorsGuideUrl() {
+  return `${getPublicAppOrigin()}${PUBLIC_SHVA_ERRORS_PDF_PATH}`;
+}
+
+export function getThreeDsErrorsGuideUrl() {
+  return `${getPublicAppOrigin()}${PUBLIC_THREE_DS_ERRORS_PDF_PATH}`;
 }

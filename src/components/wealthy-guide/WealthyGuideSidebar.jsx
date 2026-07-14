@@ -1,6 +1,7 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
+  AlertTriangle,
   BarChart3,
   Bell,
   Check,
@@ -21,13 +22,14 @@ const ICONS = {
   "ביצוע פעולות": Zap,
   "פירוט עסקאות": Receipt,
   "תוספי סליקה": Plug,
+  "שגיאות תשלום": AlertTriangle,
   "חשבוניות דיגיטליות": FileText,
   דוחות: BarChart3,
   הגדרות: Settings,
   "ניהול התראות": Bell,
 };
 
-const ALWAYS_OPEN_SECTIONS = ["הגדרות"];
+const ALWAYS_OPEN_SECTIONS = ["הגדרות", "שגיאות תשלום"];
 
 function ReadyBadge({ className }) {
   return (

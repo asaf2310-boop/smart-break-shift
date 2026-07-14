@@ -15,9 +15,19 @@ export const PUBLIC_TRANSACTION_DETAILS_VIDEO_PATH = "/guide/transaction-details
 export const PUBLIC_TRANSACTION_DETAILS_PDF_PATH = "/guide/transaction-details/pdf";
 export const PUBLIC_THREE_DS_SETTINGS_PDF_PATH = "/guide/3ds-settings/pdf";
 export const PUBLIC_WORDPRESS_PLUGIN_PDF_PATH = "/guide/wordpress-plugin/pdf";
+export const PUBLIC_SHVA_ERRORS_PDF_PATH = "/guide/shva-errors/pdf";
+export const PUBLIC_THREE_DS_ERRORS_PDF_PATH = "/guide/3ds-errors/pdf";
 
 export const WEALTHY_GUIDE_SMS_VARIANTS = ["guide", "presentation", "both"];
-export const WEALTHY_GUIDE_TYPES = ["manual-charge", "payment-link", "transaction-details", "3ds-settings", "wordpress-plugin"];
+export const WEALTHY_GUIDE_TYPES = [
+  "manual-charge",
+  "payment-link",
+  "transaction-details",
+  "3ds-settings",
+  "wordpress-plugin",
+  "shva-errors",
+  "3ds-errors",
+];
 
 export function getWealthyGuidePublicOrigin() {
   return String(process.env.VITE_APP_URL || process.env.VERCEL_URL || "")
@@ -85,6 +95,18 @@ export function getWordPressPluginGuideUrl(origin) {
   return `${base}${PUBLIC_WORDPRESS_PLUGIN_PDF_PATH}`;
 }
 
+export function getShvaErrorsGuideUrl(origin) {
+  const base = String(origin || getWealthyGuidePublicOrigin() || "").replace(/\/$/, "");
+  if (!base) return PUBLIC_SHVA_ERRORS_PDF_PATH;
+  return `${base}${PUBLIC_SHVA_ERRORS_PDF_PATH}`;
+}
+
+export function getThreeDsErrorsGuideUrl(origin) {
+  const base = String(origin || getWealthyGuidePublicOrigin() || "").replace(/\/$/, "");
+  if (!base) return PUBLIC_THREE_DS_ERRORS_PDF_PATH;
+  return `${base}${PUBLIC_THREE_DS_ERRORS_PDF_PATH}`;
+}
+
 const SMS_CONFIG = {
   "manual-charge": {
     templates: {
@@ -130,6 +152,24 @@ const SMS_CONFIG = {
     },
     getGuideUrl: getWordPressPluginGuideUrl,
     getPresentationUrl: getWordPressPluginGuideUrl,
+  },
+  "shva-errors": {
+    templates: {
+      guide: 'מדריך שגיאות שב"א: {guideUrl}',
+      presentation: 'מדריך שגיאות שב"א: {guideUrl}',
+      both: 'מדריך שגיאות שב"א: {guideUrl}',
+    },
+    getGuideUrl: getShvaErrorsGuideUrl,
+    getPresentationUrl: getShvaErrorsGuideUrl,
+  },
+  "3ds-errors": {
+    templates: {
+      guide: "מדריך שגיאות 3DS: {guideUrl}",
+      presentation: "מדריך שגיאות 3DS: {guideUrl}",
+      both: "מדריך שגיאות 3DS: {guideUrl}",
+    },
+    getGuideUrl: getThreeDsErrorsGuideUrl,
+    getPresentationUrl: getThreeDsErrorsGuideUrl,
   },
 };
 

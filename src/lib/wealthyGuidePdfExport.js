@@ -412,3 +412,44 @@ export async function exportThreeDsSettingsGuidePdf({
     ],
   });
 }
+
+function paymentErrorsToFields(errors = []) {
+  return errors.map((err) => ({
+    name: err.code,
+    description: err.description,
+    tip: err.tip,
+    required: false,
+  }));
+}
+
+export async function exportShvaErrorsGuidePdf({ title, intro, errors }) {
+  const fields = paymentErrorsToFields(errors);
+  return exportWealthyGuidePdf({
+    title,
+    intro,
+    fields,
+    filename: "shva-errors-guide.pdf",
+    fieldsSectionTitle: "קודי תשובה שב״א",
+  });
+}
+
+export async function exportThreeDsErrorsGuidePdf({
+  title,
+  intro,
+  statusCodes,
+  reasonCodes,
+  merchantCodes,
+}) {
+  const fields = paymentErrorsToFields(statusCodes);
+  return exportWealthyGuidePdf({
+    title,
+    intro,
+    fields,
+    filename: "3ds-errors-guide.pdf",
+    fieldsSectionTitle: "סטטוס אימות (transStatus)",
+    additionalSections: [
+      { title: "סיבת כישלון (transStatusReason)", fields: paymentErrorsToFields(reasonCodes) },
+      { title: "הודעות נפוצות לנציג / לקוח", fields: paymentErrorsToFields(merchantCodes) },
+    ],
+  });
+}

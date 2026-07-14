@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
+  Ban,
   BarChart3,
   Bell,
   CreditCard,
@@ -14,6 +15,7 @@ import {
   RefreshCw,
   Settings,
   Shield,
+  ShieldAlert,
 } from "lucide-react";
 import { wealthyGuideFeatures, wealthyGuidePath } from "@/lib/wealthyGuideConfig";
 
@@ -24,6 +26,8 @@ const FEATURE_ICONS = {
   "פירוט עסקאות": Receipt,
   "עסקה בטוחה 3DS": Shield,
   "תוסף וורדפרס": Plug,
+  'שגיאות שב"א': Ban,
+  "שגיאות 3DS": ShieldAlert,
   "חשבוניות דיגיטליות": FileText,
   דוחות: BarChart3,
   הגדרות: Settings,
