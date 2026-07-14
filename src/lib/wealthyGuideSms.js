@@ -11,7 +11,6 @@ import {
   getThreeDsSettingsGuideUrl,
   getWordPressPluginGuideUrl,
   getShvaErrorsGuideUrl,
-  getThreeDsErrorsGuideUrl,
 } from "@/lib/wealthyGuideConfig";
 import { REVIEW_SMS_MAX_LENGTH } from "@/lib/reviewSms";
 
@@ -28,7 +27,6 @@ export const WEALTHY_GUIDE_TYPES = [
   "3ds-settings",
   "wordpress-plugin",
   "shva-errors",
-  "3ds-errors",
 ];
 
 const SMS_CONFIG = {
@@ -85,15 +83,6 @@ const SMS_CONFIG = {
     },
     getGuideUrl: getShvaErrorsGuideUrl,
     getPresentationUrl: getShvaErrorsGuideUrl,
-  },
-  "3ds-errors": {
-    templates: {
-      guide: "מדריך שגיאות 3DS: {guideUrl}",
-      presentation: "מדריך שגיאות 3DS: {guideUrl}",
-      both: "מדריך שגיאות 3DS: {guideUrl}",
-    },
-    getGuideUrl: getThreeDsErrorsGuideUrl,
-    getPresentationUrl: getThreeDsErrorsGuideUrl,
   },
 };
 

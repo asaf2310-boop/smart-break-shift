@@ -17,6 +17,10 @@ const CATEGORY_LABELS = {
   merchant: "הודעות נפוצות לנציג / לקוח",
 };
 
+/**
+ * Temporarily unused — removed from nav/routes ("שגיאות 3DS").
+ * Re-enable by restoring App.jsx routes and wealthyGuideConfig menu/features.
+ */
 export default function ThreeDsErrorsGuide() {
   return (
     <PaymentErrorsGuideView

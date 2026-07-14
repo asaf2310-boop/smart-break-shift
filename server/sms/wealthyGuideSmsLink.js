@@ -16,7 +16,6 @@ export const PUBLIC_TRANSACTION_DETAILS_PDF_PATH = "/guide/transaction-details/p
 export const PUBLIC_THREE_DS_SETTINGS_PDF_PATH = "/guide/3ds-settings/pdf";
 export const PUBLIC_WORDPRESS_PLUGIN_PDF_PATH = "/guide/wordpress-plugin/pdf";
 export const PUBLIC_SHVA_ERRORS_PDF_PATH = "/guide/shva-errors/pdf";
-export const PUBLIC_THREE_DS_ERRORS_PDF_PATH = "/guide/3ds-errors/pdf";
 
 export const WEALTHY_GUIDE_SMS_VARIANTS = ["guide", "presentation", "both"];
 export const WEALTHY_GUIDE_TYPES = [
@@ -26,7 +25,6 @@ export const WEALTHY_GUIDE_TYPES = [
   "3ds-settings",
   "wordpress-plugin",
   "shva-errors",
-  "3ds-errors",
 ];
 
 export function getWealthyGuidePublicOrigin() {
@@ -101,12 +99,6 @@ export function getShvaErrorsGuideUrl(origin) {
   return `${base}${PUBLIC_SHVA_ERRORS_PDF_PATH}`;
 }
 
-export function getThreeDsErrorsGuideUrl(origin) {
-  const base = String(origin || getWealthyGuidePublicOrigin() || "").replace(/\/$/, "");
-  if (!base) return PUBLIC_THREE_DS_ERRORS_PDF_PATH;
-  return `${base}${PUBLIC_THREE_DS_ERRORS_PDF_PATH}`;
-}
-
 const SMS_CONFIG = {
   "manual-charge": {
     templates: {
@@ -161,15 +153,6 @@ const SMS_CONFIG = {
     },
     getGuideUrl: getShvaErrorsGuideUrl,
     getPresentationUrl: getShvaErrorsGuideUrl,
-  },
-  "3ds-errors": {
-    templates: {
-      guide: "מדריך שגיאות 3DS: {guideUrl}",
-      presentation: "מדריך שגיאות 3DS: {guideUrl}",
-      both: "מדריך שגיאות 3DS: {guideUrl}",
-    },
-    getGuideUrl: getThreeDsErrorsGuideUrl,
-    getPresentationUrl: getThreeDsErrorsGuideUrl,
   },
 };
 

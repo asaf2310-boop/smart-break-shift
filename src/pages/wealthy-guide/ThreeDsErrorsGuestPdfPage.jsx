@@ -10,6 +10,7 @@ import {
 } from "@/lib/wealthyGuidePaymentErrors";
 import { exportThreeDsErrorsGuidePdf } from "@/lib/wealthyGuidePdfExport";
 
+/** Temporarily unused — public /guide/3ds-errors/pdf route removed. */
 export default function ThreeDsErrorsGuestPdfPage() {
   const [exportingPdf, setExportingPdf] = useState(false);
 

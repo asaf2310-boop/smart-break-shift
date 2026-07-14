@@ -114,6 +114,7 @@ export {
 
 /** Public guest routes for SMS links (no agent auth / knowledge module). */
 export const PUBLIC_SHVA_ERRORS_PDF_PATH = "/guide/shva-errors/pdf";
+/** Temporarily removed from nav/routes — re-enable with 3ds-errors guide when ready. */
 export const PUBLIC_THREE_DS_ERRORS_PDF_PATH = "/guide/3ds-errors/pdf";
 export const threeDsSettingsWorkflowSteps = [
   {
@@ -208,13 +209,6 @@ export const wealthyGuideFeatures = [
     color: "bg-rose-100 text-rose-600",
   },
   {
-    title: "שגיאות 3DS",
-    description: "כישלונות אימות ומסרים נפוצים",
-    slug: "3ds-errors",
-    ready: true,
-    color: "bg-red-100 text-red-600",
-  },
-  {
     title: "חשבוניות דיגיטליות",
     description: "ניהול וחיבור מערכת חשבוניות",
     slug: "invoice-connect",
@@ -261,10 +255,7 @@ export const wealthyGuideMenuItems = [
   },
   {
     label: "שגיאות תשלום",
-    children: [
-      { label: 'שגיאות שב"א', slug: "shva-errors", ready: true },
-      { label: "שגיאות 3DS", slug: "3ds-errors", ready: true },
-    ],
+    children: [{ label: 'שגיאות שב"א', slug: "shva-errors", ready: true }],
   },
   {
     label: "חשבוניות דיגיטליות",
@@ -988,6 +979,7 @@ export function getShvaErrorsGuideUrl() {
   return `${getPublicAppOrigin()}${PUBLIC_SHVA_ERRORS_PDF_PATH}`;
 }
 
+/** Temporarily unused — 3DS errors guide removed from public routes. */
 export function getThreeDsErrorsGuideUrl() {
   return `${getPublicAppOrigin()}${PUBLIC_THREE_DS_ERRORS_PDF_PATH}`;
 }

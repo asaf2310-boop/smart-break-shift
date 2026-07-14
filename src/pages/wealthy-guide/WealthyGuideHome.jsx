@@ -15,7 +15,6 @@ import {
   RefreshCw,
   Settings,
   Shield,
-  ShieldAlert,
 } from "lucide-react";
 import { wealthyGuideFeatures, wealthyGuidePath } from "@/lib/wealthyGuideConfig";
 
@@ -27,7 +26,6 @@ const FEATURE_ICONS = {
   "עסקה בטוחה 3DS": Shield,
   "תוסף וורדפרס": Plug,
   'שגיאות שב"א': Ban,
-  "שגיאות 3DS": ShieldAlert,
   "חשבוניות דיגיטליות": FileText,
   דוחות: BarChart3,
   הגדרות: Settings,
