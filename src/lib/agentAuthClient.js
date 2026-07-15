@@ -231,6 +231,18 @@ export async function apiSendReviewSms({ phone }) {
   );
 }
 
+export async function apiSendTemplateSms({ templateId, phone, fields = {} }) {
+  return postAgentAuth(
+    {
+      action: "send_template_sms",
+      templateId,
+      phone,
+      fields,
+    },
+    { requireBearer: true }
+  );
+}
+
 export async function apiSendWealthyGuideSms({ phone, variant = "both", guideType = "manual-charge" }) {
   return postAgentAuth(
     {

@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { BarChart3, BookOpen, Bot, CalendarClock, CalendarDays, Contact, GraduationCap, Home, MessageCircle, Monitor, ShieldCheck, Star } from "lucide-react";
+import { BarChart3, BookOpen, Bot, CalendarClock, CalendarDays, Contact, GraduationCap, Home, MessageCircle, MessageSquareText, Monitor, ShieldCheck } from "lucide-react";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useAgentModules } from "@/hooks/useAgentModules";
 import { agentHasAnyKnowledgeModule, agentKnowledgeNavTarget } from "@/constants/agentModules";
@@ -110,8 +110,8 @@ export default function AppNav() {
               onMouseEnter={() => prefetchReviewSmsConfig({ accessToken: getCachedBearerToken() })}
               onFocus={() => prefetchReviewSmsConfig({ accessToken: getCachedBearerToken() })}
             >
-              <Star className="w-4 h-4" />
-              דירוג גוגל
+              <MessageSquareText className="w-4 h-4" />
+              SMS ללקוח
             </Link>
           )}
           {customerChatEnabled && !demoModeEnabled && showTab("customer_chat") && (

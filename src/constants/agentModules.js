@@ -33,7 +33,7 @@ export const AGENT_MODULES = {
   crm: { label: "CRM", paths: ["/crm"] },
   ai_agent: { label: "סוכן AI", paths: ["/ai-agent"] },
   knowledge_guide: { label: "מדריך תשלומים", paths: ["/knowledge/wealthy-guide"] },
-  google_review: { label: "דירוג בגוגל", paths: ["/review-sms"] },
+  google_review: { label: "SMS ללקוח", paths: ["/review-sms"] },
 };
 
 export const DEFAULT_AGENT_MODULES = [...AGENT_MODULE_IDS];

@@ -50,7 +50,7 @@ import { logSecurityEvent } from "../server/security/auditLog.js";
 import { listSecurityAuditLog } from "../server/security/auditLogListService.js";
 import { getSmsStatsByAgent } from "../server/security/smsStatsService.js";
 import { endSupportSessionByAgent } from "../server/support/supportSessionEndService.js";
-import { sendReviewSmsToCustomer } from "../server/sms/reviewSmsService.js";
+import { sendReviewSmsToCustomer, isInforuSmsConfigured } from "../server/sms/reviewSmsService.js";
 import { sendWealthyGuideLinksSms } from "../server/sms/wealthyGuideSmsService.js";
 import {
   DEFAULT_REVIEW_SMS_TEMPLATE,
@@ -77,6 +77,7 @@ const webrtcJoinRateByUser = new Map();
 const adminActionRateByUser = new Map();
 const supportEndRateByUser = new Map();
 const reviewSmsRateByUser = new Map();
+const templateSmsRateByUser = new Map();
 const wealthyGuideSmsRateByUser = new Map();
 const sipTokenRateByUser = new Map();
 const passwordResetRateByIp = new Map();
@@ -92,6 +93,8 @@ const ADMIN_ACTION_RATE_MAX = 60;
 const SUPPORT_END_RATE_MAX = 120;
 const REVIEW_SMS_RATE_MAX = 30;
 const REVIEW_SMS_RATE_WINDOW_MS = 60 * 60 * 1000;
+const TEMPLATE_SMS_RATE_MAX = 30;
+const TEMPLATE_SMS_RATE_WINDOW_MS = 60 * 60 * 1000;
 const WEALTHY_GUIDE_SMS_RATE_MAX = 30;
 const WEALTHY_GUIDE_SMS_RATE_WINDOW_MS = 60 * 60 * 1000;
 const SIP_TOKEN_RATE_MAX = 30;
@@ -701,6 +704,132 @@ export default async function handler(req, res) {
       return json(res, 200, result, req);
     } catch (err) {
       console.error("[agent-auth] send_review_sms", err);
+      return json(
+        res,
+        502,
+        { ok: false, error: "sms_send_failed", message: err.message || "שליחת SMS נכשלה" },
+        req
+      );
+    }
+  }
+
+  if (action === "send_template_sms") {
+    const auth = await verifyBearerAgent(req);
+    if (!auth?.agent) {
+      return json(res, 401, { error: "unauthorized", message: "נדרשת התחברות" }, req);
+    }
+
+    const key = getRateLimitKey(req, auth.agent.id);
+    const rateCheck = await checkRateLimitHybrid({
+      prefix: "template_sms",
+      key,
+      store: templateSmsRateByUser,
+      max: TEMPLATE_SMS_RATE_MAX,
+      windowMs: TEMPLATE_SMS_RATE_WINDOW_MS,
+    });
+    if (!rateCheck.allowed) {
+      return rateLimitResponse(res, req, rateCheck.retryAfterSec);
+    }
+    await recordRateLimitHybrid(rateCheck.entry);
+
+    const templateId = String(body.templateId || "").trim();
+    const phone = String(body.phone || "").trim();
+    const fields = body.fields && typeof body.fields === "object" ? body.fields : {};
+
+    const SUPPORTED_TEMPLATES = {
+      terminal_details: {
+        requiredFields: ["terminal_number", "username", "password"],
+        buildMessage(f) {
+          const lines = ["להלן פרטי המסוף שלך:"];
+          if (f.terminal_number) lines.push(`מספר מסוף: ${f.terminal_number}`);
+          if (f.username) lines.push(`שם משתמש: ${f.username}`);
+          if (f.password) lines.push(`סיסמא: ${f.password}`);
+          return lines.join("\n");
+        },
+      },
+    };
+
+    const tmpl = SUPPORTED_TEMPLATES[templateId];
+    if (!tmpl) {
+      return json(res, 400, { ok: false, error: "invalid_template", message: "תבנית SMS לא מוכרת" }, req);
+    }
+
+    const sanitizedFields = {};
+    for (const key of tmpl.requiredFields) {
+      const val = String(fields[key] || "").trim();
+      if (!val) {
+        return json(
+          res,
+          400,
+          { ok: false, error: "missing_field", message: `שדה חסר: ${key}` },
+          req
+        );
+      }
+      sanitizedFields[key] = val;
+    }
+
+    const { normalizeIsraeliPhone, sendInforuSms } = await import("./send-schedule-sms.js");
+    const normalized = normalizeIsraeliPhone(phone);
+    if (!normalized) {
+      return json(res, 400, { ok: false, error: "invalid_phone", message: "מספר טלפון לא תקין" }, req);
+    }
+
+    const message = tmpl.buildMessage(sanitizedFields);
+    if (message.length > 500) {
+      return json(res, 400, { ok: false, error: "message_too_long", message: "ההודעה ארוכה מדי" }, req);
+    }
+
+    if (!isInforuSmsConfigured()) {
+      return json(
+        res,
+        503,
+        {
+          ok: false,
+          error: "sms_not_configured",
+          message: "שירות SMS לא מוגדר. הגדירו INFORU_USERNAME, INFORU_API_TOKEN ו-INFORU_SENDER ב-Vercel.",
+        },
+        req
+      );
+    }
+
+    try {
+      const userName = String(process.env.INFORU_USERNAME || "").trim();
+      const apiToken = String(process.env.INFORU_API_TOKEN || "").trim();
+      const sender = String(process.env.INFORU_SENDER || "").trim();
+
+      const result = await sendInforuSms({
+        userName,
+        apiToken,
+        sender,
+        to: normalized,
+        message,
+      });
+
+      if (!result.ok) {
+        return json(
+          res,
+          502,
+          { ok: false, error: "inforu_failed", message: result.message || "שליחת SMS נכשלה" },
+          req
+        );
+      }
+
+      void logSecurityEvent({
+        action: "send_template_sms",
+        actorAgentId: auth.agent.id,
+        resourceType: "customer_phone",
+        resourceId: normalized.slice(-4).padStart(normalized.length, "*"),
+        metadata: {
+          actorName: auth.agent.name || null,
+          templateId,
+          phoneLast4: normalized.slice(-4),
+        },
+        req,
+      });
+
+      return json(res, 200, { ok: true, phone: normalized, message: "נשלח בהצלחה" }, req);
+    } catch (err) {
+      console.error("[agent-auth] send_template_sms", err);
       return json(
         res,
         502,

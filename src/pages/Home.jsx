@@ -1,5 +1,5 @@
 import React, { useRef, useState } from "react";
-import { BarChart3, BookOpen, Bot, CalendarClock, CalendarDays, Contact, GraduationCap, Loader2, MessageCircle, Monitor, Star } from "lucide-react";
+import { BarChart3, BookOpen, Bot, CalendarClock, CalendarDays, Contact, GraduationCap, Loader2, MessageCircle, MessageSquareText, Monitor } from "lucide-react";
 import { getAgentNamesList } from "@/constants/scheduling";
 import AgentLogin from "@/components/auth/AgentLogin";
 import HypHomeShell from "@/components/hyp/HypHomeShell";
@@ -102,9 +102,9 @@ const crmCard = {
 const reviewSmsCard = {
   module: "google_review",
   to: "/review-sms",
-  title: "דירוג גוגל",
-  desc: "שליחת SMS ללקוח עם קישור לדירוג בגוגל",
-  icon: Star,
+  title: "SMS ללקוח",
+  desc: "תבניות SMS — דירוג גוגל, פרטי מסוף ועוד",
+  icon: MessageSquareText,
   iconTile: "m3-icon-tile",
 };
 
