@@ -5,6 +5,9 @@ import {
   isBreakRegistrationClosed,
 } from "@/constants/scheduling";
 
+/** ברירת מחדל קבועה: עד 2 נציגים למשבצת הפסקה */
+export const DEFAULT_BREAK_MAX_PER_SLOT = 2;
+
 /** מנקה רווחים כפולים — מונע "אופיר דוד" מול "אופיר  דוד" */
 export function normalizeAgentName(name) {
   return String(name || "").trim().replace(/\s+/g, " ");
@@ -21,8 +24,8 @@ export function agentOwnsBreakRegistration(registration, agentName) {
 
 export function getBreakLimits(settings) {
   return {
-    short: Number(settings?.short_max_per_slot ?? 1),
-    lunch: Number(settings?.lunch_max_per_slot ?? 1),
+    short: Number(settings?.short_max_per_slot ?? DEFAULT_BREAK_MAX_PER_SLOT),
+    lunch: Number(settings?.lunch_max_per_slot ?? DEFAULT_BREAK_MAX_PER_SLOT),
   };
 }
 
@@ -82,7 +85,7 @@ export function validateBreakRegistration({
   }
 
   const limits = getBreakLimits(settings);
-  const maxPerSlot = limits[breakType] ?? 1;
+  const maxPerSlot = limits[breakType] ?? DEFAULT_BREAK_MAX_PER_SLOT;
   const normalizedName = normalizeAgentName(agentName);
 
   const agentRegsToday = registrations.filter(

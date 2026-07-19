@@ -1,6 +1,7 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { Clock, User, Check, Lock } from "lucide-react";
+import { DEFAULT_BREAK_MAX_PER_SLOT } from "@/lib/breakCapacity";
 
 export default function TimeSlotCard({
   slot,
@@ -12,14 +13,14 @@ export default function TimeSlotCard({
   isRegistering = false,
   registrationClosed = false,
   index,
-  maxPerSlot = 1,
+  maxPerSlot = DEFAULT_BREAK_MAX_PER_SLOT,
   canCancel = false,
   onCancel,
   isDeleting = false,
   myRegistration = null,
 }) {
   const isLunch = breakType === "lunch";
-  const capacity = Math.max(1, Number(maxPerSlot) || 1);
+  const capacity = Math.max(1, Number(maxPerSlot) || DEFAULT_BREAK_MAX_PER_SLOT);
   const count = registrations.length;
   const isFull = count >= capacity;
   const isSlotClosed = isFull || registrationClosed;
