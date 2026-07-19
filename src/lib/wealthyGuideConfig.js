@@ -1,23 +1,15 @@
 /** מדריך תשלומים (Wealthy Guide) — נתונים סטטיים מייצוא Base44 */
 
 import {
-  PHONE_SYSTEM_DIRECTORY_URL,
   PUBLIC_PHONE_SYSTEM_PDF_PATH,
-  PHONE_SYSTEM_SCREENSHOT_URL,
   PHONE_SYSTEM_INTRO,
-  phoneSystemScreenshots,
-  phoneSystemWorkflowSteps,
   phoneSystemSections,
   flattenPhoneSystemFields,
 } from "./wealthyGuidePhoneSystem";
 
 export {
-  PHONE_SYSTEM_DIRECTORY_URL,
   PUBLIC_PHONE_SYSTEM_PDF_PATH,
-  PHONE_SYSTEM_SCREENSHOT_URL,
   PHONE_SYSTEM_INTRO,
-  phoneSystemScreenshots,
-  phoneSystemWorkflowSteps,
   phoneSystemSections,
   flattenPhoneSystemFields,
 };
@@ -233,7 +225,7 @@ export const wealthyGuideFeatures = [
   },
   {
     title: "מערכת טלפוניה",
-    description: "הדרכת נציג ל-Genesys Cloud",
+    description: "הדרכת Genesys Widget בתוך Dynamics",
     slug: "phone-system",
     ready: true,
     color: "bg-teal-100 text-teal-600",

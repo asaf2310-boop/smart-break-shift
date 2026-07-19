@@ -164,9 +164,9 @@ const SMS_CONFIG = {
   },
   "phone-system": {
     templates: {
-      guide: "מדריך מערכת טלפוניה (Genesys Cloud): {guideUrl}",
-      presentation: "מדריך מערכת טלפוניה (Genesys Cloud): {guideUrl}",
-      both: "מדריך מערכת טלפוניה (Genesys Cloud): {guideUrl}",
+      guide: "מדריך Genesys Widget ב-Dynamics: {guideUrl}",
+      presentation: "מדריך Genesys Widget ב-Dynamics: {guideUrl}",
+      both: "מדריך Genesys Widget ב-Dynamics: {guideUrl}",
     },
     getGuideUrl: getPhoneSystemGuideUrl,
     getPresentationUrl: getPhoneSystemGuideUrl,
