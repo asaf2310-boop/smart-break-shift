@@ -69,6 +69,6 @@ values (
   false
 )
 on conflict (date) do update set
-  lunch_max_per_slot = excluded.lunch_max_per_slot,
-  short_max_per_slot = excluded.short_max_per_slot,
-  show_shortage_notice = excluded.show_shortage_notice;
+  lunch_max_per_slot = 2,
+  short_max_per_slot = 2,
+  show_shortage_notice = false;
