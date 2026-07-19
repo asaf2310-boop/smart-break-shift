@@ -11,6 +11,7 @@ import {
   getThreeDsSettingsGuideUrl,
   getWordPressPluginGuideUrl,
   getShvaErrorsGuideUrl,
+  getPhoneSystemGuideUrl,
 } from "@/lib/wealthyGuideConfig";
 import { REVIEW_SMS_MAX_LENGTH } from "@/lib/reviewSms";
 
@@ -27,6 +28,7 @@ export const WEALTHY_GUIDE_TYPES = [
   "3ds-settings",
   "wordpress-plugin",
   "shva-errors",
+  "phone-system",
 ];
 
 const SMS_CONFIG = {
@@ -83,6 +85,15 @@ const SMS_CONFIG = {
     },
     getGuideUrl: getShvaErrorsGuideUrl,
     getPresentationUrl: getShvaErrorsGuideUrl,
+  },
+  "phone-system": {
+    templates: {
+      guide: "מדריך מערכת טלפוניה (Genesys Cloud): {guideUrl}",
+      presentation: "מדריך מערכת טלפוניה (Genesys Cloud): {guideUrl}",
+      both: "מדריך מערכת טלפוניה (Genesys Cloud): {guideUrl}",
+    },
+    getGuideUrl: getPhoneSystemGuideUrl,
+    getPresentationUrl: getPhoneSystemGuideUrl,
   },
 };
 

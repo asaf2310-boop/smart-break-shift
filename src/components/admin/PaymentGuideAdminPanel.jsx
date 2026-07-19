@@ -6,11 +6,11 @@ import {
   PUBLIC_MANUAL_CHARGE_VIDEO_PATH,
   PUBLIC_PAYMENT_LINK_PDF_PATH,
   PUBLIC_PAYMENT_LINK_VIDEO_PATH,
-  PUBLIC_TRANSACTION_DETAILS_PDF_PATH,
   PUBLIC_TRANSACTION_DETAILS_VIDEO_PATH,
   PUBLIC_THREE_DS_SETTINGS_PDF_PATH,
   PUBLIC_WORDPRESS_PLUGIN_PDF_PATH,
   PUBLIC_SHVA_ERRORS_PDF_PATH,
+  PUBLIC_PHONE_SYSTEM_PDF_PATH,
   WEALTHY_GUIDE_BASE,
   wealthyGuideFeatures,
 } from "@/lib/wealthyGuideConfig";
@@ -129,6 +129,13 @@ export default function PaymentGuideAdminPanel() {
             <span className="text-slate-700">שגיאות שב״א — PDF:</span>
             <Link to={PUBLIC_SHVA_ERRORS_PDF_PATH} className="text-primary hover:underline font-mono text-xs">
               {PUBLIC_SHVA_ERRORS_PDF_PATH}
+            </Link>
+          </li>
+          <li className="flex items-center gap-2 flex-wrap">
+            <FileText className="w-4 h-4 text-slate-400 shrink-0" />
+            <span className="text-slate-700">מערכת טלפוניה — PDF:</span>
+            <Link to={PUBLIC_PHONE_SYSTEM_PDF_PATH} className="text-primary hover:underline font-mono text-xs">
+              {PUBLIC_PHONE_SYSTEM_PDF_PATH}
             </Link>
           </li>
         </ul>

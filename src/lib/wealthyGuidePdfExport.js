@@ -453,3 +453,46 @@ export async function exportThreeDsErrorsGuidePdf({
     ],
   });
 }
+
+export async function exportPhoneSystemGuidePdf({
+  title,
+  intro,
+  sections = [],
+  directoryUrl,
+  screenshotUrl,
+  workflowSteps,
+}) {
+  const firstSection = sections[0];
+  const restSections = sections.slice(1);
+
+  const loginFields = [
+    ...(directoryUrl
+      ? [
+          {
+            name: "קישור כניסה למערכת",
+            description: `פתחו את ספריית האפליקציות של Genesys Cloud בכתובת: ${directoryUrl}`,
+            tip: "הקישור נפתח בכרטיסייה חדשה ממסך המדריך.",
+            required: true,
+          },
+        ]
+      : []),
+    ...(firstSection?.steps || []),
+  ];
+
+  return exportWealthyGuidePdf({
+    title,
+    intro,
+    fields: loginFields,
+    screenshotUrl,
+    workflowSteps,
+    filename: "phone-system-guide.pdf",
+    screenshotAlt: "מסך הכניסה ל-Genesys Cloud",
+    fieldsSectionTitle: firstSection
+      ? `${firstSection.number}. ${firstSection.title}`
+      : "כניסה ל-Genesys Cloud",
+    additionalSections: restSections.map((section) => ({
+      title: `${section.number}. ${section.title}`,
+      fields: section.steps,
+    })),
+  });
+}

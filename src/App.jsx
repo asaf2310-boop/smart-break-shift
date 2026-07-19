@@ -45,6 +45,7 @@ import TransactionDetailsGuide from './pages/wealthy-guide/TransactionDetailsGui
 import ThreeDsSettingsGuide from './pages/wealthy-guide/ThreeDsSettingsGuide';
 import WordPressPluginGuide from './pages/wealthy-guide/WordPressPluginGuide';
 import ShvaErrorsGuide from './pages/wealthy-guide/ShvaErrorsGuide';
+import PhoneSystemGuide from './pages/wealthy-guide/PhoneSystemGuide';
 import ManualChargeGuestVideoPage from './pages/wealthy-guide/ManualChargeGuestVideoPage';
 import ManualChargeGuestPdfPage from './pages/wealthy-guide/ManualChargeGuestPdfPage';
 import PaymentLinkGuestVideoPage from './pages/wealthy-guide/PaymentLinkGuestVideoPage';
@@ -54,6 +55,7 @@ import TransactionDetailsGuestPdfPage from './pages/wealthy-guide/TransactionDet
 import ThreeDsSettingsGuestPdfPage from './pages/wealthy-guide/ThreeDsSettingsGuestPdfPage';
 import WordPressPluginGuestPdfPage from './pages/wealthy-guide/WordPressPluginGuestPdfPage';
 import ShvaErrorsGuestPdfPage from './pages/wealthy-guide/ShvaErrorsGuestPdfPage';
+import PhoneSystemGuestPdfPage from './pages/wealthy-guide/PhoneSystemGuestPdfPage';
 import WealthyGuideComingSoon from './pages/wealthy-guide/WealthyGuideComingSoon';
 import AdminCustomerChat from './pages/AdminCustomerChat';
 import AdminLocalhostLinksFloating from '@/components/admin/AdminLocalhostLinksFloating';
@@ -175,6 +177,7 @@ const AuthenticatedApp = () => {
         <Route path="/guide/3ds-settings/pdf" element={<RouteErrorBoundary><ThreeDsSettingsGuestPdfPage /></RouteErrorBoundary>} />
         <Route path="/guide/wordpress-plugin/pdf" element={<RouteErrorBoundary><WordPressPluginGuestPdfPage /></RouteErrorBoundary>} />
         <Route path="/guide/shva-errors/pdf" element={<RouteErrorBoundary><ShvaErrorsGuestPdfPage /></RouteErrorBoundary>} />
+        <Route path="/guide/phone-system/pdf" element={<RouteErrorBoundary><PhoneSystemGuestPdfPage /></RouteErrorBoundary>} />
         <Route path="/support/consent/:token" element={<RouteErrorBoundary><RemoteSupportConsentPage /></RouteErrorBoundary>} />
         <Route path="/support/screen/:sessionId" element={<RouteErrorBoundary><ScreenShareGuestPage /></RouteErrorBoundary>} />
         <Route path="/ai-agent" element={<ModuleGate module="ai_agent"><AiAgentPage /></ModuleGate>} />
@@ -186,6 +189,7 @@ const AuthenticatedApp = () => {
           <Route path="3ds-settings" element={<ThreeDsSettingsGuide />} />
           <Route path="wordpress-plugin" element={<WordPressPluginGuide />} />
           <Route path="shva-errors" element={<ShvaErrorsGuide />} />
+          <Route path="phone-system" element={<PhoneSystemGuide />} />
           <Route path="*" element={<WealthyGuideComingSoon />} />
         </Route>
         <Route path="/knowledge" element={<Navigate to="/knowledge/wealthy-guide" replace />} />

@@ -16,6 +16,7 @@ export const PUBLIC_TRANSACTION_DETAILS_PDF_PATH = "/guide/transaction-details/p
 export const PUBLIC_THREE_DS_SETTINGS_PDF_PATH = "/guide/3ds-settings/pdf";
 export const PUBLIC_WORDPRESS_PLUGIN_PDF_PATH = "/guide/wordpress-plugin/pdf";
 export const PUBLIC_SHVA_ERRORS_PDF_PATH = "/guide/shva-errors/pdf";
+export const PUBLIC_PHONE_SYSTEM_PDF_PATH = "/guide/phone-system/pdf";
 
 export const WEALTHY_GUIDE_SMS_VARIANTS = ["guide", "presentation", "both"];
 export const WEALTHY_GUIDE_TYPES = [
@@ -25,6 +26,7 @@ export const WEALTHY_GUIDE_TYPES = [
   "3ds-settings",
   "wordpress-plugin",
   "shva-errors",
+  "phone-system",
 ];
 
 export function getWealthyGuidePublicOrigin() {
@@ -99,6 +101,12 @@ export function getShvaErrorsGuideUrl(origin) {
   return `${base}${PUBLIC_SHVA_ERRORS_PDF_PATH}`;
 }
 
+export function getPhoneSystemGuideUrl(origin) {
+  const base = String(origin || getWealthyGuidePublicOrigin() || "").replace(/\/$/, "");
+  if (!base) return PUBLIC_PHONE_SYSTEM_PDF_PATH;
+  return `${base}${PUBLIC_PHONE_SYSTEM_PDF_PATH}`;
+}
+
 const SMS_CONFIG = {
   "manual-charge": {
     templates: {
@@ -153,6 +161,15 @@ const SMS_CONFIG = {
     },
     getGuideUrl: getShvaErrorsGuideUrl,
     getPresentationUrl: getShvaErrorsGuideUrl,
+  },
+  "phone-system": {
+    templates: {
+      guide: "מדריך מערכת טלפוניה (Genesys Cloud): {guideUrl}",
+      presentation: "מדריך מערכת טלפוניה (Genesys Cloud): {guideUrl}",
+      both: "מדריך מערכת טלפוניה (Genesys Cloud): {guideUrl}",
+    },
+    getGuideUrl: getPhoneSystemGuideUrl,
+    getPresentationUrl: getPhoneSystemGuideUrl,
   },
 };
 

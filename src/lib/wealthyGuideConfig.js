@@ -1,5 +1,27 @@
 /** מדריך תשלומים (Wealthy Guide) — נתונים סטטיים מייצוא Base44 */
 
+import {
+  PHONE_SYSTEM_DIRECTORY_URL,
+  PUBLIC_PHONE_SYSTEM_PDF_PATH,
+  PHONE_SYSTEM_SCREENSHOT_URL,
+  PHONE_SYSTEM_INTRO,
+  phoneSystemScreenshots,
+  phoneSystemWorkflowSteps,
+  phoneSystemSections,
+  flattenPhoneSystemFields,
+} from "./wealthyGuidePhoneSystem";
+
+export {
+  PHONE_SYSTEM_DIRECTORY_URL,
+  PUBLIC_PHONE_SYSTEM_PDF_PATH,
+  PHONE_SYSTEM_SCREENSHOT_URL,
+  PHONE_SYSTEM_INTRO,
+  phoneSystemScreenshots,
+  phoneSystemWorkflowSteps,
+  phoneSystemSections,
+  flattenPhoneSystemFields,
+};
+
 export const WEALTHY_GUIDE_BASE = "/knowledge/wealthy-guide";
 
 export const MANUAL_CHARGE_SCREENSHOT_URL =
@@ -116,6 +138,7 @@ export {
 export const PUBLIC_SHVA_ERRORS_PDF_PATH = "/guide/shva-errors/pdf";
 /** Temporarily removed from nav/routes — re-enable with 3ds-errors guide when ready. */
 export const PUBLIC_THREE_DS_ERRORS_PDF_PATH = "/guide/3ds-errors/pdf";
+
 export const threeDsSettingsWorkflowSteps = [
   {
     title: "כניסה למערכת",
@@ -209,6 +232,13 @@ export const wealthyGuideFeatures = [
     color: "bg-rose-100 text-rose-600",
   },
   {
+    title: "מערכת טלפוניה",
+    description: "הדרכת נציג ל-Genesys Cloud",
+    slug: "phone-system",
+    ready: true,
+    color: "bg-teal-100 text-teal-600",
+  },
+  {
     title: "חשבוניות דיגיטליות",
     description: "ניהול וחיבור מערכת חשבוניות",
     slug: "invoice-connect",
@@ -249,6 +279,7 @@ export const wealthyGuideMenuItems = [
     ],
   },
   { label: "פירוט עסקאות", slug: "transaction-details", ready: true },
+  { label: "מערכת טלפוניה", slug: "phone-system", ready: true },
   {
     label: "תוספי סליקה",
     children: [{ label: "תוסף וורדפרס", slug: "wordpress-plugin", ready: true }],
@@ -977,6 +1008,10 @@ export function getWordPressPluginGuideUrl() {
 
 export function getShvaErrorsGuideUrl() {
   return `${getPublicAppOrigin()}${PUBLIC_SHVA_ERRORS_PDF_PATH}`;
+}
+
+export function getPhoneSystemGuideUrl() {
+  return `${getPublicAppOrigin()}${PUBLIC_PHONE_SYSTEM_PDF_PATH}`;
 }
 
 /** Temporarily unused — 3DS errors guide removed from public routes. */
