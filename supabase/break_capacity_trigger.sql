@@ -1,5 +1,6 @@
 -- הרץ ב-Supabase → SQL Editor אם כבר הרצת schema.sql בעבר
 -- מונע הרשמה למשבצת שכבר מלאה (כולל לחיצות כפולות בו-זמנית)
+-- ברירת מחדל: צהריים=2, הפסקת 10 דקות=1
 
 create or replace function check_break_slot_capacity()
 returns trigger
@@ -11,15 +12,15 @@ declare
 begin
   select case new.break_type
     when 'lunch' then coalesce(bs.lunch_max_per_slot, 2)
-    when 'short' then coalesce(bs.short_max_per_slot, 2)
-    else 2
+    when 'short' then coalesce(bs.short_max_per_slot, 1)
+    else 1
   end
   into max_slots
   from break_settings bs
   where bs.date = new.date;
 
   if max_slots is null then
-    max_slots := 2;
+    max_slots := case when new.break_type = 'lunch' then 2 else 1 end;
   end if;
 
   select count(*)::int

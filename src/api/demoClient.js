@@ -119,7 +119,7 @@ function createSeedStore() {
       {
         id: makeId("settings"),
         date: todayStr,
-        short_max_per_slot: 2,
+        short_max_per_slot: 1,
         lunch_max_per_slot: 2,
         show_shortage_notice: false,
       },
