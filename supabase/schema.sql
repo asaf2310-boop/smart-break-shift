@@ -16,7 +16,7 @@ create table if not exists break_registrations (
 create table if not exists break_settings (
   id uuid primary key default gen_random_uuid(),
   date date not null unique,
-  lunch_max_per_slot int default 1,
+  lunch_max_per_slot int default 2,
   short_max_per_slot int default 1,
   show_shortage_notice boolean default false,
   shortage_notice_text text,
@@ -136,7 +136,7 @@ declare
   current_count int;
 begin
   select case new.break_type
-    when 'lunch' then coalesce(bs.lunch_max_per_slot, 1)
+    when 'lunch' then coalesce(bs.lunch_max_per_slot, 2)
     when 'short' then coalesce(bs.short_max_per_slot, 1)
     else 1
   end
@@ -145,7 +145,7 @@ begin
   where bs.date = new.date;
 
   if max_slots is null then
-    max_slots := 1;
+    max_slots := case when new.break_type = 'lunch' then 2 else 1 end;
   end if;
 
   select count(*)::int

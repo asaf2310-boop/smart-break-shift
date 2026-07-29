@@ -1,0 +1,74 @@
+-- הרץ ב-Supabase → SQL Editor
+-- צהריים: 2 נציגים למשבצת | הפסקת 10 דקות: נציג 1 | כולל היום (שעון ישראל).
+
+-- 1) ברירת מחדל לטבלה
+alter table break_settings
+  alter column lunch_max_per_slot set default 2;
+
+alter table break_settings
+  alter column short_max_per_slot set default 1;
+
+-- 2) טריגר קיבולת — fallback כשאין שורת הגדרות ליום
+create or replace function check_break_slot_capacity()
+returns trigger
+language plpgsql
+as $$
+declare
+  max_slots int;
+  current_count int;
+begin
+  select case new.break_type
+    when 'lunch' then coalesce(bs.lunch_max_per_slot, 2)
+    when 'short' then coalesce(bs.short_max_per_slot, 1)
+    else 1
+  end
+  into max_slots
+  from break_settings bs
+  where bs.date = new.date;
+
+  if max_slots is null then
+    max_slots := case when new.break_type = 'lunch' then 2 else 1 end;
+  end if;
+
+  select count(*)::int
+  into current_count
+  from break_registrations
+  where date = new.date
+    and time_slot = new.time_slot
+    and break_type = new.break_type;
+
+  if current_count >= max_slots then
+    raise exception 'break_slot_full';
+  end if;
+
+  return new;
+end;
+$$;
+
+-- 3) היום + ימים עתידיים
+update break_settings
+set
+  lunch_max_per_slot = 2,
+  short_max_per_slot = 1,
+  show_shortage_notice = false
+where date >= ((now() at time zone 'Asia/Jerusalem')::date);
+
+-- 4) ודא שיש שורה להיום (אם חסרה)
+insert into break_settings (
+  date,
+  lunch_max_per_slot,
+  short_max_per_slot,
+  show_shortage_notice,
+  registration_override_open
+)
+values (
+  (now() at time zone 'Asia/Jerusalem')::date,
+  2,
+  1,
+  false,
+  false
+)
+on conflict (date) do update set
+  lunch_max_per_slot = 2,
+  short_max_per_slot = 1,
+  show_shortage_notice = false;

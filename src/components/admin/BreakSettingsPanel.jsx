@@ -10,8 +10,17 @@ import {
   getIsraelDateStr,
   isBreakRegistrationClosed,
 } from "@/constants/scheduling";
+import { DEFAULT_LUNCH_MAX_PER_SLOT, DEFAULT_SHORT_MAX_PER_SLOT } from "@/lib/breakCapacity";
 
 const DEFAULT_NOTICE_TEXT = "עקב מחסור בנציגים, היום לא תתאפשר יציאה בזוגות להפסקת צהריים.";
+
+const defaultBreakSettingsForm = () => ({
+  lunch_max_per_slot: DEFAULT_LUNCH_MAX_PER_SLOT,
+  short_max_per_slot: DEFAULT_SHORT_MAX_PER_SLOT,
+  show_shortage_notice: false,
+  shortage_notice_text: DEFAULT_NOTICE_TEXT,
+  registration_override_open: false,
+});
 
 export default function BreakSettingsPanel({ selectedDate }) {
   const dateStr = format(selectedDate, "yyyy-MM-dd");
@@ -26,31 +35,19 @@ export default function BreakSettingsPanel({ selectedDate }) {
 
   const existing = settingsList[0] || null;
 
-  const [form, setForm] = useState({
-    lunch_max_per_slot: 1,
-    short_max_per_slot: 1,
-    show_shortage_notice: false,
-    shortage_notice_text: DEFAULT_NOTICE_TEXT,
-    registration_override_open: false,
-  });
+  const [form, setForm] = useState(defaultBreakSettingsForm);
 
   useEffect(() => {
     if (existing) {
       setForm({
-        lunch_max_per_slot: existing.lunch_max_per_slot ?? 1,
-        short_max_per_slot: existing.short_max_per_slot ?? 1,
+        lunch_max_per_slot: existing.lunch_max_per_slot ?? DEFAULT_LUNCH_MAX_PER_SLOT,
+        short_max_per_slot: existing.short_max_per_slot ?? DEFAULT_SHORT_MAX_PER_SLOT,
         show_shortage_notice: existing.show_shortage_notice ?? false,
         shortage_notice_text: existing.shortage_notice_text || DEFAULT_NOTICE_TEXT,
         registration_override_open: existing.registration_override_open ?? false,
       });
     } else {
-      setForm({
-        lunch_max_per_slot: 1,
-        short_max_per_slot: 1,
-        show_shortage_notice: false,
-        shortage_notice_text: DEFAULT_NOTICE_TEXT,
-        registration_override_open: false,
-      });
+      setForm(defaultBreakSettingsForm());
     }
   }, [existing?.id, dateStr]);
 

@@ -119,9 +119,9 @@ function createSeedStore() {
       {
         id: makeId("settings"),
         date: todayStr,
-        short_max_per_slot: 2,
-        lunch_max_per_slot: 1,
-        show_shortage_notice: true,
+        short_max_per_slot: 1,
+        lunch_max_per_slot: 2,
+        show_shortage_notice: false,
       },
     ],
     shiftRegistrations,
