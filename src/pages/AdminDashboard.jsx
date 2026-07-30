@@ -12,6 +12,7 @@ import {
   BREAK_REGISTRATION_OVERRIDE_MESSAGE,
   SHORT_BREAK_SLOTS,
   LUNCH_BREAK_SLOTS,
+  isExcludedFromSchedulingAgentName,
 } from "@/constants/scheduling";
 import BackendConfigBanner from "@/components/BackendConfigBanner";
 import AdminLocalhostLinksPanel from "@/components/admin/AdminLocalhostLinksPanel";
@@ -59,6 +60,12 @@ export default function AdminDashboard() {
   const agentNames = useMemo(
     () =>
       [...managedAgents]
+        .filter(
+          (agent) =>
+            agent.active !== false &&
+            agent.blocked !== true &&
+            !isExcludedFromSchedulingAgentName(agent.name)
+        )
         .map((agent) => String(agent.name || "").trim())
         .filter(Boolean)
         .sort((a, b) => a.localeCompare(b, "he")),

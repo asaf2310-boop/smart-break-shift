@@ -15,7 +15,7 @@ import { DEFAULT_AGENT_MODULES, modulesFromPicker } from "@/constants/agentModul
 import { formatCrmRoleLabel, modulesWithCrmRole, normalizeCrmRole } from "@/lib/crmRoles";
 import { REAL_AGENT_NAMES } from "@/constants/scheduling";
 import { normalizeAgentPhone } from "@/lib/agentPhone";
-import { apiAdminSetAgentPassword, apiProvisionAgentAuth, apiLogAdminAgentChange } from "@/lib/agentAuthClient";
+import { apiAdminSetAgentPassword, apiProvisionAgentAuth, apiLogAdminAgentChange, apiAdminSoftDeleteAgent } from "@/lib/agentAuthClient";
 import {
   fetchAgentByIdFromSupabase,
   fetchAgentsFromSupabase,
@@ -260,11 +260,16 @@ export { formatCrmRoleLabel };
 export async function deleteManagedAgent(id) {
   if (demoModeEnabled) {
     softDeleteDemoAppUser(id);
+    notifyAgentUsersChanged();
     return;
   }
-  await dataClient.entities.Agent.update(id, {
-    active: false,
-    deleted_at: new Date().toISOString(),
+
+  const result = await apiAdminSoftDeleteAgent(id);
+  notifyAgentUsersChanged();
+  // Audit is also written server-side; keep client log for older dashboards.
+  auditAdminAgentChange(id, "delete", {
+    displayName: result?.displayName || null,
+    alreadyDeleted: Boolean(result?.alreadyDeleted),
   });
-  auditAdminAgentChange(id, "delete");
+  return result;
 }

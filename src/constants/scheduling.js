@@ -482,23 +482,41 @@ export const SCHEDULE_BLOCKED_AGENT_MESSAGE =
 export function getBlockedAgentNames(managedAgents = []) {
   return new Set(
     managedAgents
-      .filter((a) => a.blocked === true)
+      .filter((a) => a.blocked === true || isExcludedFromSchedulingAgentName(a.name))
       .map((a) => resolveToCanonicalAgentName(a.name))
       .filter(Boolean)
   );
 }
 
+/**
+ * Test / placeholder accounts that must never enter the scheduling pool.
+ * Matches "משתמש בדיקה" and similar QA names.
+ */
+export function isExcludedFromSchedulingAgentName(name) {
+  const normalized = String(name || "").trim().replace(/\s+/g, " ");
+  if (!normalized) return true;
+  if (/^משתמש\s*בדיקה$/u.test(normalized)) return true;
+  if (/^test\s*user$/i.test(normalized)) return true;
+  if (/^demo\s*user$/i.test(normalized)) return true;
+  return false;
+}
+
 /** Scheduling pool from managed agents; falls back to static list when DB is empty. */
 export function getSchedulingAgentPool(managedAgents = [], fallbackPool = AGENT_NAMES) {
   const fromManaged = managedAgents
-    .filter((a) => a.active !== false && a.blocked !== true)
+    .filter(
+      (a) =>
+        a.active !== false &&
+        a.blocked !== true &&
+        !isExcludedFromSchedulingAgentName(a.name)
+    )
     .map((a) => resolveToCanonicalAgentName(String(a.name || "").trim()))
-    .filter(Boolean);
+    .filter((name) => name && !isExcludedFromSchedulingAgentName(name));
 
   if (fromManaged.length > 0) {
     return [...new Set(fromManaged)].sort((a, b) => a.localeCompare(b, "he"));
   }
-  return [...fallbackPool];
+  return [...fallbackPool].filter((name) => !isExcludedFromSchedulingAgentName(name));
 }
 
 /** Agents eligible for scheduling / constraints lists (excludes blocked). */
@@ -507,7 +525,7 @@ export function getActiveSchedulingAgentNames(managedAgents = [], agentPool) {
   const blocked = getBlockedAgentNames(managedAgents);
   const names = pool
     .map((name) => resolveToCanonicalAgentName(name))
-    .filter((name) => name && !blocked.has(name));
+    .filter((name) => name && !blocked.has(name) && !isExcludedFromSchedulingAgentName(name));
   return [...new Set(names)].sort((a, b) => a.localeCompare(b, "he"));
 }
 

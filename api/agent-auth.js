@@ -28,6 +28,7 @@ import {
   adminCreateBreakRegistration,
   adminDeleteBreakRegistration,
 } from "../server/agent/breakRegistrationAdminService.js";
+import { adminSoftDeleteAgent } from "../server/agent/agentAdminService.js";
 import { adminUpdateVacationRequestStatus } from "../server/agent/vacationRequestAdminService.js";
 import { requestPasswordResetByEmail, requestFirstLoginByEmail } from "../server/agent/agentPasswordResetService.js";
 import {
@@ -975,6 +976,45 @@ export default async function handler(req, res) {
           ? "ההרשמה לא נמצאה"
           : "לא הצלחנו להסיר את ההרשמה";
       return json(res, 500, { error: "delete_failed", message }, req);
+    }
+  }
+
+  if (action === "admin_soft_delete_agent") {
+    const auth = await requireAdminAgent(req, res, body);
+    if (!auth) return;
+
+    const agentId = String(body.agentId || body.id || "").trim();
+    if (!agentId) {
+      return json(res, 400, { error: "invalid_fields", message: "חסר מזהה נציג" }, req);
+    }
+
+    try {
+      const result = await adminSoftDeleteAgent(agentId, { actorAgentId: auth.agent.id });
+      void logSecurityEvent({
+        action: "admin_agent_delete",
+        actorAgentId: auth.agent.id,
+        resourceType: "agent",
+        resourceId: agentId,
+        metadata: {
+          displayName: result.displayName || null,
+          alreadyDeleted: Boolean(result.alreadyDeleted),
+        },
+        req,
+      });
+      return json(res, 200, { ok: true, ...result }, req);
+    } catch (err) {
+      console.error("[agent-auth] admin_soft_delete_agent", err);
+      const code = String(err?.message || "");
+      const message =
+        code === "not_found"
+          ? "הנציג לא נמצא"
+          : code === "cannot_delete_self"
+            ? "לא ניתן למחוק את המשתמש המחובר"
+            : code === "delete_no_rows"
+              ? "לא הצלחנו למחוק — אין הרשאה או שהנציג לא נמצא"
+              : "לא הצלחנו למחוק את הנציג";
+      const status = code === "cannot_delete_self" || code === "not_found" ? 400 : 500;
+      return json(res, status, { error: "delete_failed", message, code }, req);
     }
   }
 
