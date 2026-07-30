@@ -206,6 +206,20 @@ export async function apiAdminDeleteBreakRegistration(id) {
   return result;
 }
 
+export async function apiAdminSoftDeleteAgent(agentId) {
+  const result = await postAgentAuth(
+    {
+      action: "admin_soft_delete_agent",
+      agentId,
+    },
+    { requireBearer: true }
+  );
+  if (!result.ok) {
+    throw new Error(result.message || "לא הצלחנו למחוק את הנציג");
+  }
+  return result;
+}
+
 export async function apiAdminUpdateVacationRequest({ id, status }) {
   const result = await postAgentAuth(
     {

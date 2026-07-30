@@ -182,7 +182,12 @@ export default function AdminUsers() {
       invalidate();
       toast({ title: "הנציג נמחק", description: "לא ניתן להתחבר עם האימייל" });
     },
-    onError: () => toast({ title: "שגיאה", description: "לא הצלחנו למחוק", variant: "destructive" }),
+    onError: (error) =>
+      toast({
+        title: "שגיאה",
+        description: String(error?.message || "").trim() || "לא הצלחנו למחוק",
+        variant: "destructive",
+      }),
   });
 
   const openCreate = () => {
